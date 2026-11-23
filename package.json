@@ -67,6 +67,7 @@
     "comments:ratchet": "tsx scripts/check-comment-ratchet.ts --write"
   },
   "dependencies": {
+    "@1password/sdk": "0.5.0",
     "@codemirror/autocomplete": "6.20.4",
     "@codemirror/commands": "6.11.1",
     "@codemirror/lang-json": "^6.0.2",

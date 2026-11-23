@@ -97,24 +97,13 @@ function BackendCard({
 }) {
   const states = [backend.read, backend.write].filter(Boolean);
   const problem = states.find((s) => s!.state !== "ready");
-  const starting = problem?.code === "starting";
   return (
     <Card size="sm">
       <CardContent className="space-y-1">
         <div className="flex items-center justify-between gap-2">
           <p className="text-sm font-medium text-foreground">{BACKEND_LABEL[backend.name]}</p>
-          <Badge
-            variant={
-              !backend.configured || starting ? "outline" : problem ? "destructive" : "secondary"
-            }
-          >
-            {!backend.configured
-              ? "Not set up"
-              : starting
-                ? "Starting"
-                : problem
-                  ? "Error"
-                  : "Ready"}
+          <Badge variant={!backend.configured ? "outline" : problem ? "destructive" : "secondary"}>
+            {!backend.configured ? "Not set up" : problem ? "Error" : "Ready"}
           </Badge>
         </div>
         {backend.configured && (
@@ -331,7 +320,7 @@ export function VaultList() {
                 <BackendCard
                   key={backend.name}
                   backend={backend}
-                  {...(backend.name === "onepassword-connect"
+                  {...(backend.name === "onepassword"
                     ? { movable: overview.movableToOnePassword, onMoved: () => void reload(true) }
                     : {})}
                 />

@@ -5,8 +5,8 @@ Bots use the owner's secrets **without the model ever seeing them** (issue
 A value is resolved at the tool boundary, in the server process, at use
 time, and goes straight into one sink: a browser field (over CDP), an HTTP
 header on a request the server makes, or an MCP connection header. Values live
-in **1Password** (through Connect, which the app can run inside its own
-container) or in the `local` backend, sealed with `SECRETS_KEY`; the item rows
+in **1Password** (read through service accounts with 1Password's SDK) or in
+the `local` backend, sealed with `SECRETS_KEY`; the item rows
 hold references and policy only. Both sit behind one `VaultBackend` port
 (`apps/web/src/server/api/vault/backends/types.ts`).
 
@@ -17,8 +17,9 @@ Code: `packages/agent/src/vault.ts` (the port), `packages/agent/src/redact.ts`,
 `apps/web/src/server/api/vault/`. UI: `apps/web/src/client/pages/vault/`.
 Decision records: [ADR 0005](../adr/0005-secrets-live-outside-the-app.md),
 amended by [ADR 0017](../adr/0017-local-is-the-only-vault-backend.md),
-[ADR 0019](../adr/0019-vault-values-table.md) and
-[ADR 0027](../adr/0027-1password-connect-runs-inside-the-app.md).
+[ADR 0019](../adr/0019-vault-values-table.md),
+[ADR 0027](../adr/0027-1password-connect-runs-inside-the-app.md) and
+[ADR 0040](../adr/0040-1password-through-service-accounts.md).
 
 ## How a use flows
 
@@ -26,7 +27,7 @@ amended by [ADR 0017](../adr/0017-local-is-the-only-vault-backend.md),
 model ── handle ──▶ sink tool ── gate (tool permission + item policy + approval) ──▶ VaultBroker.use
                                                                                        │
                                                                                        ▼
-                       redactor ◀── value ── backend (1Password Connect | local) ──▶ sink (page / header)
+                       redactor ◀── value ── backend (1Password | local) ──▶ sink (page / header)
 ```
 
 1. **Discover.** `vault_list` returns handles and metadata (label, kind,
@@ -227,43 +228,40 @@ no code path hands a value to anything but a sink.
 
 ## Backends
 
-### 1Password Connect
+### 1Password
 
-Connect decrypts on a machine you run, so 1Password stays zero-knowledge, and
-its access tokens are scoped to one vault and can expire. Code:
-`apps/web/src/server/api/vault/backends/onepassword-connect.ts` (the REST
-client and scoping guard), `onepassword-mapping.ts` (kinds ↔ categories) and
-`apps/web/src/server/api/vault/connect/` (the bundled server).
+The backend reaches 1Password through **service accounts** with the official
+JavaScript SDK (`@1password/sdk`): items are decrypted in the app's process,
+so 1Password stays zero-knowledge, and each service account is limited to the
+vaults and permissions it was created with. Code:
+`apps/web/src/server/api/vault/backends/onepassword.ts` (the SDK client and
+scoping guard) and `onepassword-mapping.ts` (kinds ↔ categories and fields).
 
 1. In 1Password, create a vault named **tiny-agents** holding only the items
-   bots may use (plus OTP fields where a bot should do 2FA). 1Password never
-   gives Connect the built-in Personal, Private or Employee vaults.
-2. On 1Password.com → Developer → **Connect servers**, create a server with
-   access to **only** that vault and download `1password-credentials.json`.
-3. Issue a token for it, limited to that vault, set to expire. Two tokens keep
-   bots off write access:
-   - `OP_CONNECT_TOKEN`: **read** (bots resolve with it);
-   - `OP_CONNECT_ADMIN_TOKEN`: **read + write** (only the Vault page's routes
-     load it). Without it 1Password items are read-only in the Vault page and
-     new items stay local. With only this token, bots use it too.
-4. Set on the app `OP_CONNECT_CREDENTIALS` to the contents of
-   `1password-credentials.json` (the JSON, or its base64) and the token(s).
-   Redeploy. That is all: the app runs Connect itself (below).
-5. Open **Vault**: the 1Password card says **Ready · Vault "tiny-agents"**.
+   bots may use (plus one-time password fields where a bot should do 2FA).
+   Service accounts can't use the built-in Personal, Private or Employee
+   vaults, so it must be a vault of its own.
+2. On 1Password.com → Developer → **Service accounts**, create two, each with
+   access to **only** that vault. A service account's vaults and permissions
+   are fixed when it is created:
+   - `OP_SERVICE_ACCOUNT_TOKEN`: **read** only (bots resolve with it);
+   - `OP_SERVICE_ACCOUNT_ADMIN_TOKEN`: **read and write** (only the Vault
+     page's routes load it). Without it 1Password items are read-only in the
+     Vault page and new items stay local. With only this token, bots use it
+     too; a separate read-only token keeps bots off write access.
+3. Set the token(s) on the app and redeploy.
+4. Open **Vault**: the 1Password card says **Ready · Vault "tiny-agents"**.
    New items go to 1Password; items made in 1Password show under "Not linked
    yet" to link.
 
-`OP_CONNECT_VAULT_ID` is optional: without it the vault is the one the token
-sees. Without `OP_CONNECT_CREDENTIALS` and `OP_CONNECT_HOST` there is no
-1Password card.
+`OP_VAULT_ID` is optional: without it the vault is the one the token sees.
+Without either token there is no 1Password card.
 
-**Where new items go.** With `OP_CONNECT_ADMIN_TOKEN` set, every new item from
-the Vault page goes to the 1Password vault (the pinned one), and so does a new
-key the app uses itself (a model provider's key, the GitHub App's private key
-and webhook secret). MCP connection secrets stay local. A Connect server can answer a fresh item's
-`GET` with 404 until its sync catches up, so the backend retries and, for ten
-minutes, describes a new item from the `POST` answer. A refused write names the
-step and Connect's own message.
+**Where new items go.** With `OP_SERVICE_ACCOUNT_ADMIN_TOKEN` set, every new
+item from the Vault page goes to the 1Password vault (the pinned one), and so
+does a new key the app uses itself (a model provider's key, the GitHub App's
+private key and webhook secret). MCP connection secrets stay local. A refused
+write names the step and 1Password's own message.
 
 **Moving local items.** The 1Password card shows **Move N local items here**
 when items live in the local vault, the app's own keys included. After step-up it copies each one
@@ -271,77 +269,49 @@ when items live in the local vault, the app's own keys included. After step-up i
 deletes the local value (`POST /vault/move-to-1password`). An item that fails
 stays local and the toast says why. MCP connection secrets are not moved.
 
+**No offline copy.** Every use asks 1Password's servers; nothing is cached
+on disk. When 1Password is unreachable, vault uses fail closed and the rest of
+the app keeps working.
+
 **The app's keys in 1Password.** Bots still can't use them: the vault refuses an
 `app` item to every bot whatever backend holds it. The server keeps each value
-it read for 5 minutes. When Connect fails (still starting after a deploy, or
-down), it serves the last value it read; with none yet it retries for about
-8 seconds, inside GitHub's 10-second webhook timeout, before the call fails.
+it read for 5 minutes. When 1Password fails, it serves the last value it read;
+with none yet it retries for about 8 seconds, inside GitHub's 10-second
+webhook timeout, before the call fails.
 
-**Scoping guard.** The backend calls `GET /v1/vaults` before its first use and
-at least every 6 hours after (the Vault page re-checks when it loads). Unless
-the list is **exactly** the pinned vault, it reports `token_overscoped`, names
-the extra vaults, and refuses every use; the app still boots. Every path is
-pinned to the vault, and an item whose `vault.id` differs is refused.
+**Scoping guard.** The backend lists the token's vaults before its first use
+and at least every 6 hours after (the Vault page re-checks when it loads).
+Unless the list is **exactly** the pinned vault, it reports
+`token_overscoped`, names the extra vaults, and refuses every use; the app
+still boots. Every call names the pinned vault, and an item whose vault
+differs is refused.
+
+**Rate limits.** 1Password limits each service account token per hour (reads
+and writes counted apart) and each account per day, by plan; see 1Password's
+service account rate limits page. A value is read once per approved use, so
+normal use stays far below them. A request over the limit fails that use with
+1Password's message.
 
 **Rotation.** Values: change them in 1Password (or the Vault page); the next
-use picks them up, nothing is cached. Tokens: issue a new one, update the env
-var, redeploy, revoke the old one. The card names a token that expires within
-14 days (when it carries an `exp` claim).
-
-#### The bundled Connect server
-
-Connect is two processes, `connect-api` (the REST API) and `connect-sync`
-(keeps an encrypted copy of the vault current), normally two containers. With
-`OP_CONNECT_CREDENTIALS` set and no `OP_CONNECT_HOST`, the app runs both
-itself, inside its own container, so no second service is deployed:
-
-- **Binaries.** On first start the app pulls 1Password's own `connect-api` and
-  `connect-sync` images from `ghcr.io/1password` (the version and per-CPU
-  manifest digests are pinned in `connect/connect-image.ts`), checks every
-  manifest and layer against its sha256, and keeps only the executables, in
-  `op-connect/bin/<version>/` beside the agent store on the data volume. No
-  Docker daemon is involved. Later starts reuse them; a new pinned version
-  pulls once and removes the old one. Linux on amd64 or arm64 only.
-- **Processes.** `connect/bundled-connect.ts` starts both with `OP_SESSION`
-  (the credentials, in their environment only), `HOME` at
-  `op-connect/home` (Connect's encrypted vault cache) and the bus wired over
-  loopback (`OP_BUS_PORT` / `OP_BUS_PEERS`, the setup 1Password documents
-  where broadcast discovery isn't available). The API listens on port
-  11280, sync on 11281, the bus on 11282 and 11283. A process that exits is
-  restarted with backoff (1 s, doubling to a minute); stopping the app stops
-  both.
-- **Status.** While the first start pulls the binaries, the card says
-  **Starting** with what it is doing; a failure (a bad credentials value, no
-  network to the registry, an unsupported CPU) shows there and in the log.
-  Vault uses fail closed until Connect answers; the rest of the app works.
-- **Exposure.** Connect can't be bound to loopback only, so its ports are open
-  inside the app's container network. Every request needs a token; nothing
-  publishes the ports. The sandbox VM, where model-written commands run, is a
-  different machine and can't reach them, and the bots' browser refuses
-  private addresses unless `BROWSER_ALLOWED_PRIVATE_HOSTS` names them.
-
-This is not a layout 1Password supports (it ships the images, not binaries),
-and it puts the credentials file and the tokens on one host. To keep them
-apart, run Connect elsewhere (the two-container compose file from 1Password's
-docs, on another host reached over the tailnet) and set `OP_CONNECT_HOST` to
-it instead of `OP_CONNECT_CREDENTIALS`.
+use picks them up. Tokens: create a new service account with the same vault
+access, update the env var, redeploy, then delete the old one.
 
 #### Field mapping
 
-| Kind     | Category         | Fields                                                                |
-| -------- | ---------------- | --------------------------------------------------------------------- |
-| login    | `LOGIN`          | purpose `USERNAME` / `PASSWORD` / `NOTES`, an `OTP` field, `urls[]`   |
-| card     | `CREDIT_CARD`    | `ccnum`, `expiry` (MONTH_YEAR, `YYYYMM`), `cvv`, `cardholder`, `type` |
-| identity | `IDENTITY`       | `firstname`, `email`, `defphone`, `address`                           |
-| api_key  | `API_CREDENTIAL` | `credential`, `username`                                              |
+| Kind     | Category         | Fields                                                                                             |
+| -------- | ---------------- | -------------------------------------------------------------------------------------------------- |
+| login    | `Login`          | `username`, `password`, a `Totp` field (in a `tiny-agents` section when the app adds it), websites |
+| card     | `CreditCard`     | `ccnum`, `expiry` (`MonthYear`, `MM/YYYY`), `cvv`, `cardholder`, `type` (read only)                |
+| identity | `Identity`       | `firstname`, `email`, `defphone`, `address` (an `Address` field is read from its parts)            |
+| api_key  | `ApiCredentials` | `credential`, `username`                                                                           |
 
-The Connect reference doesn't document the `CREDIT_CARD` / `IDENTITY` field
-ids; the mapping uses 1Password's template ids with a label fallback, pinned
-in `tests/server/api/vault/vault-units.test.ts`. Edits keep fields the mapping
-doesn't model (read-modify-write of the whole item). A 1Password item's policy
-lives on its row only, unlike a local item's (ADR 0015). The app's own
-credentials (model provider keys, Code's GitHub token) and connection secrets
-stay in the local backend, so chatting never waits on Connect.
+Notes are the item's own notes. The SDK doesn't document the built-in field
+ids of every category; the mapping uses 1Password's template ids with a title
+fallback, pinned in `tests/server/api/vault/vault-units.test.ts`. Websites are
+saved on logins only (the SDK keeps them for `Login` and `Password` items).
+Edits keep fields the mapping doesn't model (read-modify-write of the whole
+item through `items.put`). A 1Password item's policy lives on its row only,
+unlike a local item's (ADR 0015).
 
 ### Local
 

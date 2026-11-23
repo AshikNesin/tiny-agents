@@ -71,8 +71,6 @@
   "apps/web/src/server/api/uploads/uploads.extract.ts": 3,
   "apps/web/src/server/api/uploads/uploads.extraction.ts": 2,
   "apps/web/src/server/api/uploads/uploads.sniff.ts": 1,
-  "apps/web/src/server/api/vault/connect/bundled-connect.ts": 1,
-  "apps/web/src/server/api/vault/connect/connect-image.ts": 2,
   "apps/web/src/server/api/vault/vault.import.ts": 1,
   "apps/web/src/server/api/vault/vault.service.ts": 1,
   "apps/web/src/server/lifecycle.ts": 1,

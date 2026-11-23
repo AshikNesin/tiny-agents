@@ -9,8 +9,11 @@ import {
   vaultItems,
   vaultValues,
 } from "../../../apps/web/src/server/db";
-import { installAppForTests } from "../../../apps/web/src/server/app-root";
-import { setReadBackendsForTests } from "../../../apps/web/src/server/api/vault/backends";
+import { AutofillBehavior, ItemFieldType } from "@1password/sdk";
+import {
+  setOnePasswordConnectorForTests,
+  setReadBackendsForTests,
+} from "../../../apps/web/src/server/api/vault/backends";
 import {
   createAppCredential,
   setWriteBackendsForTests,
@@ -24,21 +27,14 @@ import {
 } from "../../../apps/web/src/server/api/vault/vault.service";
 import { clearStepUpsForTests } from "../../../apps/web/src/server/api/vault/vault.stepup";
 import { secretRedactor } from "../../../packages/agent/src/redact";
-import { startFakeConnect, type FakeConnect } from "../api/vault/fake-connect";
+import { createFakeOnePassword, opItem, type FakeOnePassword } from "../api/vault/fake-onepassword";
 import { api, createTestApp, type TestApp } from "../helpers";
 
 const PASSWORD = "owner-password-123";
-const ENV_KEYS = [
-  "OP_CONNECT_CREDENTIALS",
-  "OP_CONNECT_HOST",
-  "OP_CONNECT_VAULT_ID",
-  "OP_CONNECT_TOKEN",
-  "OP_CONNECT_ADMIN_TOKEN",
-] as const;
 
 const app: TestApp = createTestApp();
 let token: string;
-let connect: FakeConnect;
+let op: FakeOnePassword;
 
 beforeAll(async () => {
   const [user] = await db
@@ -63,29 +59,47 @@ beforeEach(async () => {
   await db.delete(vaultItems);
   await db.delete(vaultValues);
   clearStepUpsForTests();
-  connect = await startFakeConnect();
-  connect.tokens.set("read-token", { vaults: ["vault-agents"], write: false });
-  connect.tokens.set("admin-token", { vaults: ["vault-agents"], write: true });
-  connect.items.set("gh", {
-    id: "gh",
-    title: "GitHub",
-    category: "LOGIN",
-    vault: { id: "vault-agents" },
-    urls: [{ href: "https://github.com/login" }],
-    fields: [
-      { id: "username", purpose: "USERNAME", value: "ana" },
-      { id: "password", purpose: "PASSWORD", type: "CONCEALED", value: "canary-op-pw" },
-    ],
-  });
+  op = createFakeOnePassword();
+  setOnePasswordConnectorForTests(op.connect);
+  op.tokens.set("read-token", { vaults: ["vault-agents"], write: false });
+  op.tokens.set("admin-token", { vaults: ["vault-agents"], write: true });
+  op.items.set(
+    "gh",
+    opItem({
+      id: "gh",
+      title: "GitHub",
+      websites: [
+        {
+          url: "https://github.com/login",
+          label: "website",
+          autofillBehavior: AutofillBehavior.AnywhereOnWebsite,
+        },
+      ],
+      fields: [
+        { id: "username", title: "username", value: "ana" },
+        {
+          id: "password",
+          title: "password",
+          fieldType: ItemFieldType.Concealed,
+          value: "canary-op-pw",
+        },
+      ],
+    }),
+  );
 });
 
-afterEach(async () => {
-  for (const key of ENV_KEYS) delete process.env[key];
-  installAppForTests({ bundledConnect: undefined });
+afterEach(() => {
+  vi.unstubAllEnvs();
+  setOnePasswordConnectorForTests(undefined);
   rebuildBackends();
   secretRedactor.clear();
-  await connect.close();
 });
+
+function useServiceAccounts(tokens: { read?: string; admin?: string }): void {
+  if (tokens.read) vi.stubEnv("OP_SERVICE_ACCOUNT_TOKEN", tokens.read);
+  if (tokens.admin) vi.stubEnv("OP_SERVICE_ACCOUNT_ADMIN_TOKEN", tokens.admin);
+  rebuildBackends();
+}
 
 // oxlint-disable-next-line typescript/no-explicit-any -- response data varies per route
 type Data = any;
@@ -105,19 +119,16 @@ async function stepUp(): Promise<string> {
   return response.body.data.token as string;
 }
 
-describe("1Password Connect at OP_CONNECT_HOST", () => {
+describe("1Password through service accounts", () => {
   beforeEach(() => {
-    process.env.OP_CONNECT_HOST = connect.url;
-    process.env.OP_CONNECT_TOKEN = "read-token";
-    process.env.OP_CONNECT_ADMIN_TOKEN = "admin-token";
-    rebuildBackends();
+    useServiceAccounts({ read: "read-token", admin: "admin-token" });
   });
 
   it("shows the 1Password card and its items to link, with no vault id set", async () => {
     const overview = (await vault("")).body.data;
     expect(overview.backends).toEqual([
       expect.objectContaining({
-        name: "onepassword-connect",
+        name: "onepassword",
         configured: true,
         read: { state: "ready", detail: 'Vault "tiny-agents".' },
         write: { state: "ready", detail: 'Vault "tiny-agents".' },
@@ -125,10 +136,10 @@ describe("1Password Connect at OP_CONNECT_HOST", () => {
       }),
       expect.objectContaining({ name: "local" }),
     ]);
-    expect(overview.primaryBackend).toBe("onepassword-connect");
+    expect(overview.primaryBackend).toBe("onepassword");
     expect(overview.unlinked).toEqual([
       expect.objectContaining({
-        backend: "onepassword-connect",
+        backend: "onepassword",
         externalId: "gh",
         title: "GitHub",
         kind: "login",
@@ -142,16 +153,16 @@ describe("1Password Connect at OP_CONNECT_HOST", () => {
     const linked = await vault("/links", {
       method: "POST",
       stepUp: await stepUp(),
-      json: { backend: "onepassword-connect", externalId: "gh", policy: { handle: "github" } },
+      json: { backend: "onepassword", externalId: "gh", policy: { handle: "github" } },
     });
     expect(linked.status).toBe(201);
     expect(linked.body.data).toMatchObject({
       handle: "github",
-      backend: "onepassword-connect",
+      backend: "onepassword",
       origins: ["https://github.com"],
     });
 
-    connect.requests.length = 0;
+    op.calls.length = 0;
     const filled = await runItemUse(
       {
         handle: "github",
@@ -167,8 +178,8 @@ describe("1Password Connect at OP_CONNECT_HOST", () => {
       async (values) => values.password!.reveal(),
     );
     expect(filled).toBe("canary-op-pw");
-    expect(connect.requests.length).toBeGreaterThan(0);
-    expect(connect.requests.every((r) => r.token === "read-token")).toBe(true);
+    expect(op.calls.length).toBeGreaterThan(0);
+    expect(op.calls.every((call) => call.token === "read-token")).toBe(true);
   });
 
   it("creates new items in 1Password, not the local backend", async () => {
@@ -184,59 +195,16 @@ describe("1Password Connect at OP_CONNECT_HOST", () => {
       },
     });
     expect(created.status).toBe(201);
-    expect(created.body.data.backend).toBe("onepassword-connect");
+    expect(created.body.data.backend).toBe("onepassword");
     const row = await db.query.vaultItems.findFirst({ where: eq(vaultItems.handle, "umami") });
-    const stored = connect.items.get(row!.externalId)!;
-    expect(stored).toMatchObject({
-      title: "Umami",
-      category: "LOGIN",
-      vault: { id: "vault-agents" },
-    });
-    expect(stored.fields?.find((f) => f.purpose === "PASSWORD")?.value).toBe("canary-new");
+    const stored = op.items.get(row!.externalId)!;
+    expect(stored).toMatchObject({ title: "Umami", category: "Login", vaultId: "vault-agents" });
+    expect(stored.fields.find((f) => f.id === "password")?.value).toBe("canary-new");
     expect(await db.select().from(vaultValues)).toEqual([]);
   });
 
-  it("saves a new item while Connect's copy hasn't caught up, and bots can use it", async () => {
-    connect.syncLag.gets = 2;
-    const created = await vault("/items", {
-      method: "POST",
-      stepUp: await stepUp(),
-      json: {
-        kind: "login",
-        title: "Umami",
-        urls: ["https://hi.example.com"],
-        values: { username: "ana", password: "canary-lagging" },
-        policy: { handle: "umami" },
-      },
-    });
-    expect(created.status).toBe(201);
-    expect(created.body.data).toMatchObject({
-      handle: "umami",
-      backend: "onepassword-connect",
-      username: "ana",
-    });
-
-    const row = await db.query.vaultItems.findFirst({ where: eq(vaultItems.handle, "umami") });
-    connect.unsynced.set(row!.externalId, 2);
-    const filled = await runItemUse(
-      {
-        handle: "umami",
-        tool: "browser_fill_secret",
-        targetKind: "origin",
-        target: "https://hi.example.com",
-        conversation: 1,
-        granted: false,
-        approved: true,
-      },
-      { unattended: false },
-      ["password"],
-      async (values) => values.password!.reveal(),
-    );
-    expect(filled).toBe("canary-lagging");
-  });
-
-  it("says which step Connect refused, in Connect's words", async () => {
-    connect.refuseCreate = { status: 404, message: "vault not found in local cache" };
+  it("says which step 1Password refused, in its words", async () => {
+    op.refuseCreate = "invalid item: field type mismatch";
     const response = await vault("/items", {
       method: "POST",
       stepUp: await stepUp(),
@@ -250,17 +218,17 @@ describe("1Password Connect at OP_CONNECT_HOST", () => {
     });
     expect(response.status).toBe(502);
     expect(JSON.stringify(response.body)).toContain(
-      "1Password Connect couldn't save the item: vault not found in local cache (404).",
+      "1Password couldn't save the item: invalid item: field type mismatch.",
     );
   });
 
   it("keeps new items local with only the read token", async () => {
-    delete process.env.OP_CONNECT_ADMIN_TOKEN;
-    rebuildBackends();
+    vi.unstubAllEnvs();
+    useServiceAccounts({ read: "read-token" });
     const overview = (await vault("")).body.data;
     expect(overview.primaryBackend).toBe("local");
     expect(overview.backends[0]).toMatchObject({
-      name: "onepassword-connect",
+      name: "onepassword",
       capabilities: { create: false, update: false, delete: false, reveal: true },
     });
   });
@@ -295,10 +263,7 @@ describe("moving local items to 1Password", () => {
       inject: { as: "header", name: "Authorization", format: "Bearer {value}" },
     });
 
-    process.env.OP_CONNECT_HOST = connect.url;
-    process.env.OP_CONNECT_TOKEN = "read-token";
-    process.env.OP_CONNECT_ADMIN_TOKEN = "admin-token";
-    rebuildBackends();
+    useServiceAccounts({ read: "read-token", admin: "admin-token" });
     expect((await vault("")).body.data.movableToOnePassword).toBe(3);
 
     const moved = await vault("/move-to-1password", { method: "POST", stepUp: grant, json: {} });
@@ -307,22 +272,18 @@ describe("moving local items to 1Password", () => {
 
     const rows = await db.select().from(vaultItems);
     expect(Object.fromEntries(rows.map((r) => [r.handle, r.backend]))).toEqual({
-      github: "onepassword-connect",
-      umami: "onepassword-connect",
-      openai: "onepassword-connect",
+      github: "onepassword",
+      umami: "onepassword",
+      openai: "onepassword",
     });
     expect(await db.select().from(vaultValues)).toHaveLength(0);
     expect(
       await resolveProviderSecret("openai", { providerName: "OpenAI", host: "api.openai.com" }),
     ).toBe("canary-app-key");
-    const umami = connect.items.get(rows.find((r) => r.handle === "umami")!.externalId)!;
-    expect(umami).toMatchObject({
-      title: "umami",
-      category: "LOGIN",
-      vault: { id: "vault-agents" },
-    });
-    expect(umami.fields?.find((f) => f.purpose === "PASSWORD")?.value).toBe("canary-umami");
-    expect(umami.fields?.find((f) => f.type === "OTP")?.value).toBe(
+    const umami = op.items.get(rows.find((r) => r.handle === "umami")!.externalId)!;
+    expect(umami).toMatchObject({ title: "umami", category: "Login", vaultId: "vault-agents" });
+    expect(umami.fields.find((f) => f.id === "password")?.value).toBe("canary-umami");
+    expect(umami.fields.find((f) => f.fieldType === ItemFieldType.Totp)?.value).toBe(
       "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
     );
 
@@ -344,11 +305,8 @@ describe("moving local items to 1Password", () => {
     expect((await vault("")).body.data.movableToOnePassword).toBe(0);
   });
 
-  it("keeps the app's keys working while Connect is starting or down", async () => {
-    process.env.OP_CONNECT_HOST = connect.url;
-    process.env.OP_CONNECT_TOKEN = "read-token";
-    process.env.OP_CONNECT_ADMIN_TOKEN = "admin-token";
-    rebuildBackends();
+  it("keeps the app's keys working while 1Password is unreachable", async () => {
+    useServiceAccounts({ read: "read-token", admin: "admin-token" });
     forgetAppCredential();
     await createAppCredential({
       handle: "gh-app-webhook",
@@ -358,52 +316,23 @@ describe("moving local items to 1Password", () => {
       inject: { as: "header", name: "Authorization", format: "Bearer {value}" },
       tools: ["github"],
     });
-    expect((await db.select().from(vaultItems))[0]!.backend).toBe("onepassword-connect");
+    expect((await db.select().from(vaultItems))[0]!.backend).toBe("onepassword");
 
-    connect.unavailable.requests = 2;
+    op.unavailable.calls = 2;
     expect(await resolveGitHubToken("gh-app-webhook")).toBe("canary-webhook");
 
     vi.setSystemTime(new Date(Date.now() + 60 * 60_000));
-    connect.unavailable.requests = 1000;
+    op.unavailable.calls = 1000;
     expect(await resolveGitHubToken("gh-app-webhook")).toBe("canary-webhook");
   });
 
   it("needs the read+write token", async () => {
-    process.env.OP_CONNECT_HOST = connect.url;
-    process.env.OP_CONNECT_TOKEN = "read-token";
-    rebuildBackends();
+    useServiceAccounts({ read: "read-token" });
     const response = await vault("/move-to-1password", {
       method: "POST",
       stepUp: await stepUp(),
       json: {},
     });
     expect(response.status).toBe(400);
-  });
-});
-
-describe("the bundled Connect server", () => {
-  it("says it is starting while the bundled server comes up", async () => {
-    process.env.OP_CONNECT_CREDENTIALS = '{"deviceUuid":"dev-1"}';
-    process.env.OP_CONNECT_TOKEN = "read-token";
-    rebuildBackends();
-    installAppForTests({
-      bundledConnect: {
-        state: () => ({
-          state: "starting",
-          detail: "Fetching 1Password Connect 1.8.4 (first start only).",
-        }),
-        stop: async () => {},
-      },
-    });
-
-    const [card] = (await vault("")).body.data.backends;
-    expect(card).toMatchObject({
-      name: "onepassword-connect",
-      read: {
-        state: "error",
-        code: "starting",
-        detail: "Fetching 1Password Connect 1.8.4 (first start only).",
-      },
-    });
   });
 });

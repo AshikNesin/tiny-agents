@@ -64,7 +64,7 @@ object VaultKinds {
     }
 
     fun backendLabel(backend: String): String = when (backend) {
-        "onepassword-connect" -> "1Password"
+        "onepassword" -> "1Password"
         "local" -> "Local"
         else -> backend
     }

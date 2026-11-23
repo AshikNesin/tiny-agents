@@ -73,10 +73,11 @@ Set these on the host; defaults and the full list are in the
   directly, the same exposure as a peer on a `192.168` LAN. Rate limits
   count an IPv6 client by its /64, the block one host usually holds.
 
-To keep vault items in 1Password, set `OP_CONNECT_CREDENTIALS` and a Connect
-token: the app runs 1Password Connect inside its own container, so there is
-no second service to deploy (see the vault guide's
-[bundled Connect server](../features/vault.md#the-bundled-connect-server)).
+To keep vault items in 1Password, create two 1Password service accounts
+limited to one dedicated vault (read-only, and read and write) and set
+`OP_SERVICE_ACCOUNT_TOKEN` and `OP_SERVICE_ACCOUNT_ADMIN_TOKEN`. The app talks
+to 1Password through its SDK, so there is no second service to deploy (see
+the vault guide's [1Password section](../features/vault.md#1password)).
 
 The server refuses to start in production with the development fallbacks or
 with any of the required variables missing, and lists what is wrong.

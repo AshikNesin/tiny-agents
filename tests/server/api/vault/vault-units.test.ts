@@ -4,15 +4,15 @@ import { SecretRedactor } from "../../../../packages/agent/src/redact";
 import { SecretValue, VaultTargetMovedError } from "../../../../packages/agent/src/vault";
 import { OriginMismatchError } from "../../../../packages/sandbox/src/browser-fill";
 import { WindowMismatchError } from "../../../../packages/sandbox/src/computer-sessions";
+import { AutofillBehavior, ItemCategory, ItemFieldType } from "@1password/sdk";
 import {
   applyDraft,
-  expiryFromConnect,
-  expiryToConnect,
-  findField,
+  fieldValue,
+  normalizeExpiry,
   summarize,
-  toConnectItem,
-  type ConnectItem,
+  toCreateParams,
 } from "../../../../apps/web/src/server/api/vault/backends/onepassword-mapping";
+import { opItem } from "./fake-onepassword";
 import { parseTotp, totpCode } from "../../../../apps/web/src/server/api/vault/vault.totp";
 
 describe("TOTP", () => {
@@ -101,37 +101,53 @@ describe("SecretRedactor", () => {
 });
 
 describe("1Password mapping", () => {
-  const login: ConnectItem = {
+  const login = opItem({
     id: "item1",
     title: "GitHub",
-    category: "LOGIN",
-    vault: { id: "v1" },
-    urls: [{ href: "https://github.com/login", primary: true }],
+    vaultId: "v1",
+    websites: [
+      {
+        url: "https://github.com/login",
+        label: "website",
+        autofillBehavior: AutofillBehavior.AnywhereOnWebsite,
+      },
+    ],
+    notes: "shared with the team",
     fields: [
-      { id: "username", type: "STRING", purpose: "USERNAME", label: "username", value: "ana" },
-      { id: "password", type: "CONCEALED", purpose: "PASSWORD", label: "password", value: "pw" },
+      { id: "username", title: "username", value: "ana" },
+      { id: "password", title: "password", fieldType: ItemFieldType.Concealed, value: "pw" },
       {
         id: "x1",
-        type: "OTP",
-        label: "one-time password",
+        title: "one-time password",
+        fieldType: ItemFieldType.Totp,
         value: "otpauth://totp/x?secret=GEZDGNBV",
       },
-      { id: "extra", type: "STRING", label: "recovery email", value: "keep me" },
+      { id: "extra", title: "recovery email", value: "keep me" },
     ],
-  };
-  const card: ConnectItem = {
+  });
+  const card = opItem({
     id: "item2",
     title: "Amex",
-    category: "CREDIT_CARD",
-    vault: { id: "v1" },
+    category: ItemCategory.CreditCard,
+    vaultId: "v1",
     fields: [
-      { id: "cardholder", type: "STRING", label: "cardholder name", value: "Ana Lima" },
-      { id: "type", type: "CREDIT_CARD_TYPE", label: "type", value: "amex" },
-      { id: "ccnum", type: "CREDIT_CARD_NUMBER", label: "number", value: "378282246310005" },
-      { id: "cvv", type: "CONCEALED", label: "verification number", value: "1234" },
-      { id: "expiry", type: "MONTH_YEAR", label: "expiry date", value: "203012" },
+      { id: "cardholder", title: "cardholder name", value: "Ana Lima" },
+      { id: "type", title: "type", fieldType: ItemFieldType.CreditCardType, value: "amex" },
+      {
+        id: "ccnum",
+        title: "number",
+        fieldType: ItemFieldType.CreditCardNumber,
+        value: "378282246310005",
+      },
+      {
+        id: "cvv",
+        title: "verification number",
+        fieldType: ItemFieldType.Concealed,
+        value: "1234",
+      },
+      { id: "expiry", title: "expiry date", fieldType: ItemFieldType.MonthYear, value: "12/2030" },
     ],
-  };
+  });
 
   it("summarizes without values", () => {
     const summary = summarize(login);
@@ -140,6 +156,7 @@ describe("1Password mapping", () => {
       username: "ana",
       hasTotp: true,
       urls: ["https://github.com/login"],
+      fields: ["username", "password", "totp", "notes"],
     });
     expect(JSON.stringify(summary)).not.toContain('"pw"');
     const cardSummary = summarize(card);
@@ -149,34 +166,72 @@ describe("1Password mapping", () => {
   });
 
   it("finds card fields by template id", () => {
-    expect(findField(card, "card_number")?.value).toBe("378282246310005");
-    expect(findField(card, "card_cvc")?.value).toBe("1234");
-    expect(findField(card, "card_holder")?.value).toBe("Ana Lima");
+    expect(fieldValue(card, "card_number")).toBe("378282246310005");
+    expect(fieldValue(card, "card_cvc")).toBe("1234");
+    expect(fieldValue(card, "card_holder")).toBe("Ana Lima");
   });
 
-  it("round-trips expiry between MM/YYYY and YYYYMM", () => {
-    expect(expiryFromConnect("203012")).toBe("12/2030");
-    expect(expiryFromConnect("3/31")).toBe("03/2031");
-    expect(expiryToConnect("12/2030")).toBe("203012");
+  it("reads notes from the item and an address from its parts", () => {
+    const person = opItem({
+      id: "item3",
+      title: "Me",
+      category: ItemCategory.Identity,
+      fields: [
+        {
+          id: "address",
+          title: "address",
+          fieldType: ItemFieldType.Address,
+          details: {
+            type: "Address",
+            content: {
+              street: "1 Main St",
+              city: "Springfield",
+              state: "IL",
+              zip: "62701",
+              country: "us",
+            },
+          },
+        },
+      ],
+    });
+    expect(fieldValue(login, "notes")).toBe("shared with the team");
+    expect(fieldValue(person, "identity_address")).toBe("1 Main St, Springfield, IL 62701, us");
+  });
+
+  it("normalizes expiry to MM/YYYY", () => {
+    expect(normalizeExpiry("203012")).toBe("12/2030");
+    expect(normalizeExpiry("3/31")).toBe("03/2031");
+    expect(normalizeExpiry("12/2030")).toBe("12/2030");
   });
 
   it("builds new items pinned to the vault", () => {
-    const item = toConnectItem(
+    const item = toCreateParams(
       {
         kind: "login",
         title: "Umami",
         urls: ["https://hi.nesin.io"],
-        values: { username: "a", password: "b" },
+        values: { username: "a", password: "b", notes: "n" },
       },
       "v1",
     );
-    expect(item).toMatchObject({ category: "LOGIN", vault: { id: "v1" }, title: "Umami" });
-    expect(item.fields?.map((f) => f.purpose)).toEqual(["USERNAME", "PASSWORD"]);
+    expect(item).toMatchObject({
+      category: ItemCategory.Login,
+      vaultId: "v1",
+      title: "Umami",
+      notes: "n",
+      websites: [{ url: "https://hi.nesin.io" }],
+    });
+    expect(item.fields?.map((f) => [f.id, f.fieldType])).toEqual([
+      ["username", ItemFieldType.Text],
+      ["password", ItemFieldType.Concealed],
+    ]);
   });
 
   it("keeps fields it doesn't model when applying an edit", () => {
-    const next = applyDraft(login, { values: { password: "new" } });
-    expect(findField(next, "password")?.value).toBe("new");
-    expect(next.fields?.find((f) => f.id === "extra")?.value).toBe("keep me");
+    const next = applyDraft(login, { values: { password: "new", notes: "changed" } });
+    expect(fieldValue(next, "password")).toBe("new");
+    expect(next.notes).toBe("changed");
+    expect(next.fields.find((f) => f.id === "extra")?.value).toBe("keep me");
+    expect(fieldValue(login, "password")).toBe("pw");
   });
 });
