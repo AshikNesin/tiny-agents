@@ -16,6 +16,7 @@ const render = (ui: Parameters<typeof renderBare>[0]) =>
   renderBare(ui, { wrapper: AppQueryProvider });
 
 const patches: Array<[string, unknown]> = [];
+const puts: Array<[string, unknown]> = [];
 
 vi.mock("sonner", () => ({
   toast: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn(), message: vi.fn() }),
@@ -27,13 +28,17 @@ vi.mock("@groot/shell/lib/api", async (importOriginal) => {
     "/code/projects": () => [project],
     "/code/github": () => github,
     "/code/github/app/repositories": () => [],
+    "/code/reviews/settings": () => inbox,
   };
   return {
     ...original,
     apiClient: Object.assign(Object.create(original.apiClient) as typeof original.apiClient, {
       get: async (path: string) => reads[path]?.() ?? [],
       post: async () => ({}),
-      put: async () => github,
+      put: async (path: string, body: unknown) => {
+        puts.push([path, body]);
+        return path === "/code/reviews/settings" ? { ...inbox, ...(body as object) } : github;
+      },
       delete: async () => ({}),
       patch: async (path: string, body: unknown) => {
         patches.push([path, body]);
@@ -69,6 +74,15 @@ const project: ProjectView = {
     },
   },
   createdAt: "2026-11-01T10:00:00Z",
+};
+
+const inbox = {
+  repos: "all",
+  direct: true,
+  drafts: false,
+  bots: false,
+  mute: [] as string[],
+  limit: 10,
 };
 
 const github: GitHubStatus = {
@@ -121,6 +135,7 @@ function renderAt(path: string) {
 beforeEach(() => {
   usePeopleStore.setState({ role: "owner" });
   patches.length = 0;
+  puts.length = 0;
   useCodeStore.setState({ harnesses: [shelley], statuses: {}, threads: [] });
 });
 
@@ -210,5 +225,32 @@ describe("Code settings", () => {
     const picker = await screen.findByRole("button", { name: "Project" });
     await waitFor(() => expect(picker).toHaveTextContent("tiny-agents"));
     expect(screen.queryByRole("button", { name: "Working directory" })).toBeNull();
+  });
+});
+
+describe("Review list settings", () => {
+  it("saves what the sidebar's Reviews list leaves out", async () => {
+    renderAt("/code/settings/reviews");
+
+    const direct = await screen.findByRole("switch", { name: "Only requests to you" });
+    expect(direct).toBeChecked();
+    await userEvent.click(direct);
+    await waitFor(() => expect(puts.at(-1)).toEqual(["/code/reviews/settings", { direct: false }]));
+
+    await userEvent.click(screen.getByRole("switch", { name: "Only project repositories" }));
+    await waitFor(() =>
+      expect(puts.at(-1)).toEqual(["/code/reviews/settings", { repos: "projects" }]),
+    );
+
+    await userEvent.type(
+      screen.getByRole("textbox", { name: "Hide PRs matching" }),
+      "back-merge, @release-bot{Enter}",
+    );
+    await waitFor(() =>
+      expect(puts.at(-1)).toEqual([
+        "/code/reviews/settings",
+        { mute: ["back-merge", "@release-bot"] },
+      ]),
+    );
   });
 });

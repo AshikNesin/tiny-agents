@@ -36,6 +36,7 @@ const posts = vi.hoisted(() => [] as Array<{ path: string; body: unknown }>);
 const deletes = vi.hoisted(() => [] as string[]);
 const asked = vi.hoisted(() => [] as unknown[]);
 const openReviews = vi.hoisted(() => [] as unknown[]);
+const inboxLimit = vi.hoisted(() => ({ value: 10 }));
 vi.mock("@groot/shell/lib/api", async (importOriginal) => {
   const original = await importOriginal<typeof import("@groot/shell/lib/api")>();
   return {
@@ -48,7 +49,16 @@ vi.mock("@groot/shell/lib/api", async (importOriginal) => {
             ? asked
             : path === "/code/reviews"
               ? openReviews
-              : [],
+              : path === "/code/reviews/settings"
+                ? {
+                    repos: "all",
+                    direct: true,
+                    drafts: false,
+                    bots: false,
+                    mute: [],
+                    limit: inboxLimit.value,
+                  }
+                : [],
       delete: async (path: string) => {
         deletes.push(path);
         return { deleted: true };
@@ -184,6 +194,7 @@ beforeEach(() => {
   deletes.length = 0;
   asked.length = 0;
   openReviews.length = 0;
+  inboxLimit.value = 10;
   useUiStore.setState({ codeSidebarOpen: true, codePane: null, lastCodePane: "changes" });
   useCodeStore.setState({
     harnesses: [agent],
@@ -515,6 +526,26 @@ describe("reviews in the thread list", () => {
     expect(posts).toEqual([
       { path: "/code/reviews", body: { pr: "https://github.com/acme/web/pull/2" } },
     ]);
+  });
+
+  it("shows only as many requests as Settings allows, and the rest on request", async () => {
+    inboxLimit.value = 2;
+    asked.push(pull(1), pull(2), pull(3), pull(4));
+    renderAt("/code");
+
+    const reviews = await screen.findByRole("region", { name: "Reviews" });
+    const rows = () => reviews.querySelectorAll("[data-testid=code-review-row]").length;
+    const more = await screen.findByRole("button", { name: "2 more" });
+    expect(rows()).toBe(2);
+    expect(screen.getByRole("link", { name: "Review list filters" })).toHaveAttribute(
+      "href",
+      "/code/settings/reviews",
+    );
+
+    fireEvent.click(more);
+
+    expect(rows()).toBe(4);
+    expect(screen.queryByRole("button", { name: /more$/ })).not.toBeInTheDocument();
   });
 
   it("opens a pasted pull request with the v key", async () => {

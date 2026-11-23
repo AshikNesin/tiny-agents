@@ -10,6 +10,7 @@ import type {
   ProjectUpdateBody,
   ProjectView,
   InboxPullView,
+  ReviewInboxSettings,
   PullReviewView,
   PullThreadsView,
   AskReviewBody,
@@ -115,6 +116,9 @@ export const reviewsApi = {
   list: () => apiClient.get<PullReviewView[]>(`${base}/reviews`),
   inbox: (filter: Record<string, string> = {}) =>
     apiClient.get<InboxPullView[]>(`${base}/reviews/inbox`, filter),
+  settings: () => apiClient.get<ReviewInboxSettings>(`${base}/reviews/settings`),
+  saveSettings: (change: Partial<ReviewInboxSettings>) =>
+    apiClient.put<ReviewInboxSettings>(`${base}/reviews/settings`, change),
   open: (pr: string) => apiClient.post<PullReviewView>(`${base}/reviews`, { pr }),
   get: (id: string) => apiClient.get<PullReviewView>(`${base}/reviews/${encodeURIComponent(id)}`),
   ask: (id: string, body: AskReviewBody) =>

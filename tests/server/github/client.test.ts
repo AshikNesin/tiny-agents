@@ -342,6 +342,7 @@ describe("the review inbox", () => {
       headSha: "head2",
       decision: "changes_requested",
       lastReview: { at: "2026-11-16T08:00:00Z", commit: "old2" },
+      bot: false,
     });
     expect(inbox[2]?.draft).toBe(true);
   });
@@ -378,6 +379,41 @@ describe("the review inbox", () => {
       "is:open is:pr archived:false author:@me updated:>=2026-10-07 draft:false repo:acme/web sort:updated-desc",
     );
     expect(inbox.map((p) => p.number)).toEqual([1]);
+  });
+
+  it("asks only for requests sent to you, and marks PRs a bot opened", async () => {
+    const fake = fakeFetch((_method, _path, body) => {
+      const { query } = body as { query: string };
+      if (!query.includes("ReviewInbox")) return json({ data: { viewer: { login: "ashik" } } });
+      return json({
+        data: {
+          requested: {
+            nodes: [
+              node(1, { author: { login: "renovate", __typename: "Bot" } }),
+              node(2, { author: { login: "release-bot", __typename: "User" } }),
+              node(3, { author: { login: "maria", __typename: "User" } }),
+            ],
+          },
+          reviewed: { nodes: [] },
+          authored: { nodes: [] },
+        },
+      });
+    });
+    const client = createGitHubClient(
+      createHttpsTransport({ token: async () => "t0ken", fetch: fake.impl }),
+    );
+
+    const inbox = await client.reviewInbox({ direct: true });
+
+    const { variables } = fake.calls[1]!.body as { variables: Record<string, string> };
+    expect(variables.requested).toBe(
+      "is:open is:pr archived:false user-review-requested:@me sort:updated-desc",
+    );
+    expect(inbox.map((p) => [p.number, p.bot])).toEqual([
+      [1, true],
+      [2, true],
+      [3, false],
+    ]);
   });
 });
 
