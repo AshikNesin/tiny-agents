@@ -1,4 +1,13 @@
-import { cpSync, existsSync, readdirSync, renameSync, rmSync } from "node:fs";
+import {
+  closeSync,
+  cpSync,
+  existsSync,
+  fsyncSync,
+  openSync,
+  readdirSync,
+  renameSync,
+  rmSync,
+} from "node:fs";
 import path from "node:path";
 import Database from "better-sqlite3";
 import { getTableColumns, getTableName, type Table } from "drizzle-orm";
@@ -15,10 +24,65 @@ export interface OpenAppDatabaseOptions {
 
 export function openAppDatabase(url: string, options: OpenAppDatabaseOptions): AppDatabase {
   const file = resolveSqlitePath(url);
+  if (file !== ":memory:") recoverInterruptedSwap(file);
   if (file !== ":memory:" && existsSync(file) && isLegacyLayout(file)) {
     return copyLegacyDatabase(file, url, options);
   }
   return createAppDb(url, { migrationsFolder: options.migrationsFolder });
+}
+
+function recoverInterruptedSwap(file: string): void {
+  const dir = path.dirname(file);
+  if (existsSync(file) || !existsSync(dir)) return;
+  const prefix = path.basename(file);
+  const main = (name: string) => !name.endsWith("-wal") && !name.endsWith("-shm");
+  const staged = readdirSync(dir)
+    .filter((name) => name.startsWith(`${prefix}.migrating-`) && main(name))
+    .sort()
+    .at(-1);
+  if (staged) {
+    const staging = path.join(dir, staged);
+    renameSync(staging, file);
+    for (const suffix of ["-wal", "-shm"]) {
+      rmSync(staging + suffix, { force: true });
+      rmSync(file + suffix, { force: true });
+    }
+    syncDirectory(dir);
+    logger.warn({ file }, "Completed a database migration a crash had left half-done");
+    return;
+  }
+  const backup = readdirSync(dir)
+    .filter((name) => name.startsWith(`${prefix}.prisma-backup-`) && main(name))
+    .sort()
+    .at(-1);
+  if (!backup) return;
+  renameSync(path.join(dir, backup), file);
+  for (const suffix of ["-wal", "-shm"]) {
+    const from = path.join(dir, backup + suffix);
+    if (existsSync(from)) renameSync(from, file + suffix);
+  }
+  syncDirectory(dir);
+  logger.warn({ file }, "Restored the pre-migration database a crash had left moved aside");
+}
+
+function syncStaged(staging: string): void {
+  const fd = openSync(staging, "r+");
+  try {
+    fsyncSync(fd);
+  } finally {
+    closeSync(fd);
+  }
+  syncDirectory(path.dirname(staging));
+}
+
+function syncDirectory(dir: string): void {
+  if (process.platform === "win32") return;
+  const fd = openSync(dir, "r");
+  try {
+    fsyncSync(fd);
+  } finally {
+    closeSync(fd);
+  }
 }
 
 export function isLegacyLayout(file: string): boolean {
@@ -98,12 +162,14 @@ function copyLegacyDatabase(
   }
   source.close();
   sqliteConnection(target).close();
+  syncStaged(staging);
 
   renameSync(file, backup);
   for (const suffix of ["-wal", "-shm"]) {
     if (existsSync(file + suffix)) renameSync(file + suffix, backup + suffix);
   }
   renameSync(staging, file);
+  syncDirectory(path.dirname(file));
   for (const suffix of ["-wal", "-shm"]) rmSync(staging + suffix, { force: true });
 
   if (options.uploadsRoot) report.uploadsCopied = copyLegacyUploads(options.uploadsRoot);

@@ -1,9 +1,10 @@
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import Database from "better-sqlite3";
 import { asc, eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
+import { createAppDb, sqliteConnection } from "../../../apps/web/src/server/db/index";
 import * as schema from "../../../apps/web/src/server/db/schema";
 import {
   convertKeyvEntry,
@@ -243,6 +244,32 @@ describe("legacy (Prisma) database copy", () => {
     const db = openAppDatabase(`file:${file}`, { migrationsFolder: MIGRATIONS });
     expect(existsSync(stale)).toBe(false);
     expect(await db.$count(schema.bots)).toBe(1);
+  });
+
+  it("completes the swap when a crash left the new database staged and app.db gone", async () => {
+    const staged = path.join(dir, "app.db.migrating-crash");
+    sqliteConnection(createAppDb(`file:${staged}`, { migrationsFolder: MIGRATIONS })).close();
+    renameSync(file, `${file}.prisma-backup-crash`);
+    expect(existsSync(file)).toBe(false);
+
+    const db = openAppDatabase(`file:${file}`, { migrationsFolder: MIGRATIONS });
+    expect(existsSync(file)).toBe(true);
+    expect(existsSync(staged)).toBe(false);
+    expect(isLegacyLayout(file)).toBe(false);
+    expect(await db.$count(schema.bots)).toBe(0);
+  });
+
+  it("rolls back when a crash left app.db gone and only the backup remains", async () => {
+    const backup = `${file}.prisma-backup-crash`;
+    renameSync(file, backup);
+    expect(existsSync(file)).toBe(false);
+
+    const db = openAppDatabase(`file:${file}`, { migrationsFolder: MIGRATIONS });
+    expect(existsSync(file)).toBe(true);
+    expect(existsSync(backup)).toBe(false);
+    expect(isLegacyLayout(file)).toBe(false);
+    expect(await db.$count(schema.bots)).toBe(1);
+    expect(readdirSync(dir).some((name) => name.startsWith("app.db.prisma-backup-"))).toBe(true);
   });
 
   it("does nothing once the database is in the Drizzle layout", async () => {

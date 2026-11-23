@@ -164,6 +164,49 @@ describe("Shelley wire helpers", () => {
     expect(assetPath("http://elsewhere")).toBeUndefined();
   });
 
+  it("keeps a malformed percent escape from breaking the whole transcript", () => {
+    const url = "/api/read?path=/tmp/shelley-screenshots/shot%zz.png";
+    expect(assetFromUrl(url)).toMatchObject({
+      ref: `file:${url.slice("/api/read?path=".length)}`,
+      name: "shot%zz.png",
+      image: true,
+    });
+    const result: ShelleyMessage = {
+      message_id: "r1",
+      sequence_id: 1,
+      type: "user",
+      created_at: "2026-11-03T17:00:00Z",
+      llm_data: JSON.stringify({
+        Content: [
+          {
+            Type: 6,
+            ToolUseID: "tool_read_bad",
+            ToolResult: [{ MediaType: "image/png", DisplayImageURL: url }],
+          },
+        ],
+      }),
+      display_data: JSON.stringify([{ tool_use_id: "tool_read_bad", display: null }]),
+    };
+    const call: ShelleyMessage = {
+      message_id: "a1",
+      sequence_id: 0,
+      type: "agent",
+      created_at: "2026-11-03T16:59:00Z",
+      llm_data: JSON.stringify({
+        Content: [{ Type: 5, ID: "tool_read_bad", ToolName: "read_image" }],
+      }),
+    };
+    const items = buildTranscript([call, result], "shelley");
+    const tool = items.find((i) => i.kind === "tool");
+    expect(tool).toMatchObject({ name: "read_image", status: "done" });
+  });
+
+  it("round-trips image refs whose ids grew past four digits", () => {
+    const asset = assetFromUrl("/api/message/m1/image/12345/678901");
+    expect(asset?.ref).toBe("img:m1:12345:678901");
+    expect(assetPath(asset!.ref)).toBe("/message/m1/image/12345/678901");
+  });
+
   it("reads queued messages and message_user calls", () => {
     expect(
       queuedMessages({

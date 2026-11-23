@@ -121,7 +121,13 @@ export class Session {
       this.pendingTurns.push({ turnId: turn.turnId, resolve, reject });
     });
     this.turnQueue.push(turn);
-    await this.ensureProcess();
+    try {
+      await this.ensureProcess();
+    } catch (error) {
+      this.alive = false;
+      this.failCurrent(error instanceof Error ? error : new Error(String(error)));
+      return done;
+    }
     return done;
   }
 
@@ -140,34 +146,40 @@ export class Session {
     this.activeGeneration = generation;
     const signal = this.abort.signal;
     const maxTurns = this.maxTurns ?? this.timings.maxTurns;
-    this.process = this.factory({
-      model: this.model,
-      system: this.system,
-      resume: this.claudeSessionId,
-      tools: this.tools,
-      signal,
-      turns: this.turns(),
-      publish: (event) => this.onFactoryEvent(event),
-      callTool: (call) => this.onTool(call),
-      setClaudeSessionId: (id) => {
-        this.claudeSessionId = id;
-        this.publish({ type: "session", claudeSessionId: id });
-      },
-      ...(maxTurns === "unlimited" ? {} : { maxTurns }),
-    }).then(
-      () => {
-        if (generation !== this.generation) return;
-        this.alive = false;
-        this.failCurrent(new Error("Claude process ended"));
-      },
-      (error: unknown) => {
-        if (generation !== this.generation) return;
-        this.alive = false;
-        const wrapped = error instanceof Error ? error : new Error(String(error));
-        this.failed = wrapped;
-        this.failCurrent(wrapped);
-      },
-    );
+    this.process = Promise.resolve()
+      .then(() =>
+        this.factory({
+          model: this.model,
+          system: this.system,
+          resume: this.claudeSessionId,
+          tools: this.tools,
+          signal,
+          turns: this.turns(),
+          publish: (event) => this.onFactoryEvent(event),
+          callTool: (call) => this.onTool(call),
+          setClaudeSessionId: (id) => {
+            this.claudeSessionId = id;
+            this.publish({ type: "session", claudeSessionId: id });
+          },
+          ...(maxTurns === "unlimited" ? {} : { maxTurns }),
+        }),
+      )
+      .then(
+        () => {
+          if (generation !== this.generation) return;
+          this.alive = false;
+          this.turnQueue = new AsyncQueue();
+          this.failCurrent(new Error("Claude process ended"));
+        },
+        (error: unknown) => {
+          if (generation !== this.generation) return;
+          this.alive = false;
+          this.turnQueue = new AsyncQueue();
+          const wrapped = error instanceof Error ? error : new Error(String(error));
+          this.failed = wrapped;
+          this.failCurrent(wrapped);
+        },
+      );
   }
 
   private async onTool(call: {

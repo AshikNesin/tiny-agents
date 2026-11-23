@@ -15,17 +15,38 @@ const app = createTestApp();
 
 function fakeSupervisor() {
   const sent: ServerMessage[] = [];
+  const disconnectListeners: (() => void)[] = [];
+  let connected = true;
   let listener: (message: unknown) => void = () => {};
   const channel: SupervisorChannel = {
-    send: (message) => sent.push(message),
+    send: (message) => {
+      if (!connected) return false;
+      sent.push(message);
+      return true;
+    },
     onMessage: (next) => {
       listener = next;
       return () => {
         listener = () => {};
       };
     },
+    onDisconnect: (next) => {
+      disconnectListeners.push(next);
+      return () => {
+        const index = disconnectListeners.indexOf(next);
+        if (index >= 0) disconnectListeners.splice(index, 1);
+      };
+    },
   };
-  return { channel, sent, deliver: (message: unknown) => listener(message) };
+  return {
+    channel,
+    sent,
+    deliver: (message: unknown) => listener(message),
+    disconnect: () => {
+      connected = false;
+      for (const fn of disconnectListeners.splice(0)) fn();
+    },
+  };
 }
 
 const STATUS: UpdateStatus = {
@@ -74,6 +95,30 @@ describe("local updates API", () => {
       202,
     );
     expect(supervisor.sent.slice(1)).toEqual([{ type: "update-check" }, { type: "update-apply" }]);
+  });
+
+  it("reports the channel dead when the supervisor disconnects, instead of a stale silent no-op", async () => {
+    const supervisor = fakeSupervisor();
+    stop = startUpdates(supervisor.channel);
+    supervisor.deliver({ type: "update-status", status: STATUS });
+    const { token } = await signIn(app);
+    expect((await api<UpdateView>(app, "/api/v1/system/update", { token })).body.data).toEqual({
+      supervised: true,
+      status: STATUS,
+    });
+
+    supervisor.disconnect();
+    expect((await api<UpdateView>(app, "/api/v1/system/update", { token })).body.data).toEqual({
+      supervised: false,
+      status: null,
+    });
+    expect((await api(app, "/api/v1/system/update/check", { method: "POST", token })).status).toBe(
+      409,
+    );
+    expect((await api(app, "/api/v1/system/update/apply", { method: "POST", token })).status).toBe(
+      409,
+    );
+    expect(supervisor.sent.slice(1)).toEqual([]);
   });
 
   it("is the owner's alone", () => {
