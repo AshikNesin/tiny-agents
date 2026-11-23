@@ -49,6 +49,7 @@ import { setChatTitler } from "./api/bots/chats.title";
 import { setCodeBranchNamer } from "./api/code/code.naming";
 import { createSideCaller, type SideCaller } from "./api/bots/side-call";
 import { scheduleMemoryTidy, setMemoryTidier } from "./api/bots/memories.tidy";
+import { scheduleReviewPrune } from "./api/code/code.reviews.prune";
 import { attachBrowserVnc } from "./api/bots/browser.vnc";
 import { attachComputerVnc } from "./api/bots/computer.vnc";
 import { closeSandboxConnections } from "./api/bots/sandbox-host";
@@ -249,6 +250,9 @@ async function main(): Promise<void> {
     needs: ["agent runtime"],
     start: () => {
       stopCode = startCode(runtime);
+      void scheduleReviewPrune().catch((error: unknown) =>
+        logger.warn({ error }, "Scheduling the daily PR review checkout prune failed"),
+      );
     },
     stop: () => stopCode(),
   });

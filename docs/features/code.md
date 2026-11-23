@@ -465,6 +465,13 @@ git there, against the PR's base. **Update** (the header's refresh) moves
 the review to the PR's latest commit. **Close review** removes the review's
 own worktree (never a thread's).
 
+**Daily prune.** Once a day the app removes the review worktrees of other
+people's PRs that sat idle (`code.reviews.prune.ts` owns the schedule and
+the idle time). It keeps your own
+PRs, PRs a Code thread opened, a thread's worktree, and a checkout with
+uncommitted changes or local commits. A pruned review stays in the list;
+opening it checks the PR out again.
+
 **The page** (`/code/reviews/<id>`, `PullReview.tsx`) takes the whole
 screen, laid out like [diffshub](https://diffshub.com) (see
 [CREDITS](../../CREDITS.md)): the agent's column, a file tree with a

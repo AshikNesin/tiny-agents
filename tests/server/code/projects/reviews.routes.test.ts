@@ -419,7 +419,7 @@ describe("reviewing a Code thread's own PR", () => {
     expect(await sh(local, `git -C ${worktree} log -1 --format=%s`)).toBe("not pushed");
   });
 
-  it("lets go of the thread's worktree when the thread is archived; opening again checks it out", async () => {
+  it("lets go of the thread's worktree when the thread is archived and checks the PR out on its own", async () => {
     const { threadId, head } = await threadPull();
     const review = await open();
     const { onThreadArchived } =
@@ -427,8 +427,8 @@ describe("reviewing a Code thread's own PR", () => {
 
     await onThreadArchived(threadId, true);
 
-    const files = await call("GET", `/threads/${encodeURIComponent(review.key)}/review/files`);
-    expect(files.status).toBe(404);
+    expect((await reviewFiles(review.key)).map((f) => f.path)).toEqual(["src/retry.ts"]);
+    expect(await sh(local, `git -C ${REVIEW_DIR()} rev-parse HEAD`)).toBe(head);
     const again = await open();
     expect(again).toMatchObject({ id: review.id, worktreeThreadId: null });
     expect(await sh(local, `git -C ${REVIEW_DIR()} rev-parse HEAD`)).toBe(head);
