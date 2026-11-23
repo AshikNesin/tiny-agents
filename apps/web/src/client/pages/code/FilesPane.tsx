@@ -383,7 +383,7 @@ export function FilesPane({
           {open === null ? (
             <div className="text-muted-foreground flex h-full flex-col items-center justify-center gap-2 p-6 text-center text-xs">
               <p>Pick a file to read or edit it.</p>
-              <p className="flex items-center gap-1.5">
+              <p className="flex items-center gap-1.5 pointer-coarse:hidden">
                 <Kbd keys="p" /> finds a file by name, <Kbd keys="s" /> searches inside them.
               </p>
             </div>

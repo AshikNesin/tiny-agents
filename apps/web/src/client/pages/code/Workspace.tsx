@@ -81,7 +81,11 @@ function PaneHeader({
   const WideIcon = wide ? Minimize2 : Maximize2;
   return (
     <div className="border-border flex h-11 shrink-0 items-center gap-1 border-b px-2">
-      <div role="tablist" aria-label="Work pane" className="flex min-w-0 flex-1 items-center gap-1">
+      <div
+        role="tablist"
+        aria-label="Work pane"
+        className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto"
+      >
         {PANES.filter((entry) => entry.id !== "pr" || hasPull).map((entry) => (
           <button
             key={entry.id}
@@ -91,14 +95,14 @@ function PaneHeader({
             onClick={() => onPane(entry.id)}
             data-testid={`code-pane-${entry.id}`}
             className={cn(
-              "flex h-7 items-center gap-1.5 rounded-lg px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
+              "flex h-7 shrink-0 items-center gap-1.5 rounded-lg px-2 text-sm whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
               pane === entry.id
                 ? "bg-muted text-foreground font-medium"
                 : "text-muted-foreground hover:text-foreground",
             )}
           >
             {entry.label}
-            <Kbd keys={entry.keys} />
+            <Kbd keys={entry.keys} className="max-sm:hidden" />
           </button>
         ))}
       </div>
@@ -120,7 +124,7 @@ function PaneHeader({
         title="Close the work pane"
         className="text-muted-foreground hover:bg-muted hover:text-foreground flex h-7 items-center gap-1.5 rounded-lg px-1.5 outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
       >
-        <Kbd keys="\" />
+        <Kbd keys="\" className="max-sm:hidden" />
         <X className="size-3.5 lg:hidden" />
       </button>
     </div>
