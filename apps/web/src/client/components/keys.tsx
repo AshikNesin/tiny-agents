@@ -88,6 +88,7 @@ export function Kbd({ keys, className }: { keys: string; className?: string }) {
     isLetter(keys) && keys === keys.toUpperCase() ? ["⇧", keys] : formatShortcut(keys, mac);
   return (
     <kbd
+      aria-hidden="true"
       className={cn(
         "border-border text-muted-foreground bg-background inline-flex h-4.5 min-w-4.5 items-center justify-center gap-0.5 rounded border px-1 text-[0.6875rem] leading-none font-medium",
         monoClass,
