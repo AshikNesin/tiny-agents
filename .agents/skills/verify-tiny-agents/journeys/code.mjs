@@ -352,12 +352,9 @@ await journey(
         const create = next.getByRole("button", { name: /create PR/i });
         await expect(create).toBeVisible({ timeout: 20_000 });
         await create.click();
-        await expect
-          .poll(async () => (await threads()).find((t) => t.id === ids.second)?.pr?.number, {
-            timeout: 30_000,
-          })
-          .toBeTruthy();
-        const number = (await threads()).find((t) => t.id === ids.second).pr.number;
+        const prNumber = async () => (await threads()).find((t) => t.id === ids.second)?.pr?.number;
+        await expect.poll(prNumber, { timeout: 30_000 }).toBeTruthy();
+        const number = await prNumber();
         await expect(next.getByRole("button", { name: `PR #${number}` })).toBeVisible({
           timeout: 20_000,
         });
