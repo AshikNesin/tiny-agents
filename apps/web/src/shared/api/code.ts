@@ -254,6 +254,15 @@ export interface InboxPullView {
   reviewId: string | null;
 }
 
+export interface ReviewInboxSettings {
+  repos: "all" | "projects";
+  direct: boolean;
+  drafts: boolean;
+  bots: boolean;
+  mute: string[];
+  limit: number;
+}
+
 export interface InboxQuery {
   days?: number;
   repo?: string;

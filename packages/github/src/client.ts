@@ -139,12 +139,13 @@ export interface InboxPull {
   headSha: string;
   decision: "approved" | "changes_requested" | "review_required" | null;
   lastReview: { at: string; commit: string | null } | null;
+  bot: boolean;
 }
 
 const INBOX_PULL = `fragment InboxPull on PullRequest {
   number title url isDraft updatedAt headRefOid reviewDecision
   repository { owner { login } name }
-  author { login }
+  author { login __typename }
   reviews(author: $login, last: 1) { nodes { submittedAt commit { oid } } }
 }`;
 
@@ -159,7 +160,13 @@ export interface InboxFilter {
   updatedSince?: string;
   repos?: RepoRef[];
   drafts?: boolean;
+  direct?: boolean;
 }
+
+const BOT_LOGIN = /(?:[-_]bot|\[bot\])$/i;
+
+const isBotAuthor = (author: { login: string; __typename?: string } | null) =>
+  author?.__typename === "Bot" || (author ? BOT_LOGIN.test(author.login) : false);
 
 const INBOX_SEARCHES = {
   requested: "review-requested:@me",
@@ -175,6 +182,9 @@ function inboxSearches(filter: InboxFilter): Record<keyof typeof INBOX_SEARCHES,
     filter.drafts === false ? "draft:false" : "",
   ].filter(Boolean);
   const repos = (filter.repos ?? []).map((r) => `repo:${repoSlug(r)}`);
+  const searches: Record<keyof typeof INBOX_SEARCHES, string> = filter.direct
+    ? { ...INBOX_SEARCHES, requested: "user-review-requested:@me" }
+    : INBOX_SEARCHES;
   const build = (who: string, withRepos: boolean) =>
     [
       "is:open is:pr archived:false",
@@ -184,7 +194,7 @@ function inboxSearches(filter: InboxFilter): Record<keyof typeof INBOX_SEARCHES,
       "sort:updated-desc",
     ].join(" ");
   const out = {} as Record<keyof typeof INBOX_SEARCHES, string>;
-  for (const [key, who] of Object.entries(INBOX_SEARCHES) as Array<
+  for (const [key, who] of Object.entries(searches) as Array<
     [keyof typeof INBOX_SEARCHES, string]
   >) {
     const full = build(who, repos.length > 0);
@@ -202,7 +212,7 @@ interface RawInboxPull {
   headRefOid: string;
   reviewDecision: "APPROVED" | "CHANGES_REQUESTED" | "REVIEW_REQUIRED" | null;
   repository: { owner: { login: string }; name: string };
-  author: { login: string } | null;
+  author: { login: string; __typename?: string } | null;
   reviews: { nodes: Array<{ submittedAt: string | null; commit: { oid: string } | null }> };
 }
 
@@ -558,6 +568,7 @@ export function createGitHubClient(api: GitHubApi): GitHubClient {
             lastReview: last?.submittedAt
               ? { at: last.submittedAt, commit: last.commit?.oid ?? null }
               : null,
+            bot: isBotAuthor(node.author),
           });
         }
       }

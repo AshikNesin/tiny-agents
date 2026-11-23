@@ -14,6 +14,7 @@ import type {
   GitHubStatus,
   ProjectView,
   InboxPullView,
+  ReviewInboxSettings,
   PullReviewView,
   PullThreadsView,
   PushedReview,
@@ -52,6 +53,9 @@ import {
   reviewComments,
   replyToReviewThread,
   reviewInbox,
+  inboxSettings,
+  inboxSettingsChange,
+  saveInboxSettings,
   resolveReviewThread,
   reviewTerminal,
   reviewIdOfKey,
@@ -534,6 +538,15 @@ router.get("/code/reviews/inbox", async (c) => {
   const query = inboxQuery.safeParse(c.req.query());
   if (!query.success) throw Boom.badRequest("Cannot read that filter.");
   return ok<InboxPullView[]>(c, await reviewInbox(query.data));
+});
+
+router.get("/code/reviews/settings", async (c) =>
+  ok<ReviewInboxSettings>(c, await inboxSettings()),
+);
+
+router.put("/code/reviews/settings", async (c) => {
+  const change = await parseBody(c, inboxSettingsChange);
+  return ok<ReviewInboxSettings>(c, await saveInboxSettings(change));
 });
 
 router.get("/code/reviews/:review", async (c) =>
