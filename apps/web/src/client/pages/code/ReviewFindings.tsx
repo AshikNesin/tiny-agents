@@ -134,7 +134,7 @@ export function ReviewFindings({
       </ul>
       {open.length > 0 && (
         <p className="text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]">
-          <span>
+          <span className="pointer-coarse:hidden">
             <Kbd keys="n" /> <Kbd keys="p" /> next, previous
           </span>
           <span>Nothing is posted until you submit.</span>

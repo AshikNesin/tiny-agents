@@ -204,7 +204,7 @@ export function NewThreadDialog({
               data-testid="code-new-message"
             />
             <div className="flex items-center gap-2">
-              <span className="text-muted-foreground flex flex-1 items-center gap-1.5 text-xs">
+              <span className="text-muted-foreground flex flex-1 items-center gap-1.5 text-xs pointer-coarse:invisible">
                 <Kbd keys="enter" /> start
                 <Kbd keys="shift+enter" className="ml-2" /> new line
               </span>

@@ -90,7 +90,7 @@ export function Kbd({ keys, className }: { keys: string; className?: string }) {
     <kbd
       aria-hidden="true"
       className={cn(
-        "border-border text-muted-foreground bg-background inline-flex h-4.5 min-w-4.5 items-center justify-center gap-0.5 rounded border px-1 text-[0.6875rem] leading-none font-medium",
+        "border-border text-muted-foreground bg-background inline-flex h-4.5 pointer-coarse:hidden min-w-4.5 items-center justify-center gap-0.5 rounded border px-1 text-[0.6875rem] leading-none font-medium",
         monoClass,
         className,
       )}
