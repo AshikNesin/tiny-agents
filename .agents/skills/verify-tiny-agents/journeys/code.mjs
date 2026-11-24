@@ -13,8 +13,10 @@ await journey(
     const ids = {};
     const threads = () => api.get("/code/threads");
     const row = (id) => page.locator(`[data-thread="${id}"]`);
-    const section = (name) =>
-      page.getByRole("navigation", { name: "Threads" }).getByRole("region", { name });
+    const status = (id, group) => page.locator(`[data-thread="${id}"][data-status="${group}"]`);
+    const needsYou = page
+      .getByRole("navigation", { name: "Threads" })
+      .locator('[data-status="needs-you"]');
     const composer = page.getByRole("textbox", { name: "Message Demo agent" });
     const transcript = page.getByTestId("code-transcript");
     const working = (id) => threads().then((all) => all.find((t) => t.id === id)?.working);
@@ -55,19 +57,15 @@ await journey(
       expect(ids.first).not.toContain(":");
     });
 
-    await step(
-      "the list groups by status: finished turns need you, the slow one works",
-      async () => {
-        await page.goto("/code", LOADED);
-        await expect(section("Needs you").locator(row(ids.first))).toBeVisible({ timeout: 20_000 });
-        await expect(section("Needs you").locator(row(ids.second))).toBeVisible();
-        await expect(section("Working").locator(row(ids.slow))).toBeVisible();
-      },
-    );
+    await step("the list marks status: finished turns need you, the slow one works", async () => {
+      await page.goto("/code", LOADED);
+      await expect(status(ids.first, "needs-you")).toBeVisible({ timeout: 20_000 });
+      await expect(status(ids.second, "needs-you")).toBeVisible();
+      await expect(status(ids.slow, "working")).toBeVisible();
+    });
     await proof("list");
 
-    await step("j opens the first thread in the list; reading it moves it to Done", async () => {
-      await expect(row(ids.first)).toContainText("finished");
+    await step("j opens the first thread in the list; reading it marks it done", async () => {
       await page.keyboard.press("j");
       const first = await page
         .getByRole("navigation", { name: "Threads" })
@@ -76,13 +74,13 @@ await journey(
         .getAttribute("data-thread");
       await on(first);
       await expect(transcript.getByText(/^Done\. I noted/)).toBeVisible({ timeout: 20_000 });
-      await expect(section("Done").locator(row(first))).toBeVisible({ timeout: 10_000 });
+      await expect(status(first, "done")).toBeVisible({ timeout: 10_000 });
     });
 
     await step("u jumps to the next thread that needs you", async () => {
       await page.keyboard.press("u");
       await expect(page).toHaveURL(/\/code\/t\//);
-      await expect(section("Needs you")).toHaveCount(0, { timeout: 10_000 });
+      await expect(needsYou).toHaveCount(0, { timeout: 10_000 });
     });
 
     await step("open the working thread: its tool call streams", async () => {

@@ -1,10 +1,10 @@
 # Code
 
-The owner's coding workspace at `/code`: threads grouped by status on the left, the open thread in the middle, and a work pane on the right. Every action has a key; `?` lists them and ⌘K runs the same commands by name.
+The owner's coding workspace at `/code`: threads under their project on the left, the open thread in the middle, and a work pane on the right. Every action has a key; `?` lists them and ⌘K runs the same commands by name.
 
 ## Sub-features
 
-- `code-list` groups threads under `Needs you`, `Working`, `In review` and `Done`. A finished turn nobody has read needs you; reading it moves the thread on.
+- `code-list` lists each project's threads under the project's name, needing-you first; each row's `data-status` is `needs-you`, `working`, `review` or `done`. A finished turn nobody has read needs you; reading it moves the thread on. The name opens the project chat; on a phone the chat's menu button goes back to the list (`code-threads.mjs`).
 - `code-move` `j` / `k` open the next or previous thread in the order shown; `u` jumps to the next one that needs you.
 - `code-thread` shows the transcript streaming: thinking, a row per tool call, the answer.
 - `code-steer` `c` focuses the composer. `Enter` steers a running turn, `Alt+Enter` queues for its end, a queued message can be sent now or cancelled, and `Escape` leaves the composer, then stops the agent.
@@ -32,8 +32,8 @@ Preconditions:
 - `ta-verify up --demo-agent --fake-github --local-sandbox`, doctor OK. The journey requires all three and reports UNREACHABLE without them. The demo agent stands in for a model: it lists the directory, appends a line to `NOTES.md` and answers; `slow` in a message stretches the turn, `commit` commits the edit, `fail` ends it with an error, and a review request gets a fixed brief with two findings.
 
 - **Setup.** `POST /api/v1/code/projects` (`acme/web`), then three threads through `POST /api/v1/code/threads`: two that finish, one `slow`.
-- **List.** `/code`: the two finished threads sit under `Needs you`, the slow one under `Working`.
-- **Move.** `Escape` (the new-thread box has focus), `j` opens the first row; its answer shows and its row moves to `Done`. `u` opens the other, and `Needs you` disappears.
+- **List.** `/code`: the two finished threads are marked `needs-you`, the slow one `working`.
+- **Move.** `Escape` (the new-thread box has focus), `j` opens the first row; its answer shows and its row is marked `done`. `u` opens the other, and no row needs you.
 - **Steer and queue.** In the working thread the hint under the composer reads `Enter steers · Alt+Enter queues · Esc stops`. `c`, type, `Enter`: the message joins the transcript and the thread still works. Type, `Alt+Enter`: it waits in `code-queued`.
 - **Stop.** Cancel the queued message, `Escape` (leaves the composer), `Escape` again: `GET /api/v1/code/threads` reports the thread idle and the transcript ends with `Stopped.`.
 - **Panes.** `1`: the Changes tab is selected and shows `NOTES.md` with the committed line. `2`: `is 1 commit ahead of main` and a Publish button. `\` and `[` hide and restore the pane and the list.
@@ -42,5 +42,6 @@ Preconditions:
 - **Rewind.** `n` starts a thread from the dialog; `t` runs its last turn again from the files as they were. A message with `fail` ends the turn with an error and the row reads `failed`.
 - **Review.** Publish the first thread, set the fake pull request's author through the fake GitHub's control server (the app's port + 3: `POST /pulls/<n>`, `POST /inbox`), then `/code`: the row under `Reviews` opens the review. `r`: the brief reads `Adds NOTES.md` and two findings show. `y`, then `d`: none stay open. `Shift+X`: the dialog is on `Request changes` with a summary; Submit, and `GET /state` on the control server lists the review under `submitted` with the added finding as its comment.
 - **Open in editor.** Launch with `--local-sandbox` too, so the demo agent's SSH target has a port. The arrow button at the end of the thread header (or `o`) opens `code-open-editor` on Cursor with host `tiny-agents-sandbox` and the `~/.ssh/config` entry. Pick Zed, type a plain host: the entry goes and Copy link gives `zed://ssh/<host>/<worktree>`. Open in Zed, then a fresh tab: the dialog reopens on Zed with that host. Headless Chromium stops taking input in the tab that tried the `zed://` link, so check in a new tab. Proof: `ta-verify drive $S/journeys/code-open-editor.mjs` → `sandbox-config`, `zed`.
+- **Projects.** `ta-verify up --demo-agent --fake-github` (the fake also offers `acme/api`, so two projects can exist): each project's threads sit in a region named after the project; the link `<project> chat` opens `/code/p/<id>`; on an iPhone the chat's `Open menu` button lands back on `/code`. `TA_VERIFY_SHOTS=<dir>` also saves desktop and phone screenshots there. Proof: `ta-verify drive $S/journeys/code-threads.mjs` → `desktop-home`, `desktop-project-chat`, `desktop-thread`.
 - **Phone.** On an iPhone (touch) the list, the new thread box, the thread and the Files tab show no key hints; a long branch line stays on screen; the work pane's tabs fit on one line beside the close button. Proof: `ta-verify drive $S/journeys/code-phone.mjs` → `new-thread`, `thread`, `pane`, `files`.
 - **Proof.** `ta-verify drive $S/journeys/code.mjs` → `code/list`, `steer-and-queue`, `stopped`, `changes`, `files`, `terminal`, `pane-and-keys`, `rewound`, `new-thread`, `review`.

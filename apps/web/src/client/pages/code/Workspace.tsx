@@ -11,7 +11,7 @@ import { useShellConfig } from "@groot/shell/lib/shell-config";
 import { Spinner } from "../../components/ui/spinner";
 import { codeApi, threadPath } from "../../lib/code/api";
 import { useThreadCommenting } from "../../lib/code/comments";
-import { listOrder, statusSections } from "../../lib/code/list";
+import { listOrder, projectGroups, statusSections } from "../../lib/code/list";
 import { projectsApi, reviewPath, reviewsApi, useProjects } from "../../lib/code/projects";
 import { errorMessage } from "../../lib/errors";
 import type { WorkflowName } from "../../../shared/code-status";
@@ -165,7 +165,11 @@ export function CodeWorkspace() {
   const composing = pathname === "/code/new";
 
   const harnesses = useMemo(
-    () => (harnessList ?? []).map((h) => ({ ...h, status: statuses[h.id] ?? h.status })),
+    () =>
+      (harnessList ?? []).map((h) => ({
+        ...h,
+        status: statuses[h.id] ?? h.status,
+      })),
     [harnessList, statuses],
   );
   const listed = useMemo(() => threads?.filter((t) => !t.review) ?? null, [threads]);
@@ -248,7 +252,9 @@ export function CodeWorkspace() {
   const archiveThread = useArchive();
   const archive = useCallback(() => {
     if (!threadId) return;
-    void archiveThread({ id: threadId, title: row?.title ?? "" }, true, { leave: true });
+    void archiveThread({ id: threadId, title: row?.title ?? "" }, true, {
+      leave: true,
+    });
   }, [threadId, row?.title, archiveThread]);
   const merge = useCallback(() => {
     if (!threadId || !prNumber) return;
@@ -270,7 +276,10 @@ export function CodeWorkspace() {
     if (window.matchMedia("(max-width: 1023px)").matches) setPane(null);
   });
 
-  const order = useMemo(() => listOrder(statusSections(listed ?? [])), [listed]);
+  const order = useMemo(
+    () => listOrder(projectGroups(listed ?? [], projects ?? [])),
+    [listed, projects],
+  );
   const move = useCallback(
     (step: 1 | -1) => {
       if (order.length === 0) return;
@@ -290,8 +299,20 @@ export function CodeWorkspace() {
 
   const commands = useMemo<KeyCommand[]>(
     () => [
-      { id: "next", group: "Go to", keys: "j", label: "Next thread", run: () => move(1) },
-      { id: "prev", group: "Go to", keys: "k", label: "Previous thread", run: () => move(-1) },
+      {
+        id: "next",
+        group: "Go to",
+        keys: "j",
+        label: "Next thread",
+        run: () => move(1),
+      },
+      {
+        id: "prev",
+        group: "Go to",
+        keys: "k",
+        label: "Previous thread",
+        run: () => move(-1),
+      },
       {
         id: "needs",
         group: "Go to",
@@ -435,7 +456,13 @@ export function CodeWorkspace() {
         enabled: Boolean(threadId),
         run: () => setPane(openPane ? null : (useUiStore.getState().lastCodePane ?? "changes")),
       },
-      { id: "keys", group: "Go to", keys: "?", label: "Show the keys", run: () => setHelp(true) },
+      {
+        id: "keys",
+        group: "Go to",
+        keys: "?",
+        label: "Show the keys",
+        run: () => setHelp(true),
+      },
       {
         id: "commands",
         group: "Go to",
@@ -507,7 +534,7 @@ export function CodeWorkspace() {
         hidden={wide || undefined}
         data-state={listOpen ? "open" : "closed"}
         className={cn(
-          "bg-sidebar text-sidebar-foreground border-sidebar-border w-full shrink-0 flex-col lg:w-64 lg:border-r-[0.5px]",
+          "bg-sidebar text-sidebar-foreground border-sidebar-border w-full shrink-0 flex-col lg:w-68 lg:border-r-[0.5px]",
           full ? "hidden" : "flex",
           listOpen ? "lg:flex" : "lg:hidden",
         )}

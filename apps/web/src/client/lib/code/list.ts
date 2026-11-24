@@ -15,7 +15,7 @@ const SECTIONS: Array<Pick<StatusSection, "key" | "label">> = [
   { key: "done", label: "Done" },
 ];
 
-const groupOf = (row: ThreadSummary): Group =>
+export const groupOf = (row: ThreadSummary): Group =>
   row.status?.group ?? (row.working ? "working" : "done");
 
 export function statusSections(rows: ThreadSummary[]): StatusSection[] {
@@ -26,6 +26,25 @@ export function statusSections(rows: ThreadSummary[]): StatusSection[] {
   })).filter((section) => section.rows.length > 0);
 }
 
-export function listOrder(sections: StatusSection[]): string[] {
+export interface ProjectGroup<P extends { id: string }> {
+  project: P | null;
+  rows: ThreadSummary[];
+}
+
+export function projectGroups<P extends { id: string }>(
+  rows: ThreadSummary[],
+  projects: P[],
+): ProjectGroup<P>[] {
+  const ordered = statusSections(rows).flatMap((section) => section.rows);
+  const known = new Set(projects.map((project) => project.id));
+  const groups: ProjectGroup<P>[] = projects.map((project) => ({
+    project,
+    rows: ordered.filter((row) => row.projectId === project.id),
+  }));
+  const loose = ordered.filter((row) => !row.projectId || !known.has(row.projectId));
+  return loose.length > 0 ? [...groups, { project: null, rows: loose }] : groups;
+}
+
+export function listOrder(sections: Array<{ rows: ThreadSummary[] }>): string[] {
   return sections.flatMap((section) => section.rows.map((row) => row.id));
 }

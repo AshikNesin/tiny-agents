@@ -77,12 +77,16 @@ to GitHub. The list of keys is the `commands` array in
 
 ### The thread list
 
-`ThreadList.tsx`. One line per thread, grouped by status, the ones that
-need you first:
+`ThreadList.tsx`. Each project is a heading with its threads under it, one
+line per thread (`projectGroups` in `apps/web/src/client/lib/code/list.ts`).
+The heading opens the project's chat; its chevron folds the project's
+threads away, and a folded project shows a dot while one of them needs you.
+Threads with no project sit under **Other**. Inside a project the rows run
+by status, the ones that need you first, and the dot beside each says which:
 
 - **Needs you:** the agent asks something, a turn finished or failed and
   you have not read it, or its pull request waits for you. The row says
-  which.
+  which, except for a plain unread finish, which the bold title shows.
 - **Working:** a turn is running. A workflow's name shows beside it.
 - **In review:** it has an open pull request.
 - **Done:** everything else, a merged pull request included.
@@ -94,7 +98,6 @@ Delete show only when the thread's harness can do them (`ThreadMenu` in
 
 The status is worked out from facts, never stored: `threadStatus` in
 `apps/web/src/shared/code-status.ts`. Reading a finished thread moves it on.
-With several projects, a row without a pull request names its project.
 
 Below the threads:
 
@@ -580,7 +583,7 @@ Known limits (register row C7):
 ## Project chat
 
 Each project has one chat, a bot tied to it (`bots.project_id`), opened from
-the top of the Code sidebar and made on first open (`code.chat.ts`, ADR
+its project's heading in the Code sidebar and made on first open (`code.chat.ts`, ADR
 0040). It coordinates instead of coding: its `project` toolkit
 (`createProjectToolkit` in `packages/agent/src/toolkits/code.ts`) starts and
 follows up threads of that project only, lists them with their state,
