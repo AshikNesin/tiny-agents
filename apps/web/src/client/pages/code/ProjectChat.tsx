@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { MessagesSquare } from "lucide-react";
 import { EmptyState } from "@groot/ui";
 import { ChatPane } from "../../components/ChatPane";
@@ -20,6 +21,7 @@ export function ProjectChat({ projectId }: { projectId: string }) {
   const models = useBotsStore((s) => s.models);
   const canAnswer = useBotsStore((s) => s.canAnswer);
   const openEditBot = useUiStore((s) => s.openEditBot);
+  const navigate = useNavigate();
 
   useEffect(() => {
     if (!opened) return;
@@ -50,6 +52,7 @@ export function ProjectChat({ projectId }: { projectId: string }) {
       models={models}
       canAnswer={canAnswer}
       onEditBot={() => void openEditBot(bot.id)}
+      onOpenMenu={() => navigate("/code")}
     />
   );
 }

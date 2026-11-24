@@ -95,6 +95,8 @@ Delete show only when the thread's harness can do them (`ThreadMenu` in
 The status is worked out from facts, never stored: `threadStatus` in
 `apps/web/src/shared/code-status.ts`. Reading a finished thread moves it on.
 With several projects, a row without a pull request names its project.
+A plain unread finish shows only its dot and bold title, not the word
+"finished". Pointing at a row a bot or project chat started says which.
 
 Below the threads:
 
@@ -581,7 +583,8 @@ Known limits (register row C7):
 
 Each project has one chat, a bot tied to it (`bots.project_id`), opened from
 the top of the Code sidebar and made on first open (`code.chat.ts`, ADR
-0040). It coordinates instead of coding: its `project` toolkit
+0040). On a phone the chat's menu button goes back to the thread list. It
+coordinates instead of coding: its `project` toolkit
 (`createProjectToolkit` in `packages/agent/src/toolkits/code.ts`) starts and
 follows up threads of that project only, lists them with their state,
 branch and PR (`code_list`), and archives finished ones (`code_resolve`).

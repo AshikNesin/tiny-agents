@@ -11,7 +11,9 @@ import groot.mobile.data.code.CodeThreadState
 import groot.mobile.data.code.DiffLine
 import groot.mobile.data.code.CodeWorkflow
 import groot.mobile.data.code.RewindPoint
+import groot.mobile.data.code.activeThreads
 import groot.mobile.data.code.codeStatusSections
+import groot.mobile.data.code.starterOf
 import groot.mobile.data.code.codeWorkflows
 import groot.mobile.data.code.lastTurn
 import groot.mobile.data.code.describeTools
@@ -150,6 +152,31 @@ class CodeThreadTest {
         assertEquals("Worked for 12s · $0.040", turnLine(TranscriptItem.Turn("t", 12_400, 0.04)))
         assertEquals("Worked for 3m 4s", turnLine(TranscriptItem.Turn("t", 184_000, null)))
         assertNull(turnLine(TranscriptItem.Turn("t", null, null)))
+    }
+
+    @Test
+    fun `the drawer shows threads that need you, then working ones, with who started each`() {
+        fun row(id: String, group: String, updated: String, extra: String = "") =
+            thread(id, updated = updated).replace(
+                "\"unread\":false",
+                "\"unread\":false,\"status\":{\"group\":\"$group\",\"reason\":null}$extra",
+            )
+        val list = CodeListEvent.from(
+            JSONObject(
+                """{"type":"list","threads":[
+                ${row("t-done", "done", "2026-11-16T08:00:00Z")},
+                ${row("t-run", "working", "2026-11-16T09:00:00Z", ",\"startedBy\":{\"botId\":\"b1\",\"name\":\"Ada\",\"project\":false}")},
+                ${row("t-asks", "needs-you", "2026-11-16T08:30:00Z", ",\"startedBy\":{\"botId\":\"b2\",\"name\":\"web\",\"project\":true}")},
+                ${row("t-run2", "working", "2026-11-16T07:00:00Z")}]}""",
+            ),
+        ) as CodeListEvent.Threads
+
+        val active = activeThreads(list.threads, 2)
+
+        assertEquals(listOf("t-asks", "t-run"), active.shown.map { it.id })
+        assertEquals(1, active.more)
+        assertEquals(listOf("web chat", "Ada"), active.shown.map { starterOf(it) })
+        assertNull(starterOf(list.threads.single { it.id == "t-run2" }))
     }
 
     @Test

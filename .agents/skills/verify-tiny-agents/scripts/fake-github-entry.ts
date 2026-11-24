@@ -40,7 +40,10 @@ installAppForTests({
     workspace: async () => ws,
     credential: async () => "token",
     installationFor: async () => 1,
-    appRepositories: async () => [{ fullName: "acme/web", installationId: 1, private: true }],
+    appRepositories: async () => [
+      { fullName: "acme/web", installationId: 1, private: true },
+      { fullName: "acme/api", installationId: 1, private: true },
+    ],
     convertManifest: async () => {
       throw new Error("No GitHub App in a verify run.");
     },

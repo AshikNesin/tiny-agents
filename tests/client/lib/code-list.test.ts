@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
-import { listOrder, statusSections } from "@/lib/code/list";
+import { activeThreads, listOrder, starterOf, statusSections } from "@/lib/code/list";
 import type { ThreadSummary } from "@/lib/code/api";
 
 const row = (nativeId: string, extra: Partial<ThreadSummary> = {}): ThreadSummary => ({
@@ -46,5 +46,31 @@ describe("the thread list's sections", () => {
       ["working", ["busy"]],
       ["done", ["idle"]],
     ]);
+  });
+});
+
+describe("the threads that are still going", () => {
+  it("are the ones that need you, then the working ones, capped, with a count of the rest", () => {
+    const rows = [
+      row("done", { status: { group: "done", reason: null } }),
+      row("run1", { status: { group: "working", reason: null } }),
+      row("asks", { status: { group: "needs-you", reason: "asks you" } }),
+      row("run2", { status: { group: "working", reason: null } }),
+      row("open", { status: { group: "review", reason: null } }),
+      row("child", { parentId: "run1", status: { group: "working", reason: null } }),
+    ];
+    const { shown, more } = activeThreads(rows, 2);
+    expect(shown.map((r) => r.id)).toEqual(["asks", "run1"]);
+    expect(more).toBe(1);
+  });
+
+  it("name who started them: a bot by name, a project chat as its chat, you as nobody", () => {
+    expect(starterOf(row("a", { startedBy: { botId: "b1", name: "Ada", project: false } }))).toBe(
+      "Ada",
+    );
+    expect(starterOf(row("b", { startedBy: { botId: "b2", name: "web", project: true } }))).toBe(
+      "web chat",
+    );
+    expect(starterOf(row("c"))).toBeNull();
   });
 });

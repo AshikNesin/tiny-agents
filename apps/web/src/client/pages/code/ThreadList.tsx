@@ -31,21 +31,15 @@ import {
   type HarnessInfo,
   type ThreadSummary,
 } from "../../lib/code/api";
-import { statusSections, type StatusSection } from "../../lib/code/list";
+import { STATUS_DOT, starterOf, statusSections, type StatusSection } from "../../lib/code/list";
 import type { ProjectView } from "../../../shared/api/code";
 import { useResource } from "../../queries/resource";
 import { PullChip, useArchive } from "./controls";
 import { Kbd } from "../../components/keys";
 import { ReviewList } from "./ReviewList";
 
-const DOT: Record<StatusSection["key"], string> = {
-  "needs-you": "bg-warning",
-  working: "bg-info animate-pulse motion-reduce:animate-none",
-  review: "bg-success",
-  done: "bg-muted-foreground/40",
-};
-
 function metaOf(row: ThreadSummary): string {
+  if (row.status?.reason === "finished") return "";
   if (row.status?.reason) return row.status.reason;
   if (row.queuedCount) return `${row.queuedCount} queued`;
   return row.offline ? "offline" : "";
@@ -131,6 +125,7 @@ function Row({
   harness?: HarnessInfo;
 }) {
   const meta = metaOf(row);
+  const starter = starterOf(row);
   return (
     <ThreadMenu row={row} active={active} harness={harness}>
       <Link
@@ -138,6 +133,8 @@ function Row({
         aria-current={active ? "page" : undefined}
         data-testid="code-thread-row"
         data-thread={row.id}
+        data-status={section}
+        title={starter ? `Started by ${starter}` : undefined}
         className={cn(
           "group flex h-8 items-center gap-2 rounded-lg px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
           active
@@ -145,7 +142,7 @@ function Row({
             : "text-sidebar-foreground hover:bg-sidebar-accent/60",
         )}
       >
-        <span className={cn("size-1.5 shrink-0 rounded-full", DOT[section])} aria-hidden />
+        <span className={cn("size-1.5 shrink-0 rounded-full", STATUS_DOT[section])} aria-hidden />
         <span className={cn("min-w-0 flex-1 truncate", row.unread && "font-medium")}>
           {row.title || "Untitled"}
         </span>

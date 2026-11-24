@@ -257,6 +257,12 @@ describe("the Code workspace", () => {
     expect(await screen.findByPlaceholderText("Message web")).toBeInTheDocument();
   });
 
+  it("the project chat's menu button goes back to the thread list", async () => {
+    renderAt("/code/p/p1");
+    fireEvent.click(await screen.findByRole("button", { name: "Open menu" }));
+    expect(where()).toBe("/code");
+  });
+
   it("j and k walk the list in the order it is shown", () => {
     renderAt("/code");
     press("j");
@@ -366,10 +372,24 @@ describe("the Code workspace", () => {
     });
   });
 
-  it("shows the reason a thread needs you beside its title", () => {
+  it("shows the reason a thread needs you beside its title, but not a plain finish", () => {
+    useCodeStore.setState({
+      threads: [waiting, thread("asks", { status: { group: "needs-you", reason: "asks you" } })],
+    });
     renderAt("/code");
-    const row = document.querySelector('[data-thread="demo:a"]');
-    expect(row).toHaveTextContent("finished");
+    expect(document.querySelector('[data-thread="demo:asks"]')).toHaveTextContent("asks you");
+    expect(document.querySelector('[data-thread="demo:a"]')).toHaveTextContent(/^Thread a$/);
+  });
+
+  it("says who started a thread when you point at it", () => {
+    useCodeStore.setState({
+      threads: [thread("a", { startedBy: { botId: "b1", name: "Ada", project: false } })],
+    });
+    renderAt("/code");
+    expect(document.querySelector('[data-thread="demo:a"]')).toHaveAttribute(
+      "title",
+      "Started by Ada",
+    );
   });
 
   it("? lists the workspace's keys, and a thread's own while one is open", async () => {
