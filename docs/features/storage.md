@@ -109,6 +109,20 @@ is mounted. The
 limits come from `config.rateLimits.storage` and `.upload`; defaults are in
 [Config](../reference/config.md#settings).
 
+**Storage is one shared namespace, not per user.** The session guard checks
+that a caller is signed in and nothing more: every route acts on the path it
+is given, and never on who is asking. So in an app with more than one account,
+each signed-in user can list, download, overwrite and delete every file, in
+every folder. That is right for a single-user app, which is what the browser
+page is built for. For a multi-user app, scope storage before you ship it:
+
+- Prefix each user's keys with their id (`users/<userId>/…`), adding the
+  prefix on the server and refusing a path that escapes it; or
+- Record an owner for each file and check it in every route.
+
+The admin model does not help here on its own: `requireAdmin` would keep
+non-admins off the whole API, and with it the storage page.
+
 | Method | Path                          | Notes                                                                                                                                       |
 | ------ | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
 | GET    | `/files?folder=docs/`         | One folder level, folders first then files, each by name. Omit `folder` for the root                                                        |

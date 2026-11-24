@@ -10,7 +10,11 @@ export interface AppConfig {
   app: { name: string; port: number };
   cors: { origins: string[] };
   trustedProxies: string[];
-  auth: { jwtExpiresIn: string };
+  auth: {
+    jwtExpiresIn: string;
+
+    passwordIterations: number;
+  };
   jobs: {
     enabled: boolean;
     pollIntervalSeconds: number;
@@ -25,6 +29,7 @@ export interface AppConfig {
   passkey: { rpName: string; rpId: string; origin: string };
   rateLimits: {
     auth: RateLimitWindow;
+    admin: RateLimitWindow;
     storage: RateLimitWindow;
     upload: RateLimitWindow;
     adminKey: RateLimitWindow;
@@ -54,7 +59,7 @@ export function defaultConfig(e: Env): AppConfig {
         .filter(Boolean),
     },
     trustedProxies: e.TRUSTED_PROXIES,
-    auth: { jwtExpiresIn: "30d" },
+    auth: { jwtExpiresIn: "30d", passwordIterations: 600_000 },
     jobs: {
       enabled: !isTest,
       pollIntervalSeconds: 5,
@@ -69,6 +74,7 @@ export function defaultConfig(e: Env): AppConfig {
     passkey: { rpName: e.RP_NAME, rpId: e.RP_ID, origin: e.ORIGIN },
     rateLimits: {
       auth: { windowMs: fifteenMinutes, max: 20 },
+      admin: { windowMs: fifteenMinutes, max: 10 },
       storage: { windowMs: fifteenMinutes, max: 100 },
       upload: { windowMs: fifteenMinutes, max: 50 },
       adminKey: { windowMs: fifteenMinutes, max: 10 },

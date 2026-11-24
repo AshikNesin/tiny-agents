@@ -123,24 +123,8 @@ export function createJobTransitions(onDue: (job: Job) => void): JobTransitions 
     assertJobName(spec.name);
     const defaults = defaultJobOptions();
 
-    const values: NewJob = {
-      id: crypto.randomUUID(),
-      name: spec.name,
-      data: spec.data ?? null,
-      state: "created",
-      priority: spec.priority ?? defaults.priority,
-      retryLimit: spec.retryLimit ?? defaults.retryLimit,
-      retryDelay: spec.retryDelaySeconds ?? defaults.retryDelaySeconds,
-      runAt: spec.runAt ?? new Date(Date.now() + (spec.delaySeconds ?? 0) * 1000),
-      singletonKey: spec.singletonKey ?? null,
-    };
-
-    if (spec.singletonKey) {
-      const [job] = await db.insert(jobs).values(values).onConflictDoNothing().returning();
-      if (job) {
-        logger.info({ jobId: job.id, name: spec.name }, "Job queued");
-        return landed(job);
-      }
+    const holder = async () => {
+      if (!spec.singletonKey) return undefined;
       const [existing] = await db
         .select()
         .from(jobs)
@@ -152,10 +136,35 @@ export function createJobTransitions(onDue: (job: Job) => void): JobTransitions 
           ),
         )
         .limit(1);
-      if (existing) return existing;
-    }
+      return existing;
+    };
 
-    const [job] = await db.insert(jobs).values(values).returning();
+    const existing = await holder();
+    if (existing) return existing;
+
+    let job: Job | undefined;
+    try {
+      [job] = await db
+        .insert(jobs)
+        .values({
+          id: crypto.randomUUID(),
+          name: spec.name,
+          data: spec.data ?? null,
+          state: "created",
+          priority: spec.priority ?? defaults.priority,
+          retryLimit: spec.retryLimit ?? defaults.retryLimit,
+          retryDelay: spec.retryDelaySeconds ?? defaults.retryDelaySeconds,
+          runAt: spec.runAt ?? new Date(Date.now() + (spec.delaySeconds ?? 0) * 1000),
+          singletonKey: spec.singletonKey ?? null,
+        })
+        .returning();
+    } catch (error) {
+      if (spec.singletonKey && /UNIQUE constraint failed/.test(String(error))) {
+        const winner = await holder();
+        if (winner) return winner;
+      }
+      throw error;
+    }
     logger.info({ jobId: job!.id, name: spec.name }, "Job queued");
     return landed(job!);
   }

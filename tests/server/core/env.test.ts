@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vite-plus/test";
 import { DEV_DEFAULTS, defaultDatabaseUrl, parseEnv } from "@groot/core/env";
 
@@ -32,12 +33,46 @@ describe("env", () => {
     const env = parseEnv({
       NODE_ENV: "production",
       JWT_SECRET_KEY: "x".repeat(40),
-      ADMIN_AUTH_KEY: "admin",
+      ADMIN_AUTH_KEY: "a-strong-admin-key-with-enough-entropy",
       ORIGIN: "https://app.example.com",
       RP_ID: "app.example.com",
     });
     expect(env.ORIGIN).toBe("https://app.example.com");
     expect(env.DATABASE_URL).toBe("file:/data/prod.db");
+  });
+
+  it("refuses a short ADMIN_AUTH_KEY in production, as it does a short JWT_SECRET_KEY", () => {
+    for (const ADMIN_AUTH_KEY of ["a", "admin", "x".repeat(31)]) {
+      expect(() =>
+        parseEnv({
+          NODE_ENV: "production",
+          JWT_SECRET_KEY: "x".repeat(40),
+          ADMIN_AUTH_KEY,
+          ORIGIN: "https://app.example.com",
+          RP_ID: "app.example.com",
+        }),
+      ).toThrow(/ADMIN_AUTH_KEY/);
+    }
+  });
+
+  it("boots in production with the keys the repository ships for it", () => {
+    const workflow = readFileSync(".github/workflows/test.yml", "utf8");
+    const step = workflow.slice(workflow.indexOf("name: Pruned production boot"));
+    const ci = Object.fromEntries(
+      [
+        ...step
+          .slice(step.indexOf("env:"), step.indexOf("run:"))
+          .matchAll(/^\s+([A-Z_]+): (.+)$/gm),
+      ].map(([, key, value]) => [key!, value!]),
+    );
+    expect(Object.keys(ci)).toEqual(
+      expect.arrayContaining(["NODE_ENV", "JWT_SECRET_KEY", "ADMIN_AUTH_KEY", "RP_ID", "ORIGIN"]),
+    );
+
+    const shipped: Array<[string, Record<string, string>]> = [
+      [".github/workflows/test.yml (Pruned production boot)", ci],
+    ];
+    for (const [file, vars] of shipped) expect(() => parseEnv(vars), file).not.toThrow();
   });
 
   it("keeps an explicit DATABASE_URL in every environment", () => {

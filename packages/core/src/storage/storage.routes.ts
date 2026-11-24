@@ -9,6 +9,7 @@ import {
   deleteFilesSchema,
   deleteFolderSchema,
   downloadFileSchema,
+  isActiveContentType,
   listFilesSchema,
   renameFileSchema,
   uploadFilesSchema,
@@ -48,7 +49,7 @@ function withTextCharset(contentType: string): string {
 router.get("/files/download", async (c) => {
   const query = parseQuery(c, downloadFileSchema);
   const file = await storageService.downloadFile({ filePath: query.filePath });
-  const active = /html|svg|xml|javascript/i.test(file.contentType);
+  const active = isActiveContentType(file.contentType);
   return c.body(file.bytes, 200, {
     "Content-Type": withTextCharset(file.contentType),
     "Content-Disposition": `${active ? "attachment" : "inline"}; ${sanitizeFileName(file.fileName)}`,

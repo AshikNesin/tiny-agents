@@ -18,11 +18,13 @@ import { formatJobId } from "@groot/jobs/client/utils";
 import type { Job, JobAction } from "@groot/jobs/client/types";
 import { JOB_ACTION_UI, JOBS_PAGE_SIZE, stateLabel } from "@groot/jobs/client/constants";
 import { useJobActions } from "@groot/jobs/client/useJobActions";
-import { allowedJobActions } from "../../lifecycle";
+import { JOB_ACTIONS, allowedJobActions, canApplyJobAction } from "../../lifecycle";
 import { JobsTableSkeleton } from "./skeletons";
 import { ChevronRight, FileText, MoreVertical, Play, RefreshCw, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router-dom";
+
+const RERUN_HINT = `Only ${JOB_ACTIONS.rerun.map((state) => stateLabel(state).toLowerCase()).join(" and ")} jobs can be re-run`;
 
 const ROW_GRID = "grid-cols-[minmax(0,1fr)_auto_auto] md:grid-cols-12";
 
@@ -49,8 +51,12 @@ export function JobsTable({
 }: Props) {
   const { run, rerunMany, purge } = useJobActions();
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
-  const selectedIds = jobs.filter((job) => selected.has(job.id)).map((job) => job.id);
-  const allSelected = jobs.length > 0 && selectedIds.length === jobs.length;
+  const selectedJobs = jobs.filter((job) => selected.has(job.id));
+  const allSelected = jobs.length > 0 && selectedJobs.length === jobs.length;
+
+  const rerunIds = selectedJobs
+    .filter((job) => canApplyJobAction("rerun", job.state))
+    .map((job) => job.id);
 
   const toggle = (jobId: string) =>
     setSelected((prev) => {
@@ -60,15 +66,21 @@ export function JobsTable({
     });
   const toggleAll = () => setSelected(allSelected ? new Set() : new Set(jobs.map((job) => job.id)));
   const rerunSelected = async () => {
-    if (await rerunMany(selectedIds)) setSelected(new Set());
+    if (await rerunMany(rerunIds)) setSelected(new Set());
   };
 
   const sectionActions = (
     <>
-      {selectedIds.length > 0 && (
-        <Button variant="outline" size="sm" onClick={() => void rerunSelected()}>
+      {selectedJobs.length > 0 && (
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => void rerunSelected()}
+          disabled={rerunIds.length === 0}
+          title={rerunIds.length < selectedJobs.length ? RERUN_HINT : undefined}
+        >
           <Play className="size-3.5" />
-          Rerun {selectedIds.length}
+          Rerun {rerunIds.length}
         </Button>
       )}
       {state !== "all" && (

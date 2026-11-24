@@ -1,5 +1,6 @@
 import { createContext, useContext, type ReactNode } from "react";
 import { LayoutDashboard, type LucideIcon } from "lucide-react";
+import { useAuthStore } from "@groot/shell/store/auth";
 
 export interface LoginFeature {
   icon: LucideIcon;
@@ -12,6 +13,9 @@ export interface NavDestination {
   icon?: LucideIcon;
   to: string;
   primary?: boolean;
+
+  adminOnly?: boolean;
+
   fullPage?: boolean;
   shortcut?: string;
 }
@@ -44,10 +48,15 @@ export function ShellProvider({ config, children }: { config: ShellConfig; child
 
 export function useShellConfig() {
   const config = useContext(ShellConfigContext);
+  const user = useAuthStore((state) => state.user);
   const brand: Required<ShellBrand> = {
     label: config.brand?.label ?? "Groot",
     icon: config.brand?.icon ?? LayoutDashboard,
     to: config.brand?.to ?? "/",
   };
-  return { ...config, brand, nav: config.nav ?? [] };
+  return {
+    ...config,
+    brand,
+    nav: (config.nav ?? []).filter((destination) => !destination.adminOnly || user?.isAdmin),
+  };
 }

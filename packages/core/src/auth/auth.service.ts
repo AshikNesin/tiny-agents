@@ -1,28 +1,33 @@
 import { eq } from "drizzle-orm";
 import { db, users, type User } from "../database";
+import { config } from "../config";
 import { Boom } from "../errors";
 import { issueSession } from "../session/token";
-import {
-  dummyPasswordHash,
-  hashPassword,
-  needsRehash,
-  verifyPassword,
-} from "../utils/password.utils";
+import { hashPassword, needsRehash, verifyPassword } from "../utils/password.utils";
 import type { CreateUserDTO, LoginDTO, SignInResponse } from "./auth.schema";
 
-export type PublicUser = Pick<User, "id" | "email" | "name" | "createdAt">;
+export type PublicUser = Pick<User, "id" | "email" | "name" | "createdAt"> & { isAdmin: boolean };
 
-const DUMMY_HASH = dummyPasswordHash();
+export function dummyHash(): string {
+  return `pbkdf2-sha256$${config.auth.passwordIterations}$${"A".repeat(22)}$${"A".repeat(43)}`;
+}
 
 const publicColumns = {
   id: users.id,
   email: users.email,
   name: users.name,
   createdAt: users.createdAt,
+  isAdmin: users.isAdmin,
 };
 
 export function toPublicUser(user: PublicUser): PublicUser {
-  return { id: user.id, email: user.email, name: user.name, createdAt: user.createdAt };
+  return {
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    createdAt: user.createdAt,
+    isAdmin: user.isAdmin,
+  };
 }
 
 export async function findUserById(id: number): Promise<User | null> {
@@ -37,7 +42,7 @@ export async function findUserByEmail(email: string): Promise<User | null> {
 
 export async function authenticate(data: LoginDTO): Promise<PublicUser> {
   const user = await findUserByEmail(data.email);
-  const isValid = await verifyPassword(data.password, user?.password ?? DUMMY_HASH);
+  const isValid = await verifyPassword(data.password, user?.password ?? dummyHash());
   if (!user || !isValid) {
     throw Boom.unauthorized("Invalid email or password");
   }
@@ -58,14 +63,22 @@ export async function login(data: LoginDTO): Promise<SignInResponse> {
   return issueSession(await authenticate(data));
 }
 
-export async function createUser(data: CreateUserDTO): Promise<PublicUser> {
+export async function createUser(
+  data: CreateUserDTO,
+  options: { isAdmin?: boolean } = {},
+): Promise<PublicUser> {
   if (await findUserByEmail(data.email)) {
     throw Boom.conflict("User with this email already exists");
   }
 
   const [user] = await db
     .insert(users)
-    .values({ email: data.email, password: await hashPassword(data.password), name: data.name })
+    .values({
+      email: data.email,
+      password: await hashPassword(data.password),
+      name: data.name,
+      isAdmin: options.isAdmin ?? false,
+    })
     .returning(publicColumns);
   return user!;
 }
@@ -79,7 +92,7 @@ export async function setupFirstUser(data: CreateUserDTO): Promise<PublicUser> {
   const closed = () => Boom.forbidden("Setup is already complete. Sign in instead.");
   if (await hasAnyUser()) throw closed();
 
-  const user = await createUser(data);
+  const user = await createUser(data, { isAdmin: true });
   const [first] = await db.select({ id: users.id }).from(users).orderBy(users.id).limit(1);
   if (first?.id !== user.id) {
     await db.delete(users).where(eq(users.id, user.id));

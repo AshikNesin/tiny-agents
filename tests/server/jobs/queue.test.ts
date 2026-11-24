@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vite-plus/test";
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { db } from "@groot/core/database";
 import { config } from "@groot/core/config";
 import {
@@ -117,19 +117,13 @@ describe("queue + tick", () => {
     expect(third).not.toBe(first);
   });
 
-  it("enqueues one job when two callers race on the same singleton key", async () => {
+  it("keeps one job per singletonKey when enqueues race", async () => {
     registerJobHandler("single", () => undefined);
-    const [a, b] = await Promise.all([
-      addJob("single", { a: 1 }, { singletonKey: "race" }),
-      addJob("single", { a: 2 }, { singletonKey: "race" }),
-    ]);
-    expect(b).toBe(a);
-    const rows = await db
-      .select()
-      .from(jobs)
-      .where(and(eq(jobs.name, "single"), eq(jobs.singletonKey, "race")));
-    expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({ singletonKey: "race", state: "created" });
+    const ids = await Promise.all(
+      Array.from({ length: 50 }, (_, i) => addJob("single", { i }, { singletonKey: "raced" })),
+    );
+    expect(new Set(ids).size).toBe(1);
+    expect(await db.select().from(jobs).where(eq(jobs.singletonKey, "raced"))).toHaveLength(1);
   });
 
   it("rejects an empty job name; route words are fine as names", async () => {

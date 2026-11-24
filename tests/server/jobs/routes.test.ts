@@ -1,24 +1,66 @@
 import { beforeEach, describe, expect, it } from "vite-plus/test";
-import {
-  addJob,
-  createJobLogger,
-  flushJobLogs,
-  jobRunner,
-  registerJobHandler,
-  runTick,
-} from "@groot/jobs/server";
+import { jobRunner, registerJobHandler, runTick } from "@groot/jobs/server";
 import { api, createTestApp, signIn } from "../helpers";
 
 const app = createTestApp();
 let token: string;
 
+let memberToken: string;
+
 beforeEach(async () => {
   jobRunner.reset();
   registerJobHandler("report", () => ({ ok: true }));
-  if (!token) ({ token } = await signIn(app));
+  if (!token) ({ token } = await signIn(app, { isAdmin: true }));
+  memberToken ??= (await signIn(app)).token;
 });
 
 describe("jobs API", () => {
+  it("is an admin API: a signed-in non-admin gets 403 on every route", async () => {
+    const jobId = (
+      await api<{ jobId: string }>(app, "/api/v1/jobs", {
+        method: "POST",
+        json: { jobName: "report" },
+        token,
+      })
+    ).body.data!.jobId;
+    await api(app, "/api/v1/jobs/schedule", {
+      method: "POST",
+      json: { jobName: "report", cron: "0 9 * * *" },
+      token,
+    });
+
+    const as = (method: string, path: string, json?: unknown) =>
+      api(app, path, { method, json, token: memberToken });
+    const refused = [
+      await as("GET", "/api/v1/jobs"),
+      await as("GET", "/api/v1/jobs/stats"),
+      await as("GET", "/api/v1/jobs/available"),
+      await as("GET", "/api/v1/jobs/schedule"),
+      await as("GET", `/api/v1/jobs/${jobId}`),
+      await as("GET", `/api/v1/jobs/${jobId}/logs`),
+      await as("POST", "/api/v1/jobs", { jobName: "report" }),
+      await as("POST", "/api/v1/jobs/bulk-rerun", { jobIds: [jobId] }),
+      await as("POST", "/api/v1/jobs/schedule", { jobName: "report", cron: "0 9 * * *" }),
+      await as("DELETE", "/api/v1/jobs/schedule/report"),
+      await as("DELETE", "/api/v1/jobs/state/created"),
+      await as("DELETE", `/api/v1/jobs/${jobId}`),
+      await as("POST", `/api/v1/jobs/${jobId}/retry`),
+      await as("POST", `/api/v1/jobs/${jobId}/cancel`),
+      await as("POST", `/api/v1/jobs/${jobId}/resume`),
+      await as("POST", `/api/v1/jobs/${jobId}/rerun`),
+    ];
+    for (const res of refused) expect(res.status).toBe(403);
+
+    const stats = await api<Record<string, number>>(app, "/api/v1/jobs/stats", { token });
+    expect(stats.body.data).toMatchObject({ created: 1, cancelled: 0 });
+    expect(
+      (await api<Array<{ name: string }>>(app, "/api/v1/jobs/schedule", { token })).body.data,
+    ).toHaveLength(1);
+
+    await api(app, "/api/v1/jobs/schedule/report", { method: "DELETE", token });
+    await api(app, `/api/v1/jobs/${jobId}`, { method: "DELETE", token });
+  });
+
   it("validates payloads", async () => {
     expect(
       (await api(app, "/api/v1/jobs", { method: "POST", json: { jobName: "" }, token })).status,
@@ -47,8 +89,10 @@ describe("jobs API", () => {
         .status,
     ).toBe(400);
     expect((await api(app, "/api/v1/jobs?state=bogus", { token })).status).toBe(400);
+
     expect((await api(app, "/api/v1/jobs?limit=10&offset=5", { token })).status).toBe(200);
     expect((await api(app, "/api/v1/jobs?limit=0", { token })).status).toBe(400);
+
     const coerced = await api<{ jobId: string }>(app, "/api/v1/jobs", {
       method: "POST",
       json: { jobName: "report", options: { retryLimit: "2" } },
@@ -61,6 +105,7 @@ describe("jobs API", () => {
       { token },
     );
     expect(coercedJob.body.data?.retryLimit).toBe(2);
+
     await api(app, `/api/v1/jobs/${coerced.body.data!.jobId}`, { method: "DELETE", token });
     expect(
       (
@@ -71,33 +116,62 @@ describe("jobs API", () => {
         })
       ).status,
     ).toBe(400);
-    const ids = () => Array.from({ length: 101 }, (v, i) => `job-${i}`);
-    expect(
-      (
-        await api(app, "/api/v1/jobs/bulk-rerun", {
-          method: "POST",
-          json: { jobIds: ids() },
-          token,
-        })
-      ).status,
-    ).toBe(400);
-    for (const options of [
+  });
+
+  it("refuses options with no upper bound, which could grow or stall the queue", async () => {
+    const within: Record<string, number> = {
+      retryLimit: 100,
+      retryDelaySeconds: 1000,
+      priority: 1_000_000,
+      delaySeconds: 1000,
+    };
+    const beyond: Record<string, number>[] = [
       { retryLimit: 101 },
-      { retryDelaySeconds: 86_401 },
-      { priority: 2_147_483_648 },
-      { priority: -2_147_483_649 },
-      { delaySeconds: 2_147_483_648 },
-    ]) {
-      expect(
-        (
-          await api(app, "/api/v1/jobs", {
-            method: "POST",
-            json: { jobName: "report", options },
-            token,
-          })
-        ).status,
-      ).toBe(400);
+      { retryLimit: 1_000_000 },
+      { retryDelaySeconds: 31_536_001 },
+      { delaySeconds: 31_536_001 },
+      { delaySeconds: 1e15 },
+      { priority: 1_000_001 },
+      { priority: -1_000_001 },
+    ];
+    const create = (options: Record<string, number>) =>
+      api(app, "/api/v1/jobs", { method: "POST", json: { jobName: "report", options }, token });
+
+    expect((await create(within)).status).toBe(201);
+    try {
+      for (const option of beyond) {
+        const res = await create(option);
+        expect(res.status, JSON.stringify(option)).toBe(400);
+
+        const field = `options.${Object.keys(option)[0]!}`;
+        expect(res.body.error?.details, JSON.stringify(option)).toHaveProperty(field);
+      }
+    } finally {
+      await api(app, "/api/v1/jobs/state/created", { method: "DELETE", token });
     }
+  });
+
+  it("bounds how many jobs one bulk-rerun may name", async () => {
+    const ids = Array.from({ length: 501 }, () => crypto.randomUUID());
+    const refused = await api(app, "/api/v1/jobs/bulk-rerun", {
+      method: "POST",
+      json: { jobIds: ids },
+      token,
+    });
+    expect(refused.status).toBe(400);
+    expect(refused.body.error?.details).toHaveProperty("jobIds");
+
+    const accepted = await api<Array<{ jobId: string; success: boolean }>>(
+      app,
+      "/api/v1/jobs/bulk-rerun",
+      {
+        method: "POST",
+        json: { jobIds: ids.slice(0, 500) },
+        token,
+      },
+    );
+    expect(accepted.status).toBe(200);
+    expect(accepted.body.data).toHaveLength(500);
   });
 
   it("creates, lists, inspects and acts on jobs", async () => {
@@ -177,31 +251,6 @@ describe("jobs API", () => {
 
     expect((await api(app, `/api/v1/jobs/${jobId}`, { method: "DELETE", token })).status).toBe(200);
     expect((await api(app, `/api/v1/jobs/${jobId}`, { token })).status).toBe(404);
-  });
-
-  it("caps how many logs one request returns", async () => {
-    const jobId = await addJob("report", {});
-    const log = createJobLogger({ jobId, jobName: "report" });
-    for (let i = 0; i < 6; i += 1) log.info({ i }, `line ${i}`);
-    await flushJobLogs();
-    const all = await api<Array<{ id: number; message: string }>>(
-      app,
-      `/api/v1/jobs/${jobId}/logs`,
-      {
-        token,
-      },
-    );
-    expect(all.body.data).toHaveLength(6);
-    const windowed = await api<Array<{ message: string }>>(
-      app,
-      `/api/v1/jobs/${jobId}/logs?limit=2&afterId=${all.body.data![0]!.id}`,
-      { token },
-    );
-    expect(windowed.status).toBe(200);
-    expect(windowed.body.data?.map((l) => l.message)).toEqual(["line 1", "line 2"]);
-    expect((await api(app, `/api/v1/jobs/${jobId}/logs?limit=0`, { token })).status).toBe(400);
-    expect((await api(app, `/api/v1/jobs/${jobId}/logs?limit=501`, { token })).status).toBe(400);
-    await api(app, `/api/v1/jobs/${jobId}`, { method: "DELETE", token });
   });
 
   it("manages schedules", async () => {

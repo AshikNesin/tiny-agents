@@ -22,12 +22,15 @@ function emptyResult(): TickResult {
   return { scheduled: 0, claimed: 0, completed: 0, retried: 0, failed: 0 };
 }
 
+type TickSlot =
+  | { status: "idle" }
+  | { status: "running"; tick: Promise<TickResult>; rerun: boolean };
+
 export class JobRunner {
   readonly transitions: JobTransitions = createJobTransitions((job) => this.#nudge(job));
 
   readonly #handlers = new Map<string, JobHandler>();
-  #inFlight: Promise<TickResult> | null = null;
-  #rerunRequested = false;
+  #slot: TickSlot = { status: "idle" };
   #timer: ReturnType<typeof setInterval> | null = null;
 
   register<T, R = unknown>(name: string, handler: JobHandler<T, R>): void {
@@ -44,28 +47,27 @@ export class JobRunner {
   }
 
   runTick(options: TickOptions = {}): Promise<TickResult> {
-    if (this.#inFlight) {
-      this.#rerunRequested = true;
-      return this.#inFlight;
+    if (this.#slot.status === "running") {
+      this.#slot = { ...this.#slot, rerun: true };
+      return this.#slot.tick;
     }
-    this.#inFlight = this.#tick(options)
+    const tick = this.#tick(options)
       .catch((error: unknown) => {
         logger.error({ err: error }, "Job tick failed");
         reportError(error, { component: "jobs" });
         return emptyResult();
       })
       .finally(() => {
-        this.#inFlight = null;
-        if (this.#rerunRequested) {
-          this.#rerunRequested = false;
-          void this.runTick(INLINE_TICK);
-        }
+        const rerun = this.#slot.status === "running" && this.#slot.rerun;
+        this.#slot = { status: "idle" };
+        if (rerun) void this.runTick(INLINE_TICK);
       });
-    return this.#inFlight;
+    this.#slot = { status: "running", tick, rerun: false };
+    return tick;
   }
 
   async idle(): Promise<void> {
-    while (this.#inFlight) await this.#inFlight;
+    while (this.#slot.status === "running") await this.#slot.tick;
   }
 
   async start(): Promise<void> {
@@ -91,7 +93,7 @@ export class JobRunner {
   async stop(): Promise<void> {
     if (this.#timer) clearInterval(this.#timer);
     this.#timer = null;
-    this.#rerunRequested = false;
+    this.#dropRerun();
     await this.idle();
   }
 
@@ -99,8 +101,12 @@ export class JobRunner {
     if (this.#timer) clearInterval(this.#timer);
     this.#timer = null;
     this.#handlers.clear();
-    this.#rerunRequested = false;
+    this.#dropRerun();
     nextHousekeepingCheck = 0;
+  }
+
+  #dropRerun(): void {
+    if (this.#slot.status === "running") this.#slot = { ...this.#slot, rerun: false };
   }
 
   #nudge(job: Job): void {

@@ -44,8 +44,8 @@ apps/web/src/server/               # App-owned (not synced)
 ```
 HTTP request
   → requestLoggerMiddleware   request id (x-request-id), child logger, AsyncLocalStorage context, one log line
-  → cors                      config.cors.origins (empty = reflect the requesting origin)
-  → bodyLimit                 1 MB on /api/*, unless the matched route declares its own (routeBodyLimit)
+  → cors                      config.cors.origins + the app's own ORIGIN, with credentials
+  → bodyLimit                 1 MB on /api/*; a route that declares its own (routeBodyLimit) owns its limit
   → router                    new Hono<AppEnv>() mounted by createWebApp() in apps/web/src/server/app.ts
   → handler                   await parseBody(c, schema) → service → ok(c, data, status?)
   → service                   Drizzle query builder → SQLite
@@ -208,14 +208,21 @@ optional TTL; app settings and passkey challenges use it. See [KV](../features/k
 
 ## Authentication
 
-| Layer     | Routes                                                                         | Requirement                                                                            |
-| --------- | ------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------- |
-| Public    | `POST /api/v1/auth/login`, `POST /api/v1/passkey/login/*`, `/health`, `/ready` | none (login routes: 20 requests / 15 min per IP)                                       |
-| Setup     | `GET` / `POST /api/v1/auth/setup`                                              | none, but `POST` only succeeds while no user exists (403 after; rate-limited as login) |
-| Protected | everything else under `/api/v1`                                                | JWT in the `token` httpOnly cookie or `Authorization: Bearer …` (`requireSession`)     |
-| Admin     | `POST` / `GET /api/v1/auth/users`                                              | `X-Admin-Auth-Key` equal to `ADMIN_AUTH_KEY` (`adminAuthMiddleware`)                   |
+| Layer     | Routes                                                                         | Requirement                                                                                       |
+| --------- | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------- |
+| Public    | `POST /api/v1/auth/login`, `POST /api/v1/passkey/login/*`, `/health`, `/ready` | none (login routes: 20 requests / 15 min per IP)                                                  |
+| Setup     | `GET` / `POST /api/v1/auth/setup`                                              | none, but `POST` only succeeds while no user exists (403 after; rate-limited as login)            |
+| Protected | everything else under `/api/v1`                                                | JWT in the `token` httpOnly cookie or `Authorization: Bearer …` (`requireSession`)                |
+| Admin     | `/api/v1/jobs` (the dashboard's API)                                           | a session whose account has `isAdmin` (`requireAdmin`): 403 for any other session                 |
+| Admin key | `POST` / `GET /api/v1/auth/users`                                              | `X-Admin-Auth-Key` equal to `ADMIN_AUTH_KEY` (`adminAuthMiddleware`); 10 requests / 15 min per IP |
 
-Passwords are PBKDF2-SHA256 (600,000 iterations through WebCrypto); tokens are
+The first account (first-run setup) is an admin. `isAdmin` is read from the
+account's row on every request, never from the session token, so promoting or
+demoting an account takes effect at once.
+
+Passwords are PBKDF2-SHA256 through WebCrypto, at `config.auth.passwordIterations`
+(600,000 by default: this deployment runs on Node, which has no Cloudflare Workers
+iteration cap). Tokens are
 HS256 via jose, valid for `config.auth.jwtExpiresIn` (30 days).
 
 The session is one module, `@groot/core/session`
@@ -225,8 +232,13 @@ return the account; the route then calls `startSession(c, account)` once,
 which mints the token, sets the cookie and returns the body every sign-in
 route sends, `{ token, user }` (`SignInResponse`, with `user` exactly the
 `SessionUser` fields; the token is for non-browser clients). `endSession(c)`
-clears the cookie. `requireSession` is the guard: it reads the cookie, else the
-bearer token, verifies it, checks the account still exists and sets
+clears the cookie and ends the account's sessions: it bumps the account's
+`tokenVersion`, and a token is minted with that value, so every outstanding
+token of the account stops working, on every device. That is how a stolen
+token is cut off, since its owner cannot say which one it is. A JWT cannot be
+revoked on its own. `requireSession` is the guard: it reads the cookie, else the
+bearer token, verifies it, checks the account still exists and that the token
+is of its current `tokenVersion`, and sets
 `c.get("user")`. It alone answers 401 `SESSION_INVALID`, the code the client
 signs out on (R9); a wrong password or passkey is a plain 401 `UNAUTHORIZED`.
 `jwtAuthMiddleware`, `utils/jwt.utils` and `utils/auth-cookie.utils` remain as

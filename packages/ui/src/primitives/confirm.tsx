@@ -15,6 +15,7 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -54,6 +55,14 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo(() => confirm, [confirm]);
+
+  useEffect(
+    () => () => {
+      resolverRef.current?.(false);
+      resolverRef.current = null;
+    },
+    [],
+  );
 
   return (
     <ConfirmContext.Provider value={value}>

@@ -1,6 +1,3 @@
-// Feature: code (features/code.md). Open a thread's worktree in Cursor or Zed over SSH
-// (`ta-verify up --demo-agent --fake-github --local-sandbox`): the header button and `o`,
-// the SSH config the sandbox needs, the link, and the remembered editor and host.
 import { journey, expect } from "../scripts/lib.mjs";
 
 const LOADED = { waitUntil: "domcontentloaded" };

@@ -17,13 +17,18 @@ platform authenticator (`authenticatorAttachment: "platform"` in
 `webauthn.utils.ts`), so browsers steer users to the device's built-in one;
 remove that line to let users register hardware security keys.
 
-**Login** (public): `POST /login/options` (an optional `email` narrows
-`allowCredentials` to that user's passkeys; the shell sends none, so the
-browser offers any passkey it holds for the site) → the browser signs the
-challenge → `POST /login/verify` verifies the signature and counter, updates
+**Login** (public): `POST /login/options` → the browser signs the challenge →
+`POST /login/verify` verifies the signature and counter, updates
 `lastUsedAt`, and signs in through `startSession` like password login: the
 `token` cookie and `{ token, user }`, with `user` the same `SessionUser`
-(`{ id, email, name }`).
+(`{ id, email, name, isAdmin }`).
+
+The options carry an empty `allowCredentials` for every caller, so the
+browser offers any discoverable passkey it holds for the site. The route
+accepts an optional `email` and ignores it. It used to narrow
+`allowCredentials` to that user's passkeys, which told an unauthenticated
+caller whether an email belonged to an account that uses passkeys, and handed
+out that account's credential IDs.
 
 Challenges live in the `kv` table (`passkey:challenge:` namespace) with a
 five-minute TTL and are consumed on first use with `kv.take` (one

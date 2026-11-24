@@ -43,6 +43,7 @@ gives you type checking and completion for `DeepPartial<AppConfig>`.
 | `cors.origins`              | `[]` (reflect the requesting origin)                | `CORS_ALLOWED_ORIGINS` (comma-separated)       |
 | `trustedProxies`            | loopback and private networks (`PRIVATE_NETWORKS`)  | `TRUSTED_PROXIES` (comma-separated, or `none`) |
 | `auth.jwtExpiresIn`         | `"30d"`                                             |                                                |
+| `auth.passwordIterations`   | `600_000` — PBKDF2 iterations (Node has no cap)     |                                                |
 | `jobs.enabled`              | `true` (`false` when `NODE_ENV=test`)               |                                                |
 | `jobs.pollIntervalSeconds`  | `5` — Node poller interval                          |                                                |
 | `jobs.batchSize`            | `10` — max jobs claimed per tick                    |                                                |
@@ -56,6 +57,7 @@ gives you type checking and completion for `DeepPartial<AppConfig>`.
 | `passkey.rpId`              | `"localhost"`                                       | `RP_ID`                                        |
 | `passkey.origin`            | `"http://localhost:3000"`                           | `ORIGIN`                                       |
 | `rateLimits.auth`           | 20 requests / 15 min per IP                         | tiny-agents: `AUTH_RATE_LIMIT_MAX` (max only)  |
+| `rateLimits.admin`          | 10 requests / 15 min per IP (user management)       |                                                |
 | `rateLimits.storage`        | 100 requests / 15 min per IP                        |                                                |
 | `rateLimits.upload`         | 50 requests / 15 min per IP                         |                                                |
 | `rateLimits.adminKey`       | 10 failed keys / 15 min per IP                      |                                                |

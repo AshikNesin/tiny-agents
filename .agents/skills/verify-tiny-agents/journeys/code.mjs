@@ -1,7 +1,3 @@
-// Feature: code (features/code.md). The Code workspace on the demo agent and the fake
-// GitHub (`ta-verify up --demo-agent --fake-github`): the status-grouped list, moving by
-// key, a streamed turn, steer, queue, stop, the Changes and Pull request panes, the key
-// list and the command palette.
 import { journey, expect } from "../scripts/lib.mjs";
 
 const LOADED = { waitUntil: "domcontentloaded" };

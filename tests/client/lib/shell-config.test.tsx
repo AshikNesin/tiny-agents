@@ -5,11 +5,19 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
-import { Box, CheckSquare, HardDrive, Settings as SettingsIcon, Star } from "lucide-react";
+import {
+  Box,
+  Briefcase,
+  CheckSquare,
+  HardDrive,
+  Settings as SettingsIcon,
+  Star,
+} from "lucide-react";
 import { type ShellConfig, ShellProvider } from "@groot/shell/lib/shell-config";
 import { Layout } from "@groot/shell/components/Layout";
+import { ProtectedRoute } from "@groot/shell/components/ProtectedRoute";
 import { Login } from "@groot/shell/pages/auth/Login";
-import { useAuthStore } from "@groot/shell/store/auth";
+import { type SessionUser, useAuthStore } from "@groot/shell/store/auth";
 import { useCommandPaletteStore } from "@groot/shell/store/command-palette";
 
 const CONFIG: ShellConfig = {
@@ -21,8 +29,12 @@ const CONFIG: ShellConfig = {
   ],
 };
 
-function renderLayout(config: ShellConfig, props: Parameters<typeof Layout>[0] = {}) {
-  useAuthStore.setState({ user: { id: 1, email: "demo@example.com", name: "Demo User" } });
+function renderLayout(
+  config: ShellConfig,
+  props: Parameters<typeof Layout>[0] = {},
+  user: SessionUser = { id: 1, email: "demo@example.com", name: "Demo User", isAdmin: false },
+) {
+  useAuthStore.setState({ user });
   return render(
     <MemoryRouter initialEntries={["/todos"]}>
       <ShellProvider config={config}>
@@ -159,5 +171,81 @@ describe("ShellConfig", () => {
     expect(await screen.findByRole("menuitem", { name: "Log out" })).toBeInTheDocument();
     expect(screen.getByRole("menuitem", { name: "Command palette" })).toBeInTheDocument();
     expect(screen.getAllByRole("menuitem")).toHaveLength(2);
+  });
+
+  describe("an adminOnly destination", () => {
+    const WITH_ADMIN_PAGE: ShellConfig = {
+      ...CONFIG,
+      nav: [...CONFIG.nav!, { label: "Jobs", icon: Briefcase, to: "/jobs", adminOnly: true }],
+    };
+    const MEMBER: SessionUser = {
+      id: 1,
+      email: "demo@example.com",
+      name: "Demo User",
+      isAdmin: false,
+    };
+    const ADMIN: SessionUser = { ...MEMBER, isAdmin: true };
+
+    it("is hidden from an account that is not an admin", async () => {
+      const user = userEvent.setup({ pointerEventsCheck: 0 });
+      renderLayout(WITH_ADMIN_PAGE, {}, MEMBER);
+
+      await user.click(screen.getAllByRole("button", { name: /demo user/i })[0]!);
+      const menu = await screen.findByRole("menu");
+      expect(within(menu).getByRole("menuitem", { name: "Storage" })).toBeInTheDocument();
+      expect(within(menu).queryByRole("menuitem", { name: /Jobs/ })).not.toBeInTheDocument();
+
+      await user.keyboard("{Escape}");
+      useCommandPaletteStore.setState({ open: true });
+      const palette = await screen.findByRole("dialog");
+      expect(within(palette).getByRole("option", { name: /^Storage/ })).toBeInTheDocument();
+      expect(within(palette).queryByRole("option", { name: /^Jobs/ })).not.toBeInTheDocument();
+    });
+
+    it("is shown to an admin", async () => {
+      renderLayout(WITH_ADMIN_PAGE, {}, ADMIN);
+
+      useCommandPaletteStore.setState({ open: true });
+      const palette = await screen.findByRole("dialog");
+      expect(within(palette).getByRole("option", { name: /^Jobs/ })).toBeInTheDocument();
+    });
+
+    const adminPage = (
+      <Routes>
+        <Route
+          path="/jobs"
+          element={
+            <ProtectedRoute adminOnly fallback="/todos">
+              <p>jobs page</p>
+            </ProtectedRoute>
+          }
+        />
+        <Route path="/todos" element={<p>todos page</p>} />
+      </Routes>
+    );
+
+    it("keeps a non-admin off its page, sending them to the first page they can see", async () => {
+      useAuthStore.setState({ user: MEMBER });
+      render(
+        <MemoryRouter initialEntries={["/jobs"]}>
+          <ShellProvider config={WITH_ADMIN_PAGE}>{adminPage}</ShellProvider>
+        </MemoryRouter>,
+      );
+
+      expect(await screen.findByText("todos page")).toBeInTheDocument();
+      expect(screen.queryByText("jobs page")).not.toBeInTheDocument();
+    });
+
+    it("lets an admin onto its page", async () => {
+      useAuthStore.setState({ user: ADMIN });
+      render(
+        <MemoryRouter initialEntries={["/jobs"]}>
+          <ShellProvider config={WITH_ADMIN_PAGE}>{adminPage}</ShellProvider>
+        </MemoryRouter>,
+      );
+
+      expect(await screen.findByText("jobs page")).toBeInTheDocument();
+      expect(screen.queryByText("todos page")).not.toBeInTheDocument();
+    });
   });
 });

@@ -2,6 +2,8 @@
 
 ADRs live in `docs/adr/` and use sequential numbering: `0001-slug.md`, `0002-slug.md`, etc.
 
+If `docs/adr/README.md` states the repo's ADR conventions (structure, status values, an index to update), follow those in place of the template and optional sections below.
+
 Create the `docs/adr/` directory lazily: only when the first ADR is needed.
 
 ## Template

@@ -9,7 +9,7 @@ import type {
 import { Boom } from "../errors";
 import { logger } from "../logger";
 import { db, passkeys, type Passkey } from "../database";
-import { findUserById, findUserByEmail, toPublicUser, type PublicUser } from "../auth/auth.service";
+import { findUserById, toPublicUser, type PublicUser } from "../auth/auth.service";
 import type { SignInResponse } from "../auth/auth.schema";
 import type { PasskeySummary } from "./passkey.schema";
 import { issueSession } from "../session/token";
@@ -158,18 +158,12 @@ export async function verifyRegistration({
   return toSummary(passkey!, await countPasskeys(userId));
 }
 
-export async function generateAuthenticationOptions({
-  email,
-}: { email?: string } = {}): Promise<PublicKeyCredentialRequestOptionsJSON> {
-  let userPasskeys: Passkey[] = [];
-  if (email) {
-    const user = await findUserByEmail(email);
-    if (user) userPasskeys = await passkeysForUser(user.id);
-  }
-
-  const options = await generatePasskeyAuthenticationOptions(userPasskeys);
+export async function generateAuthenticationOptions(
+  _input: { email?: string } = {},
+): Promise<PublicKeyCredentialRequestOptionsJSON> {
+  const options = await generatePasskeyAuthenticationOptions();
   await storeChallenge(options.challenge, { purpose: "authenticate" });
-  logger.debug({ email }, "Generated passkey authentication options");
+  logger.debug("Generated passkey authentication options");
   return options;
 }
 
