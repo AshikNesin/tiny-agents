@@ -25,6 +25,7 @@ import { PRIMARY_NAV, SECONDARY_NAV, guestNav } from "./nav";
 import { useViewerRole } from "../../store/people";
 import { BotRail, BotsSection } from "./BotsSection";
 import { BrandMark } from "./BrandMark";
+import { ThreadsSection } from "./ThreadsSection";
 import { ModeSwitch, SIDEBAR_ROW, useCodeAvailable } from "./ModeSwitch";
 import { openFeedback } from "../../lib/feedback";
 
@@ -201,6 +202,7 @@ export function AppSidebar() {
         </nav>
 
         <div className={cn("min-h-0 flex-1 overflow-y-auto pt-2", rail && "md:hidden")}>
+          {!restricted && codeAvailable && <ThreadsSection onNavigate={closeDrawer} />}
           <BotsSection bots={bots} activeId={activeBotId} onNavigate={closeDrawer} />
         </div>
         {rail && (

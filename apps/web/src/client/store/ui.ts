@@ -22,18 +22,6 @@ export type CodePane = "changes" | "pr" | "files" | "terminal";
 
 const storageIsBlockedInPrivateWindows = (): void => undefined;
 
-const CODE_FOLDED_KEY = "tiny-agents:code-folded-projects";
-
-function readFoldedProjects(): string[] {
-  try {
-    const saved: unknown = JSON.parse(localStorage.getItem(CODE_FOLDED_KEY) ?? "[]");
-    return Array.isArray(saved) ? saved.filter((id) => typeof id === "string") : [];
-  } catch {
-    storageIsBlockedInPrivateWindows();
-    return [];
-  }
-}
-
 function readCodePane(): CodePane | null {
   try {
     const saved = localStorage.getItem(CODE_PANE_KEY);
@@ -80,8 +68,6 @@ interface UiState {
   setCodePane: (pane: CodePane | null) => void;
   codePaneWide: boolean;
   toggleCodePaneWide: () => void;
-  codeFolded: string[];
-  toggleCodeFolded: (projectKey: string) => void;
   codeTerminals: Record<string, string>;
   setCodeTerminal: (threadId: string, name: string | null) => void;
   mobileOpen: boolean;
@@ -146,19 +132,6 @@ export const useUiStore = create<UiState>((set) => ({
       storageIsBlockedInPrivateWindows();
     }
     set({ codePaneWide: wide });
-  },
-  codeFolded: readFoldedProjects(),
-  toggleCodeFolded: (projectKey) => {
-    const was = useUiStore.getState().codeFolded;
-    const codeFolded = was.includes(projectKey)
-      ? was.filter((key) => key !== projectKey)
-      : [...was, projectKey];
-    try {
-      localStorage.setItem(CODE_FOLDED_KEY, JSON.stringify(codeFolded));
-    } catch {
-      storageIsBlockedInPrivateWindows();
-    }
-    set({ codeFolded });
   },
   codeTerminals: {},
   setCodeTerminal: (threadId, name) =>

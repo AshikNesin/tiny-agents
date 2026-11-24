@@ -207,6 +207,18 @@ fun codeStatusSections(rows: List<CodeThreadSummary>): List<CodeStatusSection> {
         .filter { it.rows.isNotEmpty() }
 }
 
+data class ActiveThreads(val shown: List<CodeThreadSummary>, val more: Int)
+
+fun activeThreads(rows: List<CodeThreadSummary>, limit: Int): ActiveThreads {
+    val active = codeStatusSections(rows.filter { it.parentId == null })
+        .filter { it.group == "needs-you" || it.group == "working" }
+        .flatMap { it.rows }
+    return ActiveThreads(active.take(limit), (active.size - limit).coerceAtLeast(0))
+}
+
+fun starterOf(row: CodeThreadSummary): String? =
+    row.startedBy?.let { if (it.project) "${it.name} chat" else it.name }
+
 data class RewindPoint(val at: String, val turn: Int, val turns: Int, val text: String)
 
 fun lastTurn(items: List<TranscriptItem>): RewindPoint? {

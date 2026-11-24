@@ -26,25 +26,28 @@ export function statusSections(rows: ThreadSummary[]): StatusSection[] {
   })).filter((section) => section.rows.length > 0);
 }
 
-export interface ProjectGroup<P extends { id: string }> {
-  project: P | null;
-  rows: ThreadSummary[];
-}
-
-export function projectGroups<P extends { id: string }>(
-  rows: ThreadSummary[],
-  projects: P[],
-): ProjectGroup<P>[] {
-  const ordered = statusSections(rows).flatMap((section) => section.rows);
-  const known = new Set(projects.map((project) => project.id));
-  const groups: ProjectGroup<P>[] = projects.map((project) => ({
-    project,
-    rows: ordered.filter((row) => row.projectId === project.id),
-  }));
-  const loose = ordered.filter((row) => !row.projectId || !known.has(row.projectId));
-  return loose.length > 0 ? [...groups, { project: null, rows: loose }] : groups;
-}
-
-export function listOrder(sections: Array<{ rows: ThreadSummary[] }>): string[] {
+export function listOrder(sections: StatusSection[]): string[] {
   return sections.flatMap((section) => section.rows.map((row) => row.id));
+}
+
+export const STATUS_DOT: Record<Group, string> = {
+  "needs-you": "bg-warning",
+  working: "bg-info animate-pulse motion-reduce:animate-none",
+  review: "bg-success",
+  done: "bg-muted-foreground/40",
+};
+
+export function activeThreads(
+  rows: ThreadSummary[],
+  limit: number,
+): { shown: ThreadSummary[]; more: number } {
+  const active = statusSections(rows.filter((row) => !row.parentId && !row.review))
+    .filter((section) => section.key === "needs-you" || section.key === "working")
+    .flatMap((section) => section.rows);
+  return { shown: active.slice(0, limit), more: Math.max(0, active.length - limit) };
+}
+
+export function starterOf(row: ThreadSummary): string | null {
+  if (!row.startedBy) return null;
+  return row.startedBy.project ? `${row.startedBy.name} chat` : row.startedBy.name;
 }

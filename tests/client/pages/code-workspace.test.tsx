@@ -224,12 +224,7 @@ beforeEach(() => {
   asked.length = 0;
   openReviews.length = 0;
   inboxLimit.value = 10;
-  useUiStore.setState({
-    codeSidebarOpen: true,
-    codePane: null,
-    lastCodePane: "changes",
-    codeFolded: [],
-  });
+  useUiStore.setState({ codeSidebarOpen: true, codePane: null, lastCodePane: "changes" });
   useCodeStore.setState({
     harnesses: [agent],
     statuses: {},
@@ -239,40 +234,24 @@ beforeEach(() => {
 afterEach(() => window.localStorage.clear());
 
 describe("the Code workspace", () => {
-  it("lists each project's threads under it, the ones that need you first", async () => {
-    useCodeStore.setState({
-      threads: [done, reviewed, running, waiting, thread("e", { projectId: null })],
-    });
+  it("lists threads by status, the ones that need you first", () => {
     renderAt("/code");
     const list = screen.getByRole("navigation", { name: "Threads" });
-    const groups = () =>
-      [...list.querySelectorAll('[data-testid="code-project"]')].map((section) => [
-        section.getAttribute("aria-label"),
-        [...section.querySelectorAll("[data-thread]")].map((row) =>
-          row.getAttribute("data-thread"),
-        ),
-      ]);
-    await waitFor(() =>
-      expect(groups()).toEqual([
-        ["web", ["demo:a", "demo:bb", "demo:ccc", "demo:dddd"]],
-        ["Other", ["demo:e"]],
-      ]),
-    );
+    const sections = [...list.querySelectorAll("section[aria-label]")].map((section) => [
+      section.getAttribute("aria-label"),
+      [...section.querySelectorAll("[data-thread]")].map((row) => row.getAttribute("data-thread")),
+    ]);
+    expect(sections.slice(0, 4)).toEqual([
+      ["Needs you", ["demo:a"]],
+      ["Working", ["demo:bb"]],
+      ["In review", ["demo:ccc"]],
+      ["Done", ["demo:dddd"]],
+    ]);
   });
 
-  it("folds a project's threads away, and keeps it folded", async () => {
-    const { unmount } = renderAt("/code");
-    fireEvent.click(await screen.findByRole("button", { name: "Hide web threads" }));
-    expect(document.querySelector('[data-thread="demo:a"]')).toBeNull();
-    unmount();
+  it("opens the project's chat inside Code from the sidebar", async () => {
     renderAt("/code");
-    expect(await screen.findByRole("button", { name: "Show web threads" })).toBeInTheDocument();
-    expect(document.querySelector('[data-thread="demo:a"]')).toBeNull();
-  });
-
-  it("opens the project's chat inside Code from the project's name", async () => {
-    renderAt("/code");
-    fireEvent.click(await screen.findByRole("link", { name: "web chat" }));
+    fireEvent.click(await screen.findByRole("link", { name: "Project chat" }));
     expect(where()).toBe("/code/p/p1");
     await waitFor(() => expect(posts.map((p) => p.path)).toContain("/code/projects/p1/chat"));
     expect(await screen.findByPlaceholderText("Message web")).toBeInTheDocument();
@@ -382,7 +361,7 @@ describe("the Code workspace", () => {
     press("n");
     expect(where()).toBe("/code/new");
     const box = await screen.findByRole("textbox", { name: "What should the agent do?" });
-    await within(screen.getByRole("dialog")).findByText("web");
+    await screen.findByText("web");
     fireEvent.change(box, { target: { value: "Fix the login callback" } });
     fireEvent.keyDown(box, { key: "Enter" });
     await waitFor(() => expect(where()).toBe("/code/t/new1"));
@@ -400,6 +379,17 @@ describe("the Code workspace", () => {
     renderAt("/code");
     expect(document.querySelector('[data-thread="demo:asks"]')).toHaveTextContent("asks you");
     expect(document.querySelector('[data-thread="demo:a"]')).toHaveTextContent(/^Thread a$/);
+  });
+
+  it("says who started a thread when you point at it", () => {
+    useCodeStore.setState({
+      threads: [thread("a", { startedBy: { botId: "b1", name: "Ada", project: false } })],
+    });
+    renderAt("/code");
+    expect(document.querySelector('[data-thread="demo:a"]')).toHaveAttribute(
+      "title",
+      "Started by Ada",
+    );
   });
 
   it("? lists the workspace's keys, and a thread's own while one is open", async () => {

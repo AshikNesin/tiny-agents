@@ -39,10 +39,14 @@ import groot.kit.theme.S
 import groot.mobile.data.BotsState
 import groot.mobile.data.ViewerRole
 import groot.mobile.data.api.BotListEntry
+import groot.mobile.data.api.CodeThreadSummary
+import groot.mobile.data.code.activeThreads
+import groot.mobile.data.code.starterOf
 import groot.mobile.data.api.SessionUser
 import groot.mobile.feature.chat.CountBadge
 import groot.mobile.feature.chat.TypingDots
 import groot.mobile.navigation.Routes
+import groot.mobile.ui.brand.Accents
 import groot.mobile.ui.brand.AppIcons
 import groot.mobile.ui.brand.Dims
 import groot.mobile.ui.components.ActionTile
@@ -79,6 +83,7 @@ fun AppDrawer(
     onNavigate: (String) -> Unit,
     onRetry: () -> Unit,
     modifier: Modifier = Modifier,
+    threads: List<CodeThreadSummary>? = null,
     now: () -> Long = System::currentTimeMillis,
 ) {
     var query by rememberSaveable { mutableStateOf("") }
@@ -100,6 +105,26 @@ fun AppDrawer(
             if (bots.role == ViewerRole.Owner) IconBtn(AppIcons.Compose, "New bot", onNewBot)
         }
         LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(horizontal = S.sm, vertical = S.xs)) {
+            if (bots.role == ViewerRole.Owner && query.isBlank() && threads != null) {
+                val active = activeThreads(threads, DRAWER_THREADS)
+                item(key = "threads-label") { SectionLabel("Threads", Modifier.padding(start = S.md)) }
+                items(active.shown, key = { "thread-${it.id}" }) { row ->
+                    DrawerThreadRow(row) { onNavigate(Routes.codeThread(row.id)) }
+                }
+                item(key = "threads-all") {
+                    Text(
+                        if (active.more > 0) "All threads, ${active.more} more" else "All threads",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(Dims.fieldRadius))
+                            .clickable(role = Role.Button) { onNavigate(Routes.CODE) }
+                            .padding(horizontal = S.md, vertical = S.sm),
+                    )
+                }
+                item(key = "bots-label") { SectionLabel("Bots", Modifier.padding(start = S.md, top = S.md)) }
+            }
             if (bots.error != null && bots.bots.isEmpty()) {
                 item {
                     Column(Modifier.padding(S.lg), verticalArrangement = Arrangement.spacedBy(S.sm)) {
@@ -151,6 +176,45 @@ fun AppDrawer(
                 if (bots.role == ViewerRole.Guest) Text("Guest", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             AppIcon(AppIcons.Settings, "Settings", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+private const val DRAWER_THREADS = 5
+
+@Composable
+private fun DrawerThreadRow(row: CodeThreadSummary, onClick: () -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(Dims.fieldRadius))
+            .clickable(role = Role.Button, onClick = onClick)
+            .padding(horizontal = S.md, vertical = S.sm),
+        horizontalArrangement = Arrangement.spacedBy(S.md),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (row.working) {
+            TypingDots(Modifier.height(S.lg))
+        } else {
+            StatusDot(Accents.warning)
+        }
+        Text(
+            row.title.ifBlank { "Untitled" },
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = if (row.unread) FontWeight.SemiBold else FontWeight.Normal,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        val note = if (row.statusReason == "asks you") "asks you" else starterOf(row)
+        if (note != null) {
+            Text(
+                note,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
     }
 }

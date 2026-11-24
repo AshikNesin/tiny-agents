@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.15.0
+
+### Minor Changes
+
+- The drawer lists the threads that need you or are still working above your bots, each with who
+  started it, and **All threads** opens the full list. The thread list names the bot or project
+  chat that started each thread.
+
 ## 0.14.3
 
 ### Patch Changes

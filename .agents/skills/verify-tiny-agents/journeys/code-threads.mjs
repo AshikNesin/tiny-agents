@@ -1,6 +1,7 @@
-// Feature: code (features/code.md). How a project's threads are found: the sidebar lists
-// each project's threads under its name, the name opens the project chat, and on a phone
-// the chat's menu button leads back to the list (`ta-verify up --demo-agent --fake-github`).
+// Feature: code (features/code.md). How threads are found from anywhere: the chat
+// sidebar lists the threads that need you or still work, a row opens the thread, All
+// threads opens Code, and on a phone the drawer shows them and the project chat's menu
+// button leads back to the list (`ta-verify up --demo-agent --fake-github`).
 import { devices } from "@playwright/test";
 import { journey, expect, login } from "../scripts/lib.mjs";
 
@@ -33,11 +34,7 @@ await journey("code-threads", async ({ page, step, proof, cleanup, api, stamp })
     ];
     for (const [i, message] of asks) {
       const id = (
-        await api.post("/code/threads", {
-          instanceId: "demo",
-          projectId: projects[i].id,
-          message,
-        })
+        await api.post("/code/threads", { instanceId: "demo", projectId: projects[i].id, message })
       ).threadId;
       cleanup(() => api.delete(`/code/threads/${encodeURIComponent(id)}`));
       threads.push(id);
@@ -55,72 +52,65 @@ await journey("code-threads", async ({ page, step, proof, cleanup, api, stamp })
       .toBe(true);
   });
 
-  await step("desktop: the Code home lists each project's threads under it", async () => {
+  const inChat = (p) => p.getByRole("region", { name: "Threads" });
+
+  await step("desktop: the chat sidebar lists the threads that need you", async () => {
     await page.setViewportSize({ width: 1280, height: 800 });
-    await page.goto("/code", LOADED);
-    const web = page.getByRole("region", { name: projects[0].name });
-    await expect(web.locator(`[data-thread="${threads[0]}"]`)).toBeVisible({
-      timeout: 20_000,
-    });
-    await expect(web.locator("[data-thread]")).toHaveCount(3);
+    await page.goto("/chats", LOADED);
+    const row = inChat(page).locator(`[data-thread="${threads[1]}"]`);
+    await expect(row).toBeVisible({ timeout: 20_000 });
+    await expect(row).toContainText("asks you");
+    await expect(inChat(page).locator("[data-thread]")).toHaveCount(5);
   });
-  await proof("desktop-home");
-  await shot(page, "desktop-home");
+  await proof("desktop-chat");
+  await shot(page, "desktop-chat");
 
-  await step("desktop: the project's name opens its chat", async () => {
-    await page.getByRole("link", { name: `${projects[0].name} chat` }).click();
-    await expect(page).toHaveURL(new RegExp(`/code/p/${projects[0].id}$`));
-    await expect(page.getByRole("textbox").first()).toBeVisible({
-      timeout: 20_000,
-    });
-  });
-  await proof("desktop-project-chat");
-  await shot(page, "desktop-project-chat");
-
-  await step("desktop: a thread", async () => {
-    await page.goto(`/code/t/${encodeURIComponent(threads[0])}`, LOADED);
+  await step("desktop: a thread there opens in Code", async () => {
+    await inChat(page).locator(`[data-thread="${threads[0]}"]`).click();
+    await expect(page).toHaveURL(new RegExp(`/code/t/${threads[0]}$`));
     await expect(page.getByLabel("Branch")).toBeVisible({ timeout: 20_000 });
   });
   await proof("desktop-thread");
   await shot(page, "desktop-thread");
 
+  await step("desktop: All threads opens the Code list", async () => {
+    await page.goto("/chats", LOADED);
+    await inChat(page)
+      .getByRole("link", { name: /All threads/ })
+      .click();
+    await expect(page).toHaveURL(/\/code$/);
+    await expect(page.locator(`[data-thread="${threads[2]}"]`)).toBeVisible({ timeout: 20_000 });
+  });
+  await proof("desktop-home");
+  await shot(page, "desktop-home");
+
   const context = await page
     .context()
     .browser()
-    .newContext({
-      ...devices["iPhone 13"],
-      baseURL: process.env.TA_VERIFY_URL,
-    });
+    .newContext({ ...devices["iPhone 13"], baseURL: process.env.TA_VERIFY_URL });
   cleanup(() => context.close());
   await context.route("https://feedbackbee.nesin.io/**", (route) => route.abort());
   const phone = await context.newPage();
 
-  await step("phone: the Code home", async () => {
+  await step("phone: the chat drawer lists the threads", async () => {
     await login(phone);
-    await phone.goto("/code", LOADED);
+    await phone.goto("/chats", LOADED);
+    await phone.getByRole("button", { name: "Open menu" }).first().tap();
+    await expect(inChat(phone).locator(`[data-thread="${threads[1]}"]`)).toBeVisible({
+      timeout: 20_000,
+    });
+    const drawer = phone.getByRole("complementary", { name: "Sidebar" });
+    await expect.poll(async () => (await drawer.boundingBox())?.x).toBe(0);
+  });
+  await shot(phone, "phone-chat-drawer");
+
+  await step("phone: the project chat's menu button goes back to the thread list", async () => {
+    await phone.goto(`/code/p/${encodeURIComponent(projects[0].id)}`, LOADED);
+    await phone.getByRole("button", { name: "Open menu" }).tap();
+    await expect(phone).toHaveURL(/\/code$/);
     await expect(phone.locator(`[data-thread="${threads[0]}"]`)).toBeVisible({
       timeout: 20_000,
     });
   });
   await shot(phone, "phone-home");
-
-  await step("phone: a project chat", async () => {
-    await phone.goto(`/code/p/${encodeURIComponent(projects[0].id)}`, LOADED);
-    await expect(phone.getByRole("textbox").first()).toBeVisible({
-      timeout: 20_000,
-    });
-  });
-  await shot(phone, "phone-project-chat");
-
-  await step("phone: the project chat's menu button goes back to the thread list", async () => {
-    await phone.getByRole("button", { name: "Open menu" }).tap();
-    await expect(phone).toHaveURL(/\/code$/);
-    await expect(phone.locator(`[data-thread="${threads[0]}"]`)).toBeVisible();
-  });
-
-  await step("phone: a thread", async () => {
-    await phone.goto(`/code/t/${encodeURIComponent(threads[0])}`, LOADED);
-    await expect(phone.getByLabel("Branch")).toBeVisible({ timeout: 20_000 });
-  });
-  await shot(phone, "phone-thread");
 });

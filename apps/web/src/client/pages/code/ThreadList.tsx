@@ -31,20 +31,12 @@ import {
   type HarnessInfo,
   type ThreadSummary,
 } from "../../lib/code/api";
-import { groupOf, projectGroups, type ProjectGroup, type StatusSection } from "../../lib/code/list";
-import { useUiStore } from "../../store/ui";
+import { STATUS_DOT, starterOf, statusSections, type StatusSection } from "../../lib/code/list";
 import type { ProjectView } from "../../../shared/api/code";
 import { useResource } from "../../queries/resource";
 import { PullChip, useArchive } from "./controls";
 import { Kbd } from "../../components/keys";
 import { ReviewList } from "./ReviewList";
-
-const DOT: Record<StatusSection["key"], string> = {
-  "needs-you": "bg-warning",
-  working: "bg-info animate-pulse motion-reduce:animate-none",
-  review: "bg-success",
-  done: "bg-muted-foreground/40",
-};
 
 function metaOf(row: ThreadSummary): string {
   if (row.status?.reason === "finished") return "";
@@ -99,11 +91,7 @@ function ThreadMenu({
         )}
         {can?.archive && (
           <ContextMenuItem
-            onSelect={() =>
-              void archive(row, !row.archived, {
-                leave: active && !row.archived,
-              })
-            }
+            onSelect={() => void archive(row, !row.archived, { leave: active && !row.archived })}
           >
             {row.archived ? <ArchiveRestore /> : <Archive />}
             {row.archived ? "Unarchive" : "Archive"}
@@ -127,14 +115,17 @@ function Row({
   row,
   section,
   active,
+  project,
   harness,
 }: {
   row: ThreadSummary;
   section: StatusSection["key"];
   active: boolean;
+  project?: string;
   harness?: HarnessInfo;
 }) {
   const meta = metaOf(row);
+  const starter = starterOf(row);
   return (
     <ThreadMenu row={row} active={active} harness={harness}>
       <Link
@@ -143,6 +134,7 @@ function Row({
         data-testid="code-thread-row"
         data-thread={row.id}
         data-status={section}
+        title={starter ? `Started by ${starter}` : undefined}
         className={cn(
           "group flex h-8 items-center gap-2 rounded-lg px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
           active
@@ -150,12 +142,20 @@ function Row({
             : "text-sidebar-foreground hover:bg-sidebar-accent/60",
         )}
       >
-        <span className={cn("size-1.5 shrink-0 rounded-full", DOT[section])} aria-hidden />
+        <span className={cn("size-1.5 shrink-0 rounded-full", STATUS_DOT[section])} aria-hidden />
         <span className={cn("min-w-0 flex-1 truncate", row.unread && "font-medium")}>
           {row.title || "Untitled"}
         </span>
         {meta && <span className="text-muted-foreground shrink-0 text-xs">{meta}</span>}
-        {row.pr && <PullChip pr={row.pr} />}
+        {row.pr ? (
+          <PullChip pr={row.pr} />
+        ) : (
+          project && (
+            <span className="text-muted-foreground/70 max-w-20 shrink-0 truncate text-xs">
+              {project}
+            </span>
+          )
+        )}
       </Link>
     </ThreadMenu>
   );
@@ -204,87 +204,32 @@ function ArchivedRows({ activeId, harnesses }: { activeId?: string; harnesses: H
   );
 }
 
-const OTHER = "other";
-
-function ProjectGroupView({
-  group,
-  activeId,
-  activeChat,
-  harnesses,
-}: {
-  group: ProjectGroup<ProjectView>;
-  activeId?: string;
-  activeChat?: string;
-  harnesses: HarnessInfo[];
-}) {
-  const { project, rows } = group;
-  const key = project?.id ?? OTHER;
-  const folded = useUiStore((s) => s.codeFolded.includes(key));
-  const toggle = useUiStore((s) => s.toggleCodeFolded);
-  const name = project?.name ?? "Other";
-  const active = Boolean(project) && project?.id === activeChat;
-  const waiting = rows.filter((row) => groupOf(row) === "needs-you").length;
+function ProjectChats({ projects, activeChat }: { projects: ProjectView[]; activeChat?: string }) {
+  if (projects.length === 0) return null;
   return (
-    <section aria-label={name} data-testid="code-project" className="pt-2">
-      <div
-        className={cn(
-          "group/project flex h-8 items-center gap-1 rounded-lg pr-2 pl-0.5",
-          active
-            ? "bg-sidebar-accent text-sidebar-accent-foreground"
-            : "text-sidebar-foreground hover:bg-sidebar-accent/60",
-        )}
-      >
-        <button
-          type="button"
-          onClick={() => toggle(key)}
-          aria-expanded={!folded}
-          aria-label={folded ? `Show ${name} threads` : `Hide ${name} threads`}
-          className="text-muted-foreground hover:text-foreground grid size-6 shrink-0 place-items-center rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-        >
-          <ChevronRight className={cn("size-3.5 transition-transform", !folded && "rotate-90")} />
-        </button>
-        {project ? (
+    <section aria-label="Project chats" className="space-y-px pt-2">
+      {projects.map((project) => {
+        const active = project.id === activeChat;
+        return (
           <Link
+            key={project.id}
             to={projectChatPath(project.id)}
             aria-current={active ? "page" : undefined}
             data-testid="code-project-chat"
-            aria-label={`${name} chat`}
-            title={`Chat about ${name}`}
-            className="flex h-full min-w-0 flex-1 items-center gap-2 text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-          >
-            <span className="min-w-0 flex-1 truncate">{name}</span>
-            {folded && waiting > 0 && (
-              <span className="bg-warning size-1.5 shrink-0 rounded-full" aria-hidden />
+            className={cn(
+              "flex h-8 items-center gap-2 rounded-lg px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
+              active
+                ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                : "text-sidebar-foreground hover:bg-sidebar-accent/60",
             )}
-            <MessagesSquare
-              className={cn(
-                "size-3.5 shrink-0",
-                active ? "opacity-100" : "opacity-50 group-hover/project:opacity-100",
-              )}
-              aria-hidden
-            />
+          >
+            <MessagesSquare className="size-4 shrink-0" aria-hidden />
+            <span className="min-w-0 flex-1 truncate">
+              {projects.length > 1 ? `${project.name} chat` : "Project chat"}
+            </span>
           </Link>
-        ) : (
-          <span className="min-w-0 flex-1 truncate text-sm font-medium">{name}</span>
-        )}
-      </div>
-      {!folded && (
-        <div className="space-y-px">
-          {rows.length === 0 ? (
-            <p className="text-muted-foreground py-1 pl-7.5 text-xs">No threads yet.</p>
-          ) : (
-            rows.map((row) => (
-              <Row
-                key={row.id}
-                row={row}
-                section={groupOf(row)}
-                active={row.id === activeId}
-                harness={harnesses.find((h) => h.id === row.instanceId)}
-              />
-            ))
-          )}
-        </div>
-      )}
+        );
+      })}
     </section>
   );
 }
@@ -308,7 +253,9 @@ export function ThreadList({
   addingReview: boolean;
   onAddingReview(open: boolean): void;
 }) {
-  const groups = useMemo(() => projectGroups(threads ?? [], projects ?? []), [threads, projects]);
+  const sections = useMemo(() => statusSections(threads ?? []), [threads]);
+  const projectName = (id?: string | null) =>
+    (projects?.length ?? 0) > 1 ? projects?.find((p) => p.id === id)?.name : undefined;
   const offline = harnesses.filter((h) => h.status.state !== "connected");
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -326,19 +273,30 @@ export function ThreadList({
         </button>
       </div>
       <nav aria-label="Threads" className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
+        <ProjectChats projects={projects ?? []} activeChat={activeChat} />
         {threads === null ? (
           <Spinner className="mx-2 my-2 size-4" />
-        ) : groups.length === 0 ? (
+        ) : sections.length === 0 ? (
           <p className="text-muted-foreground px-2 py-2 text-sm">No threads yet.</p>
         ) : (
-          groups.map((group) => (
-            <ProjectGroupView
-              key={group.project?.id ?? OTHER}
-              group={group}
-              activeId={activeId}
-              activeChat={activeChat}
-              harnesses={harnesses}
-            />
+          sections.map((section) => (
+            <section key={section.key} aria-label={section.label} className="pt-2">
+              <h2 className="text-muted-foreground px-2 pb-1 text-xs font-medium">
+                {section.label}
+              </h2>
+              <div className="space-y-px">
+                {section.rows.map((row) => (
+                  <Row
+                    key={row.id}
+                    row={row}
+                    section={section.key}
+                    active={row.id === activeId}
+                    project={projectName(row.projectId)}
+                    harness={harnesses.find((h) => h.id === row.instanceId)}
+                  />
+                ))}
+              </div>
+            </section>
           ))
         )}
         <ReviewList activeId={activeId} adding={addingReview} onAdding={onAddingReview} />

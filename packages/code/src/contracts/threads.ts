@@ -36,6 +36,7 @@ export interface ThreadSummary {
   branch?: string | null;
   status?: { group: "needs-you" | "working" | "review" | "done"; reason: string | null };
   offline?: boolean;
+  startedBy?: { botId: string; name: string; project: boolean } | null;
 }
 
 export interface ThreadSettings {

@@ -12,10 +12,11 @@ import {
 import { createShelleyHarness } from "@tiny-agents/code/server";
 import { testHost } from "@tiny-agents/code/testing";
 import { api, createTestApp } from "../helpers";
-import { authToken, eventually, resetAppTables } from "../fixtures";
+import { authToken, eventually, resetAppTables, seedBot } from "../fixtures";
 import { codeProjects, db, guests } from "../../../apps/web/src/server/db";
 import { createCodeHub, setCodeHub } from "../../../apps/web/src/server/api/code/code.hub";
 import { runsOf } from "../../../apps/web/src/server/api/code/code.runs";
+import { recordHandoff } from "../../../apps/web/src/server/api/code/code.store";
 import { ensureThread, repointThread } from "../../../apps/web/src/server/api/code/code.threads";
 import type { ThreadSnapshot, ThreadSummary } from "@tiny-agents/code/contracts";
 import { startFakeShelley, type FakeShelley } from "./shelley/fake-shelley";
@@ -186,6 +187,40 @@ describe("Code API", () => {
     expect((await post(`/threads/${id}/seen`, { cursor: 2 })).status).toBe(200);
     const read = (await get<ThreadSummary[]>("/threads")).body.data!;
     expect(read[0]).toMatchObject({ unread: false, status: { group: "done", reason: null } });
+  });
+
+  it("names who started each thread: a bot, the project chat, or you", async () => {
+    const byBot = await projectThread("tBot");
+    const byChat = await projectThread("tChat");
+    const byYou = await projectThread("tYou");
+    const ada = await seedBot({ name: "Ada" });
+    const [project] = await db.select().from(codeProjects);
+    const lead = await seedBot({ name: "web", projectId: project!.id });
+    for (const [bot, threadId] of [
+      [ada, byBot],
+      [lead, byChat],
+    ] as const) {
+      await recordHandoff({
+        botId: bot.id,
+        conversationId: bot.conversationId,
+        idempotencyKey: `k-${threadId}`,
+        task: "Fix it",
+        threadId,
+      });
+    }
+    for (const nativeId of ["tBot", "tChat", "tYou"]) {
+      fake.threads.push((await fake.getThread(nativeId)).thread);
+    }
+    fake.emit({ type: "threads" });
+    await eventually(async () => {
+      const list = (await get<ThreadSummary[]>("/threads")).body.data ?? [];
+      const by = Object.fromEntries(list.map((t) => [t.id, t.startedBy]));
+      expect(by).toEqual({
+        [byBot]: { botId: ada.id, name: "Ada", project: false },
+        [byChat]: { botId: lead.id, name: "web", project: true },
+        [byYou]: null,
+      });
+    });
   });
 
   it("takes a thread off the list when its agent no longer lists it", async () => {

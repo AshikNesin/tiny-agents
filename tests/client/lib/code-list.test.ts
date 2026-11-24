@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
-import { listOrder, projectGroups, statusSections } from "@/lib/code/list";
+import { activeThreads, listOrder, starterOf, statusSections } from "@/lib/code/list";
 import type { ThreadSummary } from "@/lib/code/api";
 
 const row = (nativeId: string, extra: Partial<ThreadSummary> = {}): ThreadSummary => ({
@@ -49,42 +49,28 @@ describe("the thread list's sections", () => {
   });
 });
 
-describe("the thread list's project groups", () => {
-  const project = (id: string, name: string) => ({ id, name });
-
-  it("put each thread under its project, needing-you first, and keep projects with no threads", () => {
-    const groups = projectGroups(
-      [
-        row("web-done", {
-          projectId: "web",
-          status: { group: "done", reason: null },
-        }),
-        row("api-run", {
-          projectId: "api",
-          status: { group: "working", reason: null },
-        }),
-        row("web-asks", {
-          projectId: "web",
-          status: { group: "needs-you", reason: "asks you" },
-        }),
-        row("loose"),
-      ],
-      [project("web", "web"), project("api", "api"), project("docs", "docs")],
-    );
-    expect(groups.map((g) => [g.project?.name ?? null, g.rows.map((r) => r.id)])).toEqual([
-      ["web", ["web-asks", "web-done"]],
-      ["api", ["api-run"]],
-      ["docs", []],
-      [null, ["loose"]],
-    ]);
-    expect(listOrder(groups)).toEqual(["web-asks", "web-done", "api-run", "loose"]);
+describe("the threads that are still going", () => {
+  it("are the ones that need you, then the working ones, capped, with a count of the rest", () => {
+    const rows = [
+      row("done", { status: { group: "done", reason: null } }),
+      row("run1", { status: { group: "working", reason: null } }),
+      row("asks", { status: { group: "needs-you", reason: "asks you" } }),
+      row("run2", { status: { group: "working", reason: null } }),
+      row("open", { status: { group: "review", reason: null } }),
+      row("child", { parentId: "run1", status: { group: "working", reason: null } }),
+    ];
+    const { shown, more } = activeThreads(rows, 2);
+    expect(shown.map((r) => r.id)).toEqual(["asks", "run1"]);
+    expect(more).toBe(1);
   });
 
-  it("list a thread whose project is gone with the threads that have none", () => {
-    const groups = projectGroups([row("orphan", { projectId: "gone" })], [project("web", "web")]);
-    expect(groups.map((g) => [g.project?.id ?? null, g.rows.map((r) => r.id)])).toEqual([
-      ["web", []],
-      [null, ["orphan"]],
-    ]);
+  it("name who started them: a bot by name, a project chat as its chat, you as nobody", () => {
+    expect(starterOf(row("a", { startedBy: { botId: "b1", name: "Ada", project: false } }))).toBe(
+      "Ada",
+    );
+    expect(starterOf(row("b", { startedBy: { botId: "b2", name: "web", project: true } }))).toBe(
+      "web chat",
+    );
+    expect(starterOf(row("c"))).toBeNull();
   });
 });

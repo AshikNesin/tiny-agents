@@ -15,6 +15,13 @@ The bots list groups bots by what they need (`groupBots` in
 
 Tasks, Terminal, Computer and Browser sit in one row of icons above the bots.
 
+With a coding agent connected, the owner sees **Threads** above the bots
+(`ThreadsSection.tsx`): the Code threads that need you or are still working,
+needing-you first (`activeThreads` in `apps/web/src/client/lib/code/list.ts`),
+each with who started it, a bot or a project chat (`startedBy` on the thread
+list, from the thread's first hand-off). **All threads** opens Code. The
+Android drawer shows the same section above its bots.
+
 ## Keys
 
 The chat page uses the same single-letter keys as the Code workspace, from
