@@ -7,6 +7,7 @@ import { relayText } from "../bots/bots.delivery";
 import { codeUpdate } from "../notifications/notifications.events";
 import type { HandoffFinish } from "./code.bots";
 import type { CodeHub } from "./code.hub";
+import { attentionNote, reportToProject } from "./code.report";
 import {
   endsHandoff,
   isFollowed,
@@ -19,6 +20,7 @@ import {
 } from "./code.store";
 
 const RETRY_MS = 30_000;
+const FINISH_MAX = 1_500;
 
 export interface WatcherDeps {
   hub: CodeHub;
@@ -36,7 +38,12 @@ export function handoffFinishText(
   const head = outcome.failed
     ? `${harness} stopped with an error in **${name}**.`
     : `${harness} finished **${name}**.`;
-  const body = outcome.text ? `\n\n${sanitizePeerText(outcome.text)}` : "";
+  const text = sanitizePeerText(outcome.text);
+  const clipped =
+    text.length > FINISH_MAX
+      ? `${text.slice(0, FINISH_MAX).trimEnd()}… (the rest is in the thread)`
+      : text;
+  const body = clipped ? `\n\n${clipped}` : "";
   return relayText(
     harness,
     `${head} [Open in Code](/code/t/${encodeURIComponent(handoff.threadId)})${body}`,
@@ -53,22 +60,28 @@ export function startCodeWatcher(deps: WatcherDeps): () => void {
   const sending = new Set<string>();
 
   async function send(finishes: OwedFinish[]) {
+    const batches = new Map<string, OwedFinish[]>();
     for (const finish of finishes) {
       if (sending.has(finish.id)) continue;
-      sending.add(finish.id);
+      const key = `${finish.botId}\n${finish.conversationId ?? ""}`;
+      batches.set(key, [...(batches.get(key) ?? []), finish]);
+    }
+    for (const batch of batches.values()) {
+      const first = batch[0]!;
+      for (const finish of batch) sending.add(finish.id);
       try {
         await deps.deliver({
-          botId: finish.botId,
-          conversationId: finish.conversationId,
-          requestId: finish.requestId,
-          text: finish.text,
-          from: finish.harness,
+          botId: first.botId,
+          conversationId: first.conversationId,
+          requestId: batch.length === 1 ? first.requestId : `${first.requestId}+${batch.length}`,
+          text: batch.map((finish) => finish.text).join("\n\n"),
+          from: first.harness,
         });
-        await markFinishDelivered(finish.id);
+        for (const finish of batch) await markFinishDelivered(finish.id);
       } catch (error) {
-        logError(error, finish.threadId ?? finish.id, "finish delivery (will retry)");
+        logError(error, first.threadId ?? first.id, "finish delivery (will retry)");
       } finally {
-        sending.delete(finish.id);
+        for (const finish of batch) sending.delete(finish.id);
       }
     }
   }
@@ -91,7 +104,7 @@ export function startCodeWatcher(deps: WatcherDeps): () => void {
       });
       if (finish) owed.push(finish);
     }
-    await send(owed);
+    if (owed.length > 0) await sweep();
   }
 
   async function onTurnEnd(instance: HarnessInstance, nativeId: string, outcome: TurnOutcome) {
@@ -151,8 +164,13 @@ export function startCodeWatcher(deps: WatcherDeps): () => void {
     key: string,
   ) {
     const id = threadKey(instance.id, nativeId);
-    if (hub.viewers(id) > 0 || !(await isFollowed(id))) return;
     const title = (await hub.list().catch(() => [])).find((t) => t.id === id)?.title ?? nativeId;
+    await reportToProject(id, {
+      key: `attention-${key}`,
+      from: instance.label,
+      text: attentionNote(title, text),
+    });
+    if (hub.viewers(id) > 0 || !(await isFollowed(id))) return;
     deps.notify(codeUpdate({ id, title, harness: instance.label }, "message", text, key));
   }
 

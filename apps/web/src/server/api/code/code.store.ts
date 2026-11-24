@@ -1,6 +1,7 @@
 import { and, asc, desc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import type { IndexedThread, ThreadIndex } from "@tiny-agents/code/server";
 import {
+  bots,
   codeHandoffFinishes,
   codeHandoffs,
   codeThreads,
@@ -330,4 +331,27 @@ export async function markFinishDelivered(id: string): Promise<void> {
     .update(codeHandoffFinishes)
     .set({ deliveredAt: new Date() })
     .where(eq(codeHandoffFinishes.id, id));
+}
+
+export async function projectHandoffOf(threadId: string): Promise<ThreadHandoff | undefined> {
+  const [row] = await db
+    .select({ handoff: codeHandoffs })
+    .from(codeHandoffs)
+    .innerJoin(bots, eq(bots.id, codeHandoffs.botId))
+    .where(and(eq(codeHandoffs.threadId, threadId), isNotNull(bots.projectId)))
+    .orderBy(desc(codeHandoffs.createdAt))
+    .limit(1);
+  return hasThread(row?.handoff) ? row.handoff : undefined;
+}
+
+export async function oweReport(
+  handoff: ThreadHandoff,
+  report: { requestId: string; harness: string; text: string },
+): Promise<boolean> {
+  const rows = await db
+    .insert(codeHandoffFinishes)
+    .values({ handoffId: handoff.id, ...report })
+    .onConflictDoNothing()
+    .returning({ id: codeHandoffFinishes.id });
+  return rows.length > 0;
 }
