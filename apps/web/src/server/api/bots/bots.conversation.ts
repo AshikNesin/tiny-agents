@@ -35,6 +35,7 @@ export interface BotRow {
   memoryCapturedThrough: Date | null;
   pinnedAt: Date | null;
   browserProfile: BrowserProfile;
+  projectId: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -101,6 +102,7 @@ export type BotConversationRuntime = Pick<
 
 export interface BotDraft {
   modelId: string | null;
+  projectId?: string | null;
   systemPrompt: string;
   toolPermissions: Record<string, ToolPermission>;
   autoReview?: boolean;
@@ -161,7 +163,11 @@ function agentConfig(
         : bot.systemPrompt,
     capabilities: {
       enabled: botToolkits(
-        { modelId: bot.modelId, connections: bot.connections?.map((link) => link.connection) },
+        {
+          modelId: bot.modelId,
+          projectId: bot.projectId ?? null,
+          connections: bot.connections?.map((link) => link.connection),
+        },
         rt.catalog,
       ),
       permissions: bot.toolPermissions,

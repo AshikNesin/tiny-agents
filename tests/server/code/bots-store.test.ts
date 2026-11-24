@@ -2,7 +2,8 @@ import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 import { eq } from "drizzle-orm";
 import { createShelleyHarness } from "@tiny-agents/code/server";
 import { testHost } from "@tiny-agents/code/testing";
-import { createCodeToolkit } from "../../../packages/agent/src/toolkits/code";
+import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
+import { createCodeToolkit, createProjectToolkit } from "../../../packages/agent/src/toolkits/code";
 import { defaultPermission, effectivePermission } from "../../../packages/agent/src/capabilities";
 import { db, bots, codeHandoffs, codeProjects, codeThreads } from "../../../apps/web/src/server/db";
 import { codeStore } from "../../../apps/web/src/server/api/code/code.bots";
@@ -232,6 +233,117 @@ describe("code hand-off store", () => {
     expect(status?.changedFiles).toEqual([
       { path: "math.js", status: "modified", additions: 4, deletions: 0 },
     ]);
+  });
+});
+
+describe("a project chat", () => {
+  const LEAD = 303;
+  const newConversations = () =>
+    shelley.seen
+      .filter((s) => s.url === "/api/conversations/new")
+      .map((s) => JSON.parse(String(s.body)) as { message: string });
+
+  beforeEach(async () => {
+    await db
+      .update(codeProjects)
+      .set({ settings: JSON.stringify({ instructions: "Use pnpm. Never touch migrations." }) })
+      .where(eq(codeProjects.id, fixture.project.id));
+    await db.insert(codeProjects).values({
+      ...fixture.project,
+      id: "p-api",
+      name: "api",
+      repoName: "api",
+      checkoutPath: `${fixture.project.checkoutPath}-api`,
+      settings: "{}",
+    });
+    await db.insert(bots).values({
+      name: "web",
+      modelId: TEST_MODEL,
+      conversationId: String(LEAD),
+      projectId: fixture.project.id,
+    });
+  });
+
+  it("starts threads in its own project, with the project's instructions, and refuses others", async () => {
+    const started = ok(
+      await codeStore.start({ conversationId: LEAD, idempotencyKey: "lead-1", task: "fix login" }),
+    );
+    const [thread] = await db
+      .select()
+      .from(codeThreads)
+      .where(eq(codeThreads.id, started.threadId));
+    expect(thread?.projectId).toBe(fixture.project.id);
+    expect(newConversations()[0]?.message).toContain(
+      "The owner's instructions for this project:\nUse pnpm. Never touch migrations.\n----- END OF PROJECT INSTRUCTIONS -----\n\nfix login",
+    );
+    expect(
+      await codeStore.start({
+        conversationId: LEAD,
+        idempotencyKey: "lead-2",
+        task: "tidy",
+        project: "api",
+      }),
+    ).toEqual({ error: "This chat works only in web. Ask the owner to use that project's chat." });
+    expect(
+      await codeStore.start({ conversationId: 101, idempotencyKey: "plain-1", task: "tidy" }),
+    ).toEqual({ error: "Say which project: web, api." });
+  });
+
+  it("names its project, base branch and instructions, and a plain bot has no project", async () => {
+    expect(await codeStore.scope(LEAD)).toEqual({
+      name: "web",
+      repo: "acme/web",
+      baseBranch: fixture.project.baseBranch,
+      instructions: "Use pnpm. Never touch migrations.",
+    });
+    expect(await codeStore.scope(101)).toBeUndefined();
+    const section = createProjectToolkit({ store: codeStore }).extension.sections!.find(
+      (s) => s.key === "project",
+    )!;
+    const rules = await section.render({ conversationId: LEAD } as never, BACKGROUND_CONTEXT);
+    expect(rules).toContain("You coordinate the Code project web (acme/web");
+    expect(rules).toContain(
+      "The owner's instructions for this project:\nUse pnpm. Never touch migrations.",
+    );
+    expect(await section.render({ conversationId: 101 } as never, BACKGROUND_CONTEXT)).toBe(
+      undefined,
+    );
+  });
+
+  it("lists its project's threads with their state, and resolves only those", async () => {
+    const mine = ok(
+      await codeStore.start({
+        conversationId: LEAD,
+        idempotencyKey: "lead-3",
+        task: "fix login",
+        harness: "claude-code",
+      }),
+    );
+    await db.insert(codeThreads).values({
+      id: "api-thread",
+      instanceId: "shelley",
+      nativeId: "cApi",
+      projectId: "p-api",
+      branch: "ta/tidy",
+    });
+    expect(await codeStore.threads(LEAD)).toEqual([
+      {
+        threadId: mine.threadId,
+        title: "Fix login",
+        state: "done",
+        branch: "ta/fix-login",
+        pr: null,
+        url: `/code/t/${mine.threadId}`,
+      },
+    ]);
+    expect(await codeStore.threads(101)).toEqual([]);
+    expect(await codeStore.resolve({ conversationId: LEAD, threadId: "api-thread" })).toEqual({
+      error: "Only this project's threads can be resolved here.",
+    });
+    expect(await codeStore.resolve({ conversationId: LEAD, threadId: mine.threadId })).toEqual({});
+    const [row] = await db.select().from(codeThreads).where(eq(codeThreads.id, mine.threadId));
+    expect(row).toMatchObject({ archived: true, worktree: null });
+    expect(await codeStore.threads(LEAD)).toEqual([]);
   });
 });
 

@@ -6,6 +6,7 @@ import { parseRepo, repoSlug, type RepoRef } from "@tiny-agents/github";
 import type { CreateThreadInput, HarnessInstance } from "@tiny-agents/code/server";
 import { ensureThread } from "./code.threads";
 import {
+  bots,
   codeCheckpoints,
   codeProjects,
   codeReviews,
@@ -31,7 +32,12 @@ import {
   type ProjectScripts,
   type Workspace,
 } from "./code.workspace";
-import { PROJECT_RULE, branchTitle, projectHeader } from "../../../shared/code-messages";
+import {
+  PROJECT_RULE,
+  branchTitle,
+  projectHeader,
+  projectInstructionsBlock,
+} from "../../../shared/code-messages";
 
 const DEFAULT_PROJECT_SETTINGS: ProjectSettings = {
   scripts: {},
@@ -40,6 +46,7 @@ const DEFAULT_PROJECT_SETTINGS: ProjectSettings = {
   branchPrefix: DEFAULT_BRANCH_PREFIX,
   protectedPaths: [".github/workflows/**"],
   workflowInstructions: "",
+  instructions: "",
   autofix: {
     triggers: { ...DEFAULT_AUTOFIX.triggers },
     trustedBots: [],
@@ -69,6 +76,7 @@ export function projectSettings(raw: string): ProjectSettings {
       typeof value.workflowInstructions === "string"
         ? value.workflowInstructions
         : d.workflowInstructions,
+    instructions: typeof value.instructions === "string" ? value.instructions : d.instructions,
     autofix: {
       ...d.autofix,
       ...value.autofix,
@@ -103,6 +111,8 @@ export function projectView(row: CodeProjectRow): ProjectView {
     defaultInstanceId: row.defaultInstanceId,
     defaultModel: row.defaultModel,
     settings: projectSettings(row.settings),
+    chatBotId:
+      db.select({ id: bots.id }).from(bots).where(eq(bots.projectId, row.id)).get()?.id ?? null,
     createdAt: row.createdAt.toISOString(),
   };
 }
@@ -294,6 +304,8 @@ function projectPreamble(
   if (setupFailure) {
     lines.push(`Note: the project's setup script failed:\n\`\`\`\n${setupFailure}\n\`\`\``);
   }
+  const instructions = projectSettings(project.settings).instructions.trim();
+  if (instructions) lines.push(projectInstructionsBlock(instructions));
   return lines.join("\n");
 }
 

@@ -577,6 +577,21 @@ Known limits (register row C7):
   submit) is retried, and logged, for as long as the app runs. Deleting the
   bot removes it.
 
+## Project chat
+
+Each project has one chat, a bot tied to it (`bots.project_id`), opened from
+the top of the Code sidebar and made on first open (`code.chat.ts`, ADR
+0040). It coordinates instead of coding: its `project` toolkit
+(`createProjectToolkit` in `packages/agent/src/toolkits/code.ts`) starts and
+follows up threads of that project only, lists them with their state,
+branch and PR (`code_list`), and archives finished ones (`code_resolve`).
+Its toolkits are `PROJECT_BOT_TOOLKITS` in `bot-toolkits.ts`, so it has no
+browser or computer.
+
+The project's **Instructions** (Settings, the project's page) go into the
+coordinator's prompt and into the first message of every thread of the
+project, folded out of the transcript like the rest of the preamble.
+
 ## Known gaps
 
 - Shelley and Claude Code threads cannot edit or retry a turn.

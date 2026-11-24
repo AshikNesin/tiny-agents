@@ -125,6 +125,10 @@ export function threadPath(id: string): string {
   return `/code/t/${encodeURIComponent(id)}`;
 }
 
+export function projectChatPath(projectId: string): string {
+  return `/code/p/${encodeURIComponent(projectId)}`;
+}
+
 export function shortPath(path: string | null | undefined): string {
   if (!path) return "";
   const parts = path.split("/").filter(Boolean);

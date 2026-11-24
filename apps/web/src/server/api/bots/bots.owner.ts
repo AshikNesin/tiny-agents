@@ -8,6 +8,7 @@ export interface ConversationBot {
   modelId: string | null;
   browserProfile: string;
   memoryEnabled: boolean;
+  projectId: string | null;
   shared: boolean;
 }
 
@@ -22,6 +23,7 @@ const botColumns = {
   modelId: true,
   browserProfile: true,
   memoryEnabled: true,
+  projectId: true,
 } as const;
 
 const sharedWith = { guests: { columns: { userId: true }, limit: 1 } } as const;
@@ -32,6 +34,7 @@ function conversationBot(row: {
   modelId: string | null;
   browserProfile: string;
   memoryEnabled: boolean;
+  projectId: string | null;
   guests: { userId: number }[];
 }): ConversationBot {
   const { guests, ...bot } = row;

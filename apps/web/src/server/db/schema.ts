@@ -77,6 +77,9 @@ export const bots = sqliteTable("bots", {
   memoryTidiedAt: ms("memory_tidied_at"),
   pinnedAt: ms("pinned_at"),
   browserProfile: text("browser_profile").$type<"shared" | "own">().notNull().default("shared"),
+  projectId: text("project_id")
+    .unique()
+    .references((): AnySQLiteColumn => codeProjects.id, { onDelete: "set null" }),
   ...timestamps,
 });
 

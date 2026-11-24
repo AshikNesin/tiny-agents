@@ -478,6 +478,7 @@ const settled = (conversationId: number, owner?: ConversationOwner) => ({
         modelId: "m",
         browserProfile: "shared",
         memoryEnabled: true,
+        projectId: null,
         shared: false,
       },
     } satisfies ConversationOwner),
@@ -516,6 +517,7 @@ describe("memory capture debounce (a settled step)", () => {
       modelId: "m",
       browserProfile: "shared",
       memoryEnabled: true,
+      projectId: null,
       shared: false,
     };
     await capture.onSettled.run(settled(1, { kind: "routine", bot, routineId: "r" }));

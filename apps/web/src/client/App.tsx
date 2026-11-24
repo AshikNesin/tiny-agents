@@ -144,6 +144,7 @@ export const appRoutes: RouteObject[] = [
               { path: "/code", element: <CodeWorkspace /> },
               { path: "/code/new", element: <CodeWorkspace /> },
               { path: "/code/t/:threadId", element: <CodeWorkspace /> },
+              { path: "/code/p/:chatProjectId", element: <CodeWorkspace /> },
               { path: "/code/reviews", element: <Navigate to="/code" replace /> },
               { path: "/code/reviews/:reviewId", element: <CodeWorkspace /> },
               { path: "/code/review", element: <OpenReviewLink /> },
