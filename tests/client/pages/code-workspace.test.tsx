@@ -66,6 +66,7 @@ vi.mock("@groot/shell/lib/api", async (importOriginal) => {
       post: async (path: string, body: unknown) => {
         posts.push({ path, body });
         if (path === "/code/reviews") return { id: "rv9" };
+        if (path === "/code/projects/p1/chat") return projectBot;
         if (path.endsWith("/suggest")) {
           const typed = (body as { typed?: string }).typed;
           return { suggestion: typed ? `${typed} the tests first` : "Get it merged to main" };
@@ -133,6 +134,7 @@ const renderAt = (path: string) =>
           <Route path="/code" element={<CodeWorkspace />} />
           <Route path="/code/new" element={<CodeWorkspace />} />
           <Route path="/code/t/:threadId" element={<CodeWorkspace />} />
+          <Route path="/code/p/:chatProjectId" element={<CodeWorkspace />} />
           <Route path="/code/reviews/:id" element={<p>Review page</p>} />
         </Routes>
       </MemoryRouter>
@@ -172,6 +174,33 @@ const project = {
   settings: {},
   createdAt: "2026-11-05T00:00:00Z",
 };
+
+const projectBot = vi.hoisted(() => ({
+  id: "lead",
+  conversationId: "c-lead",
+  name: "web",
+  description: "Project chat for acme/web",
+  systemPrompt: "",
+  modelId: "test-model",
+  lastReadAt: null,
+  lastActivityAt: "2026-11-05T00:00:00Z",
+  lastMessagePreview: null,
+  toolPermissions: {},
+  skillIds: [],
+  connectionIds: [],
+  memoryEnabled: true,
+  autoReview: false,
+  yoloByDefault: false,
+  browserProfile: "shared",
+  projectId: "p1",
+  pinnedAt: null,
+  guestIds: [],
+  chatStartedAt: "2026-11-05T00:00:00Z",
+  memoryCapturedThrough: null,
+  connectionCapabilities: [],
+  createdAt: "2026-11-05T00:00:00Z",
+  updatedAt: "2026-11-05T00:00:00Z",
+}));
 
 const pull = (number: number, over: Record<string, unknown> = {}) => ({
   section: "needs",
@@ -218,6 +247,14 @@ describe("the Code workspace", () => {
       ["In review", ["demo:ccc"]],
       ["Done", ["demo:dddd"]],
     ]);
+  });
+
+  it("opens the project's chat inside Code from the sidebar", async () => {
+    renderAt("/code");
+    fireEvent.click(await screen.findByRole("link", { name: "Project chat" }));
+    expect(where()).toBe("/code/p/p1");
+    await waitFor(() => expect(posts.map((p) => p.path)).toContain("/code/projects/p1/chat"));
+    expect(await screen.findByPlaceholderText("Message web")).toBeInTheDocument();
   });
 
   it("j and k walk the list in the order it is shown", () => {

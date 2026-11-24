@@ -41,6 +41,21 @@ describe("a project thread's first message", () => {
     expect(screen.getByLabelText("Branch")).toHaveTextContent("setup script failed");
     expect(screen.getByText("Fix the login redirect")).toBeInTheDocument();
   });
+
+  it("keeps the project's instructions out of the owner's words", () => {
+    render(
+      row(
+        "[Project acme/web · branch ta/fix-login · base main]\n" +
+          "Work and commit on this branch. Do not push or open a pull request: the app publishes it.\n" +
+          "The owner's instructions for this project:\nUse pnpm.\n\nNever touch migrations.\n" +
+          "----- END OF PROJECT INSTRUCTIONS -----\n\n" +
+          "Fix the login redirect",
+      ),
+    );
+    expect(screen.getByText("Fix the login redirect")).toBeInTheDocument();
+    expect(screen.getByLabelText("Branch")).toHaveTextContent("ta/fix-login from main");
+    expect(screen.queryByText(/Never touch migrations/)).toBeNull();
+  });
 });
 
 describe("a PR review assistant's first message", () => {

@@ -6,6 +6,7 @@ import {
   ChevronRight,
   CircleAlert,
   GitPullRequest,
+  MessagesSquare,
   Plus,
   Settings,
   Trash2,
@@ -23,7 +24,13 @@ import { useConfirm } from "@groot/ui/primitives";
 import { errorMessage } from "../../lib/errors";
 import { Spinner } from "../../components/ui/spinner";
 import { SidebarTop } from "../../components/shell/ModeSwitch";
-import { codeApi, threadPath, type HarnessInfo, type ThreadSummary } from "../../lib/code/api";
+import {
+  codeApi,
+  projectChatPath,
+  threadPath,
+  type HarnessInfo,
+  type ThreadSummary,
+} from "../../lib/code/api";
 import { statusSections, type StatusSection } from "../../lib/code/list";
 import type { ProjectView } from "../../../shared/api/code";
 import { useResource } from "../../queries/resource";
@@ -200,11 +207,42 @@ function ArchivedRows({ activeId, harnesses }: { activeId?: string; harnesses: H
   );
 }
 
+function ProjectChats({ projects, activeChat }: { projects: ProjectView[]; activeChat?: string }) {
+  if (projects.length === 0) return null;
+  return (
+    <section aria-label="Project chats" className="space-y-px pt-2">
+      {projects.map((project) => {
+        const active = project.id === activeChat;
+        return (
+          <Link
+            key={project.id}
+            to={projectChatPath(project.id)}
+            aria-current={active ? "page" : undefined}
+            data-testid="code-project-chat"
+            className={cn(
+              "flex h-8 items-center gap-2 rounded-lg px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
+              active
+                ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                : "text-sidebar-foreground hover:bg-sidebar-accent/60",
+            )}
+          >
+            <MessagesSquare className="size-4 shrink-0" aria-hidden />
+            <span className="min-w-0 flex-1 truncate">
+              {projects.length > 1 ? `${project.name} chat` : "Project chat"}
+            </span>
+          </Link>
+        );
+      })}
+    </section>
+  );
+}
+
 export function ThreadList({
   threads,
   harnesses,
   projects,
   activeId,
+  activeChat,
   onNew,
   addingReview,
   onAddingReview,
@@ -213,6 +251,7 @@ export function ThreadList({
   harnesses: HarnessInfo[];
   projects?: ProjectView[] | null;
   activeId?: string;
+  activeChat?: string;
   onNew(): void;
   addingReview: boolean;
   onAddingReview(open: boolean): void;
@@ -237,6 +276,7 @@ export function ThreadList({
         </button>
       </div>
       <nav aria-label="Threads" className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
+        <ProjectChats projects={projects ?? []} activeChat={activeChat} />
         {threads === null ? (
           <Spinner className="mx-2 my-2 size-4" />
         ) : sections.length === 0 ? (

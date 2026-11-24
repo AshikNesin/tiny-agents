@@ -28,6 +28,7 @@ import type {
   SubmitReviewBody,
   ThreadPullsView,
 } from "../../../shared/api/code";
+import type { Bot } from "../../../shared/api/bots";
 
 const base = "/code";
 const thread = (id: string) => `${base}/threads/${encodeURIComponent(id)}`;
@@ -55,6 +56,7 @@ export const projectsApi = {
   update: (id: string, body: ProjectUpdateBody) =>
     apiClient.patch<ProjectView>(`${base}/projects/${encodeURIComponent(id)}`, body),
   remove: (id: string) => apiClient.delete(`${base}/projects/${encodeURIComponent(id)}`),
+  openChat: (id: string) => apiClient.post<Bot>(`${base}/projects/${encodeURIComponent(id)}/chat`),
 
   pulls: (id: string, fresh = true) =>
     apiClient.get<ThreadPullsView>(`${thread(id)}/pr`, fresh ? {} : { fresh: "false" }),

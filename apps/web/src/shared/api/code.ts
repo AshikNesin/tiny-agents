@@ -26,6 +26,7 @@ export interface ProjectSettings {
   branchPrefix: string;
   protectedPaths: string[];
   workflowInstructions: string;
+  instructions: string;
   autofix: AutofixProjectSettings;
 }
 
@@ -50,6 +51,7 @@ export interface ProjectView {
   defaultInstanceId: string | null;
   defaultModel: string | null;
   settings: ProjectSettings;
+  chatBotId: string | null;
   createdAt: string;
 }
 

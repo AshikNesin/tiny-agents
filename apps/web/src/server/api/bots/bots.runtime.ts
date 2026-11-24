@@ -14,6 +14,7 @@ import {
   createSandboxToolkit,
   createSkillsCapability,
   createCodeToolkit,
+  createProjectToolkit,
   createTasksToolkit,
   createTodayCapability,
   createTranscriber,
@@ -87,6 +88,13 @@ function builtinCapabilities(env: AppEnv, config: ModelConfig): Capability[] {
   setScrubber((text) => secretRedactor.scrub(text));
   const vault = createVaultBroker(getAgentRuntime);
   const own = appStoreCapabilities(env);
+  const code =
+    env.SHELLEY_URL?.trim() || claudePlanOn(config)
+      ? { store: codeStore }
+      : {
+          setupHint:
+            "Set SHELLEY_URL, or turn on the Claude plan on the sandbox, to hand coding work to a coding agent.",
+        };
   return [
     own.skills,
     own.memory,
@@ -117,14 +125,8 @@ function builtinCapabilities(env: AppEnv, config: ModelConfig): Capability[] {
       vault,
       ownerWaits: app().ownerWaits,
     }),
-    createCodeToolkit(
-      env.SHELLEY_URL?.trim() || claudePlanOn(config)
-        ? { store: codeStore }
-        : {
-            setupHint:
-              "Set SHELLEY_URL, or turn on the Claude plan on the sandbox, to hand coding work to a coding agent.",
-          },
-    ),
+    createCodeToolkit(code),
+    createProjectToolkit(code),
     createComputerToolkit({
       sessions: getComputerSessions(env) ?? undefined,
       resolveProfile: computerProfileForConversation,

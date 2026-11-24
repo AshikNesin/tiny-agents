@@ -75,6 +75,7 @@ const HOST: Bot = {
   autoReview: false,
   yoloByDefault: false,
   browserProfile: "shared",
+  projectId: null,
   pinnedAt: null,
   guestIds: [],
   chatStartedAt: new Date().toISOString(),

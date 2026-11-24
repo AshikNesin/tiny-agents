@@ -48,6 +48,21 @@ describe("botToolkits", () => {
     expect(botToolkits({ modelId: "gone-model" }, catalog)).toContain(VISION_TOOLKIT);
   });
 
+  it("gives a project chat a manager's toolkits: its project's threads, no shell, browser or vault", () => {
+    expect(botToolkits({ modelId: "vision-model", projectId: "p1" }, catalog)).toEqual([
+      "project",
+      "tasks",
+      "routines",
+      "web",
+      "skills",
+      "memory",
+      "today",
+      "questions",
+      "attachments",
+      TOOL_SEARCH_TOOLKIT,
+    ]);
+  });
+
   it("adds each linked connection", () => {
     const small = connection("small", 3);
     const large = connection("large", 40);
@@ -89,7 +104,7 @@ describe("selected ids match installed ones", () => {
   });
 
   it("reports an id the runtime lacks", () => {
-    expect(missingToolkits(BOT_TOOLKITS)).toEqual([VISION_TOOLKIT, TOOL_SEARCH_TOOLKIT]);
+    expect(missingToolkits(BOT_TOOLKITS)).toEqual(["project", VISION_TOOLKIT, TOOL_SEARCH_TOOLKIT]);
   });
 
   it("every built-in a bot selects is installed by the server's runtime", async () => {

@@ -33,6 +33,7 @@ import { ResizablePane } from "./ResizablePane";
 import { ReviewPanel } from "./ReviewPanel";
 import { ThreadList } from "./ThreadList";
 import { ThreadView } from "./ThreadView";
+import { ProjectChat } from "./ProjectChat";
 
 const PANES: Array<{ id: CodePane; label: string; keys: string }> = [
   { id: "changes", label: "Changes", keys: "1" },
@@ -132,7 +133,13 @@ function PaneHeader({
 }
 
 export function CodeWorkspace() {
-  const { threadId: rawId, section, projectId: settingsProjectId, reviewId } = useParams();
+  const {
+    threadId: rawId,
+    section,
+    projectId: settingsProjectId,
+    reviewId,
+    chatProjectId,
+  } = useParams();
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const { brand } = useShellConfig();
@@ -477,7 +484,7 @@ export function CodeWorkspace() {
   if (harnessList.length === 0) return <NotConfigured brand={brand} />;
   if (reviewId) return <PullReview reviewId={reviewId} harnesses={harnesses} rows={rows} />;
 
-  const full = Boolean(threadId) || inSettings;
+  const full = Boolean(threadId) || inSettings || Boolean(chatProjectId);
   return (
     <div className="flex h-dvh min-h-0">
       <PageKeys commands={commands} />
@@ -510,6 +517,7 @@ export function CodeWorkspace() {
           harnesses={harnesses}
           projects={projects}
           activeId={threadId}
+          activeChat={chatProjectId}
           onNew={() => navigate("/code/new")}
           addingReview={addingReview}
           onAddingReview={setAddingReview}
@@ -524,7 +532,9 @@ export function CodeWorkspace() {
           full ? (openPane ? "hidden lg:flex" : "flex") : "hidden lg:flex",
         )}
       >
-        {inSettings ? (
+        {chatProjectId ? (
+          <ProjectChat projectId={chatProjectId} />
+        ) : inSettings ? (
           <CodeSettings
             section={settingsProjectId ? "projects" : section}
             projectId={settingsProjectId}

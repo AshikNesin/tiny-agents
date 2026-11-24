@@ -42,7 +42,12 @@ export { createVaultToolkit } from "./toolkits/vault";
 export type { SecretFillField } from "@tiny-agents/sandbox/browser";
 export { InvalidAnswersError } from "./toolkits/questions";
 export { createTasksToolkit, type TaskRecord, type TaskStore } from "./toolkits/tasks";
-export { createCodeToolkit, type CodeHandoffRecord, type CodeStore } from "./toolkits/code";
+export {
+  createCodeToolkit,
+  createProjectToolkit,
+  type CodeHandoffRecord,
+  type CodeStore,
+} from "./toolkits/code";
 export { createTodayCapability } from "./toolkits/today";
 export { createSandboxToolkit } from "./toolkits/sandbox";
 export { codingSelection, createCodingToolkit, type CodingPermissionMode } from "./toolkits/coding";

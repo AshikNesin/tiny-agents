@@ -55,6 +55,7 @@ that the code alone cannot show.
 | 0037 | [Owner waits park the tool call](0037-owner-waits-park-the-tool-call.md)                                             | accepted                                            |
 | 0038 | [Browser traffic goes through a pinning proxy](0038-browser-traffic-goes-through-a-pinning-proxy.md)                 | accepted (amends 0034)                              |
 | 0039 | [Code threads own their id, belong to a project, and record runs](0039-code-threads-and-runs.md)                     | accepted                                            |
+| 0040 | [A project chat is a bot tied to one Code project](0040-project-chat-is-a-bot.md)                                    | accepted                                            |
 | G4   | [Hono + Drizzle on SQLite, for Node and Cloudflare Workers](0004-hono-drizzle-sqlite-workers.md)                     | accepted (groot)                                    |
 
 `G4` is groot's ADR 0004, synced from the boilerplate; tiny-agents' own 0004

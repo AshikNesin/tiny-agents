@@ -57,6 +57,7 @@ describe("conversationOwner", () => {
       browserProfile: "own",
       memoryEnabled: true,
       shared: false,
+      projectId: null,
     };
     expect(await conversationOwner(chat)).toEqual({ kind: "chat", bot: fields });
     expect(await conversationOwner(routineConversation)).toEqual({

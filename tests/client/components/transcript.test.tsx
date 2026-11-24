@@ -129,6 +129,7 @@ describe("Past chat transcript", () => {
     autoReview: false,
     yoloByDefault: false,
     browserProfile: "shared",
+    projectId: null,
     pinnedAt: null,
     guestIds: [],
     chatStartedAt: "2026-10-30T00:00:00.000Z",

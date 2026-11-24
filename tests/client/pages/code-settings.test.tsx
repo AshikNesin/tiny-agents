@@ -57,6 +57,7 @@ const project: ProjectView = {
   checkoutPath: "/home/exedev/tiny-agents-code/AshikNesin--tiny-agents/checkout",
   defaultInstanceId: null,
   defaultModel: null,
+  chatBotId: null,
   settings: {
     scripts: {},
     archiveOnMerge: true,
@@ -64,6 +65,7 @@ const project: ProjectView = {
     branchPrefix: "ta/",
     protectedPaths: [".github/workflows/**"],
     workflowInstructions: "",
+    instructions: "",
     autofix: {
       triggers: { checks: true, reviews: true, conflicts: true },
       trustedBots: ["coderabbitai[bot]"],

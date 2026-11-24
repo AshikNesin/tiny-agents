@@ -117,6 +117,7 @@ const project: NonNullable<ThreadPullsView["project"]> = {
   checkoutPath: "/home/exedev/tiny-agents-code/o--r/checkout",
   defaultInstanceId: null,
   defaultModel: null,
+  chatBotId: null,
   settings: {
     scripts: {},
     archiveOnMerge: true,
@@ -124,6 +125,7 @@ const project: NonNullable<ThreadPullsView["project"]> = {
     branchPrefix: "ta/",
     protectedPaths: [],
     workflowInstructions: "",
+    instructions: "",
     autofix: {
       triggers: { checks: true, reviews: true, conflicts: true },
       trustedBots: [],

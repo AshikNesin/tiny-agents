@@ -14,6 +14,7 @@ import {
 import { toast } from "sonner";
 import { Button, EmptyState, Input, monoClass, metaLabelClass } from "@groot/ui";
 import { useConfirm } from "@groot/ui/primitives";
+import { Textarea } from "@groot/ui/textarea";
 import { cn } from "@groot/ui/lib/utils";
 import { SearchSelect } from "../../components/ui/search-select";
 import { Spinner } from "../../components/ui/spinner";
@@ -481,6 +482,7 @@ function ProjectSettings({
     <>
       <ProjectHeader project={project} />
       <GeneralGroup project={project} harnesses={harnesses} update={update} />
+      <InstructionsGroup project={project} update={update} />
       <ScriptsGroup project={project} update={update} />
       <PullRequestGroups project={project} update={update} />
       <LimitsGroup project={project} update={update} />
@@ -490,6 +492,59 @@ function ProjectSettings({
 }
 
 type Update = (body: ProjectUpdateBody) => void;
+
+const INSTRUCTIONS_MAX = 8000;
+
+function InstructionsGroup({ project, update }: { project: ProjectView; update: Update }) {
+  const id = fieldId(project, "project-instructions");
+  return (
+    <SettingsGroup title="Project chat">
+      <SettingsRow
+        label="Instructions"
+        description="Sent to the project chat and to every new thread of this project. Running threads keep what they started with."
+        htmlFor={id}
+        stack
+      >
+        <InstructionsField
+          key={project.settings.instructions}
+          id={id}
+          value={project.settings.instructions}
+          onSave={(instructions) => update({ settings: { instructions } })}
+        />
+      </SettingsRow>
+    </SettingsGroup>
+  );
+}
+
+function InstructionsField({
+  id,
+  value,
+  onSave,
+}: {
+  id: string;
+  value: string;
+  onSave(next: string): void;
+}) {
+  const [draft, setDraft] = useState(value);
+  return (
+    <div className="flex w-full flex-col gap-1">
+      <Textarea
+        id={id}
+        value={draft}
+        rows={5}
+        maxLength={INSTRUCTIONS_MAX}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={() => {
+          if (draft.trim() !== value) onSave(draft.trim());
+        }}
+        placeholder="Use pnpm. Merge to main once CI is green. Ask before touching migrations."
+      />
+      <span className="text-muted-foreground self-end text-xs">
+        {draft.length.toLocaleString()} / {INSTRUCTIONS_MAX.toLocaleString()}
+      </span>
+    </div>
+  );
+}
 
 const fieldId = (project: ProjectView, name: string) => `project-${project.id}-${name}`;
 
