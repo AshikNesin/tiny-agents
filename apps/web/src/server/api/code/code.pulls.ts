@@ -30,6 +30,7 @@ import { checkpointTurn } from "./code.checkpoints";
 import { codeGitHub } from "./code.github";
 import { codeHub } from "./code.hub";
 import { pullTitle } from "./code.naming";
+import { reportPull, type PullReportKind } from "./code.report";
 import { finishPass, startPass, timeOutPass } from "./code.passes";
 import { yoloWaiting } from "./code.yolo";
 import {
@@ -98,7 +99,18 @@ async function ownerLoginOf(
   return (await github.viewer().catch(() => undefined))?.login ?? null;
 }
 
-function notify(pull: CodePullRow, kind: CodePullKind, detail?: string) {
+function logUntoldProjectChat(error: unknown, threadId: string) {
+  logger.warn({ error, threadId }, "Code: could not tell the project chat about a PR");
+}
+
+async function tellProjectChat(pull: CodePullRow, kind: PullReportKind, detail?: string) {
+  await reportPull(pull, kind, detail).catch((error: unknown) =>
+    logUntoldProjectChat(error, pull.threadId),
+  );
+}
+
+async function notify(pull: CodePullRow, kind: CodePullKind, detail?: string) {
+  await tellProjectChat(pull, kind, detail);
   if ((codeHub()?.viewers(pull.threadId) ?? 0) > 0) return;
   notificationService.notify(codePullUpdate(pull, kind, detail));
 }
@@ -193,6 +205,7 @@ export async function publish(
     baseRef: project.baseBranch,
     autofix: projectSettings(project.settings).autofix.onByDefault,
   });
+  await tellProjectChat(row, "opened");
   await reconcileNow(row.id);
   await armReconcile(row.id, 60_000);
   return (await getPull(row.id)) ?? row;
@@ -266,6 +279,7 @@ async function linkByBranch(threadId: string): Promise<CodePullRow | undefined> 
       baseRef: project.baseBranch,
       autofix: projectSettings(project.settings).autofix.onByDefault,
     });
+    await tellProjectChat(row, "opened");
     await reconcileNow(row.id);
     await armReconcile(row.id, 60_000);
     return row;
@@ -375,7 +389,7 @@ async function yoloStep(
     return "waiting";
   }
   await updatePull(pull.id, { yoloMethod: null, yoloWaiting: null });
-  notify(pull, "merged");
+  await notify(pull, "merged");
   return "merged";
 }
 
@@ -478,7 +492,7 @@ async function reconcile(pullId: string, now = Date.now()): Promise<number | nul
 
   if (snapshot.state === "merged") {
     await moveLoop(pull.id, "merged");
-    notify(pull, "merged");
+    await notify(pull, "merged");
     if (projectSettings(project.settings).archiveOnMerge) await archiveThread(pull.threadId);
     return null;
   }
@@ -493,7 +507,11 @@ async function reconcile(pullId: string, now = Date.now()): Promise<number | nul
   const stalled = stalledChecks(snapshot, now, settings.stallHours);
   if (stalled.length && pull.stalledNotifiedSha !== snapshot.headSha) {
     await updatePull(pull.id, { stalledNotifiedSha: snapshot.headSha });
-    notify(pull, "stalled", `${stalled.map((c) => c.name).join(", ")} has been pending for hours.`);
+    await notify(
+      pull,
+      "stalled",
+      `${stalled.map((c) => c.name).join(", ")} has been pending for hours.`,
+    );
   }
 
   const running = await runningPass(pull.id);
@@ -546,7 +564,8 @@ async function reconcile(pullId: string, now = Date.now()): Promise<number | nul
     if (decision.kind === "pass") {
       await startPass(pull, decision.trigger, decision.items, decision.hash);
     } else if (decision.kind === "green") {
-      if (await moveLoop(pull.id, "green", { headSha: snapshot.headSha })) notify(pull, "green");
+      if (await moveLoop(pull.id, "green", { headSha: snapshot.headSha }))
+        await notify(pull, "green");
     } else if (decision.kind === "timeout") {
       const pass = passes.find((p) => p.id === decision.passId);
       if (pass) await timeOutPass(pass);
@@ -557,7 +576,7 @@ async function reconcile(pullId: string, now = Date.now()): Promise<number | nul
           headSha: snapshot.headSha,
         })
       ) {
-        notify(pull, "needs_input", decision.reason);
+        await notify(pull, "needs_input", decision.reason);
       }
     } else if (decision.kind === "pause") {
       if (
@@ -566,7 +585,7 @@ async function reconcile(pullId: string, now = Date.now()): Promise<number | nul
           headSha: snapshot.headSha,
         })
       ) {
-        notify(pull, "needs_input", decision.reason);
+        await notify(pull, "needs_input", decision.reason);
       }
     } else if (decision.kind === "off") {
       if (
@@ -575,11 +594,11 @@ async function reconcile(pullId: string, now = Date.now()): Promise<number | nul
           autofix: false,
         })
       ) {
-        notify(pull, "off", decision.reason);
+        await notify(pull, "off", decision.reason);
       }
     } else if (decision.kind === "none" && !pull.autofix) {
       const failed = checksJustFailed(cachedSnapshot(before), snapshot);
-      if (failed.length) notify(pull, "checks_failed", failed.join(", "));
+      if (failed.length) await notify(pull, "checks_failed", failed.join(", "));
     }
     break;
   }

@@ -592,6 +592,15 @@ The project's **Instructions** (Settings, the project's page) go into the
 coordinator's prompt and into the first message of every thread of the
 project, folded out of the transcript like the rest of the preamble.
 
+Threads the chat started or adopted report back to it (`code.report.ts`):
+when one waits for the owner, and when its PR opens, goes green, fails
+checks, needs the owner or merges. Each note is one short line with a link,
+owed in the hand-off finish outbox (`code_handoff_finishes`) so a restart
+does not lose it. The watcher's sweep sends what is owed to one chat as a
+single turn, so a burst of news costs one turn, not several. Threads the
+owner started report nothing. A finish keeps its first 1,500 characters and
+points to the thread for the rest.
+
 ## Known gaps
 
 - Shelley and Claude Code threads cannot edit or retry a turn.

@@ -8,7 +8,14 @@ import { createNamespaceKv } from "@groot/core/kv";
 import { FIXED_NOW } from "../../../test-clock";
 import { api, createTestApp } from "../../helpers";
 import { authToken, eventually, resetAppTables } from "../../fixtures";
-import { codeAutofixPasses, codeThreads, db, jobs } from "../../../../apps/web/src/server/db";
+import {
+  bots,
+  codeAutofixPasses,
+  codeHandoffFinishes,
+  codeThreads,
+  db,
+  jobs,
+} from "../../../../apps/web/src/server/db";
 import { users } from "@groot/core/database/schema";
 import { installAppForTests } from "../../../../apps/web/src/server/app-root";
 import {
@@ -19,7 +26,7 @@ import {
 import { createWorkspace } from "../../../../apps/web/src/server/api/code/code.workspace";
 import { onTurnEnded } from "../../../../apps/web/src/server/api/code/code.pulls";
 import { runsOf } from "../../../../apps/web/src/server/api/code/code.runs";
-import { threadIndex } from "../../../../apps/web/src/server/api/code/code.store";
+import { recordHandoff, threadIndex } from "../../../../apps/web/src/server/api/code/code.store";
 import { threadIdOf } from "@tiny-agents/code/server";
 import { NO_CAPABILITIES } from "@tiny-agents/code/contracts";
 import type {
@@ -518,6 +525,35 @@ describe("publish and the PR tab", () => {
     await pr(thread.id);
     expect(changes).toContain("list");
     off();
+  });
+
+  it("tells the project chat that started a thread when its PR opens and merges", async () => {
+    const project = await newProject();
+    const thread = await newThread(project.id);
+    const enc = encodeURIComponent(thread.id);
+    const [bot] = await db
+      .insert(bots)
+      .values({ name: "web project", modelId: null, conversationId: "77", projectId: project.id })
+      .returning();
+    await recordHandoff({
+      botId: bot!.id,
+      conversationId: "77",
+      idempotencyKey: "chat-start",
+      task: "Fix the login flow",
+      threadId: thread.id,
+    });
+    await commit(thread.worktree, "src/login.ts");
+    await call("POST", `/threads/${enc}/publish`, {});
+    github.pull(1).state = "merged";
+    await pr(thread.id);
+
+    const notes = (await db.select().from(codeHandoffFinishes)).map((row) => row.text);
+    expect(notes).toHaveLength(2);
+    expect(notes[0]).toMatch(
+      /^\*\*Reply from GitHub:\*\* \[PR #1\]\(https:\/\/github\.com\/acme\/web\/pull\/1\).* opened\./,
+    );
+    expect(notes[1]).toMatch(/PR #1\].* merged\./);
+    expect(notes[1]).toContain(`(/code/t/${enc})`);
   });
 
   it("titles the pull request from its commits, short and clean", async () => {

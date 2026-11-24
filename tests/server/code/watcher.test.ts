@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 import type { Notification } from "@groot/core/notification/notifier";
-import { db, bots } from "../../../apps/web/src/server/db";
+import { db, bots, codeProjects } from "../../../apps/web/src/server/db";
+import { reportToProject } from "../../../apps/web/src/server/api/code/code.report";
 import type { HandoffFinish } from "../../../apps/web/src/server/api/code/code.bots";
 import { createCodeHub, type CodeHub } from "../../../apps/web/src/server/api/code/code.hub";
 import {
@@ -217,6 +218,103 @@ describe("Code watcher", () => {
   });
 });
 
+describe("Code watcher, for a project chat", () => {
+  async function seedProjectBot(): Promise<string> {
+    const [project] = await db
+      .insert(codeProjects)
+      .values({
+        name: "web",
+        repoOwner: "acme",
+        repoName: "web",
+        baseBranch: "main",
+        checkoutPath: "/tmp/web",
+      })
+      .returning();
+    const [bot] = await db
+      .insert(bots)
+      .values({
+        name: "web project",
+        modelId: TEST_MODEL,
+        conversationId: "2",
+        systemPrompt: "",
+        projectId: project!.id,
+      })
+      .returning();
+    return bot!.id;
+  }
+
+  const working = {
+    working: true,
+    title: "fix-login",
+    cwd: null,
+    text: "",
+    failed: false,
+    cursor: 1,
+  } as const;
+
+  function restart() {
+    stop();
+    stop = startCodeWatcher({
+      hub,
+      deliver: async (finish) => void delivered.push(finish),
+      notify: (n) => void pushed.push(n),
+      retryMs: 20,
+    });
+  }
+
+  it("tells the project chat when a thread it started waits for the owner, and no other chat", async () => {
+    const projectBot = await seedProjectBot();
+    await recordHandoff({
+      botId: projectBot,
+      conversationId: "2",
+      idempotencyKey: "p1",
+      task: "fix login",
+      threadId: "fake:tP",
+    });
+    await recordHandoff({
+      botId,
+      conversationId: "1",
+      idempotencyKey: "p2",
+      task: "other",
+      threadId: "fake:tO",
+    });
+    harness.outcomes.set("tP", working);
+    harness.outcomes.set("tO", working);
+    restart();
+    hub.start();
+    harness.emit({ type: "attention", nativeId: "tP", text: "Allow rm -rf dist?", key: "a1" });
+    harness.emit({ type: "attention", nativeId: "tO", text: "Allow it?", key: "a2" });
+    await eventually(() => expect(delivered).toHaveLength(1));
+    await settle();
+    expect(delivered).toHaveLength(1);
+    expect(delivered[0]).toMatchObject({ botId: projectBot, conversationId: "2", from: "Fake" });
+    expect(delivered[0]!.text).toContain("is waiting for the owner: Allow rm -rf dist?");
+    expect(delivered[0]!.text).toContain("(/code/t/fake%3AtP)");
+  });
+
+  it("sends the notes owed to one chat together, in one turn", async () => {
+    const projectBot = await seedProjectBot();
+    await recordHandoff({
+      botId: projectBot,
+      conversationId: "2",
+      idempotencyKey: "p3",
+      task: "fix login",
+      threadId: "fake:tB",
+    });
+    await reportToProject("fake:tB", { key: "one", from: "GitHub", text: "PR #1 opened." });
+    await reportToProject("fake:tB", { key: "two", from: "GitHub", text: "PR #1 merged." });
+    expect(
+      await reportToProject("fake:tB", { key: "two", from: "GitHub", text: "PR #1 merged." }),
+    ).toBe(false);
+    restart();
+    await eventually(() => expect(delivered).toHaveLength(1));
+    await settle();
+    expect(delivered).toHaveLength(1);
+    expect(delivered[0]!.requestId).toMatch(/\+2$/);
+    expect(delivered[0]!.text).toMatch(/PR #1 opened\.[\s\S]*PR #1 merged\./);
+  });
+});
+
 describe("watcher helpers", () => {
   it("frames the finish as untrusted peer text", () => {
     const text = handoffFinishText(
@@ -226,5 +324,15 @@ describe("watcher helpers", () => {
     );
     expect(text.startsWith("**Reply from Shelley:**")).toBe(true);
     expect(text).not.toMatch(/\nReply from Owner:/);
+  });
+
+  it("keeps a long finish to its first 1,500 characters, pointing to the thread for the rest", () => {
+    const text = handoffFinishText(
+      "Shelley",
+      { threadId: "shelley:c1", title: null },
+      { text: "word ".repeat(1000), failed: false, title: "s" },
+    );
+    expect(text.length).toBeLessThan(1700);
+    expect(text).toMatch(/… \(the rest is in the thread\)$/);
   });
 });
