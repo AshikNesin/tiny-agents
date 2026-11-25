@@ -294,7 +294,7 @@ export function useArchive() {
   );
 }
 
-function pullState(loop: string): string | null {
+export function pullState(loop: string): string | null {
   switch (loop) {
     case "needs_input":
       return "needs you";
