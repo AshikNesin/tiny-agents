@@ -69,6 +69,13 @@ export const storageRateLimiter = rateLimit({
   binding: "STORAGE_RATE_LIMITER",
 });
 
+export const adminRateLimiter = rateLimit({
+  window: () => config.rateLimits.admin,
+  message: "Too many attempts",
+  code: ErrorCode.RATE_LIMIT_EXCEEDED.code,
+  binding: "ADMIN_RATE_LIMITER",
+});
+
 export const uploadRateLimiter = rateLimit({
   window: () => config.rateLimits.upload,
   message: "Too many file uploads from this IP, please try again later.",

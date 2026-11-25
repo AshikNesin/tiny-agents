@@ -1,3 +1,4 @@
+import { useRef, useState } from "react";
 import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@groot/ui/button";
 import { displayClass, h1Class } from "@groot/ui/typography";
@@ -10,7 +11,7 @@ import { useSetupStatus } from "@groot/shell/hooks/useSetupStatus";
 import type { z } from "zod";
 import { loginSchema } from "@groot/core/auth/auth.schema";
 import { toast } from "sonner";
-import { LayoutDashboard, ShieldCheck, Zap, ArrowRight, KeyRound } from "lucide-react";
+import { LayoutDashboard, ShieldCheck, Zap, ArrowRight, KeyRound, Loader2 } from "lucide-react";
 
 const isDev = import.meta.env.DEV;
 
@@ -43,6 +44,15 @@ export function returnPath(state: unknown): string {
   return `${from.pathname}${search}${hash}`;
 }
 
+type SignInMethod = "password" | "passkey";
+
+type SignInState = { status: "idle" } | { status: "running"; method: SignInMethod };
+
+const SIGN_IN_FAILURE: Record<SignInMethod, { title: string; fallback: string }> = {
+  password: { title: "Login Failed", fallback: "Invalid credentials" },
+  passkey: { title: "Passkey Sign-In Failed", fallback: "Passkey authentication failed" },
+};
+
 export function Login() {
   const login = useAuthStore((state) => state.login);
   const loginWithPasskey = useAuthStore((state) => state.loginWithPasskey);
@@ -58,27 +68,30 @@ export function Login() {
   const features = config.login?.features ?? FEATURES;
   const needsSetup = useSetupStatus();
 
-  const onSubmit = async (values: LoginValues) => {
+  const [signIn, setSignIn] = useState<SignInState>({ status: "idle" });
+
+  const running = useRef(false);
+
+  const runSignIn = async (method: SignInMethod, attempt: () => Promise<unknown>) => {
+    if (running.current) return;
+    running.current = true;
+    setSignIn({ status: "running", method });
     try {
-      await login(values.email, values.password);
+      await attempt();
       navigate(destination, { replace: true });
     } catch (error) {
-      toast.error("Login Failed", {
-        description: loginErrorDescription(error, "Invalid credentials"),
-      });
+      const { title, fallback } = SIGN_IN_FAILURE[method];
+      toast.error(title, { description: loginErrorDescription(error, fallback) });
+    } finally {
+      running.current = false;
+      setSignIn({ status: "idle" });
     }
   };
 
-  const handlePasskeyLogin = async () => {
-    try {
-      await loginWithPasskey();
-      navigate(destination, { replace: true });
-    } catch (error) {
-      toast.error("Passkey Sign-In Failed", {
-        description: loginErrorDescription(error, "Passkey authentication failed"),
-      });
-    }
-  };
+  const onSubmit = (values: LoginValues) =>
+    runSignIn("password", () => login(values.email, values.password));
+  const handlePasskeyLogin = () => runSignIn("passkey", loginWithPasskey);
+  const busyWith = signIn.status === "running" ? signIn.method : null;
 
   if (needsSetup === undefined) {
     return (
@@ -122,9 +135,19 @@ export function Login() {
             <FormField name="password" label="Password">
               <Input type="password" autoComplete="current-password" placeholder="••••••••" />
             </FormField>
-            <Button type="submit" size="lg" className="w-full">
-              Sign In
-              <ArrowRight className="size-4" />
+            <Button
+              type="submit"
+              size="lg"
+              className="w-full"
+              disabled={busyWith !== null}
+              aria-busy={busyWith === "password"}
+            >
+              {busyWith === "password" ? "Signing in…" : "Sign In"}
+              {busyWith === "password" ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <ArrowRight className="size-4" />
+              )}
             </Button>
           </Form>
 
@@ -139,10 +162,16 @@ export function Login() {
             variant="secondary"
             size="lg"
             className="w-full"
-            onClick={handlePasskeyLogin}
+            onClick={() => void handlePasskeyLogin()}
+            disabled={busyWith !== null}
+            aria-busy={busyWith === "passkey"}
           >
-            <KeyRound className="size-4" />
-            Sign in with passkey
+            {busyWith === "passkey" ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <KeyRound className="size-4" />
+            )}
+            {busyWith === "passkey" ? "Waiting for passkey…" : "Sign in with passkey"}
           </Button>
         </div>
       </div>

@@ -5,10 +5,19 @@ import { selectAuthStatus, useAuthStore } from "@groot/shell/store/auth";
 
 interface ProtectedRouteProps {
   children: ReactNode;
+
+  adminOnly?: boolean;
+
+  fallback?: string;
 }
 
-export function ProtectedRoute({ children }: ProtectedRouteProps) {
+export function ProtectedRoute({
+  children,
+  adminOnly = false,
+  fallback = "/",
+}: ProtectedRouteProps) {
   const status = useAuthStore((state) => selectAuthStatus(state).status);
+  const isAdmin = useAuthStore((state) => state.user?.isAdmin === true);
   const location = useLocation();
 
   if (status === "unknown") {
@@ -21,6 +30,10 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
 
   if (status === "signedOut") {
     return <Navigate to="/login" replace state={{ from: location }} />;
+  }
+
+  if (adminOnly && !isAdmin) {
+    return <Navigate to={fallback} replace />;
   }
 
   return <>{children}</>;

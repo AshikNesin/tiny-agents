@@ -45,7 +45,7 @@ export const errorHandler: ErrorHandler<AppEnv> = (error, c) => {
     return fail(c, { code, message, details: data }, statusCode as ContentfulStatusCode);
   }
 
-  const isDevelopment = env.NODE_ENV === "development";
+  const isDevelopment = env.isDevelopment;
   return fail(
     c,
     {

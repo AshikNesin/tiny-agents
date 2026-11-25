@@ -63,11 +63,17 @@ export async function api<T = unknown>(
 
 let userCounter = 0;
 
-export async function signIn(app: TestApp, overrides: { email?: string; password?: string } = {}) {
+export async function signIn(
+  app: TestApp,
+  overrides: { email?: string; password?: string; isAdmin?: boolean } = {},
+) {
   userCounter += 1;
   const email = overrides.email ?? `user${userCounter}@example.com`;
   const password = overrides.password ?? "correct horse battery staple";
-  const user = await authService.createUser({ email, password, name: "Test User" });
+  const user = await authService.createUser(
+    { email, password, name: "Test User" },
+    { isAdmin: overrides.isAdmin ?? false },
+  );
   const login = await api<{ token: string }>(app, "/api/v1/auth/login", {
     method: "POST",
     json: { email, password },

@@ -101,4 +101,50 @@ describe("routeBodyLimit", () => {
       });
     }
   });
+
+  it("keeps a ceiling on a route without its own limit that overlaps a limited one", async () => {
+    const router = new Hono<AppEnv>();
+    const read = async (c: { req: { text(): Promise<string> }; json(v: unknown): Response }) =>
+      c.json({ read: (await c.req.text()).length });
+    router.post("/files/:name", read as never);
+    router.post("/files/upload", routeBodyLimit(64), read as never);
+    const app = createApp({
+      bodyLimitBytes: 16,
+      routes(app) {
+        app.route("/api/v1", router);
+      },
+    });
+
+    const allowed = await app.fetch(post("/api/v1/files/upload", 48));
+    expect(allowed.status).toBe(200);
+    expect(await allowed.json()).toEqual({ read: 48 });
+
+    expect((await app.fetch(post("/api/v1/files/upload", 65))).status).toBe(413);
+    expect((await app.fetch(postStream("/api/v1/files/upload", 65))).status).toBe(413);
+  });
+
+  it("keeps each app's limit to itself when two apps share the process", async () => {
+    const router = new Hono<AppEnv>();
+    const read = async (c: { req: { text(): Promise<string> }; json(v: unknown): Response }) =>
+      c.json({ read: (await c.req.text()).length });
+    router.post("/notes", read as never);
+    router.post("/upload", routeBodyLimit(256), read as never);
+    const build = (bodyLimitBytes: number) =>
+      createApp({
+        bodyLimitBytes,
+        routes(app) {
+          app.route("/api/v1", router);
+        },
+      });
+    const strict = build(16);
+    const lenient = build(512);
+
+    expect((await strict.fetch(post("/api/v1/notes", 48))).status).toBe(413);
+    expect((await lenient.fetch(post("/api/v1/notes", 48))).status).toBe(200);
+
+    for (const app of [strict, lenient]) {
+      expect((await app.fetch(post("/api/v1/upload", 200))).status).toBe(200);
+      expect((await app.fetch(post("/api/v1/upload", 257))).status).toBe(413);
+    }
+  });
 });

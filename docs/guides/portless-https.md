@@ -2,7 +2,9 @@
 
 How local dev gets a stable `https://tiny-agents.localhost` URL instead of a random port, and how to fix trust/HMR issues when it doesn't.
 
-This project uses [portless](https://github.com/vercel-labs/portless) to replace port numbers with stable, named `.localhost` URLs during local development. HTTPS with HTTP/2 is enabled by default.
+[portless](https://github.com/vercel-labs/portless) replaces port numbers with
+named `.localhost` URLs during local development, with HTTPS and HTTP/2 by
+default.
 
 Portless is optional. `scripts/with-portless.ts` runs `pnpm dev` under
 `portless run --name $npm_package_name` when the `portless` command exists and
@@ -106,14 +108,12 @@ Stop the conflicting process, or stop the existing portless proxy with
 Safari sometimes doesn't resolve `.localhost` subdomains. `portless hosts sync`
 adds entries to `/etc/hosts`; `portless hosts clean` removes them later.
 
-### Disable portless temporarily
+### Go back to plain HTTP
 
 ```bash
-PORTLESS=0 pnpm dev
+pnpm dev
 # → http://localhost:3000 (plain HTTP, no portless needed)
 ```
-
-`pnpm test:e2e` sets `PORTLESS=0` itself.
 
 ### Check active routes or stop the proxy
 
@@ -127,7 +127,7 @@ portless proxy stop
 ## 5. Using Custom Certs (Optional)
 
 If you already have certificates from `mkcert` or another tool, start the proxy
-yourself before `pnpm dev`:
+yourself before `pnpm dev:portless`:
 
 ```bash
 portless proxy start --cert ./cert.pem --key ./key.pem
@@ -144,5 +144,5 @@ Or let `pnpm dev` start a plain-HTTP proxy on 8888
 (`http://tiny-agents.localhost:8888`):
 
 ```bash
-PORTLESS_HTTPS=0 pnpm dev
+PORTLESS_HTTPS=0 pnpm dev:portless
 ```

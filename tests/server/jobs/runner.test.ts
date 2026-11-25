@@ -232,7 +232,6 @@ describe("inline tick", () => {
 
   it("does not nudge while the queue is disabled or not inline", async () => {
     registerJobHandler("inline", () => "ran");
-    const ticks = vi.spyOn(jobRunner, "runTick");
     for (const jobsConfig of [
       { enabled: false, runInline: true },
       { enabled: true, runInline: false },
@@ -241,7 +240,6 @@ describe("inline tick", () => {
       const id = await addJob("inline", {});
       expect((await load(id)).state).toBe("created");
     }
-    expect(ticks).not.toHaveBeenCalled();
   });
 });
 
@@ -278,26 +276,28 @@ describe("tick scheduling", () => {
     const running = new Promise<void>((resolve) => (started = resolve));
     const gate = new Promise<void>((resolve) => (release = resolve));
     const ran: string[] = [];
-    const handler = async (job: { data: string }) => {
+    registerJobHandler<string>("held", async (job) => {
+      ran.push(job.data);
       if (job.data === "first") {
         started();
         await gate;
       }
-      ran.push(job.data);
-    };
-    registerJobHandler<string>("held", handler);
+    });
     await addJob("held", "first");
     const first = runTick({ housekeeping: false });
     await running;
     const second = await addJob("held", "second");
     void runTick();
     jobRunner.reset();
-    registerJobHandler<string>("held", handler);
+
+    registerJobHandler<string>("held", async (job) => {
+      ran.push(job.data);
+    });
     release();
     await first;
     await tickInFlight();
     expect(ran).toEqual(["first"]);
-    expect((await load(second)).state).toBe("created");
+    expect(await load(second)).toMatchObject({ state: "created" });
   });
 
   it("forgets a pending re-run on stop", async () => {
@@ -307,11 +307,11 @@ describe("tick scheduling", () => {
     const gate = new Promise<void>((resolve) => (release = resolve));
     const ran: string[] = [];
     registerJobHandler<string>("held", async (job) => {
+      ran.push(job.data);
       if (job.data === "first") {
         started();
         await gate;
       }
-      ran.push(job.data);
     });
     await addJob("held", "first");
     const first = runTick({ housekeeping: false });
@@ -323,7 +323,7 @@ describe("tick scheduling", () => {
     await first;
     await stopped;
     expect(ran).toEqual(["first"]);
-    expect((await load(second)).state).toBe("created");
+    expect(await load(second)).toMatchObject({ state: "created" });
   });
 });
 

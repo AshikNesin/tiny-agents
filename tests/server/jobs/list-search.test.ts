@@ -50,7 +50,8 @@ describe("job list search", () => {
 
   it("is the list endpoint's search param", async () => {
     const app = createTestApp();
-    const { token } = await signIn(app);
+
+    const { token } = await signIn(app, { isAdmin: true });
     const res = await api<{ jobs: { id: string }[]; total: number }>(
       app,
       "/api/v1/jobs?search=REPORT&limit=2&offset=4",

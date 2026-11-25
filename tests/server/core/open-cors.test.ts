@@ -62,4 +62,32 @@ describe("createApp openCorsPaths", () => {
       setAppConfig();
     }
   });
+
+  it("does not reflect a foreign origin when the allow-list is empty", async () => {
+    setAppConfig({ cors: { origins: [] } });
+    try {
+      const app = buildApp();
+      const blocked = await app.fetch(preflight("/api/v1/private", "https://evil.example"));
+
+      expect(blocked.headers.get("access-control-allow-origin")).toBeNull();
+
+      const sameOrigin = await app.fetch(new Request("http://localhost/api/v1/private"));
+      expect(sameOrigin.status).toBe(200);
+      expect(sameOrigin.headers.get("access-control-allow-origin")).toBeNull();
+    } finally {
+      setAppConfig();
+    }
+  });
+
+  it("allows only the app's own origin when the allow-list is empty", async () => {
+    setAppConfig({ cors: { origins: [] }, passkey: { origin: "http://localhost" } });
+    try {
+      const app = buildApp();
+      const own = await app.fetch(preflight("/api/v1/private", "http://localhost"));
+      expect(own.headers.get("access-control-allow-origin")).toBe("http://localhost");
+      expect(own.headers.get("access-control-allow-credentials")).toBe("true");
+    } finally {
+      setAppConfig();
+    }
+  });
 });

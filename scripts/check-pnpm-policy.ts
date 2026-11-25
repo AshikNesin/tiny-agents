@@ -2,6 +2,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import process from "node:process";
+import { load } from "js-yaml";
 
 const EXPECTED = {
   minimumReleaseAge: "1440",
@@ -13,43 +14,48 @@ export interface Failure {
   problem: string;
 }
 
-const EXACT_PIN = /^[\w@/.-]+@\d+\.\d+\.\d+(-[\w.-]+)?$/;
-
-const isComment = (line: string) => /^\s*#/.test(line);
+const EXACT_PIN = /^(?:@[\w.-]+\/)?[\w.-]+@\d+\.\d+\.\d+(?:-[\w.-]+)?(?:\+[\w.-]+)?$/;
 
 export function evaluatePolicy(yaml: string): Failure[] {
   const failures: Failure[] = [];
-  const lines = yaml.split(/\r?\n/);
 
-  const entries = new Map<string, string>(
-    lines
-      .map((line) => /^([A-Za-z][\w-]*):\s*(.*)$/.exec(line))
-      .filter((m): m is RegExpExecArray => m !== null)
-      .map((m) => [m[1], m[2]] as const),
-  );
+  let parsed: unknown;
+  try {
+    parsed = load(yaml);
+  } catch (error) {
+    return [
+      { key: "pnpm-workspace.yaml", problem: `is not valid YAML: ${String(error).split("\n")[0]}` },
+    ];
+  }
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    return [{ key: "pnpm-workspace.yaml", problem: "is not a YAML mapping" }];
+  }
+  const entries = parsed as Record<string, unknown>;
 
   for (const [key, expected] of Object.entries(EXPECTED)) {
-    const actual = entries.get(key) ?? null;
-    if (actual === null) {
+    const actual = entries[key];
+    if (actual === undefined || actual === null) {
       failures.push({ key, problem: "missing" });
-    } else if (actual.replace(/["']/g, "") !== expected) {
-      failures.push({ key, problem: `expected "${expected}", found "${actual}"` });
+    } else if (String(actual) !== expected) {
+      failures.push({ key, problem: `expected "${expected}", found "${String(actual)}"` });
     }
   }
 
-  const excludeStart = lines.findIndex((line) => line.startsWith("trustPolicyExclude:"));
-  if (excludeStart !== -1) {
-    for (const line of lines.slice(excludeStart + 1)) {
-      if (line.trim() !== "" && !/^[\s-]/.test(line)) break;
-      if (line.trim() === "[]" || isComment(line)) continue;
-      const item = /^\s*-\s*(.+)$/.exec(line)?.[1];
-      if (!item) continue;
-      const pin = item.replace(/["']/g, "").trim();
-      if (!EXACT_PIN.test(pin)) {
-        failures.push({
-          key: "trustPolicyExclude",
-          problem: `"${pin}" is not an exact name@version pin`,
-        });
+  const excludes = entries.trustPolicyExclude;
+  if (excludes !== undefined && excludes !== null) {
+    if (!Array.isArray(excludes) || excludes.some((item) => typeof item !== "string")) {
+      failures.push({
+        key: "trustPolicyExclude",
+        problem: "must be a list of name@version strings",
+      });
+    } else {
+      for (const pin of excludes) {
+        if (!EXACT_PIN.test(pin)) {
+          failures.push({
+            key: "trustPolicyExclude",
+            problem: `"${pin}" is not an exact name@version pin`,
+          });
+        }
       }
     }
   }

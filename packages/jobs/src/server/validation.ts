@@ -1,18 +1,19 @@
 import { z } from "zod";
 
-const MAX_RETRY_LIMIT = 100;
-const MAX_RETRY_DELAY_SECONDS = 24 * 60 * 60;
-const MAX_PRIORITY = 2_147_483_647;
-const MAX_DELAY_SECONDS = 24 * 60 * 60;
-const MAX_JOB_IDS = 100;
+const MAX_RETRIES = 100;
 export const MAX_JOB_LOGS = 500;
+const MAX_DELAY_SECONDS = 365 * 24 * 60 * 60;
+const MAX_PRIORITY = 1_000_000;
+const MAX_BULK_RERUN = 500;
+
+const seconds = z.coerce.number().int().min(0).max(MAX_DELAY_SECONDS);
 
 const sendOptionsSchema = z
   .object({
-    retryLimit: z.coerce.number().int().min(0).max(MAX_RETRY_LIMIT).optional(),
-    retryDelaySeconds: z.coerce.number().int().min(0).max(MAX_RETRY_DELAY_SECONDS).optional(),
+    retryLimit: z.coerce.number().int().min(0).max(MAX_RETRIES).optional(),
+    retryDelaySeconds: seconds.optional(),
     priority: z.coerce.number().int().min(-MAX_PRIORITY).max(MAX_PRIORITY).optional(),
-    delaySeconds: z.coerce.number().int().min(0).max(MAX_DELAY_SECONDS).optional(),
+    delaySeconds: seconds.optional(),
     singletonKey: z.string().min(1).optional(),
   })
   .optional();
@@ -33,7 +34,7 @@ export const scheduleJobSchema = z.object({
 });
 
 export const bulkRerunSchema = z.object({
-  jobIds: z.array(z.string().min(1)).min(1).max(MAX_JOB_IDS),
+  jobIds: z.array(z.string().min(1)).min(1).max(MAX_BULK_RERUN),
 });
 
 export const paginationQuerySchema = z.object({

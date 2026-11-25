@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { adminAuthMiddleware } from "../middlewares/admin-auth.middleware";
-import { authRateLimiter } from "../middlewares/rate-limit.middleware";
+import { adminRateLimiter, authRateLimiter } from "../middlewares/rate-limit.middleware";
 import { parseBody, requireUser } from "../utils/controller.utils";
 import { endSession, requireSession, startSession } from "../session";
 import { ok } from "../utils/api-response.utils";
@@ -24,8 +24,8 @@ router.post("/setup", authRateLimiter, async (c) => {
   return ok(c, await startSession(c, await authService.setupFirstUser(body)), 201);
 });
 
-router.post("/logout", requireSession, (c) => {
-  endSession(c);
+router.post("/logout", requireSession, async (c) => {
+  await endSession(c);
   return ok(c, { status: "logged out" });
 });
 
@@ -34,12 +34,12 @@ router.get("/me", requireSession, async (c) => {
   return ok(c, await authService.getUserById({ userId }));
 });
 
-router.post("/users", adminAuthMiddleware, async (c) => {
+router.post("/users", adminRateLimiter, adminAuthMiddleware, async (c) => {
   const body = await parseBody(c, createUserSchema);
   return ok(c, await authService.createUser(body), 201);
 });
 
-router.get("/users", adminAuthMiddleware, async (c) => {
+router.get("/users", adminRateLimiter, adminAuthMiddleware, async (c) => {
   return ok(c, await authService.getAllUsers());
 });
 

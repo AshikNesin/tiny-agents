@@ -50,14 +50,11 @@ export async function verifyPasskeyRegistration(
   });
 }
 
-export async function generatePasskeyAuthenticationOptions(userPasskeys: Passkey[] = []) {
+export async function generatePasskeyAuthenticationOptions() {
   return generateAuthenticationOptions({
     rpID: config.passkey.rpId,
-    allowCredentials: userPasskeys.map((passkey) => ({
-      id: passkey.credentialId,
-      type: "public-key",
-      transports: transports(passkey),
-    })),
+
+    allowCredentials: [],
     userVerification: "preferred",
   });
 }

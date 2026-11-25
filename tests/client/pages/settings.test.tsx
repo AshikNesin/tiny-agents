@@ -51,7 +51,9 @@ const pathname = () => screen.getByTestId("pathname").textContent;
 const heading = () => screen.getByRole("heading", { level: 1 });
 
 beforeEach(() => {
-  useAuthStore.setState({ user: { id: 7, email: "demo@example.com", name: "Demo User" } });
+  useAuthStore.setState({
+    user: { id: 7, email: "demo@example.com", name: "Demo User", isAdmin: false },
+  });
 });
 
 afterEach(() => {
@@ -71,6 +73,22 @@ describe("Settings page", () => {
 
   it("redirects an unknown section to the first one", () => {
     renderAt("/settings/nope");
+    expect(pathname()).toBe("/settings/account");
+  });
+
+  it("keeps the settings prefix when the unknown section has an encoded slash", () => {
+    renderAt("/settings/a%2Fb");
+    expect(pathname()).toBe("/settings/account");
+    expect(heading()).toHaveTextContent("Account");
+  });
+
+  it("keeps the settings prefix when the mount is not at the root", () => {
+    renderAt("/settings/a%2Fb/c");
+    expect(pathname()).toBe("/settings/account");
+  });
+
+  it("survives a pathname that is not valid percent-encoding", () => {
+    renderAt("/settings/100%");
     expect(pathname()).toBe("/settings/account");
   });
 

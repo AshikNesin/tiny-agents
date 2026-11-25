@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState, type ComponentType } from "react";
 import type { ReactCodeMirrorProps } from "@uiw/react-codemirror";
 import type { Extension } from "@codemirror/state";
+import { cn } from "@groot/ui/lib/utils";
+import { Textarea } from "@groot/ui/textarea";
 import { useTheme } from "@groot/shell/lib/theme";
 
 export interface CodeMirrorLinkRange {
@@ -9,18 +11,33 @@ export interface CodeMirrorLinkRange {
   href: string;
 }
 
-const editorPromise = Promise.all([
-  import("@uiw/react-codemirror"),
-  import("@codemirror/lang-json"),
-  import("@codemirror/view"),
-]).then(([cm, langJson, view]) => ({
-  CodeMirror: cm.default as ComponentType<Record<string, unknown>>,
-  json: langJson.json,
-  Decoration: view.Decoration,
-  EditorView: view.EditorView,
-}));
+const loadEditorModules = () =>
+  Promise.all([
+    import("@uiw/react-codemirror"),
+    import("@codemirror/lang-json"),
+    import("@codemirror/view"),
+  ]).then(([cm, langJson, view]) => ({
+    CodeMirror: cm.default as ComponentType<Record<string, unknown>>,
+    json: langJson.json,
+    Decoration: view.Decoration,
+    EditorView: view.EditorView,
+  }));
 
-type EditorModules = Awaited<typeof editorPromise>;
+type EditorModules = Awaited<ReturnType<typeof loadEditorModules>>;
+
+type EditorLoad =
+  | { status: "loading" }
+  | { status: "ready"; modules: EditorModules }
+  | { status: "failed" };
+
+let editorLoad: EditorLoad = { status: "loading" };
+const editorLoaded: Promise<EditorLoad> = loadEditorModules().then(
+  (modules) => (editorLoad = { status: "ready", modules }),
+  (error: unknown) => {
+    console.error("Code editor failed to load; using a plain text field", error);
+    return (editorLoad = { status: "failed" });
+  },
+);
 
 interface CodeMirrorEditorProps {
   value: string;
@@ -43,11 +60,16 @@ export function CodeMirrorEditor({
   linkRanges = [],
   onLinkClick,
 }: CodeMirrorEditorProps) {
-  const [mods, setMods] = useState<EditorModules | null>(null);
+  const [load, setLoad] = useState(() => editorLoad);
+  const mods = load.status === "ready" ? load.modules : null;
   const { resolvedTheme } = useTheme();
 
   useEffect(() => {
-    editorPromise.then(setMods);
+    let live = true;
+    void editorLoaded.then((settled) => live && setLoad(settled));
+    return () => {
+      live = false;
+    };
   }, []);
 
   const extensions = useMemo<Extension[]>(() => {
@@ -83,7 +105,24 @@ export function CodeMirrorEditor({
     return extensions;
   }, [mods, lineWrapping, linkRanges, onLinkClick]);
 
-  if (!mods) return null;
+  if (load.status === "failed") {
+    return (
+      <Textarea
+        value={value}
+        onChange={(event) => onChange?.(event.target.value)}
+        readOnly={!editable}
+        spellCheck={false}
+        aria-label="JSON"
+        className={cn(
+          "font-mono",
+          !lineWrapping && "whitespace-pre",
+          height && "[field-sizing:fixed]",
+        )}
+        style={{ height }}
+      />
+    );
+  }
+  if (!mods) return <div style={{ height }} />;
 
   const { CodeMirror } = mods;
 

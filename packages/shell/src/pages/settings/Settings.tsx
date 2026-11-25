@@ -13,9 +13,18 @@ export function Settings({ sections = DEFAULT_SETTINGS_SECTIONS }: SettingsProps
   const { pathname } = useLocation();
   const splat = useParams()["*"] ?? "";
 
+  const countSegments = (value: string) => value.split("/").filter(Boolean).length;
+  let segmentCount = countSegments(pathname);
+  try {
+    segmentCount = countSegments(decodeURIComponent(pathname));
+  } catch {
+    segmentCount = countSegments(pathname);
+  }
   const splatSegments = splat.split("/").filter(Boolean);
-  const pathSegments = pathname.split("/").filter(Boolean);
-  const baseSegments = pathSegments.slice(0, pathSegments.length - splatSegments.length);
+  const baseSegments = pathname
+    .split("/")
+    .filter(Boolean)
+    .slice(0, segmentCount - splatSegments.length);
   const basePath = baseSegments.length > 0 ? `/${baseSegments.join("/")}` : "";
 
   const first = sections[0];

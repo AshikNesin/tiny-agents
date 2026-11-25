@@ -1,5 +1,83 @@
 # @groot/shell
 
+## 3.2.0
+
+### Minor Changes
+
+- [#178](https://github.com/AshikNesin/groot/pull/178) [`cb37122`](https://github.com/AshikNesin/groot/commit/cb37122eed238dbd14f60ffb1cc4214f2bf8fa68) Thanks [@AshikNesin](https://github.com/AshikNesin)! - The jobs API (`/api/v1/jobs`) is admin-only. Its own comment called it an admin
+  API, but it only required a session, so any signed-in user could create jobs
+  with arbitrary payloads, overwrite schedules and purge the queue. Every route
+  now answers `403` to a session that is not an admin.
+  
+  Users gain an `isAdmin` column. It is read from the database row on every
+  request, never from the session token, so promoting or demoting an account
+  takes effect at once. `requireAdmin` (`@groot/core/session`) is the guard, and
+  `jobRoutes` applies it itself, so any app that mounts it is covered.
+  
+  - The first account (first-run setup) is an admin. On an existing install the
+    migration promotes the lowest-id account, so someone can still open the
+    dashboard after upgrading.
+  - `SessionUser` and `/auth/me` include `isAdmin`.
+  - A `NavDestination` can be `adminOnly`: `useShellConfig()` hides it from
+    non-admins in the sidebar, the account menu and ⌘K, and
+    `<ProtectedRoute adminOnly>` keeps them off the page. The Jobs page is marked
+    this way in the app.
+
+### Patch Changes
+
+- [#173](https://github.com/AshikNesin/groot/pull/173) [`941d0fd`](https://github.com/AshikNesin/groot/commit/941d0fdc04c78614fb9ecd430b36db80e56bf6dd) Thanks [@AshikNesin](https://github.com/AshikNesin)! - fix: make the remaining implicit state machines explicit, and index them all
+  
+  - shell: `/login` runs one sign-in at a time. While a password or passkey
+    sign-in runs, its button shows that it is busy and the other method is
+    disabled, so a double click no longer starts a second WebAuthn prompt (which
+    the browser refuses with an error toast).
+  - shell: `CodeMirrorEditor` loads as `loading`, then `ready` or `failed`. When
+    its chunks fail to load (a dropped connection, or a deploy under an open
+    tab) it renders a plain text field that still edits the value, where it
+    used to stay blank.
+  - jobs: the bulk "Rerun N" button counts and sends only the selected jobs the
+    job state machine allows to re-run (completed and failed); with none it is
+    disabled and says why. It used to send every selected job, and the server
+    refused the rest.
+  - jobs: the runner's tick is one tagged slot (`idle`, or `running` with a
+    `rerun` flag) instead of two fields that had to agree. Behaviour is
+    unchanged.
+  - web: the Node process moves from `serving` to `draining` on the first
+    SIGTERM/SIGINT. A second signal during the drain now exits at once, where it
+    used to start a second shutdown that cut the first one short.
+  - docs: `docs/reference/state-machines.md` lists every state machine with its
+    states, the file that moves it and the test that pins it.
+
+- [#178](https://github.com/AshikNesin/groot/pull/178) [`05e6aef`](https://github.com/AshikNesin/groot/commit/05e6aefa150ed6dba7beb5c4a77ad518089dd8d9) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Smaller fixes, each with a test that failed before it.
+  
+  - **R2 `copy()` no longer reads the whole source object into memory.** It
+    called `arrayBuffer()` before writing, which a large object cannot fit in a
+    Workers isolate. It now hands `put` the source's stream, which R2 streams
+    from object to object.
+  - **Updating or deleting a todo answers `404` when the row is gone.** Each did
+    an existence check and then the write; a todo deleted in between produced a
+    `200` with no data. The write is the check now: an empty `RETURNING` is the
+    `404`.
+  - **A pending `confirm()` settles when `ConfirmProvider` unmounts.** Whoever
+    awaited it was left waiting for ever, so the code after the `await`, its
+    `finally` blocks included, never ran. It resolves `false`.
+  - **The settings page keeps its prefix on a redirect.** For a section with an
+    encoded slash (`/settings/a%2Fb`) the splat param decodes to two segments
+    while the pathname has one, and the redirect went to `/account` instead of
+    `/settings/account`. The pathname is now counted decoded. A pathname that is
+    not valid percent-encoding is counted as it is.
+
+- [#178](https://github.com/AshikNesin/groot/pull/178) [`cb37122`](https://github.com/AshikNesin/groot/commit/cb37122eed238dbd14f60ffb1cc4214f2bf8fa68) Thanks [@AshikNesin](https://github.com/AshikNesin)! - "View" on the Storage page no longer runs script from an uploaded file. It
+  opened the file through a same-origin `blob:` URL, which dropped the
+  `Content-Disposition: attachment` the download route sets for HTML, SVG, XML
+  and JavaScript, so an uploaded `.html` ran its script with the viewer's
+  session. Such files now open as plain text. The rule for which types are
+  active is `isActiveContentType` in `@groot/core/storage/storage.schema`, shared
+  by the route and the client.
+- Updated dependencies [[`cb37122`](https://github.com/AshikNesin/groot/commit/cb37122eed238dbd14f60ffb1cc4214f2bf8fa68), [`8fe9496`](https://github.com/AshikNesin/groot/commit/8fe949668a6a34e1710b9378683ecc03cf1ca843), [`cb37122`](https://github.com/AshikNesin/groot/commit/cb37122eed238dbd14f60ffb1cc4214f2bf8fa68), [`cb37122`](https://github.com/AshikNesin/groot/commit/cb37122eed238dbd14f60ffb1cc4214f2bf8fa68), [`66f6efb`](https://github.com/AshikNesin/groot/commit/66f6efb5c9af1c643025dc566ff5fc8e67037713), [`651e710`](https://github.com/AshikNesin/groot/commit/651e71005e9a9b2abc510b0a95b37611015b692d), [`23f14f6`](https://github.com/AshikNesin/groot/commit/23f14f6b843093bd06521bde13cbf592aee4127b), [`05e6aef`](https://github.com/AshikNesin/groot/commit/05e6aefa150ed6dba7beb5c4a77ad518089dd8d9), [`cb37122`](https://github.com/AshikNesin/groot/commit/cb37122eed238dbd14f60ffb1cc4214f2bf8fa68)]:
+  - @groot/core@2.4.0
+  - @groot/ui@1.3.1
+
 ## 3.2.1
 
 ### Patch Changes
@@ -31,7 +109,6 @@
 
 - Updated dependencies [[`879de1d`](https://github.com/AshikNesin/tiny-agents/commit/879de1db33c332dfbf9ab98bb83fca2f53ed108a)]:
   - @groot/core@2.3.1
-
 ## 3.1.0
 
 ### Minor Changes

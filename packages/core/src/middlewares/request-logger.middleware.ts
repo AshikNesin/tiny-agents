@@ -5,8 +5,11 @@ import { clientIp } from "../utils/controller.utils";
 import { redactSecretPath } from "../utils/redact-path";
 import type { AppEnv } from "../types";
 
+const CLIENT_REQUEST_ID = /^[A-Za-z0-9_-]{1,64}$/;
+
 export const requestLoggerMiddleware = createMiddleware<AppEnv>(async (c, next) => {
-  const requestId = c.req.header("x-request-id") ?? crypto.randomUUID();
+  const supplied = c.req.header("x-request-id");
+  const requestId = supplied && CLIENT_REQUEST_ID.test(supplied) ? supplied : crypto.randomUUID();
   const startTime = Date.now();
 
   let waitUntil: ((promise: Promise<unknown>) => void) | undefined;

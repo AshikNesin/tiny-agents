@@ -209,7 +209,12 @@ housekeeping, all through `deleteJobLogs(ids)`. A job deleted while its
 handler is still running loses the rows written after the delete when the
 tick finishes it.
 
-## HTTP API (`/api/v1/jobs`, JWT)
+## HTTP API (`/api/v1/jobs`, admin session)
+
+**Every route is admin-only.** The API creates jobs with any registered handler
+and payload, replaces schedules and purges the queue, so it answers `403` to a
+session whose account is not an admin (`requireAdmin`). The first account is an
+admin; the dashboard is hidden from, and closed to, everyone else.
 
 | Method | Path                                    | Body / query                                        | Returns                                                         |
 | ------ | --------------------------------------- | --------------------------------------------------- | --------------------------------------------------------------- |
@@ -230,10 +235,14 @@ tick finishes it.
 
 `search` on `GET /` matches a substring of the job's name or id,
 case-insensitively, and `total` counts every match. `:jobId` is the job's
-uuid. `options` on `POST /` takes the `addJob()` options except `runAt`. An
-unknown state is a `400`, an unknown job a `404` (`JOB_NOT_FOUND`), and an
-action the job's state does not allow a `400`. curl examples are in
-[API requests](../reference/api-requests.md#jobs-jwt).
+uuid. `options` on `POST /` takes the `addJob()` options except `runAt`, each
+with an upper bound: `retryLimit` at most 100, `retryDelaySeconds` and
+`delaySeconds` at most a year, `priority` within ±1,000,000. One `POST
+/bulk-rerun` names at most 500 jobs. (`addJob()` itself is unchanged: it is
+application code, and the bounds are the route's.) An unknown state is a
+`400`, an unknown job a `404` (`JOB_NOT_FOUND`), an action the job's state does
+not allow a `400`, and a non-admin session a `403`. curl examples are in
+[API requests](../reference/api-requests.md#jobs-admin-session).
 
 The response types (`Job`, `JobSchedule`, `JobLog`, `JobStats`,
 `BulkRerunResult`) are published once in `@groot/jobs/server/wire-types`, with

@@ -8,9 +8,14 @@ import { jwtAuthMiddleware } from "@groot/core/middlewares/jwt-auth.middleware";
 import { Boom } from "@groot/core/errors";
 
 describe("session token", () => {
-  it("round-trips the user claims", async () => {
+  it("round-trips the user claims and the token generation", async () => {
+    const token = await signSessionToken({ userId: 7, email: "a@b.c", tokenVersion: 3 });
+    expect(await verifySessionToken(token)).toEqual({ userId: 7, email: "a@b.c", tokenVersion: 3 });
+  });
+
+  it("stamps a token minted without a generation as generation 0", async () => {
     const token = await signSessionToken({ userId: 7, email: "a@b.c" });
-    expect(await verifySessionToken(token)).toEqual({ userId: 7, email: "a@b.c" });
+    expect(await verifySessionToken(token)).toEqual({ userId: 7, email: "a@b.c", tokenVersion: 0 });
   });
 
   it("rejects tampered or garbage tokens with the SESSION_INVALID 401", async () => {

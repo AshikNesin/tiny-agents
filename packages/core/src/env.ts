@@ -57,6 +57,8 @@ export type Env = Omit<ParsedEnv, "DATABASE_URL" | "JWT_SECRET_KEY" | "ADMIN_AUT
   DATABASE_URL: string;
   JWT_SECRET_KEY: string;
   ADMIN_AUTH_KEY: string;
+
+  isDevelopment: boolean;
 };
 
 export type EnvSource = Record<string, string | undefined>;
@@ -92,6 +94,7 @@ export function parseEnv(source: EnvSource): Env {
     DATABASE_URL: parsed.DATABASE_URL ?? defaultDatabaseUrl(parsed.NODE_ENV),
     JWT_SECRET_KEY: secret("JWT_SECRET_KEY"),
     ADMIN_AUTH_KEY: secret("ADMIN_AUTH_KEY"),
+    isDevelopment: cleaned.NODE_ENV === "development",
   };
 
   if (isProduction) {
@@ -100,6 +103,12 @@ export function parseEnv(source: EnvSource): Env {
     if (missing.length > 0) {
       throw new Error(
         `Missing required environment variables in production: ${missing.join(", ")}`,
+      );
+    }
+
+    if (env.ADMIN_AUTH_KEY.length < 32) {
+      throw new Error(
+        "Invalid environment variables:\n  ADMIN_AUTH_KEY: must be at least 32 characters",
       );
     }
   }

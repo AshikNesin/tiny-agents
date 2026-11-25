@@ -1,8 +1,9 @@
 {
   "fromVersion": "3.2.1",
-  "toVersion": "3.2.1",
-  "fromCommit": "2a63753008bbd3e93309a303e2d5340b2ef5fabb",
-  "toCommit": "0a924aa73e58dcfe5c54203e469bb4cfca80d1b3",
-  "generatedAt": "2026-11-09T21:19:42.957Z",
-  "conflicts": []
+  "toVersion": "3.4.0",
+  "fromCommit": "0a924aa73e58dcfe5c54203e469bb4cfca80d1b3",
+  "toCommit": "a649c6d4b81d215f01ea4d14c1fd02b10b027cb4",
+  "generatedAt": "2026-11-24T20:31:54.391Z",
+  "conflicts": [],
+  "resolvedBy": "manual (no Z.AI key; conflicts merged by hand per .agents/skills/groot-sync/SKILL.md)"
 }

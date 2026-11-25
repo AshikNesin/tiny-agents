@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import type { AppEnv } from "@groot/core/types";
+import { requireAdmin } from "@groot/core/session";
 import { ok } from "@groot/core/utils/api-response.utils";
 import { parseBody, parseQuery, parseStringParam } from "@groot/core/utils/controller.utils";
 import * as queue from "./queue";
@@ -14,6 +15,8 @@ import {
 } from "./validation";
 
 export const jobRoutes = new Hono<AppEnv>();
+
+jobRoutes.use(requireAdmin);
 
 jobRoutes.post("/", async (c) => {
   const { jobName, data, options } = await parseBody(c, createJobSchema);

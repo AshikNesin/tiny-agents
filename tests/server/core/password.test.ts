@@ -1,11 +1,9 @@
 import { pbkdf2Sync, randomBytes } from "node:crypto";
 import { describe, expect, it } from "vite-plus/test";
-import {
-  dummyPasswordHash,
-  hashPassword,
-  needsRehash,
-  verifyPassword,
-} from "@groot/core/utils/password.utils";
+import { config } from "@groot/core/config";
+import { dummyHash } from "@groot/core/auth/auth.service";
+import { hashPassword, needsRehash, verifyPassword } from "@groot/core/utils/password.utils";
+import { setAppConfig } from "../helpers";
 
 function hashAt(password: string, iterations: number): string {
   const salt = randomBytes(16);
@@ -21,9 +19,40 @@ function hashAt(password: string, iterations: number): string {
 describe("password hashing", () => {
   it("round-trips and rejects wrong passwords", async () => {
     const hash = await hashPassword("s3cret!");
-    expect(hash.startsWith("pbkdf2-sha256$600000$")).toBe(true);
+    expect(hash.startsWith(`pbkdf2-sha256$${config.auth.passwordIterations}$`)).toBe(true);
     expect(await verifyPassword("s3cret!", hash)).toBe(true);
     expect(await verifyPassword("S3cret!", hash)).toBe(false);
+  });
+
+  it("hashes with the iteration count the app configures", async () => {
+    const before = await hashPassword("x");
+    setAppConfig({ auth: { passwordIterations: 1_000 } });
+    try {
+      const lowered = await hashPassword("x");
+      expect(lowered.startsWith("pbkdf2-sha256$1000$")).toBe(true);
+      expect(needsRehash(lowered)).toBe(false);
+
+      expect(await verifyPassword("x", before)).toBe(true);
+      expect(needsRehash(before)).toBe(true);
+    } finally {
+      setAppConfig();
+    }
+    expect(needsRehash(before)).toBe(false);
+    expect(needsRehash(await hashPassword("x"))).toBe(false);
+  });
+
+  it("checks an unknown email against a dummy hash at the configured count", () => {
+    try {
+      for (const passwordIterations of [10_000, 100_000, 600_000]) {
+        setAppConfig({ auth: { passwordIterations } });
+        const [, iterations] = dummyHash().split("$");
+        expect(Number(iterations)).toBe(passwordIterations);
+
+        expect(needsRehash(dummyHash())).toBe(false);
+      }
+    } finally {
+      setAppConfig();
+    }
   });
 
   it("uses a fresh salt per hash", async () => {
@@ -53,7 +82,7 @@ describe("password hashing", () => {
   });
 
   it("keeps the unknown-email dummy hash at the current work factor, so timing reveals no account", async () => {
-    const [, iterations] = dummyPasswordHash().split("$");
+    const [, iterations] = dummyHash().split("$");
     expect(Number(iterations)).toBe(Number((await hashPassword("x")).split("$")[1]));
   });
 });

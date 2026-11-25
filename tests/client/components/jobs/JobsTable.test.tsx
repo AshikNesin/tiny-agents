@@ -1,17 +1,44 @@
-import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { createShellQueryClient, ShellQueryProvider } from "@groot/shell/lib/query-client";
 import { MemoryRouter } from "react-router-dom";
-import { ConfirmProvider } from "@groot/ui/primitives";
-import { jobsApi } from "@groot/jobs/client/api";
+import { GrootUIProvider } from "@groot/ui/provider";
 import { JobsTable } from "@groot/jobs/client/components/JobsTable";
 import { JOBS_PAGE_SIZE } from "@groot/jobs/client/constants";
 import type { Job, JobState } from "@groot/jobs/client/types";
 
-vi.mock("@groot/jobs/client/api", () => ({
-  jobsApi: { rerunJobs: vi.fn(), retryJob: vi.fn(), deleteJob: vi.fn() },
-}));
+type Call = { method: string; url: string; body?: unknown };
+
+function stubJobsFetch() {
+  const calls: Call[] = [];
+  vi.stubGlobal("fetch", async (url: string, init?: RequestInit) => {
+    const method = init?.method ?? "GET";
+    const body = typeof init?.body === "string" ? (JSON.parse(init.body) as unknown) : undefined;
+    calls.push(body === undefined ? { method, url } : { method, url, body });
+    if (method === "POST" && url === "/api/v1/jobs/bulk-rerun") {
+      const jobIds = (body as { jobIds: string[] }).jobIds;
+      return new Response(
+        JSON.stringify({
+          success: true,
+          data: jobIds.map((jobId) => ({ jobId, success: true, newJobId: "new-job" })),
+        }),
+        { status: 200 },
+      );
+    }
+    if (method === "DELETE" && url.startsWith("/api/v1/jobs/")) {
+      return new Response(null, { status: 204 });
+    }
+    return new Response(
+      JSON.stringify({
+        success: false,
+        error: { code: "NOT_FOUND", message: `Unexpected ${method} ${url}` },
+      }),
+      { status: 404 },
+    );
+  });
+  return calls;
+}
 
 function job(id: string, state: JobState = "completed"): Job {
   const now = new Date().toISOString();
@@ -45,8 +72,8 @@ function renderTable(
   }: Partial<{ total: number; page: number; onPage: (page: number) => void }> = {},
 ) {
   return render(
-    <ShellQueryProvider client={createShellQueryClient()}>
-      <ConfirmProvider>
+    <ShellQueryProvider client={createShellQueryClient({ queries: { retry: false } })}>
+      <GrootUIProvider>
         <MemoryRouter>
           <JobsTable
             jobs={jobs}
@@ -57,14 +84,16 @@ function renderTable(
             onPage={onPage}
           />
         </MemoryRouter>
-      </ConfirmProvider>
+      </GrootUIProvider>
     </ShellQueryProvider>,
   );
 }
 
 const row = (shortId: string) => screen.getByRole("row", { name: `Job report (${shortId})` });
 
-beforeEach(() => vi.clearAllMocks());
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 describe("JobsTable", () => {
   it("renders one named row per job", () => {
@@ -73,22 +102,36 @@ describe("JobsTable", () => {
     expect(within(row("aaaaaa")).getByRole("link")).toHaveAttribute("href", "/jobs/aaaaaaaa-1");
   });
 
-  it("selects rows by id and re-runs the selection after confirming", async () => {
-    vi.mocked(jobsApi.rerunJobs).mockResolvedValue([
-      { jobId: "aaaaaaaa-1", success: true, newJobId: "n1" },
-      { jobId: "cccccccc-3", success: true, newJobId: "n3" },
-    ]);
+  it("selects rows by id and re-runs the finished ones after confirming", async () => {
+    const calls = stubJobsFetch();
     const user = userEvent.setup();
     renderTable();
 
     await user.click(within(row("aaaaaa")).getByRole("checkbox"));
     await user.click(within(row("cccccc")).getByRole("checkbox"));
-    await user.click(screen.getByRole("button", { name: "Rerun 2" }));
+
+    const rerun = screen.getByRole("button", { name: "Rerun 1" });
+    expect(rerun).toHaveAttribute("title", "Only completed and failed jobs can be re-run");
+    await user.click(rerun);
     const dialog = await screen.findByRole("alertdialog");
+    expect(calls).toEqual([]);
     await user.click(within(dialog).getByRole("button", { name: "Re-run" }));
 
-    expect(jobsApi.rerunJobs).toHaveBeenCalledWith(["aaaaaaaa-1", "cccccccc-3"]);
+    expect(calls).toEqual([
+      { method: "POST", url: "/api/v1/jobs/bulk-rerun", body: { jobIds: ["aaaaaaaa-1"] } },
+    ]);
+    expect(
+      await screen.findByText("Successfully triggered re-run for 1 of 1 jobs."),
+    ).toBeInTheDocument();
     await waitFor(() => expect(screen.queryByRole("button", { name: /^Rerun/ })).toBeNull());
+  });
+
+  it("disables bulk re-run when no selected job can be re-run", async () => {
+    const user = userEvent.setup();
+    renderTable();
+
+    await user.click(within(row("cccccc")).getByRole("checkbox"));
+    expect(screen.getByRole("button", { name: "Rerun 0" })).toBeDisabled();
   });
 
   it("selects and clears every row with select all", async () => {
@@ -97,7 +140,7 @@ describe("JobsTable", () => {
     const selectAll = screen.getByRole("checkbox", { name: "Select all" });
 
     await user.click(selectAll);
-    expect(screen.getByRole("button", { name: "Rerun 3" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Rerun 2" })).toBeInTheDocument();
     expect(within(row("bbbbbb")).getByRole("checkbox")).toBeChecked();
 
     await user.click(selectAll);
@@ -105,7 +148,7 @@ describe("JobsTable", () => {
   });
 
   it("offers the actions the job's state allows and confirms delete", async () => {
-    vi.mocked(jobsApi.deleteJob).mockResolvedValue();
+    const calls = stubJobsFetch();
     const user = userEvent.setup();
     renderTable();
 
@@ -114,10 +157,11 @@ describe("JobsTable", () => {
     expect(items).toEqual(["Retry", "Re-run", "Delete"]);
 
     await user.click(screen.getByRole("menuitem", { name: "Delete" }));
-    expect(jobsApi.deleteJob).not.toHaveBeenCalled();
+    expect(calls).toEqual([]);
     const dialog = await screen.findByRole("alertdialog");
     await user.click(within(dialog).getByRole("button", { name: "Delete" }));
-    expect(jobsApi.deleteJob).toHaveBeenCalledWith("bbbbbbbb-2");
+    expect(calls).toEqual([{ method: "DELETE", url: "/api/v1/jobs/bbbbbbbb-2" }]);
+    expect(await screen.findByText("Job has been deleted")).toBeInTheDocument();
   });
 
   it("pages through the server's total", async () => {
