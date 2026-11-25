@@ -591,6 +591,16 @@ branch and PR (`code_list`), and archives finished ones (`code_resolve`).
 Its toolkits are `PROJECT_BOT_TOOLKITS` in `bot-toolkits.ts`, so it has no
 browser or computer.
 
+A side panel sits beside the chat (`ProjectPanel.tsx`), shown or hidden
+with the header's Threads button. Its **Threads** tab lists the project's
+threads with a search box, grouped by state (`statusSections`, Done and
+Archived folded), each with a one-line status (`statusLine`) and its PR.
+A row opens that thread inside the panel (`?thread=<id>`): its live
+transcript, a branch and PR bar, and the composer to steer it, with a back
+arrow to the list and a button to the full thread. Its **Context** tab
+shows the repository, the Instructions and the chat's memory. On a phone
+the chat comes first and the panel opens over it, full screen.
+
 The project's **Instructions** (Settings, the project's page) go into the
 coordinator's prompt and into the first message of every thread of the
 project, folded out of the transcript like the rest of the preamble.

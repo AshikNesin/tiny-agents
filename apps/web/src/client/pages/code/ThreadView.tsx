@@ -336,6 +336,7 @@ export function ThreadView({
   commands = false,
   onReplaced,
   nextSteps,
+  composerTop,
 }: {
   id: string;
   harness: HarnessInfo;
@@ -349,6 +350,7 @@ export function ThreadView({
   commands?: boolean;
   onReplaced?: () => void;
   nextSteps?: ReactNode;
+  composerTop?: ReactNode;
 }) {
   const state = useCodeThread(id);
   const { thread, working, items, settings } = state;
@@ -651,6 +653,7 @@ export function ThreadView({
             </Button>
           ) : (
             <>
+              {composerTop}
               <Running id={id} state={state} rows={rows} canKill={caps.extras.jobs} run={run} />
               <Queued
                 id={id}
