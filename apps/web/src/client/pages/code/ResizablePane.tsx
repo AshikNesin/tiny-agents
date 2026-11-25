@@ -35,6 +35,13 @@ const FILE_LIST: PanelLimits = {
   keep: 360,
 };
 
+const PROJECT_PANEL: PanelLimits = {
+  key: "code:project-panel-width",
+  side: "right",
+  min: 340,
+  keep: 420,
+};
+
 const ASSISTANT: PanelLimits = {
   key: "code:assistant-width",
   side: "left",
@@ -113,6 +120,45 @@ export function ResizablePane({
       >
         {children}
       </section>
+    </>
+  );
+}
+
+export function ProjectSidePane({
+  children,
+  className,
+}: {
+  children: ReactNode;
+  className?: string;
+}) {
+  const [width, setWidth] = useStoredWidth(PROJECT_PANEL.key);
+  const panelRef = useRef<HTMLElement>(null);
+  return (
+    <>
+      <PanelResizer
+        limits={PROJECT_PANEL}
+        label="Resize project panel"
+        controls="code-project-panel"
+        className="lg:block"
+        panelRef={panelRef}
+        width={width}
+        onWidth={setWidth}
+      />
+      <aside
+        ref={panelRef}
+        id="code-project-panel"
+        aria-label="Project panel"
+        className={cn(
+          "bg-background flex w-full min-w-0 flex-col",
+          width === null ? "lg:w-[44%] lg:max-w-2xl" : "lg:w-(--project-panel-width)",
+          className,
+        )}
+        style={
+          width === null ? undefined : ({ "--project-panel-width": `${width}px` } as CSSProperties)
+        }
+      >
+        {children}
+      </aside>
     </>
   );
 }

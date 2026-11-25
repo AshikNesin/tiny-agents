@@ -51,3 +51,27 @@ export function starterOf(row: ThreadSummary): string | null {
   if (!row.startedBy) return null;
   return row.startedBy.project ? `${row.startedBy.name} chat` : row.startedBy.name;
 }
+
+export function projectThreads(
+  rows: ThreadSummary[],
+  projectId: string,
+  query: string,
+): ThreadSummary[] {
+  const words = query.trim().toLowerCase();
+  return rows.filter(
+    (row) =>
+      row.projectId === projectId &&
+      !row.parentId &&
+      !row.review &&
+      (!words || `${row.title} ${row.branch ?? ""}`.toLowerCase().includes(words)),
+  );
+}
+
+export function statusLine(row: ThreadSummary): string {
+  if (row.status?.reason && row.status.reason !== "finished") return row.status.reason;
+  const preview = row.preview?.split("\n").find((line) => line.trim());
+  if (preview) return preview.trim();
+  if (row.working) return "Working…";
+  const starter = starterOf(row);
+  return starter ? `Started by ${starter}` : (row.branch ?? "");
+}
