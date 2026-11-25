@@ -1,3 +1,5 @@
+// Feature: code (features/code.md), on a phone: a touch device sees no key hints, the
+// branch line stays on screen, and the work pane's tabs fit on one line.
 import { devices } from "@playwright/test";
 import { journey, expect, login } from "../scripts/lib.mjs";
 
