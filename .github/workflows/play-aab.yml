@@ -1,9 +1,9 @@
-# Builds the signed release AAB (Play Store bundle) without publishing it: the
+# Builds the signed release AAB (Play Store bundle) for manual Play Console
 # same keyless exchange and release-hub keystore as Mobile Release Hub Publish,
 # but `:app:bundleRelease` and the output is a workflow artifact for manual
 # upload to the Play Console. The keystore is deleted in the same step-set as
 # the build and never leaves the runner.
-name: Mobile Release AAB
+name: Play Release AAB
 
 on:
   workflow_dispatch:
@@ -83,6 +83,6 @@ jobs:
       - name: Upload the AAB artifact
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
         with:
-          name: tiny-agents-release-aab-${{ env.VERSION_CODE }}
+          name: play-release-aab
           path: mobile/android/app/build/outputs/bundle/release/*.aab
           if-no-files-found: error
