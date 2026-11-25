@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 500">
+  <!-- Play Store feature graphic: launcher background, logo mark, tagline.
+       Text is drawn as paths-free text; falls back to a clean sans if Inter
+       is unavailable (see render check in README). -->
+  <rect width="1024" height="500" fill="#050505"/>
+  <g transform="translate(88,190) scale(2.9)">
+    <path fill="#fcfcfc" fill-rule="evenodd" d="M23 14h16a12 12 0 0 1 12 12v6a12 12 0 0 1-12 12H29l-11 8v-9.09A12 12 0 0 1 11 32v-6a12 12 0 0 1 12-12z"/>
+    <rect x="24" y="22" width="6" height="12" rx="3" fill="#050505"/>
+    <rect x="36" y="22" width="6" height="12" rx="3" fill="#050505"/>
+    <circle cx="49.5" cy="15.5" r="5.5" fill="#fcfcfc" stroke="#050505" stroke-width="3.5"/>
+  </g>
+  <text x="88" y="330" font-family="Inter, DejaVu Sans, sans-serif" font-size="46" font-weight="600" fill="#fcfcfc" letter-spacing="-1">Your own AI assistant.</text>
+  <text x="88" y="392" font-family="Inter, DejaVu Sans, sans-serif" font-size="46" font-weight="600" fill="#9a9aa3" letter-spacing="-1">On your own server.</text>
+</svg>
