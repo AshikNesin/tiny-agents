@@ -501,6 +501,7 @@ async function reconcile(pullId: string, now = Date.now()): Promise<number | nul
       reason: "The pull request was closed.",
       autofix: false,
     });
+    if (projectSettings(project.settings).archiveOnMerge) await archiveThread(pull.threadId);
     return null;
   }
 
@@ -616,7 +617,7 @@ async function archiveThread(threadId: string): Promise<void> {
     }
     await onProjectThreadArchived(threadId, true);
   } catch (error) {
-    logger.warn({ error, threadId }, "Code: could not archive a merged thread");
+    logger.warn({ error, threadId }, "Code: could not archive a finished thread");
   }
 }
 

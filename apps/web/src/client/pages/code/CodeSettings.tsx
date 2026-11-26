@@ -753,7 +753,7 @@ function PullRequestGroups({ project, update }: { project: ProjectView; update: 
           onChange={(draftPulls) => update({ settings: { draftPulls } })}
         />
         <SwitchRow
-          label="Archive the thread when its PR merges"
+          label="Archive the thread when its PR merges or closes"
           checked={settings.archiveOnMerge}
           onChange={(archiveOnMerge) => update({ settings: { archiveOnMerge } })}
         />

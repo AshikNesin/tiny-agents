@@ -527,6 +527,20 @@ describe("publish and the PR tab", () => {
     off();
   });
 
+  it("archives the thread and frees its worktree when its PR is closed without merging", async () => {
+    const project = await newProject();
+    const thread = await newThread(project.id);
+    await commit(thread.worktree, "src/login.ts");
+    await call("POST", `/threads/${encodeURIComponent(thread.id)}/publish`, {});
+
+    github.pull(1).state = "closed";
+    await pr(thread.id);
+
+    const row = (await db.query.codeThreads.findFirst({ where: eq(codeThreads.id, thread.id) }))!;
+    expect(row.worktree).toBeNull();
+    expect(existsSync(thread.worktree)).toBe(false);
+  });
+
   it("tells the project chat that started a thread when its PR opens and merges", async () => {
     const project = await newProject();
     const thread = await newThread(project.id);
