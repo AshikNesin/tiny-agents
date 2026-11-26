@@ -63,8 +63,8 @@ interface UiState {
   setCollapsed: (collapsed: boolean) => void;
   codeSidebarOpen: boolean;
   toggleSidebar: (mode: AppMode) => void;
-  newThreadDraft: string;
-  setNewThreadDraft: (text: string) => void;
+  newThreadDraft: { text: string; projectId: string };
+  setNewThreadDraft: (draft: Partial<{ text: string; projectId: string }>) => void;
   codePane: CodePane | null;
   lastCodePane: CodePane;
   setCodePane: (pane: CodePane | null) => void;
@@ -104,8 +104,9 @@ export const useUiStore = create<UiState>((set) => ({
     set({ collapsed });
   },
   codeSidebarOpen: readCodeSidebar(),
-  newThreadDraft: "",
-  setNewThreadDraft: (newThreadDraft) => set({ newThreadDraft }),
+  newThreadDraft: { text: "", projectId: "" },
+  setNewThreadDraft: (draft) =>
+    set((state) => ({ newThreadDraft: { ...state.newThreadDraft, ...draft } })),
   toggleSidebar: (mode) => {
     if (mode === "chat") {
       useUiStore.getState().setCollapsed(!useUiStore.getState().collapsed);

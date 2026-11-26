@@ -1,4 +1,5 @@
 import React from "react";
+import userEvent from "@testing-library/user-event";
 import {
   act,
   fireEvent,
@@ -38,6 +39,10 @@ const deletes = vi.hoisted(() => [] as string[]);
 const asked = vi.hoisted(() => [] as unknown[]);
 const openReviews = vi.hoisted(() => [] as unknown[]);
 const inboxLimit = vi.hoisted(() => ({ value: 10 }));
+const more = vi.hoisted(() => ({
+  projects: [] as unknown[],
+  creating: null as Promise<unknown> | null,
+}));
 vi.mock("@groot/shell/lib/api", async (importOriginal) => {
   const original = await importOriginal<typeof import("@groot/shell/lib/api")>();
   return {
@@ -45,7 +50,7 @@ vi.mock("@groot/shell/lib/api", async (importOriginal) => {
     apiClient: Object.assign(Object.create(original.apiClient) as typeof original.apiClient, {
       get: async (path: string) =>
         path === "/code/projects"
-          ? [project]
+          ? [project, ...more.projects]
           : path === "/code/reviews/inbox"
             ? asked
             : path === "/code/reviews"
@@ -72,6 +77,7 @@ vi.mock("@groot/shell/lib/api", async (importOriginal) => {
           const typed = (body as { typed?: string }).typed;
           return { suggestion: typed ? `${typed} the tests first` : "Get it merged to main" };
         }
+        if (path === "/code/threads" && more.creating) return more.creating;
         return path === "/code/threads" ? { threadId: "new1" } : { status: "accepted" };
       },
     }),
@@ -229,8 +235,10 @@ beforeEach(() => {
     codeSidebarOpen: true,
     codePane: null,
     lastCodePane: "changes",
-    newThreadDraft: "",
+    newThreadDraft: { text: "", projectId: "" },
   });
+  more.projects = [];
+  more.creating = null;
   useCodeStore.setState({
     harnesses: [agent],
     statuses: {},
@@ -380,6 +388,32 @@ describe("the Code workspace", () => {
     expect(await screen.findByRole("textbox", { name: "What should the agent do?" })).toHaveValue(
       "Fix the login callback",
     );
+  });
+
+  it("keeps the project picked for an unsent task too", async () => {
+    more.projects = [{ ...project, id: "p2", name: "api", repo: { owner: "acme", name: "api" } }];
+    renderAt("/code");
+    const box = await screen.findByRole("textbox", { name: "What should the agent do?" });
+    await userEvent.click(await screen.findByRole("button", { name: "Project" }));
+    await userEvent.click(await screen.findByRole("option", { name: /api/ }));
+    fireEvent.change(box, { target: { value: "Fix the login callback" } });
+    fireEvent.click(document.querySelector('[data-thread="demo:a"]')!);
+    await waitFor(() => expect(where()).toBe("/code/t/demo%3Aa"));
+    press("n");
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Project" })).toHaveTextContent("api"),
+    );
+  });
+
+  it("clears a task as it starts, so leaving and coming back cannot send it twice", async () => {
+    more.creating = new Promise(() => {});
+    renderAt("/code");
+    const box = await screen.findByRole("textbox", { name: "What should the agent do?" });
+    await screen.findByText("web");
+    fireEvent.change(box, { target: { value: "Fix the login callback" } });
+    fireEvent.keyDown(box, { key: "Enter" });
+    await waitFor(() => expect(box).toHaveValue(""));
+    expect(posts.filter((post) => post.path === "/code/threads")).toHaveLength(1);
   });
 
   it("n focuses the new thread box, not a dialog; Enter starts the thread in the remembered project", async () => {
