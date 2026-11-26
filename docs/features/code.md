@@ -748,6 +748,10 @@ chat bots use, with a working directory and five coding tools.
   Accept edits asks before `bash` only; Plan takes the three away and tells
   the agent to plan; Bypass asks for nothing. A call that asks is an
   approval card, and the agent's own question is a question card.
+- **Connections:** every connection shared with every bot (`allBots`) is
+  offered, deferred behind `tool_search`, with Settings > Tools deciding
+  allow, ask or off ([ADR 0042](../adr/0042-code-threads-use-shared-connections.md)).
+  The mode's permissions cover only the coding tools.
 - **While it works:** a message steers (it joins after the running tool
   round, and waits in the queue until then) or is held with the queue
   button. A held message can be sent now, which makes it a steer, or
