@@ -137,7 +137,7 @@ await journey("shared-bots", async ({ page, step, proof, cleanup, api, stamp }) 
     ).toBeVisible();
     await expect(guestPage.getByRole("heading", { level: 1, name: shared })).toBeVisible();
     await expect(guestPage.getByRole("button", { name: `${shared} menu` })).toHaveCount(0);
-    await expect(guestPage.getByTestId("yolo-toggle")).toHaveCount(0);
+    await expect(guestPage.getByTestId("yolo-chip")).toHaveCount(0);
     await expect(guestPage.getByRole("button", { name: "Start a new chat" })).toHaveCount(0);
   });
   await guestProof("guest-view");

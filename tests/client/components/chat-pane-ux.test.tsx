@@ -312,7 +312,7 @@ describe("ChatPane header", () => {
     expect(within(header).queryByText("Plans trips")).toBeNull();
   });
 
-  it("opens Bot settings and the YOLO confirm from the bot menu", async () => {
+  it("opens Bot settings from the bot menu, which has no YOLO row", async () => {
     seedStore();
     const onEditBot = vi.fn();
     render(
@@ -321,14 +321,23 @@ describe("ChatPane header", () => {
       </BrowserRouter>,
     );
     await user.click(screen.getByRole("button", { name: "Host Bot menu" }));
+    expect(screen.queryByTestId("yolo-toggle")).toBeNull();
     await user.click(await screen.findByRole("menuitem", { name: "Bot settings" }));
     expect(onEditBot).toHaveBeenCalledOnce();
+  });
 
-    await user.click(screen.getByRole("button", { name: "Host Bot menu" }));
-    const yolo = await screen.findByTestId("yolo-toggle");
-    expect(yolo).toHaveAttribute("aria-checked", "false");
-    await user.click(yolo);
+  it("shows YOLO as a chip in the composer, as Code's composer does", async () => {
+    seedStore();
+    renderPane();
+    snapshot([]);
+    const chip = screen.getByRole("button", { name: "YOLO" });
+    expect(chip).toHaveAttribute("aria-pressed", "false");
+    await user.click(chip);
     expect(await screen.findByRole("dialog", { name: "Turn on YOLO mode?" })).toBeInTheDocument();
+    await user.keyboard("{Escape}");
+    botStream("host").send({ type: "yolo", on: true });
+    await waitFor(() => expect(chip).toHaveAttribute("aria-pressed", "true"));
+    expect(screen.queryByTestId("yolo-banner")).toBeNull();
   });
 
   it("disables new chat on an empty conversation and confirms it otherwise", async () => {

@@ -759,7 +759,7 @@ chat bots use, with a working directory and five coding tools.
 - **Permission modes** are the Tool gate's per-tool permissions
   (`codingSelection`): Default asks before `write`, `edit` and `bash`;
   Accept edits asks before `bash` only; Plan takes the three away and tells
-  the agent to plan; Bypass asks for nothing. A call that asks is an
+  the agent to plan; YOLO (`bypassPermissions`) asks for nothing. A call that asks is an
   approval card, and the agent's own question is a question card.
 - **Connections:** every connection shared with every bot (`allBots`) is
   offered, deferred behind `tool_search`, with Settings > Tools deciding

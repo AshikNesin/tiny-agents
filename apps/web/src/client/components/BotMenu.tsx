@@ -1,8 +1,7 @@
 import { useEffect, useRef } from "react";
-import { ChevronDown, ChevronLeft, ChevronRight, History, Settings2, Zap } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, History, Settings2 } from "lucide-react";
 import {
   DropdownMenu,
-  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
@@ -19,11 +18,9 @@ interface BotMenuProps {
   view: BotMenuView;
   onViewChange: (view: BotMenuView) => void;
   onEditBot: () => void;
-  yolo: boolean;
-  onYoloChange: (on: boolean) => void;
 }
 
-export function BotMenu({ bot, view, onViewChange, onEditBot, yolo, onYoloChange }: BotMenuProps) {
+export function BotMenu({ bot, view, onViewChange, onEditBot }: BotMenuProps) {
   const chats = usePastChats(bot.id, bot.conversationId, view);
   const contentRef = useRef<HTMLDivElement>(null);
 
@@ -92,21 +89,6 @@ export function BotMenu({ bot, view, onViewChange, onEditBot, yolo, onYoloChange
               Chat history
               <ChevronRight className="text-muted-foreground ml-auto" />
             </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuCheckboxItem
-              checked={yolo}
-              onCheckedChange={(on) => onYoloChange(on === true)}
-              className="items-start"
-              data-testid="yolo-toggle"
-            >
-              <Zap className={`mt-0.5 ${yolo ? "text-warning" : ""}`} />
-              <span className="flex flex-col">
-                YOLO mode
-                <span className="text-muted-foreground text-xs">
-                  Run tools without asking (vault still asks)
-                </span>
-              </span>
-            </DropdownMenuCheckboxItem>
           </>
         )}
       </DropdownMenuContent>
