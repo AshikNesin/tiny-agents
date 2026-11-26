@@ -32,6 +32,8 @@ function normalized(root: Element): Element {
     el.style.removeProperty("animation-duration");
     el.style.removeProperty("animation-name");
     el.style.removeProperty("transition-duration");
+    el.style.removeProperty("--collapsible-panel-height");
+    el.style.removeProperty("--collapsible-panel-width");
     if (!el.getAttribute("style")) el.removeAttribute("style");
   }
   return clone;

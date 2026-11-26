@@ -162,7 +162,6 @@ exports[`ChatMessageView, pinned > a failed tool row opens to a destructive outp
               data-open=""
               data-slot="trace-collapsible-content"
               id="base-ui-<id1>"
-              style="--collapsible-panel-height: 0px; --collapsible-panel-width: 0px;"
             >
               <div
                 class="mt-2 mb-1 ml-[calc(--spacing(2)-1px)] min-w-0 border-l pr-1 pl-4 leading-relaxed wrap-break-word text-muted-foreground space-y-2"
@@ -343,7 +342,6 @@ exports[`ChatMessageView, pinned > a group opens to its calls > markup 1`] = `
               data-open=""
               data-slot="trace-collapsible-content"
               id="base-ui-<id1>"
-              style="--collapsible-panel-height: auto; --collapsible-panel-width: auto;"
             >
               <div
                 class="mt-2 mb-1 ml-[calc(--spacing(2)-1px)] min-w-0 border-l pr-1 pl-4 leading-relaxed wrap-break-word text-muted-foreground space-y-1"
@@ -571,7 +569,6 @@ exports[`ChatMessageView, pinned > a tool row opens to its input, output and sou
               data-open=""
               data-slot="trace-collapsible-content"
               id="base-ui-<id1>"
-              style="--collapsible-panel-height: auto; --collapsible-panel-width: auto;"
             >
               <div
                 class="mt-2 mb-1 ml-[calc(--spacing(2)-1px)] min-w-0 border-l pr-1 pl-4 leading-relaxed wrap-break-word text-muted-foreground space-y-2"
@@ -1526,7 +1523,6 @@ exports[`ChatMessageView, pinned > assistant: reasoning while streaming > markup
           data-open=""
           data-slot="trace-collapsible-content"
           id="base-ui-<id1>"
-          style="--collapsible-panel-height: auto; --collapsible-panel-width: auto;"
         >
           <div
             class="mt-2 mb-1 ml-[calc(--spacing(2)-1px)] min-w-0 border-l pr-1 pl-4 leading-relaxed wrap-break-word text-muted-foreground"
@@ -4885,7 +4881,6 @@ exports[`ChatMessageView, pinned > reasoning folds when the turn finishes and op
           data-open=""
           data-slot="trace-collapsible-content"
           id="base-ui-<id1>"
-          style="--collapsible-panel-height: auto; --collapsible-panel-width: auto;"
         >
           <div
             class="mt-2 mb-1 ml-[calc(--spacing(2)-1px)] min-w-0 border-l pr-1 pl-4 leading-relaxed wrap-break-word text-muted-foreground"
