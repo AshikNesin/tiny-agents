@@ -632,6 +632,11 @@ const FIXTURES: Record<string, Fixture> = {
       'import { eq } from "drizzle-orm";\nimport { db } from "../database";\nimport { passkeys } from "./schema";\nexport async function register(id: string) {\n  const [taken] = await db.select().from(passkeys).where(eq(passkeys.id, id));\n  if (taken) throw new Error("taken");\n  await db.insert(passkeys).values({ id });\n}\n',
     rules: ["R19"],
   },
+  "apps/web/src/server/api/tasks/r19-returned-insert-fail.ts": {
+    source:
+      'import { eq } from "drizzle-orm";\nimport { db, tasks } from "../../db";\nexport async function createTask(sourceKey: string) {\n  const existing = await db.query.tasks.findFirst({ where: eq(tasks.sourceKey, sourceKey) });\n  if (existing) return existing;\n  return db.insert(tasks).values({ sourceKey }).returning();\n}\n',
+    rules: ["R19"],
+  },
   "apps/web/src/server/api/skills/r19-pass.ts": {
     source:
       'import { eq } from "drizzle-orm";\nimport { db, skills, users } from "../../db";\nexport async function save(name: string) {\n  const [row] = await db.insert(skills).values({ name }).onConflictDoNothing({ target: skills.name }).returning();\n  return row ?? (await db.query.skills.findFirst({ where: eq(skills.name, name) }));\n}\nexport async function addUser(email: string) {\n  await Promise.resolve();\n  return db.transaction((tx) => {\n    if (tx.select().from(users).where(eq(users.email, email)).get()) throw new Error("taken");\n    return tx.insert(users).values({ email }).returning().get();\n  });\n}\nexport async function touch(name: string) {\n  const found = await db.query.skills.findFirst({ where: eq(skills.name, name) });\n  await db.insert(users).values({ email: name });\n  return found;\n}\n',

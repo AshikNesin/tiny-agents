@@ -372,7 +372,7 @@ export default {
             const raced = reads.some(
               (read) =>
                 read.table === insert.table &&
-                awaits.some((at) => at > read.end && at < insert.start),
+                awaits.some((resumed) => resumed >= read.end && resumed <= insert.start),
             );
             if (raced) context.report({ node: insert.node, message: RACE_MESSAGE });
           }
@@ -387,7 +387,7 @@ export default {
           ArrowFunctionExpression: enter,
           "ArrowFunctionExpression:exit": exit,
           AwaitExpression(node) {
-            frames.at(-1).awaits.push(node.start ?? node.range[0]);
+            frames.at(-1).awaits.push(node.end ?? node.range[1]);
           },
           CallExpression(node) {
             const frame = frames.at(-1);
