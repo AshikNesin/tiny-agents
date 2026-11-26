@@ -529,7 +529,7 @@ exports[`ConnectionDetail, pinned > connected, with tools and bots > markup 1`] 
                 <p
                   class="text-muted-foreground text-xs"
                 >
-                  Bots you make later get it too. Bots shared with guests and project bots get it only when ticked below.
+                  Bots you make later get it too, including bots shared with guests. Project chats get it only when ticked below.
                 </p>
               </div>
               <button
@@ -785,7 +785,7 @@ heading "Used by bots"
   "Used by bots"
 "1 bot"
 "Every bot"
-"Bots you make later get it too. Bots shared with guests and project bots get it only when ticked below."
+"Bots you make later get it too, including bots shared with guests. Project chats get it only when ticked below."
 switch "Every bot"
 list
   listitem
@@ -1101,7 +1101,7 @@ exports[`ConnectionDetail, pinned > connected, without tools, bots loading > mar
                 <p
                   class="text-muted-foreground text-xs"
                 >
-                  Bots you make later get it too. Bots shared with guests and project bots get it only when ticked below.
+                  Bots you make later get it too, including bots shared with guests. Project chats get it only when ticked below.
                 </p>
               </div>
               <button
@@ -1244,7 +1244,7 @@ heading "Used by bots"
   "Used by bots"
 "0 bots"
 "Every bot"
-"Bots you make later get it too. Bots shared with guests and project bots get it only when ticked below."
+"Bots you make later get it too, including bots shared with guests. Project chats get it only when ticked below."
 switch "Every bot"
 "Loading…"
 heading "Danger zone"
@@ -1550,7 +1550,7 @@ exports[`ConnectionDetail, pinned > connecting, without tools, bots loading > ma
                 <p
                   class="text-muted-foreground text-xs"
                 >
-                  Bots you make later get it too. Bots shared with guests and project bots get it only when ticked below.
+                  Bots you make later get it too, including bots shared with guests. Project chats get it only when ticked below.
                 </p>
               </div>
               <button
@@ -1693,7 +1693,7 @@ heading "Used by bots"
   "Used by bots"
 "0 bots"
 "Every bot"
-"Bots you make later get it too. Bots shared with guests and project bots get it only when ticked below."
+"Bots you make later get it too, including bots shared with guests. Project chats get it only when ticked below."
 switch "Every bot"
 "Loading…"
 heading "Danger zone"
@@ -2004,7 +2004,7 @@ exports[`ConnectionDetail, pinned > error, without tools, bots loading > markup 
                 <p
                   class="text-muted-foreground text-xs"
                 >
-                  Bots you make later get it too. Bots shared with guests and project bots get it only when ticked below.
+                  Bots you make later get it too, including bots shared with guests. Project chats get it only when ticked below.
                 </p>
               </div>
               <button
@@ -2148,7 +2148,7 @@ heading "Used by bots"
   "Used by bots"
 "0 bots"
 "Every bot"
-"Bots you make later get it too. Bots shared with guests and project bots get it only when ticked below."
+"Bots you make later get it too, including bots shared with guests. Project chats get it only when ticked below."
 switch "Every bot"
 "Loading…"
 heading "Danger zone"
@@ -2454,7 +2454,7 @@ exports[`ConnectionDetail, pinned > needs_auth, without tools, bots loading > ma
                 <p
                   class="text-muted-foreground text-xs"
                 >
-                  Bots you make later get it too. Bots shared with guests and project bots get it only when ticked below.
+                  Bots you make later get it too, including bots shared with guests. Project chats get it only when ticked below.
                 </p>
               </div>
               <button
@@ -2597,7 +2597,7 @@ heading "Used by bots"
   "Used by bots"
 "0 bots"
 "Every bot"
-"Bots you make later get it too. Bots shared with guests and project bots get it only when ticked below."
+"Bots you make later get it too, including bots shared with guests. Project chats get it only when ticked below."
 switch "Every bot"
 "Loading…"
 heading "Danger zone"
@@ -2996,7 +2996,7 @@ exports[`ConnectionDetail, pinned > no bots > markup 1`] = `
                 <p
                   class="text-muted-foreground text-xs"
                 >
-                  Bots you make later get it too. Bots shared with guests and project bots get it only when ticked below.
+                  Bots you make later get it too, including bots shared with guests. Project chats get it only when ticked below.
                 </p>
               </div>
               <button
@@ -3175,7 +3175,7 @@ heading "Used by bots"
   "Used by bots"
 "0 bots"
 "Every bot"
-"Bots you make later get it too. Bots shared with guests and project bots get it only when ticked below."
+"Bots you make later get it too, including bots shared with guests. Project chats get it only when ticked below."
 switch "Every bot"
 icon lucide-bot
 "No bots yet"
@@ -3588,7 +3588,7 @@ exports[`ConnectionDetail, pinned > the remove prompt for none > markup 1`] = `
                 <p
                   class="text-muted-foreground text-xs"
                 >
-                  Bots you make later get it too. Bots shared with guests and project bots get it only when ticked below.
+                  Bots you make later get it too, including bots shared with guests. Project chats get it only when ticked below.
                 </p>
               </div>
               <button
@@ -3918,7 +3918,7 @@ div [aria-hidden=true]
     "Used by bots"
   "0 bots"
   "Every bot"
-  "Bots you make later get it too. Bots shared with guests and project bots get it only when ticked below."
+  "Bots you make later get it too, including bots shared with guests. Project chats get it only when ticked below."
   switch "Every bot"
   list
     listitem
@@ -4351,7 +4351,7 @@ exports[`ConnectionDetail, pinned > the remove prompt for one > markup 1`] = `
                 <p
                   class="text-muted-foreground text-xs"
                 >
-                  Bots you make later get it too. Bots shared with guests and project bots get it only when ticked below.
+                  Bots you make later get it too, including bots shared with guests. Project chats get it only when ticked below.
                 </p>
               </div>
               <button
@@ -4702,7 +4702,7 @@ div [aria-hidden=true]
     "Used by bots"
   "1 bot"
   "Every bot"
-  "Bots you make later get it too. Bots shared with guests and project bots get it only when ticked below."
+  "Bots you make later get it too, including bots shared with guests. Project chats get it only when ticked below."
   switch "Every bot"
   list
     listitem
@@ -5136,7 +5136,7 @@ exports[`ConnectionDetail, pinned > the remove prompt for several > markup 1`] =
                 <p
                   class="text-muted-foreground text-xs"
                 >
-                  Bots you make later get it too. Bots shared with guests and project bots get it only when ticked below.
+                  Bots you make later get it too, including bots shared with guests. Project chats get it only when ticked below.
                 </p>
               </div>
               <button
@@ -5508,7 +5508,7 @@ div [aria-hidden=true]
     "Used by bots"
   "2 bots"
   "Every bot"
-  "Bots you make later get it too. Bots shared with guests and project bots get it only when ticked below."
+  "Bots you make later get it too, including bots shared with guests. Project chats get it only when ticked below."
   switch "Every bot"
   list
     listitem
@@ -9966,7 +9966,7 @@ exports[`SkillDetail, pinned > edited, previewed, then asked to delete > delete 
                 <p
                   class="text-muted-foreground text-xs"
                 >
-                  Bots you make later get it too. Bots shared with guests and project bots get it only when ticked below.
+                  Bots you make later get it too, including bots shared with guests. Project chats get it only when ticked below.
                 </p>
               </div>
               <button
@@ -10392,7 +10392,7 @@ div [aria-hidden=true]
     "Used by bots"
   "2 of 2"
   "Every bot"
-  "Bots you make later get it too. Bots shared with guests and project bots get it only when ticked below."
+  "Bots you make later get it too, including bots shared with guests. Project chats get it only when ticked below."
   switch "Every bot"
   checkbox "Use deploy with Helper Bot"
     icon lucide-check
@@ -10684,7 +10684,7 @@ exports[`SkillDetail, pinned > edited, previewed, then asked to delete > dirty m
                 <p
                   class="text-muted-foreground text-xs"
                 >
-                  Bots you make later get it too. Bots shared with guests and project bots get it only when ticked below.
+                  Bots you make later get it too, including bots shared with guests. Project chats get it only when ticked below.
                 </p>
               </div>
               <button
@@ -11010,7 +11010,7 @@ heading "Used by bots"
   "Used by bots"
 "2 of 2"
 "Every bot"
-"Bots you make later get it too. Bots shared with guests and project bots get it only when ticked below."
+"Bots you make later get it too, including bots shared with guests. Project chats get it only when ticked below."
 switch "Every bot"
 checkbox "Use deploy with Helper Bot"
   icon lucide-check
@@ -11288,7 +11288,7 @@ exports[`SkillDetail, pinned > edited, previewed, then asked to delete > preview
                 <p
                   class="text-muted-foreground text-xs"
                 >
-                  Bots you make later get it too. Bots shared with guests and project bots get it only when ticked below.
+                  Bots you make later get it too, including bots shared with guests. Project chats get it only when ticked below.
                 </p>
               </div>
               <button
@@ -11624,7 +11624,7 @@ heading "Used by bots"
   "Used by bots"
 "2 of 2"
 "Every bot"
-"Bots you make later get it too. Bots shared with guests and project bots get it only when ticked below."
+"Bots you make later get it too, including bots shared with guests. Project chats get it only when ticked below."
 switch "Every bot"
 checkbox "Use deploy with Helper Bot"
   icon lucide-check
@@ -11905,7 +11905,7 @@ exports[`SkillDetail, pinned > no bots > markup 1`] = `
                 <p
                   class="text-muted-foreground text-xs"
                 >
-                  Bots you make later get it too. Bots shared with guests and project bots get it only when ticked below.
+                  Bots you make later get it too, including bots shared with guests. Project chats get it only when ticked below.
                 </p>
               </div>
               <button
@@ -12132,7 +12132,7 @@ heading "Used by bots"
   "Used by bots"
 "0 of 0"
 "Every bot"
-"Bots you make later get it too. Bots shared with guests and project bots get it only when ticked below."
+"Bots you make later get it too, including bots shared with guests. Project chats get it only when ticked below."
 switch "Every bot"
 "No bots yet. Create a bot to assign this skill to it."
 heading "Instructions"
@@ -12405,7 +12405,7 @@ exports[`SkillDetail, pinned > used by none > edit markup 1`] = `
                 <p
                   class="text-muted-foreground text-xs"
                 >
-                  Bots you make later get it too. Bots shared with guests and project bots get it only when ticked below.
+                  Bots you make later get it too, including bots shared with guests. Project chats get it only when ticked below.
                 </p>
               </div>
               <button
@@ -12671,7 +12671,7 @@ heading "Used by bots"
   "Used by bots"
 "0 of 2"
 "Every bot"
-"Bots you make later get it too. Bots shared with guests and project bots get it only when ticked below."
+"Bots you make later get it too, including bots shared with guests. Project chats get it only when ticked below."
 switch "Every bot"
 "No bot loads this skill yet. Tick the bots that should have it."
 checkbox "Use deploy with Helper Bot"
@@ -12945,7 +12945,7 @@ exports[`SkillDetail, pinned > used by none > empty preview markup 1`] = `
                 <p
                   class="text-muted-foreground text-xs"
                 >
-                  Bots you make later get it too. Bots shared with guests and project bots get it only when ticked below.
+                  Bots you make later get it too, including bots shared with guests. Project chats get it only when ticked below.
                 </p>
               </div>
               <button
@@ -13217,7 +13217,7 @@ heading "Used by bots"
   "Used by bots"
 "0 of 2"
 "Every bot"
-"Bots you make later get it too. Bots shared with guests and project bots get it only when ticked below."
+"Bots you make later get it too, including bots shared with guests. Project chats get it only when ticked below."
 switch "Every bot"
 "No bot loads this skill yet. Tick the bots that should have it."
 checkbox "Use deploy with Helper Bot"
@@ -13492,7 +13492,7 @@ exports[`SkillDetail, pinned > used by one bot > markup 1`] = `
                 <p
                   class="text-muted-foreground text-xs"
                 >
-                  Bots you make later get it too. Bots shared with guests and project bots get it only when ticked below.
+                  Bots you make later get it too, including bots shared with guests. Project chats get it only when ticked below.
                 </p>
               </div>
               <button
@@ -13797,7 +13797,7 @@ heading "Used by bots"
   "Used by bots"
 "1 of 2"
 "Every bot"
-"Bots you make later get it too. Bots shared with guests and project bots get it only when ticked below."
+"Bots you make later get it too, including bots shared with guests. Project chats get it only when ticked below."
 switch "Every bot"
 checkbox "Use deploy with Helper Bot"
   icon lucide-check
@@ -14070,7 +14070,7 @@ exports[`SkillDetail, pinned > used by one bot, bots still loading > markup 1`] 
                 <p
                   class="text-muted-foreground text-xs"
                 >
-                  Bots you make later get it too. Bots shared with guests and project bots get it only when ticked below.
+                  Bots you make later get it too, including bots shared with guests. Project chats get it only when ticked below.
                 </p>
               </div>
               <button
@@ -14296,7 +14296,7 @@ textbox
 heading "Used by bots"
   "Used by bots"
 "Every bot"
-"Bots you make later get it too. Bots shared with guests and project bots get it only when ticked below."
+"Bots you make later get it too, including bots shared with guests. Project chats get it only when ticked below."
 switch "Every bot"
 "Loading…"
 heading "Instructions"

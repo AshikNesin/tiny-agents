@@ -520,7 +520,7 @@ describe("MCP connections (header auth, streamable http)", () => {
     expect(await db.$count(botConnections)).toBe(1);
   }, 30_000);
 
-  it("gives a new connection to every bot, defers its tools, and leaves out a bot shared with a guest", async () => {
+  it("gives a new connection to every bot, a bot shared with a guest included, and defers its tools", async () => {
     const app = buildApp();
     const [ops] = await db
       .insert(bots)
@@ -545,9 +545,9 @@ describe("MCP connections (header auth, streamable http)", () => {
         secret: "secret123",
       },
     });
-    expect(created.data).toMatchObject({ allBots: true, botIds: [ops!.id] });
-    await until(() => configured.includes(952), "ops reconfigured");
-    expect(configured).not.toContain(953);
+    expect(created.data).toMatchObject({ allBots: true });
+    expect([...created.data.botIds].sort()).toEqual([ops!.id, shared!.id].sort());
+    await until(() => configured.includes(952) && configured.includes(953), "bots reconfigured");
     const capability = installed.get("mcp:demo") as unknown as {
       extension: { tools: { deferred?: boolean }[] };
     };
@@ -555,7 +555,7 @@ describe("MCP connections (header auth, streamable http)", () => {
     const opsBot = await call(app, `/api/v1/bots/${ops!.id}`, 200);
     expect(opsBot.data.connectionIds).toEqual([created.data.id]);
     const sharedBot = await call(app, `/api/v1/bots/${shared!.id}`, 200);
-    expect(sharedBot.data.connectionIds).toEqual([]);
+    expect(sharedBot.data.connectionIds).toEqual([created.data.id]);
     expect(await db.$count(botConnections)).toBe(0);
     await db.delete(users).where(eq(users.id, 990_952));
   }, 30_000);

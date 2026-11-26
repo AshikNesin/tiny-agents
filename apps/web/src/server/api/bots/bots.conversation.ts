@@ -93,7 +93,7 @@ export function toBot(row: BotWithLinks): Bot {
 export async function findBotRow(id: string): Promise<BotWithLinks> {
   const bot = await db.query.bots.findFirst({ where: eq(bots.id, id), with: withLinks });
   if (!bot) throw Boom.notFound("Bot not found");
-  const shared = takesShared({ projectId: bot.projectId, guests: bot.guests.length });
+  const shared = takesShared(bot);
   const linkedConnections = new Set(bot.connections.map((link) => link.connectionId));
   const linkedSkills = new Set(bot.skills.map((link) => link.skillId));
   const sharedConnections = shared

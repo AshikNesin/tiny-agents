@@ -12,8 +12,8 @@ export function EveryBotSwitch({
       <div className="min-w-0 flex-1">
         <p className="text-sm font-medium">Every bot</p>
         <p className="text-muted-foreground text-xs">
-          Bots you make later get it too. Bots shared with guests and project bots get it only when
-          ticked below.
+          Bots you make later get it too, including bots shared with guests. Project chats get it
+          only when ticked below.
         </p>
       </div>
       <Switch checked={checked} onCheckedChange={onCheckedChange} aria-label="Every bot" />

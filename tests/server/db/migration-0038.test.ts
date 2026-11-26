@@ -34,7 +34,7 @@ function migrationsBefore(tag: string): string {
 }
 
 describe("migration 0038", () => {
-  it("shares a connection or skill every bot already had, and keeps narrower ones as they were", async () => {
+  it("shares a connection or skill every bot already had, guest-shared bots included, and keeps narrower ones as they were", async () => {
     const file = path.join(dir, "app.db");
     const before = createAppDb(`file:${file}`, {
       migrationsFolder: migrationsBefore("0038_bots_share_by_default"),
@@ -77,6 +77,7 @@ describe("migration 0038", () => {
     );
     skillLink.run("ops", "report", T);
     skillLink.run("news", "report", T);
+    skillLink.run("guest", "report", T);
     skillLink.run("news", "deploy", T);
     old.close();
 
@@ -92,7 +93,6 @@ describe("migration 0038", () => {
     ]);
     const links = await after.select().from(schema.botConnections);
     expect(links.map((row) => [row.botId, row.connectionId, row.enabled]).sort()).toEqual([
-      ["guest", "gmail", true],
       ["ops", "github", true],
     ]);
     const skills = await after.select().from(schema.skills);

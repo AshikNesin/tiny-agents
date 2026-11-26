@@ -16,12 +16,12 @@ first:
    across reconnects and tool-list changes; tools the server adds later start
    on.
 2. **Connection on the bot**. A connection with `allBots` (the default for a
-   new one) reaches every bot except bots shared with guests and project
-   bots; a `BotConnection` row with `enabled` false turns it off for one bot,
+   new one) reaches every bot except project bots, guest-shared bots
+   included; a `BotConnection` row with `enabled` false turns it off for one bot,
    and one with `enabled` true gives it to a bot the default leaves out. With
    `allBots` off, only bots with an enabled row get it. Set from the bot
    dialog or the connection's "Used by bots" list; the rules live in
-   `apps/web/src/server/api/bots/bot-reach.ts` (ADR 0004, issue #559).
+   `apps/web/src/server/api/bots/bot-reach.ts` (ADR 0041).
 3. **Tool permission on the bot** (`Bot.toolPermissions`: allow / ask / off).
 
 Turning a tool on or off re-installs the capability from the cached tool list

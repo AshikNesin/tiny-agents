@@ -120,8 +120,8 @@ export async function updateBot(id: string, data: UpdateBotDTO, rt: BotAgentRunt
     throw Boom.badRequest("Unknown model. Pick one set up in Settings → Models.");
   }
   if (data.name !== undefined) await assertNameFree(data.name, id);
-  if (data.guestIds !== undefined) await setBotGuests(id, data.guestIds);
   await setLinks(id, data.skillIds, data.connectionIds);
+  if (data.guestIds !== undefined) await setBotGuests(id, data.guestIds);
   if (data.systemPrompt !== undefined && data.systemPrompt !== before.systemPrompt) {
     await db
       .insert(promptRevisions)

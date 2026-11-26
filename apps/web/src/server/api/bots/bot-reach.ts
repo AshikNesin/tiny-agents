@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import { botConnections, botGuests, bots, botSkills, connections, db, skills } from "../../db";
+import { botConnections, bots, botSkills, connections, db, skills } from "../../db";
 
 export type ReachKind = "connections" | "skills";
 
@@ -14,8 +14,8 @@ interface Item {
   allBots: boolean;
 }
 
-export function takesShared(bot: { projectId: string | null; guests: number }): boolean {
-  return bot.projectId === null && bot.guests === 0;
+export function takesShared(bot: { projectId: string | null }): boolean {
+  return bot.projectId === null;
 }
 
 function reaches(item: Item, shared: boolean, link: Link | undefined): boolean {
@@ -64,15 +64,7 @@ async function itemsOf(kind: ReachKind): Promise<Item[]> {
 
 async function sharedBots(): Promise<Map<string, boolean>> {
   const rows = await db.select({ id: bots.id, projectId: bots.projectId }).from(bots);
-  const guested = new Set(
-    (await db.select({ botId: botGuests.botId }).from(botGuests)).map((row) => row.botId),
-  );
-  return new Map(
-    rows.map((row) => [
-      row.id,
-      takesShared({ projectId: row.projectId, guests: guested.has(row.id) ? 1 : 0 }),
-    ]),
-  );
+  return new Map(rows.map((row) => [row.id, takesShared(row)]));
 }
 
 export async function itemBotIds(kind: ReachKind, items: Item[]): Promise<Map<string, string[]>> {
@@ -96,7 +88,7 @@ export async function itemBotIds(kind: ReachKind, items: Item[]): Promise<Map<st
 
 export async function botItemIds(
   kind: ReachKind,
-  bot: { id: string; projectId: string | null; guests: number },
+  bot: { id: string; projectId: string | null },
 ): Promise<string[]> {
   const shared = takesShared(bot);
   const links = new Map(
@@ -145,7 +137,7 @@ function writeLinks(kind: ReachKind, scope: { botId?: string; itemId?: string },
 
 export async function setBotReach(
   kind: ReachKind,
-  bot: { id: string; projectId: string | null; guests: number },
+  bot: { id: string; projectId: string | null },
   wanted: Iterable<string>,
 ): Promise<void> {
   const shared = takesShared(bot);
@@ -180,12 +172,11 @@ export async function setItemReach(
 
 export async function reachBot(
   id: string,
-): Promise<{ id: string; projectId: string | null; guests: number } | undefined> {
+): Promise<{ id: string; projectId: string | null } | undefined> {
   const row = await db.query.bots.findFirst({
     where: eq(bots.id, id),
     columns: { id: true, projectId: true },
   });
   if (!row) return undefined;
-  const guests = await db.$count(botGuests, eq(botGuests.botId, id));
-  return { id: row.id, projectId: row.projectId, guests };
+  return { id: row.id, projectId: row.projectId };
 }

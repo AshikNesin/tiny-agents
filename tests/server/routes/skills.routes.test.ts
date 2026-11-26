@@ -223,7 +223,7 @@ describe("Skills API", () => {
     expect((await skillStore.list(901)).map((s) => s.name)).toEqual(["inbox-zero"]);
   });
 
-  it("gives a new skill to every bot, including bots made later, but not to a bot shared with a guest", async () => {
+  it("gives a new skill to every bot, including bots made later and a bot shared with a guest", async () => {
     const app = buildApp();
     const ops = await seedBot("930");
     const shared = await seedBot("931");
@@ -237,11 +237,12 @@ describe("Skills API", () => {
       token,
     });
     expect(created.status).toBe(201);
-    expect(created.body.data).toMatchObject({ allBots: true, botIds: [ops.id] });
+    expect(created.body.data).toMatchObject({ allBots: true });
+    expect([...created.body.data!.botIds].sort()).toEqual([ops.id, shared.id].sort());
 
     const later = await seedBot("932");
     expect((await skillStore.list(932)).map((skill) => skill.name)).toEqual(["deploy"]);
-    expect(await skillStore.list(931)).toEqual([]);
+    expect((await skillStore.list(931)).map((skill) => skill.name)).toEqual(["deploy"]);
     const bot = await api<{ skillIds: string[] }>(app, `/api/v1/bots/${later.id}`, { token });
     expect(bot.body.data!.skillIds).toEqual([created.body.data!.id]);
     expect(await db.$count(botSkills)).toBe(0);

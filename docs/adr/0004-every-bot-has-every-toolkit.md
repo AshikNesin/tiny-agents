@@ -42,15 +42,8 @@ by default. The toolkit switch was a second, redundant layer.
   `tool_search` when it needs them, and a stable prompt section names them.
   Tasks, routines, web, sandbox, memory, skills, bots and questions stay
   direct.
-- Amended 2026-11-26 (issue #559): connections and skills reach every bot
-  by default too (`allBots`), as vault items already did. A bot opts out
-  with a link row whose `enabled` is false. Bots shared with guests and
-  project bots get a shared item only through an enabled link, because
-  read-only connection tools run without asking and a guest could read the
-  owner's data through them. A shared connection is always deferred and
-  named in one short `deferred_tools` line. A skill a bot saves stays with
-  that bot. The migration keeps every bot's current set: an item every
-  eligible bot already had becomes shared, the rest keep their lists.
+- Amended 2026-11-26 (issue #559): connections and skills now reach every
+  bot by default too; see [ADR 0041](0041-bots-share-what-the-owner-sets-up.md).
 - Existing bots gain the toolkits they had off. Effectful tools still ask
   first; a tool the owner does not want for a bot is set to Off.
 - Bots know the date but not the exact clock time. A bot asked for the time
