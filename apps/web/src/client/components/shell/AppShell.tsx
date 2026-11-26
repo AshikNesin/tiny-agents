@@ -18,7 +18,7 @@ import type { CommandGroupEntry } from "@groot/shell/components/CommandPalette";
 import { useAuthStore } from "@groot/shell/store/auth";
 import { useTheme } from "@groot/shell/lib/theme";
 import { toast } from "sonner";
-import { useBotsStore } from "../../store/bots";
+import { chatBots, useBotsStore } from "../../store/bots";
 import { modeOf, useUiStore } from "../../store/ui";
 import { useCodeStore } from "../../store/code";
 import { useKeyCommands } from "../keys";
@@ -87,13 +87,14 @@ export function AppShell() {
   useEffect(() => rememberPath(pathname, search), [pathname, search, rememberPath]);
 
   const commandGroups = useMemo<CommandGroupEntry[]>(() => {
+    const listed = chatBots(bots);
     const botGroup: CommandGroupEntry[] =
-      bots.length === 0
+      listed.length === 0
         ? []
         : [
             {
               heading: "Bots",
-              items: bots.map((bot) => ({
+              items: listed.map((bot) => ({
                 id: bot.id,
                 label: bot.name,
                 icon: Bot,

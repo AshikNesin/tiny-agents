@@ -40,6 +40,7 @@ function listEntry(id: string, conversationId: string, overrides: Partial<BotLis
     approvals: 0,
     questions: 0,
     pinnedAt: null,
+    projectId: null,
     ...overrides,
   } satisfies BotListEntry;
 }
