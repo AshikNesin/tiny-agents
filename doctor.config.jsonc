@@ -39,17 +39,14 @@
         "files": ["site/demos/kit/**"],
         "rules": ["react-doctor/no-ref-current-in-render"],
       },
-      // The size morph is the point here: the hover, focus and selection
+      // The size morph is the point here (the question card's files are in
+      // vendor/fluid, covered above): the hover, focus and selection
       // indicators reshape between rows of different sizes with rounded
       // corners and a ring, the question card opens to its content's real
       // height, and the switch thumb stretches into a pill. A scale transform
       // would distort the corners, ring and pill instead.
       {
-        "files": [
-          "src/client/components/fluid/ask-user-questions.tsx",
-          "src/client/components/fluid/hooks/use-merge-split.tsx",
-          "src/client/components/ui/switch.tsx",
-        ],
+        "files": ["src/switch.tsx"],
         "rules": ["react-doctor/no-layout-property-animation"],
       },
     ],
