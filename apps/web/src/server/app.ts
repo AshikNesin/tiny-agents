@@ -29,6 +29,7 @@ import peopleRoutes from "./api/people/people.routes";
 import updatesRoutes from "./api/system/updates.routes";
 import appLinksRouter from "./api/system/app-links";
 import { guestGuard } from "./api/people/guest.guard";
+import { stepUpGuard } from "./api/route-access";
 import pushRoutes from "./api/notifications/push.routes";
 import { registerRoutineJobs } from "./api/routines/routines.jobs";
 import { registerMemoryTidyJob } from "./api/bots/memories.tidy";
@@ -55,6 +56,8 @@ export function createWebApp(options: Omit<CreateAppOptions, "routes"> = {}) {
       const api = new Hono<AppEnv>();
       api.use(requireSession);
       api.use(guestGuard());
+      api.use("/vault/*", vaultNoStore);
+      api.use(stepUpGuard());
       api.route("/", peopleRoutes);
       api.route("/", botsRoutes);
       api.route("/", memoriesRoutes);
@@ -70,7 +73,6 @@ export function createWebApp(options: Omit<CreateAppOptions, "routes"> = {}) {
       api.route("/", codeProjectRoutes);
       api.route("/", modelsRoutes);
       api.route("/", updatesRoutes);
-      api.use("/vault/*", vaultNoStore);
       api.route("/", vaultRoutes);
       api.route("/jobs", jobRoutes);
       api.route("/storage", storageRoutes);
