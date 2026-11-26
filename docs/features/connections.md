@@ -15,14 +15,20 @@ first:
    here is never installed into the runtime, so no bot sees it. It stays off
    across reconnects and tool-list changes; tools the server adds later start
    on.
-2. **Connection on the bot** (`BotConnection`). Per bot, from the bot dialog
-   or the connection's "Used by bots" list (ADR 0004: connections stay a
-   per-bot choice).
+2. **Connection on the bot**. A connection with `allBots` (the default for a
+   new one) reaches every bot except bots shared with guests and project
+   bots; a `BotConnection` row with `enabled` false turns it off for one bot,
+   and one with `enabled` true gives it to a bot the default leaves out. With
+   `allBots` off, only bots with an enabled row get it. Set from the bot
+   dialog or the connection's "Used by bots" list; the rules live in
+   `apps/web/src/server/api/bots/bot-reach.ts` (ADR 0004, issue #559).
 3. **Tool permission on the bot** (`Bot.toolPermissions`: allow / ask / off).
 
 Turning a tool on or off re-installs the capability from the cached tool list
 and re-applies every linked bot's configuration (`ConnectionManager.reinstall`).
-Servers whose tool schemas pass `MCP_DEFER_CHARS` (8,000 characters, by
+A connection with `allBots` always defers its tools, and the prompt names
+only its first few tools, so sharing it costs every bot one short line.
+Other servers whose tool schemas pass `MCP_DEFER_CHARS` (8,000 characters, by
 size rather than count) defer them behind `tool_search`
 (`packages/agent/src/mcp.ts`), as the browser and computer toolkits do; the
 runtime's tool search capability names each deferred group in the prompt,

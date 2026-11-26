@@ -1,15 +1,8 @@
-import { eq, inArray } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { Boom } from "@groot/core/errors";
 import { AgentRuntime } from "@tiny-agents/agent";
-import {
-  db,
-  botConnections,
-  bots,
-  botSkills,
-  connections,
-  promptRevisions,
-  skills,
-} from "../../db";
+import { db, bots, promptRevisions } from "../../db";
+import { reachBot, setBotReach } from "./bot-reach";
 import { getAgentRuntime } from "./bots.runtime";
 import { releaseBot } from "./bot-resources";
 import {
@@ -107,43 +100,17 @@ export async function createBot(
     })
     .returning();
   if (!row) throw new Error("Bot insert returned no row");
-  if (data.skillIds || data.connectionIds || data.guestIds?.length) {
-    await setLinks(row.id, data.skillIds, data.connectionIds);
-    if (data.guestIds?.length) await setBotGuests(row.id, data.guestIds);
-    return reconcileBotConversation(row.id, rt);
-  }
-  return getBot(row.id);
+  if (data.guestIds?.length) await setBotGuests(row.id, data.guestIds);
+  await setLinks(row.id, data.skillIds, data.connectionIds);
+  return reconcileBotConversation(row.id, rt);
 }
 
 async function setLinks(botId: string, skillIds?: string[], connectionIds?: string[]) {
-  if (skillIds) {
-    const known = await db
-      .select({ id: skills.id })
-      .from(skills)
-      .where(inArray(skills.id, skillIds));
-    db.transaction((tx) => {
-      tx.delete(botSkills).where(eq(botSkills.botId, botId)).run();
-      if (known.length > 0) {
-        tx.insert(botSkills)
-          .values(known.map((skill) => ({ botId, skillId: skill.id })))
-          .run();
-      }
-    });
-  }
-  if (connectionIds) {
-    const known = await db
-      .select({ id: connections.id })
-      .from(connections)
-      .where(inArray(connections.id, connectionIds));
-    db.transaction((tx) => {
-      tx.delete(botConnections).where(eq(botConnections.botId, botId)).run();
-      if (known.length > 0) {
-        tx.insert(botConnections)
-          .values(known.map((connection) => ({ botId, connectionId: connection.id })))
-          .run();
-      }
-    });
-  }
+  if (!skillIds && !connectionIds) return;
+  const bot = await reachBot(botId);
+  if (!bot) return;
+  if (skillIds) await setBotReach("skills", bot, skillIds);
+  if (connectionIds) await setBotReach("connections", bot, connectionIds);
 }
 
 export async function updateBot(id: string, data: UpdateBotDTO, rt: BotAgentRuntime = runtime()) {
@@ -153,8 +120,8 @@ export async function updateBot(id: string, data: UpdateBotDTO, rt: BotAgentRunt
     throw Boom.badRequest("Unknown model. Pick one set up in Settings → Models.");
   }
   if (data.name !== undefined) await assertNameFree(data.name, id);
-  await setLinks(id, data.skillIds, data.connectionIds);
   if (data.guestIds !== undefined) await setBotGuests(id, data.guestIds);
+  await setLinks(id, data.skillIds, data.connectionIds);
   if (data.systemPrompt !== undefined && data.systemPrompt !== before.systemPrompt) {
     await db
       .insert(promptRevisions)

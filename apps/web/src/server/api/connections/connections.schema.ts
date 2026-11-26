@@ -18,6 +18,7 @@ export const createConnectionSchema = z
     secret: secret.optional(),
     clientId: z.string().trim().min(1).max(500).optional(),
     clientSecret: z.string().min(1).max(2000).optional(),
+    allBots: z.boolean().optional(),
     botIds: z.array(z.string()).max(200).optional(),
   })
   .refine((v) => v.authType !== "header" || (v.headerName && v.secret), {
@@ -37,6 +38,7 @@ export const updateConnectionSchema = z.object({
     .regex(/^[a-z0-9][a-z0-9-]{0,47}$/)
     .nullable()
     .optional(),
+  allBots: z.boolean().optional(),
   botIds: z.array(z.string()).max(200).optional(),
 });
 

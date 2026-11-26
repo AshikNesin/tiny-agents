@@ -20,6 +20,7 @@ export const createSkillSchema = z.object({
   files: files.optional().default([]),
   source: z.enum(["manual", "url"]).optional().default("manual"),
   sourceUrl: z.string().url().max(2000).optional(),
+  allBots: z.boolean().optional(),
   botIds: z.array(z.string()).optional(),
 });
 
@@ -27,6 +28,7 @@ export const updateSkillSchema = z.object({
   name: name.optional(),
   description: description.optional(),
   body: body.optional(),
+  allBots: z.boolean().optional(),
   botIds: z.array(z.string()).optional(),
 });
 

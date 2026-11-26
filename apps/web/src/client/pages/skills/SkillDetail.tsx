@@ -93,6 +93,17 @@ export function SkillDetail({ id }: { id: string }) {
     }
   };
 
+  const setAllBots = async (allBots: boolean) => {
+    const previous = skill;
+    setSkill({ ...skill, allBots });
+    try {
+      setSkill(await mutations.update.mutateAsync({ id, input: { allBots } }));
+    } catch (error) {
+      setSkill(previous);
+      toast.error(errorMessage(error, "Failed to update bots"));
+    }
+  };
+
   const remove = async () => {
     setDeleting(true);
     try {
@@ -138,7 +149,13 @@ export function SkillDetail({ id }: { id: string }) {
       <LeaveGuard when={dirty && !deleting} />
       <SkillDetailsCard skill={skill} form={form} setForm={setForm} />
 
-      <SkillBotsSection skill={skill} bots={bots} usedBy={usedBy} toggleBot={toggleBot} />
+      <SkillBotsSection
+        skill={skill}
+        bots={bots}
+        usedBy={usedBy}
+        toggleBot={toggleBot}
+        setAllBots={setAllBots}
+      />
 
       <SkillInstructions form={form} setForm={setForm} />
 

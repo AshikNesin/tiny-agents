@@ -17,6 +17,7 @@ function connection(partial: Partial<Connection>): Connection {
     hasSecret: false,
     secretRef: null,
     tools: [],
+    allBots: false,
     botIds: [],
     status: "connected",
     createdAt: new Date(FIXED_NOW).toISOString(),

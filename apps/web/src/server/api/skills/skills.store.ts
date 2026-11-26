@@ -1,5 +1,6 @@
-import { asc, eq } from "drizzle-orm";
+import { asc, eq, inArray } from "drizzle-orm";
 import { botSkills, db, skills } from "../../db";
+import { botItemIds, reachBot } from "../bots/bot-reach";
 import type { SkillStore } from "@tiny-agents/agent";
 import { conversationOwner } from "../bots/bots.owner";
 import type { SkillFile } from "../../../shared/api/skills";
@@ -16,14 +17,14 @@ function files(raw: string): SkillFile[] {
 async function assigned(conversationId: number) {
   const owner = await conversationOwner(conversationId);
   if (!owner) return { botId: undefined, skills: [] };
-  const bot = owner.bot;
-  const links = await db
-    .select({ skill: skills })
-    .from(botSkills)
-    .innerJoin(skills, eq(botSkills.skillId, skills.id))
-    .where(eq(botSkills.botId, bot.id))
-    .orderBy(asc(skills.name));
-  return { botId: bot.id, skills: links.map((link) => link.skill) };
+  const bot = await reachBot(owner.bot.id);
+  if (!bot) return { botId: undefined, skills: [] };
+  const ids = await botItemIds("skills", bot);
+  const rows =
+    ids.length > 0
+      ? await db.select().from(skills).where(inArray(skills.id, ids)).orderBy(asc(skills.name))
+      : [];
+  return { botId: bot.id, skills: rows };
 }
 
 export const skillStore: SkillStore = {
@@ -60,7 +61,13 @@ export const skillStore: SkillStore = {
     }
     const [skill] = await db
       .insert(skills)
-      .values({ name: input.name, description: input.description, body: input.body, source: "bot" })
+      .values({
+        name: input.name,
+        description: input.description,
+        body: input.body,
+        source: "bot",
+        allBots: false,
+      })
       .onConflictDoNothing({ target: skills.name })
       .returning({ id: skills.id });
     if (!skill) {
