@@ -14,6 +14,7 @@ import { NO_CAPABILITIES } from "@tiny-agents/code/contracts";
 import { CodeWorkspace } from "@/pages/code/Workspace";
 import { useCodeStore } from "@/store/code";
 import { useUiStore } from "@/store/ui";
+import { useCommandPaletteStore } from "@groot/shell/store/command-palette";
 import type { HarnessInfo, ThreadSnapshot, ThreadSummary } from "@/lib/code/api";
 import { AppQueryProvider } from "../query-provider";
 import { streamAt } from "../fakes/sse";
@@ -440,27 +441,14 @@ describe("the Code workspace", () => {
     expect(thread).not.toHaveAttribute("hidden");
   });
 
-  it(": opens a menu of the page's commands; picking one runs it", async () => {
+  it(": opens the app's command palette, the one menu for every command", async () => {
+    useCommandPaletteStore.setState({ open: false });
     renderAt("/code/t/demo%3Adddd");
     open(done);
     await screen.findByText("web /");
     press(":", { shiftKey: true });
-    const menu = await screen.findByRole("dialog", { name: "Commands" });
-    expect(menu).toHaveTextContent("Pull request");
-    fireEvent.click(within(menu).getByText("Files"));
-    await waitFor(() =>
-      expect(screen.getByRole("tab", { name: /Files/ })).toHaveAttribute("aria-selected", "true"),
-    );
-  });
-
-  it(": jumps to a thread by its title", async () => {
-    renderAt("/code/t/demo%3Adddd");
-    open(done);
-    await screen.findByText("web /");
-    press(":", { shiftKey: true });
-    const menu = await screen.findByRole("dialog", { name: "Commands" });
-    fireEvent.click(within(menu).getByText("Thread a"));
-    await waitFor(() => expect(where()).toBe("/code/t/demo%3Aa"));
+    expect(useCommandPaletteStore.getState().open).toBe(true);
+    expect(screen.queryByRole("dialog", { name: "Commands" })).toBeNull();
   });
 
   it("right-clicking a thread offers Open PR, Archive and Delete", async () => {

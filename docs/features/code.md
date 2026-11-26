@@ -54,9 +54,9 @@ Three columns: the thread list, the open thread, and a work pane with four
 tabs: Changes, Pull request, Files and Terminal. `Workspace.tsx` owns the
 layout.
 
-Every action has a key. `?` lists them. `:` opens the Code command menu
-(`CodeCommandMenu.tsx`): this page's commands and its threads, nothing from
-the rest of the app. The command palette (⌘K) also runs them by name. Plain letters act in the app; Shift letters post
+Every action has a key. `?` lists them. `:` opens the command palette, the
+same one as ⌘K: it runs this page's commands by name and jumps to threads,
+bots and the rest of the app. Plain letters act in the app; Shift letters post
 to GitHub. The list of keys is the `commands` array in
 `apps/web/src/client/pages/code/Workspace.tsx` (the workspace) and in
 `PullReview.tsx` (a PR review); `keys.tsx` binds them. The ones used most:
@@ -70,7 +70,7 @@ to GitHub. The list of keys is the `commands` array in
 | `1` `2` `3` `4` | Changes, Pull request, Files, Terminal                 |
 | `` ` `` `\` `[` | Show or hide the terminal, work pane, thread list      |
 | `z`             | Widen the work pane over the thread, and back          |
-| `:` `?`         | Run a command or jump to a thread; list the keys       |
+| `:` `?`         | Open the command palette; list the keys                |
 | `o`             | Open the worktree in Cursor or Zed                     |
 | `f` `a`         | Fix CI, Address comments                               |
 | `P` `M`         | Create the PR (or push to it), committing first; merge |
