@@ -15,6 +15,8 @@ import type {
   PastChatView,
   PinBody,
   SendMessageBody,
+  ToolPermission,
+  ToolPermissionsData,
   YoloBody,
   YoloState,
 } from "../../shared/api/bots";
@@ -119,12 +121,19 @@ export const botsApi = {
     decision: "approved" | "denied",
     alwaysAllow?: string,
     grant?: boolean,
+    everyBot?: boolean,
   ) =>
     apiClient.post(`/bots/${id}/approvals/${taskId}`, {
       decision,
       ...(alwaysAllow ? { alwaysAllow } : {}),
       ...(grant ? { grant } : {}),
+      ...(everyBot ? { everyBot } : {}),
     } satisfies ApprovalBody),
+  toolPermissions: () => apiClient.get<ToolPermissionsData>("/tool-permissions"),
+  setToolPermissions: (permissions: Record<string, ToolPermission>) =>
+    apiClient.put<ToolPermissionsData>("/tool-permissions", {
+      permissions,
+    } satisfies ToolPermissionsData),
   answerQuestions: (id: string, taskId: number, answers: OwnerAnswer[] | null) =>
     apiClient.post(
       `/bots/${id}/questions/${taskId}`,

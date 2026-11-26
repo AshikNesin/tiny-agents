@@ -8,6 +8,7 @@ import { ThemeSettings } from "@groot/shell/components/ThemeSettings";
 import { Settings, type SettingsSection } from "@groot/shell/pages/settings/Settings";
 import { PeopleSettings } from "../../components/PeopleSettings";
 import { PhoneNotificationSettings } from "../../components/PhoneNotificationSettings";
+import { ToolDefaultsSettings } from "../../components/ToolDefaultsSettings";
 import { UpdatesSettings } from "../../components/UpdatesSettings";
 import { useViewerRole } from "../../store/people";
 import { ModelsSettings } from "./models/ModelsSettings";
@@ -18,6 +19,7 @@ const ELEMENTS: Record<string, ReactNode> = {
   appearance: <ThemeSettings />,
   security: <PasskeyManager />,
   models: <ModelsSettings />,
+  tools: <ToolDefaultsSettings />,
   notifications: (
     <NotificationSettings
       destinations={[{ id: "webpush", label: "Phone app", details: <PhoneNotificationSettings /> }]}

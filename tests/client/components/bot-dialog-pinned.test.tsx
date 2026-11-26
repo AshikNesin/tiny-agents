@@ -11,7 +11,8 @@
  * split must render each the same.
  */
 import React from "react";
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, render as renderPlain, screen, waitFor } from "@testing-library/react";
+import { AppQueryProvider } from "../query-provider";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { ApiError } from "@groot/shell/lib/api";
@@ -19,6 +20,8 @@ import { BotDialog } from "@/components/BotDialog";
 import type { Bot } from "../../../apps/web/src/shared/api/bots";
 import type { CatalogModel } from "../../../apps/web/src/shared/api/models";
 import { markup, outline } from "../dom-outline";
+
+const render = (ui: React.ReactElement) => renderPlain(ui, { wrapper: AppQueryProvider });
 
 const api = vi.hoisted(() => ({
   capabilities: vi.fn(),

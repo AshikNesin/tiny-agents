@@ -11,6 +11,7 @@ import {
 } from "@tiny-agents/agent";
 import { db, bots, connections as connectionsTable, skills as skillsTable } from "../../db";
 import { takesShared } from "./bot-reach";
+import { botPermissions, ownerToolPermissions } from "./tool-permissions";
 import type { BotData } from "../../../shared/api/bots";
 import type { BrowserProfile } from "../../../shared/api/live";
 import { resolveAttachments } from "../uploads/uploads.attach";
@@ -216,7 +217,14 @@ async function rowConfig(
 ): Promise<BotAgentConfig> {
   const participants =
     !unattended && (row.guests?.length ?? 0) > 0 ? await participantNames(row.id) : [];
-  return agentConfig({ ...toBot(row), connections: row.connections }, rt, unattended, participants);
+  const bot = toBot(row);
+  const toolPermissions = botPermissions(await ownerToolPermissions(), bot.toolPermissions);
+  return agentConfig(
+    { ...bot, toolPermissions, connections: row.connections },
+    rt,
+    unattended,
+    participants,
+  );
 }
 
 export async function startBotConversation(

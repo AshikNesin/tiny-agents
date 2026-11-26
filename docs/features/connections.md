@@ -22,7 +22,9 @@ first:
    `allBots` off, only bots with an enabled row get it. Set from the bot
    dialog or the connection's "Used by bots" list; the rules live in
    `apps/web/src/server/api/bots/bot-reach.ts` (ADR 0041).
-3. **Tool permission on the bot** (`Bot.toolPermissions`: allow / ask / off).
+3. **Tool permission** (allow / ask / off). Settings > Tools sets one map
+   every bot starts from; a bot's own `Bot.toolPermissions` entry wins for
+   that bot (`apps/web/src/server/api/bots/tool-permissions.ts`).
 
 Turning a tool on or off re-installs the capability from the cached tool list
 and re-applies every linked bot's configuration (`ConnectionManager.reinstall`).

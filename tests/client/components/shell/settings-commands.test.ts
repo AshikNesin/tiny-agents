@@ -16,6 +16,7 @@ describe("the ⌘K Settings group", () => {
       "Appearance",
       "Security",
       "Models",
+      "Tools",
       "Notifications",
       "People",
       "Configuration",

@@ -50,7 +50,12 @@ export const yoloSchema = z.object({ on: z.boolean() });
 export const approvalSchema = z.object({
   decision: z.enum(["approved", "denied"]),
   alwaysAllow: z.string().min(1).max(128).optional(),
+  everyBot: z.boolean().optional(),
   grant: z.boolean().optional(),
+});
+
+export const toolPermissionsSchema = z.object({
+  permissions: z.record(z.string().min(1).max(128), z.enum(["allow", "ask", "off"])),
 });
 
 const ownerAnswer = z.object({

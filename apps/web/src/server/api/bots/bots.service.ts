@@ -181,3 +181,8 @@ export async function markRead(id: string, viewer?: Viewer) {
   else await updateBotRow(id, { lastReadAt: new Date() });
   return getBot(id);
 }
+
+export async function reconcileAllBots(rt: BotAgentRuntime = runtime()): Promise<void> {
+  const rows = await db.select({ id: bots.id }).from(bots);
+  for (const row of rows) await reconcileBotConversation(row.id, rt);
+}
