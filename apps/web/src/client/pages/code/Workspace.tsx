@@ -21,7 +21,7 @@ import { harnessOf, useCodeStore } from "../../store/code";
 import { useUiStore, type CodePane } from "../../store/ui";
 import { PageKeys, Kbd, useKeyCommands, type KeyCommand } from "../../components/keys";
 import { FilesPane, type FilesFocus } from "./FilesPane";
-import { NewThreadDialog } from "./NewThreadDialog";
+import { NewThread } from "./NewThread";
 import { TerminalPane } from "./TerminalPane";
 import { useCommandPaletteStore } from "@groot/shell/store/command-palette";
 import { PullPanel } from "./PullPanel";
@@ -474,16 +474,10 @@ export function CodeWorkspace() {
   if (harnessList.length === 0) return <NotConfigured brand={brand} />;
   if (reviewId) return <PullReview reviewId={reviewId} harnesses={harnesses} rows={rows} />;
 
-  const full = Boolean(threadId) || Boolean(chatProjectId);
+  const full = Boolean(threadId) || Boolean(chatProjectId) || composing;
   return (
     <div className="flex h-dvh min-h-0">
       <PageKeys commands={commands} />
-      <NewThreadDialog
-        open={composing}
-        onOpenChange={(open) => !open && navigate(threadId ? threadPath(threadId) : "/code")}
-        projects={projects}
-        harnesses={harnesses}
-      />
       <aside
         id="code-sidebar"
         aria-label="Threads"
@@ -558,16 +552,7 @@ export function CodeWorkspace() {
             <Spinner />
           </div>
         ) : (
-          <EmptyState
-            icon={Code2}
-            title="No thread open"
-            description={
-              <span className="inline-flex flex-wrap items-center justify-center gap-1.5">
-                <Kbd keys="n" /> starts one, <Kbd keys="j" /> and <Kbd keys="k" /> move through the
-                list, <Kbd keys=":" /> runs a command, <Kbd keys="?" /> shows every key.
-              </span>
-            }
-          />
+          <NewThread focused={composing} projects={projects} harnesses={harnesses} />
         )}
       </main>
 
