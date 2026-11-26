@@ -1,5 +1,7 @@
+import { userInfo } from "node:os";
 import { resolve } from "node:path";
 import { shelley } from "@tiny-agents/code/server";
+import { DEFAULT_SSH_USER } from "@tiny-agents/sandbox";
 import type { EditorSshTarget } from "../../../shared/api/code";
 import { appEnv, type AppEnv } from "../../env";
 import { sandboxHost, unquoteEnv } from "../bots/sandbox-host";
@@ -26,18 +28,20 @@ function sandboxTarget(env: AppEnv): EditorSshTarget | null {
   const keyFile = unquoteEnv(env.SANDBOX_SSH_KEY_FILE);
   return {
     host: remoteHost(host),
-    user: unquoteEnv(env.SANDBOX_USER) ?? null,
+    user: unquoteEnv(env.SANDBOX_USER) ?? DEFAULT_SSH_USER,
     port: Number.isInteger(port) && port > 0 && port !== 22 ? port : null,
     keyFile: keyFile ? resolve(keyFile) : null,
   };
 }
 
-const APP_HOST: EditorSshTarget = { host: null, user: null, port: null, keyFile: null };
+function appHost(): EditorSshTarget {
+  return { host: null, user: userInfo().username, port: null, keyFile: null };
+}
 
 export function editorSshTarget(kind: string, env: AppEnv = appEnv()): EditorSshTarget {
   const sandbox = sandboxTarget(env);
-  if (kind !== "shelley") return sandbox ?? APP_HOST;
+  if (kind !== "shelley") return sandbox ?? appHost();
   const host = remoteHost(urlHost(shelley.trimUrl(env.SHELLEY_URL)));
-  if (host) return { ...APP_HOST, host };
-  return sandbox && sandbox.host === null ? sandbox : APP_HOST;
+  if (host) return { host, user: DEFAULT_SSH_USER, port: null, keyFile: null };
+  return sandbox && sandbox.host === null ? sandbox : appHost();
 }

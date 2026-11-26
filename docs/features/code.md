@@ -87,9 +87,16 @@ need you first:
 - **In review:** it has an open pull request.
 - **Done:** everything else, a merged pull request included.
 
+Right-click a row for **Open PR** (when it has one), **Archive** (or
+**Unarchive** under Archived) and **Delete**, which asks first. Archive and
+Delete show only when the thread's harness can do them (`ThreadMenu` in
+`ThreadList.tsx`).
+
 The status is worked out from facts, never stored: `threadStatus` in
 `apps/web/src/shared/code-status.ts`. Reading a finished thread moves it on.
 With several projects, a row without a pull request names its project.
+A plain unread finish shows only its dot and bold title, not the word
+"finished". Pointing at a row a bot or project chat started says which.
 
 Below the threads:
 
@@ -153,6 +160,17 @@ runs it again as it was. Both are a **rewind** (`code.rewind.ts`):
 Only a harness with the `threads.rewind` capability offers this: Native
 today. The agent must be stopped first.
 
+**Suggested next message.** After a turn, the composer shows what you
+will likely say next in grey (for example "get it merged to main"); `Tab`
+takes it. While you type a single line, it offers the rest of the line the
+same way. One small call to the cheap title model (role `chat_title`) per
+finished turn, and one per pause in typing only when the line no longer
+matches the last suggestion. The prompt holds just the last user message
+(300 characters) and the end of the agent's reply (900 characters), the
+reply is capped at one short line, and answers are cached per turn
+(`code.suggest.ts`, `use-next-message.ts`). With no model set up it shows
+nothing.
+
 **Archive.** The command palette archives or restores the open thread. An
 archived thread offers **Unarchive to continue** in place of the composer.
 
@@ -213,8 +231,12 @@ are built by `apps/web/src/client/lib/code/editor.ts`):
 The dialog prefills the SSH host from `GET /code/status`, which gives each
 harness an `ssh` target (`code.editor.ts`): Shelley's host from
 `SHELLEY_URL`, the other harnesses' from `SANDBOX_HOST`, `SANDBOX_USER` and
-`SANDBOX_PORT`. A loopback host becomes the host the page was opened on, so
-an app on `tiny-agents.exe.xyz` suggests `tiny-agents.exe.xyz`.
+`SANDBOX_PORT`. The user is `SANDBOX_USER`, else `exedev` (the sandbox
+connection's default), or the app's own OS user when the files live beside
+the app. A loopback host becomes the host the page was opened on, so an app
+on `tiny-agents.exe.xyz` suggests `tiny-agents.exe.xyz`; a page on
+`localhost` suggests `127.0.0.1`, because macOS resolves `localhost` to
+`::1` first and the local sandbox publishes its port on IPv4 only.
 
 When the target needs a port or a key, as the local Docker sandbox
 (`pnpm sandbox:up`) does, the dialog suggests the `tiny-agents-sandbox`
@@ -449,6 +471,13 @@ git there, against the PR's base. **Update** (the header's refresh) moves
 the review to the PR's latest commit. **Close review** removes the review's
 own worktree (never a thread's).
 
+**Daily prune.** Once a day the app removes the review worktrees of other
+people's PRs that sat idle (`code.reviews.prune.ts` owns the schedule and
+the idle time). It keeps your own
+PRs, PRs a Code thread opened, a thread's worktree, and a checkout with
+uncommitted changes or local commits. A pruned review stays in the list;
+opening it checks the PR out again.
+
 **The page** (`/code/reviews/<id>`, `PullReview.tsx`) takes the whole
 screen, laid out like [diffshub](https://diffshub.com) (see
 [CREDITS](../../CREDITS.md)): the agent's column, a file tree with a
@@ -549,6 +578,41 @@ Known limits (register row C7):
 - A finish that can never be delivered (its bot's chat keeps refusing the
   submit) is retried, and logged, for as long as the app runs. Deleting the
   bot removes it.
+
+## Project chat
+
+Each project has one chat, a bot tied to it (`bots.project_id`), opened from
+the top of the Code sidebar and made on first open (`code.chat.ts`, ADR
+0040). On a phone the chat's menu button goes back to the thread list. It
+coordinates instead of coding: its `project` toolkit
+(`createProjectToolkit` in `packages/agent/src/toolkits/code.ts`) starts and
+follows up threads of that project only, lists them with their state,
+branch and PR (`code_list`), and archives finished ones (`code_resolve`).
+Its toolkits are `PROJECT_BOT_TOOLKITS` in `bot-toolkits.ts`, so it has no
+browser or computer.
+
+A side panel sits beside the chat (`ProjectPanel.tsx`), shown or hidden
+with the header's Threads button. Its **Threads** tab lists the project's
+threads with a search box, grouped by state (`statusSections`, Done and
+Archived folded), each with a one-line status (`statusLine`) and its PR.
+A row opens that thread inside the panel (`?thread=<id>`): its live
+transcript, a branch and PR bar, and the composer to steer it, with a back
+arrow to the list and a button to the full thread. Its **Context** tab
+shows the repository, the Instructions and the chat's memory. On a phone
+the chat comes first and the panel opens over it, full screen.
+
+The project's **Instructions** (Settings, the project's page) go into the
+coordinator's prompt and into the first message of every thread of the
+project, folded out of the transcript like the rest of the preamble.
+
+Threads the chat started or adopted report back to it (`code.report.ts`):
+when one waits for the owner, and when its PR opens, goes green, fails
+checks, needs the owner or merges. Each note is one short line with a link,
+owed in the hand-off finish outbox (`code_handoff_finishes`) so a restart
+does not lose it. The watcher's sweep sends what is owed to one chat as a
+single turn, so a burst of news costs one turn, not several. Threads the
+owner started report nothing. A finish keeps its first 1,500 characters and
+points to the thread for the rest.
 
 ## Known gaps
 

@@ -3,9 +3,15 @@ import type { Logger } from "./logger";
 import type { RateLimitStore } from "./rate-limit/store";
 import type { ClientAddressResolver } from "./utils/client-ip";
 
-export interface AuthUser {
+export interface SessionClaims {
   userId: number;
   email: string;
+
+  tokenVersion?: number;
+}
+
+export interface AuthUser extends SessionClaims {
+  isAdmin: boolean;
 }
 
 export type AppEnv = {

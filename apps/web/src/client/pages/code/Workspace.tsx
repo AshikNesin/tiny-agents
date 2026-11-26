@@ -33,6 +33,7 @@ import { ResizablePane } from "./ResizablePane";
 import { ReviewPanel } from "./ReviewPanel";
 import { ThreadList } from "./ThreadList";
 import { ThreadView } from "./ThreadView";
+import { ProjectChat } from "./ProjectChat";
 
 const PANES: Array<{ id: CodePane; label: string; keys: string }> = [
   { id: "changes", label: "Changes", keys: "1" },
@@ -81,7 +82,11 @@ function PaneHeader({
   const WideIcon = wide ? Minimize2 : Maximize2;
   return (
     <div className="border-border flex h-11 shrink-0 items-center gap-1 border-b px-2">
-      <div role="tablist" aria-label="Work pane" className="flex min-w-0 flex-1 items-center gap-1">
+      <div
+        role="tablist"
+        aria-label="Work pane"
+        className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto"
+      >
         {PANES.filter((entry) => entry.id !== "pr" || hasPull).map((entry) => (
           <button
             key={entry.id}
@@ -91,14 +96,14 @@ function PaneHeader({
             onClick={() => onPane(entry.id)}
             data-testid={`code-pane-${entry.id}`}
             className={cn(
-              "flex h-7 items-center gap-1.5 rounded-lg px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
+              "flex h-7 shrink-0 items-center gap-1.5 rounded-lg px-2 text-sm whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
               pane === entry.id
                 ? "bg-muted text-foreground font-medium"
                 : "text-muted-foreground hover:text-foreground",
             )}
           >
             {entry.label}
-            <Kbd keys={entry.keys} />
+            <Kbd keys={entry.keys} className="max-sm:hidden" />
           </button>
         ))}
       </div>
@@ -120,7 +125,7 @@ function PaneHeader({
         title="Close the work pane"
         className="text-muted-foreground hover:bg-muted hover:text-foreground flex h-7 items-center gap-1.5 rounded-lg px-1.5 outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
       >
-        <Kbd keys="\" />
+        <Kbd keys="\" className="max-sm:hidden" />
         <X className="size-3.5 lg:hidden" />
       </button>
     </div>
@@ -128,7 +133,13 @@ function PaneHeader({
 }
 
 export function CodeWorkspace() {
-  const { threadId: rawId, section, projectId: settingsProjectId, reviewId } = useParams();
+  const {
+    threadId: rawId,
+    section,
+    projectId: settingsProjectId,
+    reviewId,
+    chatProjectId,
+  } = useParams();
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const { brand } = useShellConfig();
@@ -473,7 +484,7 @@ export function CodeWorkspace() {
   if (harnessList.length === 0) return <NotConfigured brand={brand} />;
   if (reviewId) return <PullReview reviewId={reviewId} harnesses={harnesses} rows={rows} />;
 
-  const full = Boolean(threadId) || inSettings;
+  const full = Boolean(threadId) || inSettings || Boolean(chatProjectId);
   return (
     <div className="flex h-dvh min-h-0">
       <PageKeys commands={commands} />
@@ -496,7 +507,7 @@ export function CodeWorkspace() {
         hidden={wide || undefined}
         data-state={listOpen ? "open" : "closed"}
         className={cn(
-          "bg-sidebar text-sidebar-foreground border-sidebar-border w-full shrink-0 flex-col lg:w-64 lg:border-r-[0.5px]",
+          "bg-sidebar text-sidebar-foreground border-sidebar-border w-full shrink-0 flex-col lg:w-68 lg:border-r-[0.5px]",
           full ? "hidden" : "flex",
           listOpen ? "lg:flex" : "lg:hidden",
         )}
@@ -506,10 +517,10 @@ export function CodeWorkspace() {
           harnesses={harnesses}
           projects={projects}
           activeId={threadId}
+          activeChat={chatProjectId}
           onNew={() => navigate("/code/new")}
           addingReview={addingReview}
           onAddingReview={setAddingReview}
-          onCommands={() => setMenuOpen(true)}
         />
       </aside>
 
@@ -521,7 +532,9 @@ export function CodeWorkspace() {
           full ? (openPane ? "hidden lg:flex" : "flex") : "hidden lg:flex",
         )}
       >
-        {inSettings ? (
+        {chatProjectId ? (
+          <ProjectChat projectId={chatProjectId} />
+        ) : inSettings ? (
           <CodeSettings
             section={settingsProjectId ? "projects" : section}
             projectId={settingsProjectId}
@@ -614,6 +627,7 @@ export function CodeWorkspace() {
                 refreshKey={changesKey}
                 focus={filesFocus}
                 onFocused={clearFilesFocus}
+                editor={harness && row?.cwd ? { harness, folder: row.cwd } : undefined}
               />
             ) : openPane === "terminal" && project ? (
               <TerminalPane threadId={threadId} place={row?.cwd ?? project.name} />

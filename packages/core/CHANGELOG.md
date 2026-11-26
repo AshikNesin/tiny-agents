@@ -1,5 +1,135 @@
 # @groot/core
 
+## 2.4.0
+
+### Minor Changes
+
+- [#178](https://github.com/AshikNesin/groot/pull/178) [`cb37122`](https://github.com/AshikNesin/groot/commit/cb37122eed238dbd14f60ffb1cc4214f2bf8fa68) Thanks [@AshikNesin](https://github.com/AshikNesin)! - The jobs API (`/api/v1/jobs`) is admin-only. Its own comment called it an admin
+  API, but it only required a session, so any signed-in user could create jobs
+  with arbitrary payloads, overwrite schedules and purge the queue. Every route
+  now answers `403` to a session that is not an admin.
+  
+  Users gain an `isAdmin` column. It is read from the database row on every
+  request, never from the session token, so promoting or demoting an account
+  takes effect at once. `requireAdmin` (`@groot/core/session`) is the guard, and
+  `jobRoutes` applies it itself, so any app that mounts it is covered.
+  
+  - The first account (first-run setup) is an admin. On an existing install the
+    migration promotes the lowest-id account, so someone can still open the
+    dashboard after upgrading.
+  - `SessionUser` and `/auth/me` include `isAdmin`.
+  - A `NavDestination` can be `adminOnly`: `useShellConfig()` hides it from
+    non-admins in the sidebar, the account menu and ⌘K, and
+    `<ProtectedRoute adminOnly>` keeps them off the page. The Jobs page is marked
+    this way in the app.
+
+- [#178](https://github.com/AshikNesin/groot/pull/178) [`cb37122`](https://github.com/AshikNesin/groot/commit/cb37122eed238dbd14f60ffb1cc4214f2bf8fa68) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Defaults that failed open now fail closed.
+  
+  - **`ADMIN_AUTH_KEY` must be at least 32 characters in production**, the same
+    floor as `JWT_SECRET_KEY`. It is the only guard on user management and could
+    be a single character. The admin routes are rate limited too
+    (`config.rateLimits.admin`, 10 per 15 minutes; `ADMIN_RATE_LIMITER` on
+    Workers), with their own budget so it cannot lock a person out of login.
+  - **An empty `CORS_ALLOWED_ORIGINS` allows only the app's own `ORIGIN`**, where
+    it used to reflect whichever origin asked. A separate frontend on another
+    origin must now list it, as the docs already described.
+  - **A crash no longer sends its message and stack to the client unless
+    `NODE_ENV` is explicitly `development`.** It defaulted to development when
+    unset, so a deployment that forgot the variable leaked stack traces.
+  - A client-supplied `X-Request-Id` is used only if it is a short token of
+    letters, digits, `-` and `_`; anything else (ANSI escapes, spaces, very long
+    strings) is replaced by a fresh id. It goes into logs and back as a response
+    header.
+
+- [#178](https://github.com/AshikNesin/groot/pull/178) [`66f6efb`](https://github.com/AshikNesin/groot/commit/66f6efb5c9af1c643025dc566ff5fc8e67037713) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Logout ends every session of the account, not only the cookie in the browser
+  that asked. Users gain a `tokenVersion`, a session token carries the value it
+  was minted with, and `requireSession` refuses a token from an older one. So a
+  stolen bearer token stops working when its owner logs out, where before it
+  stayed valid for up to 30 days and nothing could revoke it.
+  
+  A token minted before this change carries no version and counts as
+  generation 0, as existing rows do, so upgrading signs nobody out. Existing
+  tokens keep working until their account logs out.
+  
+  `endSession()` is now async; the logout route awaits it. Every sign-in mints
+  its token for the account's current generation, the deprecated service-level
+  ones included, so none hands out a token that logout has superseded.
+
+### Patch Changes
+
+- [#178](https://github.com/AshikNesin/groot/pull/178) [`8fe9496`](https://github.com/AshikNesin/groot/commit/8fe949668a6a34e1710b9378683ecc03cf1ca843) Thanks [@AshikNesin](https://github.com/AshikNesin)! - The app's default body limit no longer disappears for a whole request just
+  because one matched route declares its own. Hono runs every handler that
+  matches a path, so a route _without_ a limit that shared a path with a
+  `routeBodyLimit` route, and was registered first, answered with no limit at
+  all. The default now stays for such a request, as a ceiling at the largest
+  limit a matched route declared. A route whose own limit runs first is still
+  handed to it, so its `onError` wording is unchanged.
+
+- [#178](https://github.com/AshikNesin/groot/pull/178) [`cb37122`](https://github.com/AshikNesin/groot/commit/cb37122eed238dbd14f60ffb1cc4214f2bf8fa68) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Fixes for races between a check and the write that follows it.
+  
+  - **A `singletonKey` now allows one pending job, however many enqueues race.**
+    The rule was only a lookup before the insert, and concurrent `addJob` calls
+    interleaved around it: 50 at once produced 50 jobs. A unique index
+    (`jobs_singleton_idx`, on name and key where the job is `created` or
+    `active`) enforces it in the database. The migration first cancels duplicates
+    a database may already hold, keeping a running job over a waiting one, else
+    the earliest.
+  - **`kv.get()` no longer deletes a value written while it was expiring the old
+    one.** The lazy delete of an expired row now matches the expiry it read.
+  - **Renaming a passkey is one statement scoped to its owner.** The ownership
+    check and the update were separate, and a passkey deleted in between turned
+    the rename into a `500`; it answers `404` now.
+
+- [#178](https://github.com/AshikNesin/groot/pull/178) [`651e710`](https://github.com/AshikNesin/groot/commit/651e71005e9a9b2abc510b0a95b37611015b692d) Thanks [@AshikNesin](https://github.com/AshikNesin)! - `POST /passkey/login/options` no longer reveals which emails belong to
+  accounts that use passkeys. Sent an `email`, it narrowed `allowCredentials` to
+  that user's passkeys, and left the list empty for any other address: an
+  unauthenticated caller could probe emails with it, and received the account's
+  credential IDs. Every request now gets an empty `allowCredentials`, so the
+  browser offers the discoverable passkeys it holds for the site. The route still
+  accepts `email` and ignores it, so a client that sends it keeps working.
+  
+  `generatePasskeyAuthenticationOptions()` takes no argument as a result.
+
+- [#178](https://github.com/AshikNesin/groot/pull/178) [`23f14f6`](https://github.com/AshikNesin/groot/commit/23f14f6b843093bd06521bde13cbf592aee4127b) Thanks [@AshikNesin](https://github.com/AshikNesin)! - The PBKDF2 iteration count for password hashes is
+  `config.auth.passwordIterations` (default `100_000`), where it was a constant.
+  Cloudflare Workers caps PBKDF2 at 100,000, so that stays the default. A
+  deployment on Node only can raise it in its config; `apps/web/src/server/config.ts`
+  explains when that is safe.
+  
+  A hash stores the count it was made with, so one from another count still
+  verifies, and the next login re-hashes it. No migration is needed. The dummy
+  hash an unknown email is checked against is now built from the configured
+  count too. Had it kept the old one, an unknown email would have answered many
+  times faster than a known one once the count was raised, revealing which
+  emails have accounts.
+
+- [#178](https://github.com/AshikNesin/groot/pull/178) [`05e6aef`](https://github.com/AshikNesin/groot/commit/05e6aefa150ed6dba7beb5c4a77ad518089dd8d9) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Smaller fixes, each with a test that failed before it.
+  
+  - **R2 `copy()` no longer reads the whole source object into memory.** It
+    called `arrayBuffer()` before writing, which a large object cannot fit in a
+    Workers isolate. It now hands `put` the source's stream, which R2 streams
+    from object to object.
+  - **Updating or deleting a todo answers `404` when the row is gone.** Each did
+    an existence check and then the write; a todo deleted in between produced a
+    `200` with no data. The write is the check now: an empty `RETURNING` is the
+    `404`.
+  - **A pending `confirm()` settles when `ConfirmProvider` unmounts.** Whoever
+    awaited it was left waiting for ever, so the code after the `await`, its
+    `finally` blocks included, never ran. It resolves `false`.
+  - **The settings page keeps its prefix on a redirect.** For a section with an
+    encoded slash (`/settings/a%2Fb`) the splat param decodes to two segments
+    while the pathname has one, and the redirect went to `/account` instead of
+    `/settings/account`. The pathname is now counted decoded. A pathname that is
+    not valid percent-encoding is counted as it is.
+
+- [#178](https://github.com/AshikNesin/groot/pull/178) [`cb37122`](https://github.com/AshikNesin/groot/commit/cb37122eed238dbd14f60ffb1cc4214f2bf8fa68) Thanks [@AshikNesin](https://github.com/AshikNesin)! - "View" on the Storage page no longer runs script from an uploaded file. It
+  opened the file through a same-origin `blob:` URL, which dropped the
+  `Content-Disposition: attachment` the download route sets for HTML, SVG, XML
+  and JavaScript, so an uploaded `.html` ran its script with the viewer's
+  session. Such files now open as plain text. The rule for which types are
+  active is `isActiveContentType` in `@groot/core/storage/storage.schema`, shared
+  by the route and the client.
+
 ## 2.4.1
 
 ### Patch Changes
@@ -45,7 +175,6 @@
   - **No dead end on /code ([#242](https://github.com/AshikNesin/tiny-agents/issues/242)):** with no coding agent, the page keeps its "Back to tiny-agents" bar and links Settings → Models.
   - **E2E in containers ([#243](https://github.com/AshikNesin/tiny-agents/issues/243)):** `pnpm test:e2e` launches `PLAYWRIGHT_CHROMIUM_PATH`, or a Chromium pre-installed at `/opt/pw-browsers/chromium` when Playwright's own build is missing.
   - **Quieter logs ([#244](https://github.com/AshikNesin/tiny-agents/issues/244)):** 4xx errors are logged without a stack trace, and the session guard's 401 (every signed-out page load) at debug. `@groot/core/session` exports `isSessionInvalid()`.
-
 ## 2.3.0
 
 ### Minor Changes

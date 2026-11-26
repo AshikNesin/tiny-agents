@@ -24,10 +24,15 @@ describe("first-run setup", () => {
     expect(created.body.data?.user).toMatchObject({ email: payload.email, name: "Owner" });
     expect(created.headers.get("set-cookie")).toMatch(/^token=/);
 
-    const me = await api<{ email: string }>(app, "/api/v1/auth/me", {
+    const me = await api<{ email: string; isAdmin: boolean }>(app, "/api/v1/auth/me", {
       token: created.body.data!.token,
     });
     expect(me.body.data?.email).toBe(payload.email);
+
+    expect(me.body.data?.isAdmin).toBe(true);
+    expect((await api(app, "/api/v1/jobs/stats", { token: created.body.data!.token })).status).toBe(
+      200,
+    );
 
     const after = await api<{ needsSetup: boolean }>(app, "/api/v1/auth/setup");
     expect(after.body.data).toEqual({ needsSetup: false });

@@ -7,6 +7,7 @@ import { app } from "../../app-root";
 
 const HEARTBEAT_MS = 25_000;
 const PER_USER_STREAM_LIMIT = 20;
+const MAX_BUFFERED_BYTES = 2 * 1024 * 1024;
 
 const SSE_HEADERS = {
   "Content-Type": "text/event-stream; charset=utf-8",
@@ -37,7 +38,7 @@ export function openSse<E>(
   if (userStreams.length >= PER_USER_STREAM_LIMIT) {
     throw Boom.tooManyRequests("Too many streams open. Close some tabs and try again.");
   }
-  let controller: ReadableStreamDefaultController<Uint8Array> | undefined;
+  let controller: ReadableByteStreamController | undefined;
   const listeners: (() => void)[] = [];
   let closed = false;
   let release = () => {};
@@ -65,6 +66,10 @@ export function openSse<E>(
       },
       write(event: E | PingEvent | StreamErrorEvent) {
         if (closed || !controller) return;
+        if (controller.desiredSize !== null && controller.desiredSize <= 0) {
+          sse.end();
+          return;
+        }
         try {
           controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
         } catch {
@@ -86,14 +91,18 @@ export function openSse<E>(
     { userId },
   );
 
-  const body = new ReadableStream<Uint8Array>({
-    start(ctrl) {
-      controller = ctrl;
+  const body = new ReadableStream<Uint8Array>(
+    {
+      type: "bytes",
+      start(ctrl) {
+        controller = ctrl as ReadableByteStreamController;
+      },
+      cancel() {
+        finish();
+      },
     },
-    cancel() {
-      finish();
-    },
-  });
+    { highWaterMark: MAX_BUFFERED_BYTES },
+  );
 
   heartbeat = setInterval(() => {
     sse.write({ type: "ping" });

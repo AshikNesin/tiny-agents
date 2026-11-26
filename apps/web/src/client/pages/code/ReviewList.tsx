@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { ExternalLink, Plus, X } from "lucide-react";
+import { ExternalLink, Plus, SlidersHorizontal, X } from "lucide-react";
 import { toast } from "sonner";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { cn } from "@groot/ui/lib/utils";
@@ -12,6 +12,7 @@ import type { InboxPullView, PullReviewView } from "../../../shared/api/code";
 
 const REVIEWS_KEY = ["code", "reviews", "list"];
 const INBOX_KEY = ["code", "reviews", "inbox"];
+export const INBOX_SETTINGS_KEY = ["code", "reviews", "settings"];
 
 const rowClass =
   "group text-sidebar-foreground hover:bg-sidebar-accent/60 flex h-8 w-full min-w-0 items-center gap-2 rounded-lg px-2 text-left text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50";
@@ -80,8 +81,17 @@ export function ReviewList({
     () => reviewsApi.inbox(),
     "Could not read your review requests.",
   );
-  const asked = (inbox.data ?? []).filter(asksForYou);
-  const inInbox = new Set(asked.map((pull) => pull.url));
+  const settings = useResource(
+    INBOX_SETTINGS_KEY,
+    () => reviewsApi.settings(),
+    "Could not read your review list settings.",
+  );
+  const [showAll, setShowAll] = useState(false);
+  const allAsked = (inbox.data ?? []).filter(asksForYou);
+  const limit = settings.data?.limit ?? allAsked.length;
+  const asked = showAll ? allAsked : allAsked.slice(0, limit);
+  const hidden = allAsked.length - asked.length;
+  const inInbox = new Set(allAsked.map((pull) => pull.url));
   const others = (open.data ?? []).filter((review) => !inInbox.has(review.url));
 
   const openPull = async (pull: InboxPullView) => {
@@ -115,6 +125,14 @@ export function ReviewList({
     <section aria-label="Reviews" className="pt-2" data-testid="code-reviews">
       <div className="flex items-center pr-1 pb-1">
         <h2 className="text-muted-foreground flex-1 px-2 text-xs font-medium">Reviews</h2>
+        <Link
+          to="/code/settings/reviews"
+          aria-label="Review list filters"
+          title="Choose what this list shows"
+          className="text-muted-foreground hover:text-foreground hover:bg-sidebar-accent/60 flex size-5 items-center justify-center rounded outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+        >
+          <SlidersHorizontal className="size-3.5" />
+        </Link>
         <button
           type="button"
           onClick={() => onAdding(!adding)}
@@ -169,6 +187,15 @@ export function ReviewList({
               <ExternalLink className="text-muted-foreground size-3 shrink-0" aria-hidden />
             </a>
           ),
+        )}
+        {hidden > 0 && (
+          <button
+            type="button"
+            onClick={() => setShowAll(true)}
+            className={cn(rowClass, "text-muted-foreground pl-5 text-xs")}
+          >
+            {hidden} more
+          </button>
         )}
         {others.map((review) => (
           <div key={review.id} className="relative">

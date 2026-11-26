@@ -19,6 +19,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -65,12 +66,14 @@ fun HomeRoute(container: AppContainer, onNavigate: (String) -> Unit) {
     val session by container.session.state.collectAsStateWithLifecycle()
     val sessions by container.chats.sessions.collectAsStateWithLifecycle()
     val bot = HomeViewModel.current(bots, selected)
+    val threads by viewModel.threads.collectAsStateWithLifecycle()
 
     val drawer = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     var menu by remember { mutableStateOf(false) }
     var confirmNewChat by remember { mutableStateOf(false) }
     BackHandler(enabled = drawer.isOpen) { scope.launch { drawer.close() } }
+    LaunchedEffect(drawer.isOpen) { if (drawer.isOpen) viewModel.loadThreads() }
     LifecycleStartEffect(Unit) {
         viewModel.retry()
         onStopOrDispose {}
@@ -96,6 +99,7 @@ fun HomeRoute(container: AppContainer, onNavigate: (String) -> Unit) {
                     onNavigate(it)
                 },
                 onRetry = viewModel::retry,
+                threads = threads,
             )
         },
     ) {

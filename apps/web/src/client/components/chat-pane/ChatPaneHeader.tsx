@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { Globe, History, Menu, MonitorPlay, SquarePen, Users } from "lucide-react";
 import { Button } from "@groot/ui/button";
 import type { Bot } from "../../../shared/api/bots";
@@ -22,6 +23,7 @@ export function ChatPaneHeader({
   canReset,
   onOpenMenu,
   onNewChat,
+  actions,
 }: {
   bot: Bot;
   guest: boolean;
@@ -34,6 +36,7 @@ export function ChatPaneHeader({
   canReset: boolean;
   onOpenMenu: () => void;
   onNewChat: () => void;
+  actions?: ReactNode;
 }) {
   const { hasComputer, liveShown, liveBusy, liveLabel, toggleLive } = live;
   return (
@@ -124,6 +127,7 @@ export function ChatPaneHeader({
             <SquarePen className="size-4" />
           </Button>
         )}
+        {actions}
       </div>
     </header>
   );

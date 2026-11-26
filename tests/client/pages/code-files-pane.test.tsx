@@ -3,6 +3,7 @@
  */
 import { fireEvent, render as renderBare, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
+import { NO_CAPABILITIES } from "@tiny-agents/code/contracts";
 import { FilesPane } from "@/pages/code/FilesPane";
 import { AppQueryProvider } from "../query-provider";
 
@@ -54,6 +55,29 @@ async function treeRoot(): Promise<ShadowRoot> {
 afterEach(() => vi.unstubAllGlobals());
 
 describe("the Files tab", () => {
+  it("opens the worktree in an editor from the top of the tab", async () => {
+    stubFetch();
+    const harness = {
+      id: "shelley",
+      kind: "shelley",
+      label: "Shelley",
+      status: { state: "connected" as const },
+      capabilities: NO_CAPABILITIES,
+      commands: [],
+      ssh: { host: "my-vm", user: "exedev", port: null, keyFile: null },
+    };
+    render(
+      <FilesPane
+        threadId="demo:a"
+        refreshKey="1"
+        editor={{ harness, folder: "/home/exedev/code/acme--web" }}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Open in editor" }));
+    expect(await screen.findByLabelText("SSH host")).toHaveValue("exedev@my-vm");
+    expect(screen.getByText("/home/exedev/code/acme--web")).toBeInTheDocument();
+  });
+
   it("lists the worktree as folders, marking the file the agent changed", async () => {
     stubFetch();
     render(<FilesPane threadId="demo:a" refreshKey="1" />);

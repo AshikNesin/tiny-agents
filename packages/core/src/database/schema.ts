@@ -15,6 +15,10 @@ export const users = sqliteTable("users", {
   email: text("email").notNull().unique(),
   password: text("password").notNull(),
   name: text("name"),
+
+  isAdmin: integer("is_admin", { mode: "boolean" }).notNull().default(false),
+
+  tokenVersion: integer("token_version").notNull().default(0),
   ...timestamps,
 });
 

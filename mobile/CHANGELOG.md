@@ -1,12 +1,20 @@
 # Changelog
 
-## 0.14.4
+## 0.15.1
 
 ### Patch Changes
 
 - The Vault screen reads the server's new 1Password backend name (`onepassword`, for 1Password service
   accounts), so the 1Password card keeps its label and its **Move N local items here** button. The
   **Starting** badge is gone with the bundled Connect server it described.
+
+## 0.15.0
+
+### Minor Changes
+
+- The drawer lists the threads that need you or are still working above your bots, each with who
+  started it, and **All threads** opens the full list. The thread list names the bot or project
+  chat that started each thread.
 
 ## 0.14.3
 

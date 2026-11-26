@@ -93,6 +93,8 @@ data class CodeHarness(
 
 data class ThreadPr(val number: Int, val loop: String)
 
+data class ThreadStarter(val botId: String, val name: String, val project: Boolean)
+
 data class CodeThreadSummary(
     val id: String,
     val instanceId: String,
@@ -119,6 +121,7 @@ data class CodeThreadSummary(
     val reviewId: String? = null,
     val statusGroup: String? = null,
     val statusReason: String? = null,
+    val startedBy: ThreadStarter? = null,
 ) {
     companion object {
         fun from(json: JSONObject) = CodeThreadSummary(
@@ -147,6 +150,9 @@ data class CodeThreadSummary(
             reviewId = json.objOrNull("review")?.stringOrNull("id"),
             statusGroup = json.objOrNull("status")?.stringOrNull("group"),
             statusReason = json.objOrNull("status")?.stringOrNull("reason"),
+            startedBy = json.objOrNull("startedBy")?.let {
+                ThreadStarter(it.string("botId"), it.string("name"), it.bool("project"))
+            },
         )
     }
 }

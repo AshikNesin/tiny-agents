@@ -1,28 +1,114 @@
-import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
-import { ChevronRight, CircleAlert, Plus, Settings } from "lucide-react";
+import { useMemo, useState, type ReactNode } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import {
+  Archive,
+  ArchiveRestore,
+  ChevronRight,
+  CircleAlert,
+  GitPullRequest,
+  MessagesSquare,
+  Plus,
+  Settings,
+  Trash2,
+} from "lucide-react";
+import { toast } from "sonner";
 import { cn } from "@groot/ui/lib/utils";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from "@groot/ui/context-menu";
+import { useConfirm } from "@groot/ui/primitives";
+import { errorMessage } from "../../lib/errors";
 import { Spinner } from "../../components/ui/spinner";
 import { SidebarTop } from "../../components/shell/ModeSwitch";
-import { codeApi, threadPath, type HarnessInfo, type ThreadSummary } from "../../lib/code/api";
-import { statusSections, type StatusSection } from "../../lib/code/list";
+import {
+  codeApi,
+  projectChatPath,
+  threadPath,
+  type HarnessInfo,
+  type ThreadSummary,
+} from "../../lib/code/api";
+import { STATUS_DOT, starterOf, statusSections, type StatusSection } from "../../lib/code/list";
 import type { ProjectView } from "../../../shared/api/code";
 import { useResource } from "../../queries/resource";
-import { PullChip } from "./controls";
-import { Kbd, useKeyCommands } from "../../components/keys";
+import { PullChip, useArchive } from "./controls";
+import { Kbd } from "../../components/keys";
 import { ReviewList } from "./ReviewList";
 
-const DOT: Record<StatusSection["key"], string> = {
-  "needs-you": "bg-warning",
-  working: "bg-info animate-pulse motion-reduce:animate-none",
-  review: "bg-success",
-  done: "bg-muted-foreground/40",
-};
-
 function metaOf(row: ThreadSummary): string {
+  if (row.status?.reason === "finished") return "";
   if (row.status?.reason) return row.status.reason;
   if (row.queuedCount) return `${row.queuedCount} queued`;
   return row.offline ? "offline" : "";
+}
+
+function ThreadMenu({
+  row,
+  active,
+  harness,
+  children,
+}: {
+  row: ThreadSummary;
+  active: boolean;
+  harness?: HarnessInfo;
+  children: ReactNode;
+}) {
+  const navigate = useNavigate();
+  const confirm = useConfirm();
+  const archive = useArchive();
+  const can = harness?.capabilities.threads;
+  const title = row.title || "Untitled";
+  const remove = async () => {
+    const yes = await confirm({
+      title: `Delete “${title}”?`,
+      description: "The thread and its transcript are deleted for good. Its branch stays.",
+      confirmLabel: "Delete",
+      destructive: true,
+    });
+    if (!yes) return;
+    try {
+      await codeApi.remove(row.id);
+      if (active) navigate("/code");
+      toast.success(`Deleted “${title}”`);
+    } catch (error) {
+      toast.error(errorMessage(error, "Could not delete it."));
+    }
+  };
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
+      <ContextMenuContent>
+        {row.pr && (
+          <ContextMenuItem asChild>
+            <a href={row.pr.url} target="_blank" rel="noreferrer">
+              <GitPullRequest />
+              Open PR #{row.pr.number}
+            </a>
+          </ContextMenuItem>
+        )}
+        {can?.archive && (
+          <ContextMenuItem
+            onSelect={() => void archive(row, !row.archived, { leave: active && !row.archived })}
+          >
+            {row.archived ? <ArchiveRestore /> : <Archive />}
+            {row.archived ? "Unarchive" : "Archive"}
+          </ContextMenuItem>
+        )}
+        {can?.delete && (
+          <>
+            {(row.pr || can.archive) && <ContextMenuSeparator />}
+            <ContextMenuItem variant="destructive" onSelect={() => void remove()}>
+              <Trash2 />
+              Delete
+            </ContextMenuItem>
+          </>
+        )}
+      </ContextMenuContent>
+    </ContextMenu>
+  );
 }
 
 function Row({
@@ -30,45 +116,52 @@ function Row({
   section,
   active,
   project,
+  harness,
 }: {
   row: ThreadSummary;
   section: StatusSection["key"];
   active: boolean;
   project?: string;
+  harness?: HarnessInfo;
 }) {
   const meta = metaOf(row);
+  const starter = starterOf(row);
   return (
-    <Link
-      to={threadPath(row.id)}
-      aria-current={active ? "page" : undefined}
-      data-testid="code-thread-row"
-      data-thread={row.id}
-      className={cn(
-        "group flex h-8 items-center gap-2 rounded-lg px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
-        active
-          ? "bg-sidebar-accent text-sidebar-accent-foreground"
-          : "text-sidebar-foreground hover:bg-sidebar-accent/60",
-      )}
-    >
-      <span className={cn("size-1.5 shrink-0 rounded-full", DOT[section])} aria-hidden />
-      <span className={cn("min-w-0 flex-1 truncate", row.unread && "font-medium")}>
-        {row.title || "Untitled"}
-      </span>
-      {meta && <span className="text-muted-foreground shrink-0 text-xs">{meta}</span>}
-      {row.pr ? (
-        <PullChip pr={row.pr} />
-      ) : (
-        project && (
-          <span className="text-muted-foreground/70 max-w-20 shrink-0 truncate text-xs">
-            {project}
-          </span>
-        )
-      )}
-    </Link>
+    <ThreadMenu row={row} active={active} harness={harness}>
+      <Link
+        to={threadPath(row.id)}
+        aria-current={active ? "page" : undefined}
+        data-testid="code-thread-row"
+        data-thread={row.id}
+        data-status={section}
+        title={starter ? `Started by ${starter}` : undefined}
+        className={cn(
+          "group flex h-8 items-center gap-2 rounded-lg px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
+          active
+            ? "bg-sidebar-accent text-sidebar-accent-foreground"
+            : "text-sidebar-foreground hover:bg-sidebar-accent/60",
+        )}
+      >
+        <span className={cn("size-1.5 shrink-0 rounded-full", STATUS_DOT[section])} aria-hidden />
+        <span className={cn("min-w-0 flex-1 truncate", row.unread && "font-medium")}>
+          {row.title || "Untitled"}
+        </span>
+        {meta && <span className="text-muted-foreground shrink-0 text-xs">{meta}</span>}
+        {row.pr ? (
+          <PullChip pr={row.pr} />
+        ) : (
+          project && (
+            <span className="text-muted-foreground/70 max-w-20 shrink-0 truncate text-xs">
+              {project}
+            </span>
+          )
+        )}
+      </Link>
+    </ThreadMenu>
   );
 }
 
-function Archived({ activeId }: { activeId?: string }) {
+function Archived({ activeId, harnesses }: { activeId?: string; harnesses: HarnessInfo[] }) {
   const [open, setOpen] = useState(false);
   return (
     <section className="pt-1">
@@ -82,12 +175,12 @@ function Archived({ activeId }: { activeId?: string }) {
         <ChevronRight className={cn("size-3 transition-transform", open && "rotate-90")} />
         Archived
       </button>
-      {open && <ArchivedRows activeId={activeId} />}
+      {open && <ArchivedRows activeId={activeId} harnesses={harnesses} />}
     </section>
   );
 }
 
-function ArchivedRows({ activeId }: { activeId?: string }) {
+function ArchivedRows({ activeId, harnesses }: { activeId?: string; harnesses: HarnessInfo[] }) {
   const { data } = useResource(
     ["code", "threads", "archived"],
     () => codeApi.list("archived"),
@@ -99,9 +192,45 @@ function ArchivedRows({ activeId }: { activeId?: string }) {
   return (
     <div className="space-y-px">
       {rows.map((row) => (
-        <Row key={row.id} row={row} section="done" active={row.id === activeId} />
+        <Row
+          key={row.id}
+          row={row}
+          section="done"
+          active={row.id === activeId}
+          harness={harnesses.find((h) => h.id === row.instanceId)}
+        />
       ))}
     </div>
+  );
+}
+
+function ProjectChats({ projects, activeChat }: { projects: ProjectView[]; activeChat?: string }) {
+  if (projects.length === 0) return null;
+  return (
+    <section aria-label="Project chats" className="space-y-px pt-2">
+      {projects.map((project) => {
+        const active = project.id === activeChat;
+        return (
+          <Link
+            key={project.id}
+            to={projectChatPath(project.id)}
+            aria-current={active ? "page" : undefined}
+            data-testid="code-project-chat"
+            className={cn(
+              "flex h-8 items-center gap-2 rounded-lg px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
+              active
+                ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                : "text-sidebar-foreground hover:bg-sidebar-accent/60",
+            )}
+          >
+            <MessagesSquare className="size-4 shrink-0" aria-hidden />
+            <span className="min-w-0 flex-1 truncate">
+              {projects.length > 1 ? `${project.name} chat` : "Project chat"}
+            </span>
+          </Link>
+        );
+      })}
+    </section>
   );
 }
 
@@ -110,21 +239,20 @@ export function ThreadList({
   harnesses,
   projects,
   activeId,
+  activeChat,
   onNew,
   addingReview,
   onAddingReview,
-  onCommands,
 }: {
   threads: ThreadSummary[] | null;
   harnesses: HarnessInfo[];
   projects?: ProjectView[] | null;
   activeId?: string;
+  activeChat?: string;
   onNew(): void;
   addingReview: boolean;
   onAddingReview(open: boolean): void;
-  onCommands(): void;
 }) {
-  const setHelp = useKeyCommands((s) => s.setHelp);
   const sections = useMemo(() => statusSections(threads ?? []), [threads]);
   const projectName = (id?: string | null) =>
     (projects?.length ?? 0) > 1 ? projects?.find((p) => p.id === id)?.name : undefined;
@@ -145,6 +273,7 @@ export function ThreadList({
         </button>
       </div>
       <nav aria-label="Threads" className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
+        <ProjectChats projects={projects ?? []} activeChat={activeChat} />
         {threads === null ? (
           <Spinner className="mx-2 my-2 size-4" />
         ) : sections.length === 0 ? (
@@ -163,6 +292,7 @@ export function ThreadList({
                     section={section.key}
                     active={row.id === activeId}
                     project={projectName(row.projectId)}
+                    harness={harnesses.find((h) => h.id === row.instanceId)}
                   />
                 ))}
               </div>
@@ -170,7 +300,7 @@ export function ThreadList({
           ))
         )}
         <ReviewList activeId={activeId} adding={addingReview} onAdding={onAddingReview} />
-        <Archived activeId={activeId} />
+        <Archived activeId={activeId} harnesses={harnesses} />
       </nav>
       {offline.map((h) => (
         <p
@@ -202,26 +332,6 @@ export function ThreadList({
           <Settings className="size-4" />
           Settings
         </Link>
-        <span className="flex-1" />
-        <button
-          type="button"
-          onClick={() => setHelp(true)}
-          title="Show the keys"
-          aria-label="Show the keys"
-          className="text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-foreground flex h-8 items-center gap-1.5 rounded-lg px-2 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-        >
-          <Kbd keys="?" />
-        </button>
-        <button
-          type="button"
-          onClick={onCommands}
-          title="Run a command or jump to a thread"
-          data-testid="code-commands"
-          className="text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-foreground flex h-8 items-center gap-1.5 rounded-lg px-2 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-        >
-          <Kbd keys=":" />
-          Commands
-        </button>
       </div>
     </div>
   );

@@ -1,5 +1,79 @@
 # @groot/jobs
 
+## 3.1.0
+
+### Minor Changes
+
+- [#178](https://github.com/AshikNesin/groot/pull/178) [`cb37122`](https://github.com/AshikNesin/groot/commit/cb37122eed238dbd14f60ffb1cc4214f2bf8fa68) Thanks [@AshikNesin](https://github.com/AshikNesin)! - The jobs API (`/api/v1/jobs`) is admin-only. Its own comment called it an admin
+  API, but it only required a session, so any signed-in user could create jobs
+  with arbitrary payloads, overwrite schedules and purge the queue. Every route
+  now answers `403` to a session that is not an admin.
+  
+  Users gain an `isAdmin` column. It is read from the database row on every
+  request, never from the session token, so promoting or demoting an account
+  takes effect at once. `requireAdmin` (`@groot/core/session`) is the guard, and
+  `jobRoutes` applies it itself, so any app that mounts it is covered.
+  
+  - The first account (first-run setup) is an admin. On an existing install the
+    migration promotes the lowest-id account, so someone can still open the
+    dashboard after upgrading.
+  - `SessionUser` and `/auth/me` include `isAdmin`.
+  - A `NavDestination` can be `adminOnly`: `useShellConfig()` hides it from
+    non-admins in the sidebar, the account menu and ⌘K, and
+    `<ProtectedRoute adminOnly>` keeps them off the page. The Jobs page is marked
+    this way in the app.
+
+- [#178](https://github.com/AshikNesin/groot/pull/178) [`cb37122`](https://github.com/AshikNesin/groot/commit/cb37122eed238dbd14f60ffb1cc4214f2bf8fa68) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Fixes for races between a check and the write that follows it.
+  
+  - **A `singletonKey` now allows one pending job, however many enqueues race.**
+    The rule was only a lookup before the insert, and concurrent `addJob` calls
+    interleaved around it: 50 at once produced 50 jobs. A unique index
+    (`jobs_singleton_idx`, on name and key where the job is `created` or
+    `active`) enforces it in the database. The migration first cancels duplicates
+    a database may already hold, keeping a running job over a waiting one, else
+    the earliest.
+  - **`kv.get()` no longer deletes a value written while it was expiring the old
+    one.** The lazy delete of an expired row now matches the expiry it read.
+  - **Renaming a passkey is one statement scoped to its owner.** The ownership
+    check and the update were separate, and a passkey deleted in between turned
+    the rename into a `500`; it answers `404` now.
+
+### Patch Changes
+
+- [#173](https://github.com/AshikNesin/groot/pull/173) [`941d0fd`](https://github.com/AshikNesin/groot/commit/941d0fdc04c78614fb9ecd430b36db80e56bf6dd) Thanks [@AshikNesin](https://github.com/AshikNesin)! - fix: make the remaining implicit state machines explicit, and index them all
+  
+  - shell: `/login` runs one sign-in at a time. While a password or passkey
+    sign-in runs, its button shows that it is busy and the other method is
+    disabled, so a double click no longer starts a second WebAuthn prompt (which
+    the browser refuses with an error toast).
+  - shell: `CodeMirrorEditor` loads as `loading`, then `ready` or `failed`. When
+    its chunks fail to load (a dropped connection, or a deploy under an open
+    tab) it renders a plain text field that still edits the value, where it
+    used to stay blank.
+  - jobs: the bulk "Rerun N" button counts and sends only the selected jobs the
+    job state machine allows to re-run (completed and failed); with none it is
+    disabled and says why. It used to send every selected job, and the server
+    refused the rest.
+  - jobs: the runner's tick is one tagged slot (`idle`, or `running` with a
+    `rerun` flag) instead of two fields that had to agree. Behaviour is
+    unchanged.
+  - web: the Node process moves from `serving` to `draining` on the first
+    SIGTERM/SIGINT. A second signal during the drain now exits at once, where it
+    used to start a second shutdown that cut the first one short.
+  - docs: `docs/reference/state-machines.md` lists every state machine with its
+    states, the file that moves it and the test that pins it.
+
+- [#178](https://github.com/AshikNesin/groot/pull/178) [`05e6aef`](https://github.com/AshikNesin/groot/commit/05e6aefa150ed6dba7beb5c4a77ad518089dd8d9) Thanks [@AshikNesin](https://github.com/AshikNesin)! - The jobs API has upper bounds where it had none. `retryLimit` is at most 100,
+  `retryDelaySeconds` and `delaySeconds` at most a year, `priority` within
+  ±1,000,000, and one bulk-rerun names at most 500 jobs (the pagination limit).
+  Before, a request could schedule a job with a million retries or a delay past
+  the largest valid `Date`, or rerun thousands of jobs at once. The bounds live
+  in the route's Zod schema, so `addJob()` is unchanged for application code.
+- Updated dependencies [[`cb37122`](https://github.com/AshikNesin/groot/commit/cb37122eed238dbd14f60ffb1cc4214f2bf8fa68), [`8fe9496`](https://github.com/AshikNesin/groot/commit/8fe949668a6a34e1710b9378683ecc03cf1ca843), [`cb37122`](https://github.com/AshikNesin/groot/commit/cb37122eed238dbd14f60ffb1cc4214f2bf8fa68), [`941d0fd`](https://github.com/AshikNesin/groot/commit/941d0fdc04c78614fb9ecd430b36db80e56bf6dd), [`cb37122`](https://github.com/AshikNesin/groot/commit/cb37122eed238dbd14f60ffb1cc4214f2bf8fa68), [`66f6efb`](https://github.com/AshikNesin/groot/commit/66f6efb5c9af1c643025dc566ff5fc8e67037713), [`651e710`](https://github.com/AshikNesin/groot/commit/651e71005e9a9b2abc510b0a95b37611015b692d), [`23f14f6`](https://github.com/AshikNesin/groot/commit/23f14f6b843093bd06521bde13cbf592aee4127b), [`05e6aef`](https://github.com/AshikNesin/groot/commit/05e6aefa150ed6dba7beb5c4a77ad518089dd8d9), [`cb37122`](https://github.com/AshikNesin/groot/commit/cb37122eed238dbd14f60ffb1cc4214f2bf8fa68)]:
+  - @groot/core@2.4.0
+  - @groot/shell@3.2.0
+  - @groot/ui@1.3.1
+
 ## 3.0.4
 
 ### Patch Changes
@@ -26,7 +100,6 @@
 - Updated dependencies [[`879de1d`](https://github.com/AshikNesin/tiny-agents/commit/879de1db33c332dfbf9ab98bb83fca2f53ed108a)]:
   - @groot/core@2.3.1
   - @groot/shell@3.1.1
-
 ## 3.0.1
 
 ### Patch Changes

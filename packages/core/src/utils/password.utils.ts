@@ -6,15 +6,11 @@ import {
   utf8Encode,
   type Bytes,
 } from "./encoding.utils";
+import { config } from "../config";
 
 const ALGORITHM = "pbkdf2-sha256";
-const ITERATIONS = 600_000;
 const SALT_BYTES = 16;
 const KEY_BITS = 256;
-
-export function dummyPasswordHash(): string {
-  return `${ALGORITHM}$${ITERATIONS}$${"A".repeat(22)}$${"A".repeat(43)}`;
-}
 
 async function derive(password: string, salt: Bytes, iterations: number): Promise<Bytes> {
   const key = await crypto.subtle.importKey("raw", utf8Encode(password), "PBKDF2", false, [
@@ -30,8 +26,10 @@ async function derive(password: string, salt: Bytes, iterations: number): Promis
 
 export async function hashPassword(password: string): Promise<string> {
   const salt = crypto.getRandomValues(new Uint8Array(SALT_BYTES));
-  const hash = await derive(password, salt, ITERATIONS);
-  return `${ALGORITHM}$${ITERATIONS}$${toBase64Url(salt)}$${toBase64Url(hash)}`;
+
+  const iterations = config.auth.passwordIterations;
+  const hash = await derive(password, salt, iterations);
+  return `${ALGORITHM}$${iterations}$${toBase64Url(salt)}$${toBase64Url(hash)}`;
 }
 
 export async function verifyPassword(password: string, stored: string): Promise<boolean> {
@@ -49,7 +47,7 @@ export async function verifyPassword(password: string, stored: string): Promise<
 
 export function needsRehash(stored: string): boolean {
   const [algorithm, iterations] = stored.split("$");
-  return algorithm !== ALGORITHM || Number(iterations) !== ITERATIONS;
+  return algorithm !== ALGORITHM || Number(iterations) !== config.auth.passwordIterations;
 }
 
 function isLegacyBcrypt(stored: string): boolean {

@@ -101,7 +101,7 @@ keeps the JWT in an HttpOnly `token` cookie, so the store holds only the user:
 
 | Member                                          | Does                                                                                            |
 | ----------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| `user`, `isAuthenticated`, `hasCheckedAuth`     | The signed-in `SessionUser` (`{ id, email, name }`); whether `checkAuth()` settled              |
+| `user`, `isAuthenticated`, `hasCheckedAuth`     | The signed-in `SessionUser` (`{ id, email, name, isAdmin }`); whether `checkAuth()` settled     |
 | `selectAuthStatus(state)`                       | The session as one value: `unknown`, `signedOut`, or `signedIn` with its `user`                 |
 | `login(email, password)` / `loginWithPasskey()` | Sign in (`POST /auth/login`, or the WebAuthn ceremony); resolve with the user, or reject        |
 | `setup({ email, password, name? })`             | First-run setup (`POST /auth/setup`): create the first account and sign in; 403 once one exists |

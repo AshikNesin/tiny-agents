@@ -10,6 +10,7 @@ import type {
   ProjectUpdateBody,
   ProjectView,
   InboxPullView,
+  ReviewInboxSettings,
   PullReviewView,
   PullThreadsView,
   AskReviewBody,
@@ -27,6 +28,7 @@ import type {
   SubmitReviewBody,
   ThreadPullsView,
 } from "../../../shared/api/code";
+import type { Bot } from "../../../shared/api/bots";
 
 const base = "/code";
 const thread = (id: string) => `${base}/threads/${encodeURIComponent(id)}`;
@@ -54,6 +56,7 @@ export const projectsApi = {
   update: (id: string, body: ProjectUpdateBody) =>
     apiClient.patch<ProjectView>(`${base}/projects/${encodeURIComponent(id)}`, body),
   remove: (id: string) => apiClient.delete(`${base}/projects/${encodeURIComponent(id)}`),
+  openChat: (id: string) => apiClient.post<Bot>(`${base}/projects/${encodeURIComponent(id)}/chat`),
 
   pulls: (id: string, fresh = true) =>
     apiClient.get<ThreadPullsView>(`${thread(id)}/pr`, fresh ? {} : { fresh: "false" }),
@@ -115,6 +118,9 @@ export const reviewsApi = {
   list: () => apiClient.get<PullReviewView[]>(`${base}/reviews`),
   inbox: (filter: Record<string, string> = {}) =>
     apiClient.get<InboxPullView[]>(`${base}/reviews/inbox`, filter),
+  settings: () => apiClient.get<ReviewInboxSettings>(`${base}/reviews/settings`),
+  saveSettings: (change: Partial<ReviewInboxSettings>) =>
+    apiClient.put<ReviewInboxSettings>(`${base}/reviews/settings`, change),
   open: (pr: string) => apiClient.post<PullReviewView>(`${base}/reviews`, { pr }),
   get: (id: string) => apiClient.get<PullReviewView>(`${base}/reviews/${encodeURIComponent(id)}`),
   ask: (id: string, body: AskReviewBody) =>

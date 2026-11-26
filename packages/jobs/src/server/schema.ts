@@ -28,9 +28,10 @@ export const jobs = sqliteTable(
     index("jobs_state_completed_at_idx").on(table.state, table.completedAt),
     index("jobs_name_idx").on(table.name),
     index("jobs_created_at_idx").on(table.createdAt),
-    uniqueIndex("jobs_singleton_active_idx")
+
+    uniqueIndex("jobs_singleton_idx")
       .on(table.name, table.singletonKey)
-      .where(sql`state in ('created', 'active') and singleton_key is not null`),
+      .where(sql`${table.state} IN ('created', 'active')`),
   ],
 );
 

@@ -41,6 +41,7 @@ import groot.mobile.data.api.CodeThreadSummary
 import groot.mobile.data.api.SseSignal
 import groot.mobile.data.code.CodeStatusSection
 import groot.mobile.data.code.codeStatusSections
+import groot.mobile.data.code.starterOf
 import groot.mobile.feature.chat.TypingDots
 import groot.mobile.ui.brand.Accents
 import groot.mobile.ui.brand.AppIcons
@@ -324,6 +325,7 @@ private fun ThreadRow(row: CodeThreadSummary, group: String, harness: String, no
             )
             val details = listOfNotNull(
                 row.statusReason,
+                starterOf(row)?.let { "by $it" },
                 harness,
                 row.branch,
                 row.pr?.let { "PR #${it.number}" + loopNote(it.loop) },

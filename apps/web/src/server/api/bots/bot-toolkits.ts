@@ -20,6 +20,20 @@ export const BOT_TOOLKITS = [
   "code",
 ] as const;
 
+const PROJECT_TOOLKIT = "project";
+
+const PROJECT_BOT_TOOLKITS = [
+  PROJECT_TOOLKIT,
+  "tasks",
+  "routines",
+  "web",
+  "skills",
+  "memory",
+  "today",
+  "questions",
+  "attachments",
+] as const;
+
 export const VISION_TOOLKIT = "vision";
 
 export const TOOL_SEARCH_TOOLKIT = "tool-search";
@@ -80,12 +94,16 @@ export interface BotConnectionTools extends ConnectionToolColumns {
 }
 
 export function botToolkits(
-  bot: { modelId: string | null; connections?: readonly BotConnectionTools[] },
+  bot: {
+    modelId: string | null;
+    projectId?: string | null;
+    connections?: readonly BotConnectionTools[];
+  },
   catalog: Pick<ModelCatalog, "get" | "forRole">,
 ): string[] {
   const connections = bot.connections ?? [];
   return [
-    ...BOT_TOOLKITS,
+    ...(bot.projectId ? PROJECT_BOT_TOOLKITS : BOT_TOOLKITS),
     ...(modelSeesImages(catalog, bot.modelId) ? [] : [VISION_TOOLKIT]),
     ...connections.map((connection) => connectionCapabilityId(connection.slug)),
     TOOL_SEARCH_TOOLKIT,
@@ -94,5 +112,7 @@ export function botToolkits(
 
 export function missingToolkits(installed: Iterable<string>): string[] {
   const have = new Set(installed);
-  return [...BOT_TOOLKITS, VISION_TOOLKIT, TOOL_SEARCH_TOOLKIT].filter((id) => !have.has(id));
+  return [...BOT_TOOLKITS, PROJECT_TOOLKIT, VISION_TOOLKIT, TOOL_SEARCH_TOOLKIT].filter(
+    (id) => !have.has(id),
+  );
 }

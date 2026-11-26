@@ -1,4 +1,4 @@
-import { and, desc, eq, isNotNull } from "drizzle-orm";
+import { and, asc, desc, eq, isNotNull } from "drizzle-orm";
 import { createId } from "@groot/core/utils/id.utils";
 import {
   LEGACY_INSTANCE_ID,
@@ -11,6 +11,8 @@ import {
   type TranscriptItem,
 } from "@tiny-agents/code/server";
 import {
+  bots,
+  codeHandoffs,
   codePullRequests,
   codeReviews,
   codeRuns,
@@ -81,10 +83,11 @@ interface Decoration {
   pull: { number: number; loop: string; url: string } | null;
   review: { id: string; number: number } | null;
   lastRun: { status: RunStatus; workflow: string | null } | null;
+  startedBy: ThreadSummary["startedBy"];
 }
 
 async function decorations(): Promise<Map<string, Decoration>> {
-  const [pulls, reviews, runs] = await Promise.all([
+  const [pulls, reviews, runs, starters] = await Promise.all([
     db
       .select({
         threadId: codePullRequests.threadId,
@@ -107,10 +110,21 @@ async function decorations(): Promise<Map<string, Decoration>> {
       })
       .from(codeRuns)
       .orderBy(desc(codeRuns.seq)),
+    db
+      .select({
+        threadId: codeHandoffs.threadId,
+        botId: bots.id,
+        name: bots.name,
+        projectId: bots.projectId,
+      })
+      .from(codeHandoffs)
+      .innerJoin(bots, eq(bots.id, codeHandoffs.botId))
+      .where(isNotNull(codeHandoffs.threadId))
+      .orderBy(asc(codeHandoffs.createdAt)),
   ]);
   const out = new Map<string, Decoration>();
   const entry = (id: string) => {
-    const found = out.get(id) ?? { pull: null, review: null, lastRun: null };
+    const found = out.get(id) ?? { pull: null, review: null, lastRun: null, startedBy: null };
     out.set(id, found);
     return found;
   };
@@ -128,6 +142,14 @@ async function decorations(): Promise<Map<string, Decoration>> {
   for (const run of runs) {
     const found = entry(run.threadId);
     found.lastRun ??= { status: run.status, workflow: run.workflow };
+  }
+  for (const starter of starters) {
+    const found = entry(starter.threadId!);
+    found.startedBy ??= {
+      botId: starter.botId,
+      name: starter.name,
+      project: starter.projectId !== null,
+    };
   }
   return out;
 }
@@ -168,6 +190,7 @@ function summaryOf(
     pr: pull && pull.loop !== "merged" ? pull : null,
     review: extra?.review ?? null,
     offline: live === undefined,
+    startedBy: extra?.startedBy ?? null,
     status: threadStatus({
       working,
       attention: row.attention,

@@ -5,6 +5,13 @@ export function projectHeader(repo: string, branch: string, base: string): strin
   return `[Project ${repo} · branch ${branch} · base ${base}]`;
 }
 
+const INSTRUCTIONS_HEAD = "The owner's instructions for this project:";
+const INSTRUCTIONS_END = "----- END OF PROJECT INSTRUCTIONS -----";
+
+export function projectInstructionsBlock(instructions: string): string {
+  return `${INSTRUCTIONS_HEAD}\n${instructions}\n${INSTRUCTIONS_END}`;
+}
+
 export function branchTitle(branch: string | null | undefined): string | null {
   const words = (branch ?? "").split("/").pop()!.replace(/[-_]+/g, " ").trim();
   return words ? words[0]!.toUpperCase() + words.slice(1) : null;
@@ -21,7 +28,8 @@ const PREAMBLE = new RegExp(
   "^\\[Project (\\S+) · branch (\\S+) · base (\\S+)\\]\\n" +
     PROJECT_RULE.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") +
     "(?:\\nRun `[^\\n]*` before you report done\\.)?" +
-    "(\\nNote: the project's setup script failed:\\n```\\n[\\s\\S]*?\\n```)?\\n\\n",
+    "(\\nNote: the project's setup script failed:\\n```\\n[\\s\\S]*?\\n```)?" +
+    `(?:\\n${INSTRUCTIONS_HEAD}\\n[\\s\\S]*?\\n${INSTRUCTIONS_END})?\\n\\n`,
 );
 
 export function splitProjectPreamble(

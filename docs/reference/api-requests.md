@@ -13,13 +13,14 @@ ADMIN_KEY=dev-only-admin-key      # ADMIN_AUTH_KEY (the dev default)
 
 > Everything under `/api/v1` except password and passkey login needs a JWT. The
 > login response sets an httpOnly `token` cookie for browsers and returns the
-> token for scripts: pass it as `Authorization: Bearer $TOKEN`. User management
+> token for scripts: pass it as `Authorization: Bearer $TOKEN`. Two surfaces
+> need more: the jobs API answers only an admin's session, and user management
 > uses the admin key instead (`X-Admin-Auth-Key`).
 
 ## Get a token
 
 ```bash
-# 200 → { token, user: { id, email, name } }
+# 200 → { token, user: { id, email, name, isAdmin } }
 TOKEN=$(curl -s -X POST $BASE/api/v1/auth/login \
   -H "Content-Type: application/json" \
   -d '{"email":"demo@example.com","password":"demo@example.com"}' | jq -r .data.token)
@@ -48,7 +49,7 @@ curl -H "X-Admin-Auth-Key: $ADMIN_KEY" $BASE/api/v1/auth/users
 # Current user (JWT) → 200
 curl -H "Authorization: Bearer $TOKEN" $BASE/api/v1/auth/me
 
-# Logout (JWT; clears the cookie) → 200
+# Logout (JWT; ends every session of the account) → 200
 curl -H "Authorization: Bearer $TOKEN" -X POST $BASE/api/v1/auth/logout
 ```
 
@@ -88,7 +89,10 @@ curl -H "Authorization: Bearer $TOKEN" $BASE/api/v1/routines/runs/recent
 curl -H "Authorization: Bearer $TOKEN" -X DELETE $BASE/api/v1/routines/$ROUTINE_ID
 ```
 
-## Jobs (JWT)
+## Jobs (admin session)
+
+Every route answers `403` unless the token belongs to an admin. The first
+account created is one.
 
 ```bash
 # Queue a job → 201 { jobId, jobName, data }. It runs once a handler is

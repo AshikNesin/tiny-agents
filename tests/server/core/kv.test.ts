@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import { eq } from "drizzle-orm";
 import { createNamespaceKv, kv, purgeExpiredKv } from "@groot/core/kv";
+import { db, kv as kvTable } from "@groot/core/database";
 import { useFreshTestDatabase } from "../fixtures/test-db";
 
 beforeEach(useFreshTestDatabase);
@@ -95,6 +97,33 @@ describe("kv", () => {
     await kv.set("stale", "old", 1);
     vi.setSystemTime(Date.now() + 5);
     expect(await kv.take("stale")).toBeUndefined();
+  });
+
+  it("keeps a value written while get() is expiring the old one", async () => {
+    await kv.set("raced", "stale", 1);
+    vi.setSystemTime(Date.now() + 5);
+
+    const builder = db.select().from(kvTable).where(eq(kvTable.key, "x")).limit(1);
+    const prototype = Object.getPrototypeOf(builder) as { limit: (...args: unknown[]) => unknown };
+    const realLimit = prototype.limit;
+    let raced = false;
+    prototype.limit = function (this: unknown, ...args: unknown[]) {
+      const rows = realLimit.apply(this, args);
+      if (raced) return rows;
+      raced = true;
+      return Promise.resolve(rows).then(async (read) => {
+        await kv.set("raced", "fresh");
+        return read;
+      });
+    };
+
+    try {
+      expect(await kv.get("raced")).toBeUndefined();
+
+      expect(await kv.get("raced")).toBe("fresh");
+    } finally {
+      prototype.limit = realLimit;
+    }
   });
 
   it("claims a key at most once per interval", async () => {

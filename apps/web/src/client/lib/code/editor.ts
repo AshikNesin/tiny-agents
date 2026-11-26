@@ -15,9 +15,14 @@ function needsAlias(target: EditorSshTarget): boolean {
   return target.port !== null || target.keyFile !== null;
 }
 
+function sshHost(target: EditorSshTarget, appHost: string): string {
+  if (target.host) return target.host;
+  return /^(localhost|127(\.\d+){3}|0\.0\.0\.0|\[?::1\]?)$/i.test(appHost) ? "127.0.0.1" : appHost;
+}
+
 export function suggestedHost(target: EditorSshTarget, appHost: string): string {
   if (needsAlias(target)) return SANDBOX_ALIAS;
-  const host = target.host ?? appHost;
+  const host = sshHost(target, appHost);
   return target.user ? `${target.user}@${host}` : host;
 }
 
@@ -25,7 +30,7 @@ export function sshConfig(target: EditorSshTarget, appHost: string): string | nu
   if (!needsAlias(target)) return null;
   return [
     `Host ${SANDBOX_ALIAS}`,
-    `  HostName ${target.host ?? appHost}`,
+    `  HostName ${sshHost(target, appHost)}`,
     target.port !== null && `  Port ${target.port}`,
     target.user && `  User ${target.user}`,
     target.keyFile && `  IdentityFile ${target.keyFile}`,

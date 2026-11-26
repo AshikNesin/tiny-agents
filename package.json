@@ -32,7 +32,7 @@
     "verify": "pnpm verify:static && pnpm test && pnpm test:client",
     "verify:static": "node scripts/gates.mjs",
     "test:watch": "NODE_ENV=test vp test --config vitest.config.server.ts",
-    "test:e2e": "PORTLESS=0 playwright test",
+    "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "db:migrate": "tsx scripts/db-migrate.ts",
     "db:seed": "tsx scripts/seed.ts",
@@ -64,7 +64,9 @@
     "check:pnpm-policy": "tsx scripts/check-pnpm-policy.ts",
     "check:old-modules": "tsx scripts/check-old-modules.ts",
     "check:comments": "tsx scripts/check-comment-ratchet.ts",
-    "comments:ratchet": "tsx scripts/check-comment-ratchet.ts --write"
+    "comments:ratchet": "tsx scripts/check-comment-ratchet.ts --write",
+    "dev:portless": "NODE_ENV=development PORTLESS_PORT=8888 portless run --name $npm_package_name tsx scripts/dev.ts",
+    "check:action-pinning": "tsx scripts/check-action-pinning.ts"
   },
   "dependencies": {
     "@1password/sdk": "0.5.0",
@@ -98,7 +100,7 @@
     "drizzle-orm": "^0.45.4",
     "fflate": "^0.8.3",
     "hono": "^4.13.17",
-    "jose": "^6.2.15",
+    "jose": "^6.2.16",
     "js-yaml": "^5.5.0",
     "lucide-react": "^1.61.0",
     "ms": "2.1.3",
@@ -124,6 +126,7 @@
   "devDependencies": {
     "@changesets/changelog-github": "^1.0.1",
     "@changesets/cli": "^3.0.3",
+    "@earendil-works/pi-schema": "^1.5.0",
     "@playwright/test": "^1.64.1",
     "@sentry/esbuild-plugin": "^11.9.0",
     "@sentry/vite-plugin": "^11.9.0",

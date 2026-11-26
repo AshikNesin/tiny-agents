@@ -46,7 +46,7 @@ export interface SshEndpoint {
 }
 
 const DEFAULT_SSH_PORT = 22;
-const DEFAULT_SSH_USER = "exedev";
+export const DEFAULT_SSH_USER = "exedev";
 
 export function hostKeyHash(raw: Buffer): string {
   return `sha256:${createHash("sha256").update(raw).digest("base64")}`;

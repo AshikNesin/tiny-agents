@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { describe, expect, it } from "vite-plus/test";
 import { db, users } from "@groot/core/database";
 import { needsRehash } from "@groot/core/utils/password.utils";
-import { adminHeaders, api, createTestApp, signIn } from "../helpers";
+import { adminHeaders, api, createTestApp, setAppConfig, signIn } from "../helpers";
 
 const app = createTestApp();
 
@@ -141,5 +141,39 @@ describe("auth API", () => {
       headers: adminHeaders(),
     });
     expect(list.body.data?.some((u) => u.email === "new@example.com")).toBe(true);
+  });
+
+  it("rate-limits admin key guesses, so a weak key cannot be brute-forced", async () => {
+    const guarded = createTestApp({
+      clientAddress: (c) => c.req.header("x-test-peer") ?? "unknown",
+    });
+    setAppConfig({ rateLimits: { admin: { windowMs: 60_000, max: 3 } } });
+    const guess = () =>
+      api(guarded, "/api/v1/auth/users", {
+        headers: { "x-admin-auth-key": "wrong", "x-test-peer": "203.0.113.9" },
+      });
+
+    for (let i = 0; i < 3; i++) expect((await guess()).status).toBe(403);
+
+    const fourth = await guess();
+    expect(fourth.status).toBe(429);
+    expect(fourth.body.error?.code).toBe("RATE_LIMIT_EXCEEDED");
+
+    expect(
+      (
+        await api(guarded, "/api/v1/auth/users", {
+          headers: { ...adminHeaders(), "x-test-peer": "203.0.113.9" },
+        })
+      ).status,
+    ).toBe(429);
+
+    expect(
+      (
+        await api(guarded, "/api/v1/auth/users", {
+          headers: { ...adminHeaders(), "x-test-peer": "203.0.113.10" },
+        })
+      ).status,
+    ).toBe(200);
+    setAppConfig();
   });
 });

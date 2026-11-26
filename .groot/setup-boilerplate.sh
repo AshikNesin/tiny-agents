@@ -41,22 +41,6 @@ check_git_repo() {
     fi
 }
 
-setup_portless() {
-    print_info "Checking portless (required by pnpm dev; serves https://<app>.localhost)..."
-    if command -v portless &> /dev/null; then
-        print_success "portless is installed"
-        return
-    fi
-    read -rp "Install portless globally via npm? (Y/n): " -r
-    echo
-    if [[ ! $REPLY =~ ^[Nn]$ ]]; then
-        npm install -g portless || { print_warning "Failed — run 'npm install -g portless' manually."; return; }
-        command -v portless &> /dev/null && print_success "portless installed" || print_warning "Installation may have failed"
-    else
-        print_warning "Skipped. pnpm dev needs it: npm install -g portless"
-    fi
-}
-
 update_app_name() {
     print_info "Configure your application name..."
     local current_name
@@ -114,7 +98,7 @@ install_dependencies() {
 final_steps() {
     echo ""
     print_info "Next steps:"
-    echo "  1. pnpm dev                      # SQLite + Vite, zero config"
+    echo "  1. pnpm dev                      # SQLite + Vite on http://localhost:3000, zero config"
     echo "  2. Sign in with demo@example.com / demo@example.com"
     echo "  3. Deploy: docs/guides/deploy.md"
     echo ""
@@ -128,7 +112,6 @@ main() {
     echo "╚════════════════════════════════════════════════════════════╝"
     echo ""
     check_git_repo
-    setup_portless
     update_app_name
     install_dependencies
     final_steps

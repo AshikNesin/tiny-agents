@@ -14,6 +14,7 @@ import { setTerminalServiceForTests } from "../../../../apps/web/src/server/api/
 import type { TerminalService } from "../../../../packages/sandbox/src/terminal/terminal";
 import type {
   InboxPullView,
+  ReviewInboxSettings,
   ProjectView,
   PullReviewView,
   PullThreadsView,
@@ -36,6 +37,7 @@ let harness: FakeHarness;
 beforeEach(async () => {
   await resetAppTables();
   await createNamespaceKv("CODE_GITHUB").clear();
+  await createNamespaceKv("CODE_REVIEWS").clear();
   local = localExec();
   bare = await bareRepo(local);
   github = fakeGitHub(local, bare);
@@ -419,7 +421,7 @@ describe("reviewing a Code thread's own PR", () => {
     expect(await sh(local, `git -C ${worktree} log -1 --format=%s`)).toBe("not pushed");
   });
 
-  it("lets go of the thread's worktree when the thread is archived; opening again checks it out", async () => {
+  it("lets go of the thread's worktree when the thread is archived and checks the PR out on its own", async () => {
     const { threadId, head } = await threadPull();
     const review = await open();
     const { onThreadArchived } =
@@ -427,8 +429,8 @@ describe("reviewing a Code thread's own PR", () => {
 
     await onThreadArchived(threadId, true);
 
-    const files = await call("GET", `/threads/${encodeURIComponent(review.key)}/review/files`);
-    expect(files.status).toBe(404);
+    expect((await reviewFiles(review.key)).map((f) => f.path)).toEqual(["src/retry.ts"]);
+    expect(await sh(local, `git -C ${REVIEW_DIR()} rev-parse HEAD`)).toBe(head);
     const again = await open();
     expect(again).toMatchObject({ id: review.id, worktreeThreadId: null });
     expect(await sh(local, `git -C ${REVIEW_DIR()} rev-parse HEAD`)).toBe(head);
@@ -812,6 +814,7 @@ describe("the review inbox", () => {
     headSha: `head${number}`,
     decision: null,
     lastReview: null,
+    bot: false,
     ...over,
   });
 
@@ -855,6 +858,7 @@ describe("the review inbox", () => {
       updatedSince: "2026-10-07",
       repos: [{ owner: "acme", name: "web" }],
       drafts: false,
+      direct: true,
     });
   });
 
@@ -866,8 +870,64 @@ describe("the review inbox", () => {
     await newProject();
     const res = await call<InboxPullView[]>("GET", "/reviews/inbox?repo=projects");
 
-    expect(github.inboxFilter).toEqual({ repos: [{ owner: "acme", name: "web" }] });
+    expect(github.inboxFilter).toEqual({
+      repos: [{ owner: "acme", name: "web" }],
+      drafts: false,
+      direct: true,
+    });
     expect(res.body.data!.map((p) => p.number)).toEqual([7]);
+  });
+
+  it("leaves out team requests, drafts and bots until the settings let them in", async () => {
+    const defaults = await call<ReviewInboxSettings>("GET", "/reviews/settings");
+    expect(defaults.body.data).toEqual({
+      repos: "all",
+      direct: true,
+      drafts: false,
+      bots: false,
+      mute: [],
+      limit: 10,
+    });
+    github.inbox = [pull(7), pull(8, { author: "renovate", bot: true })];
+
+    const quiet = await call<InboxPullView[]>("GET", "/reviews/inbox");
+
+    expect(github.inboxFilter).toEqual({ drafts: false, direct: true });
+    expect(quiet.body.data!.map((p) => p.number)).toEqual([7]);
+
+    await newProject();
+    const saved = await call<ReviewInboxSettings>("PUT", "/reviews/settings", {
+      repos: "projects",
+      direct: false,
+      drafts: true,
+      bots: true,
+    });
+    expect(saved.body.data).toMatchObject({ repos: "projects", bots: true });
+    const loud = await call<InboxPullView[]>("GET", "/reviews/inbox");
+
+    expect(github.inboxFilter).toEqual({ repos: [{ owner: "acme", name: "web" }] });
+    expect(loud.body.data!.map((p) => p.number)).toEqual([7, 8]);
+  });
+
+  it("hides PRs whose title has a muted word, or whose author is a muted @login", async () => {
+    github.inbox = [
+      pull(7, { title: "Add billing export" }),
+      pull(8, { title: "chore: Back-merge main into develop" }),
+      pull(9, { title: "Syncing with latest", author: "Release-Manager" }),
+    ];
+    await call("PUT", "/reviews/settings", { mute: [" back-merge ", "@release-manager", ""] });
+
+    const res = await call<InboxPullView[]>("GET", "/reviews/inbox");
+
+    expect(res.body.data!.map((p) => p.number)).toEqual([7]);
+    const saved = await call<ReviewInboxSettings>("GET", "/reviews/settings");
+    expect(saved.body.data!.mute).toEqual(["back-merge", "@release-manager"]);
+  });
+
+  it("refuses settings it cannot read", async () => {
+    const res = await call("PUT", "/reviews/settings", { limit: 0 });
+
+    expect(res.status).toBe(400);
   });
 
   it("refuses a filter it cannot read", async () => {

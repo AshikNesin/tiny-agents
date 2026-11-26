@@ -22,6 +22,8 @@ export interface SessionUser {
   id: number;
   email: string;
   name: string | null;
+
+  isAdmin: boolean;
 }
 
 export interface SignInResponse {

@@ -25,6 +25,7 @@
         "memoryTidiedAt": null,
         "pinnedAt": null,
         "browserProfile": "shared",
+        "projectId": null,
         "createdAt": "2026-11-06T06:30:00.000Z",
         "updatedAt": "2026-11-06T06:30:00.000Z",
         "skillIds": [],
@@ -72,6 +73,7 @@
         "memoryTidiedAt": null,
         "pinnedAt": null,
         "browserProfile": "shared",
+        "projectId": null,
         "createdAt": "2026-11-06T06:30:00.000Z",
         "updatedAt": "2026-11-06T06:30:00.000Z",
         "skillIds": [],
@@ -197,6 +199,7 @@
         "memoryTidiedAt": null,
         "pinnedAt": null,
         "browserProfile": "shared",
+        "projectId": null,
         "createdAt": "2026-11-06T06:30:00.000Z",
         "updatedAt": "2026-11-06T06:30:00.000Z",
         "skillIds": [],
@@ -324,6 +327,7 @@
           "memoryTidiedAt": null,
           "pinnedAt": null,
           "browserProfile": "shared",
+          "projectId": null,
           "createdAt": "2026-11-06T06:30:00.000Z",
           "updatedAt": "2026-11-06T06:30:00.000Z"
         }

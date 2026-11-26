@@ -124,6 +124,38 @@ describe("passkey API", () => {
     );
   });
 
+  it("does not reveal which emails belong to accounts that use passkeys", async () => {
+    const app = createTestApp();
+    const { user, email } = await signIn(app);
+    await storePasskey(user.id, {
+      transports: ["internal"],
+      deviceType: "singleDevice",
+      credentialName: "Touch ID",
+    });
+    const other = await signIn(app);
+    const options = async (body?: { email: string }) => {
+      const res = await api<Record<string, unknown>>(app, "/api/v1/passkey/login/options", {
+        method: "POST",
+        json: body ?? {},
+      });
+      return {
+        status: res.status,
+        allowCredentials: res.body.data?.allowCredentials as unknown,
+      };
+    };
+
+    const withPasskey = await options({ email });
+    expect(withPasskey).toEqual({ status: 200, allowCredentials: [] });
+    for (const same of [
+      await options({ email: other.email }),
+      await options({ email: "nobody@example.com" }),
+      await options(),
+    ]) {
+      expect(same.status).toBe(200);
+      expect(same.allowCredentials).toEqual(withPasskey.allowCredentials);
+    }
+  });
+
   it("rejects verification with an unknown or reused challenge", async () => {
     const { token } = await signIn(app);
     const unknown = await api(app, "/api/v1/passkey/login/verify", {
@@ -427,7 +459,7 @@ describe("passkey API", () => {
       ]);
       expect(response.body.error).toBeUndefined();
     }
-    expect(known.body.data!.allowCredentials).toHaveLength(1);
+    expect(known.body.data!.allowCredentials).toEqual([]);
     expect(unknown.body.data!.allowCredentials).toEqual([]);
     expect(unknown.body.data!.timeout).toBe(known.body.data!.timeout);
     expect(unknown.body.data!.rpId).toBe(known.body.data!.rpId);

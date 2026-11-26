@@ -31,6 +31,7 @@ export interface BotData {
   memoryCapturedThrough: Date | null;
   pinnedAt: Date | null;
   browserProfile: BrowserProfile;
+  projectId: string | null;
   createdAt: Date;
   updatedAt: Date;
   toolPermissions: Record<string, ToolPermission>;

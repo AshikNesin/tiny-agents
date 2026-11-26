@@ -1,0 +1,88 @@
+# Builds the signed release AAB (Play Store bundle) for manual Play Console
+# same keyless exchange and release-hub keystore as Mobile Release Hub Publish,
+# but `:app:bundleRelease` and the output is a workflow artifact for manual
+# upload to the Play Console. The keystore is deleted in the same step-set as
+# the build and never leaves the runner.
+name: Play Release AAB
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write # request the repo's OIDC token for the release hub exchange
+
+concurrency: ${{ github.workflow }}-${{ github.ref }}
+
+jobs:
+  aab:
+    name: Build signed AAB
+    if: vars.RELEASE_HUB_URL != ''
+    runs-on: instabox-medium
+    timeout-minutes: 30
+    env:
+      RELEASE_HUB_URL: ${{ vars.RELEASE_HUB_URL }}
+      RELEASE_HUB_SLUG: ${{ vars.RELEASE_HUB_SLUG || github.event.repository.name }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./mobile/.github/actions/setup-android
+
+      - name: Exchange the job's OIDC token for a release hub token
+        run: |
+          set -euo pipefail
+          : "${RELEASE_HUB_URL:?RELEASE_HUB_URL repo variable is not set}"
+          oidc=$(curl -fsS -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            -H "Accept: application/json; api-version=2.0" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=release-hub" | jq -r .value)
+          resp=$(curl -sS -X POST "$RELEASE_HUB_URL/api/oidc/exchange" \
+            --data-urlencode "token=$oidc" -w '\n%{http_code}')
+          code=$(tail -n1 <<<"$resp"); body=$(sed '$d' <<<"$resp")
+          if [ "$code" != "200" ]; then
+            echo "::error::release hub exchange failed (HTTP $code): $body"
+            exit 1
+          fi
+          RELEASE_HUB_TOKEN=$(jq -r .token <<<"$body")
+          echo "::add-mask::$RELEASE_HUB_TOKEN"
+          echo "RELEASE_HUB_TOKEN=$RELEASE_HUB_TOKEN" >> "$GITHUB_ENV"
+
+      - name: Fetch the signing key from the release hub
+        run: |
+          set -euo pipefail
+          curl -fsS -D "$RUNNER_TEMP/h" -H "Authorization: Bearer $RELEASE_HUB_TOKEN" \
+            -o "$RUNNER_TEMP/release.jks" "$RELEASE_HUB_URL/api/apps/$RELEASE_HUB_SLUG/android/signing"
+          header() { grep -i "^$1:" "$RUNNER_TEMP/h" | cut -d' ' -f2- | tr -d '\r'; }
+          echo "$(header x-release-hub-keystore-sha256)  $RUNNER_TEMP/release.jks" | sha256sum -c
+          {
+            echo "RELEASE_STORE_FILE=$RUNNER_TEMP/release.jks"
+            echo "RELEASE_KEY_ALIAS=$(header x-release-hub-key-alias)"
+          } >> "$GITHUB_ENV"
+          echo "::add-mask::$(header x-release-hub-store-password)"
+          echo "::add-mask::$(header x-release-hub-key-password)"
+          echo "RELEASE_STORE_PASSWORD=$(header x-release-hub-store-password)" >> "$GITHUB_ENV"
+          echo "RELEASE_KEY_PASSWORD=$(header x-release-hub-key-password)" >> "$GITHUB_ENV"
+
+      - name: Build the signed release AAB
+        working-directory: mobile/android
+        run: ./gradlew :app:bundleRelease --console=plain
+
+      - name: Clean up the keystore
+        if: always()
+        run: rm -f "$RUNNER_TEMP/release.jks"
+
+      - name: Record version info
+        working-directory: mobile/android
+        run: |
+          . ./version.properties
+          {
+            echo "VERSION_CODE=$VERSION_CODE"
+            echo "VERSION_NAME=$VERSION_NAME"
+          } >> "$GITHUB_ENV"
+
+      - name: Upload the AAB artifact
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+        with:
+          name: play-release-aab
+          path: mobile/android/app/build/outputs/bundle/release/*.aab
+          if-no-files-found: error

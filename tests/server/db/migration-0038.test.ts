@@ -10,7 +10,7 @@ const MIGRATIONS = "apps/web/drizzle";
 let dir: string;
 
 beforeEach(() => {
-  dir = mkdtempSync(path.join(tmpdir(), "migration-0036-"));
+  dir = mkdtempSync(path.join(tmpdir(), "migration-0038-"));
 });
 
 afterEach(() => {
@@ -32,11 +32,11 @@ function migrationsBefore(tag: string): string {
   return folder;
 }
 
-describe("migration 0036", () => {
+describe("migration 0038", () => {
   it("points Connect-era 1Password items at the service account backend", async () => {
     const file = path.join(dir, "app.db");
     const before = createAppDb(`file:${file}`, {
-      migrationsFolder: migrationsBefore("0036_vault_onepassword_backend"),
+      migrationsFolder: migrationsBefore("0038_vault_onepassword_backend"),
     });
     const old = sqliteConnection(before);
     const insert = old.prepare(

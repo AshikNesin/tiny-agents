@@ -33,8 +33,10 @@ vi.mock("sonner", () => ({
 vi.mock("@/lib/sse", async () => (await import("../fakes/sse")).sseModule);
 
 const posts = vi.hoisted(() => [] as Array<{ path: string; body: unknown }>);
+const deletes = vi.hoisted(() => [] as string[]);
 const asked = vi.hoisted(() => [] as unknown[]);
 const openReviews = vi.hoisted(() => [] as unknown[]);
+const inboxLimit = vi.hoisted(() => ({ value: 10 }));
 vi.mock("@groot/shell/lib/api", async (importOriginal) => {
   const original = await importOriginal<typeof import("@groot/shell/lib/api")>();
   return {
@@ -47,10 +49,28 @@ vi.mock("@groot/shell/lib/api", async (importOriginal) => {
             ? asked
             : path === "/code/reviews"
               ? openReviews
-              : [],
+              : path === "/code/reviews/settings"
+                ? {
+                    repos: "all",
+                    direct: true,
+                    drafts: false,
+                    bots: false,
+                    mute: [],
+                    limit: inboxLimit.value,
+                  }
+                : [],
+      delete: async (path: string) => {
+        deletes.push(path);
+        return { deleted: true };
+      },
       post: async (path: string, body: unknown) => {
         posts.push({ path, body });
         if (path === "/code/reviews") return { id: "rv9" };
+        if (path === "/code/projects/p1/chat") return projectBot;
+        if (path.endsWith("/suggest")) {
+          const typed = (body as { typed?: string }).typed;
+          return { suggestion: typed ? `${typed} the tests first` : "Get it merged to main" };
+        }
         return path === "/code/threads" ? { threadId: "new1" } : { status: "accepted" };
       },
     }),
@@ -65,6 +85,7 @@ const agent: HarnessInfo = {
   capabilities: {
     ...NO_CAPABILITIES,
     turns: { ...NO_CAPABILITIES.turns, interrupt: true, steer: true, queue: true },
+    threads: { ...NO_CAPABILITIES.threads, archive: true, delete: true },
     workspace: { ...NO_CAPABILITIES.workspace, diffs: true },
   },
   commands: [],
@@ -113,6 +134,7 @@ const renderAt = (path: string) =>
           <Route path="/code" element={<CodeWorkspace />} />
           <Route path="/code/new" element={<CodeWorkspace />} />
           <Route path="/code/t/:threadId" element={<CodeWorkspace />} />
+          <Route path="/code/p/:chatProjectId" element={<CodeWorkspace />} />
           <Route path="/code/reviews/:id" element={<p>Review page</p>} />
         </Routes>
       </MemoryRouter>
@@ -153,6 +175,33 @@ const project = {
   createdAt: "2026-11-05T00:00:00Z",
 };
 
+const projectBot = vi.hoisted(() => ({
+  id: "lead",
+  conversationId: "c-lead",
+  name: "web",
+  description: "Project chat for acme/web",
+  systemPrompt: "",
+  modelId: "test-model",
+  lastReadAt: null,
+  lastActivityAt: "2026-11-05T00:00:00Z",
+  lastMessagePreview: null,
+  toolPermissions: {},
+  skillIds: [],
+  connectionIds: [],
+  memoryEnabled: true,
+  autoReview: false,
+  yoloByDefault: false,
+  browserProfile: "shared",
+  projectId: "p1",
+  pinnedAt: null,
+  guestIds: [],
+  chatStartedAt: "2026-11-05T00:00:00Z",
+  memoryCapturedThrough: null,
+  connectionCapabilities: [],
+  createdAt: "2026-11-05T00:00:00Z",
+  updatedAt: "2026-11-05T00:00:00Z",
+}));
+
 const pull = (number: number, over: Record<string, unknown> = {}) => ({
   section: "needs",
   repo: "acme/web",
@@ -171,8 +220,10 @@ const pull = (number: number, over: Record<string, unknown> = {}) => ({
 
 beforeEach(() => {
   posts.length = 0;
+  deletes.length = 0;
   asked.length = 0;
   openReviews.length = 0;
+  inboxLimit.value = 10;
   useUiStore.setState({ codeSidebarOpen: true, codePane: null, lastCodePane: "changes" });
   useCodeStore.setState({
     harnesses: [agent],
@@ -196,6 +247,20 @@ describe("the Code workspace", () => {
       ["In review", ["demo:ccc"]],
       ["Done", ["demo:dddd"]],
     ]);
+  });
+
+  it("opens the project's chat inside Code from the sidebar", async () => {
+    renderAt("/code");
+    fireEvent.click(await screen.findByRole("link", { name: "Project chat" }));
+    expect(where()).toBe("/code/p/p1");
+    await waitFor(() => expect(posts.map((p) => p.path)).toContain("/code/projects/p1/chat"));
+    expect(await screen.findByPlaceholderText("Message web")).toBeInTheDocument();
+  });
+
+  it("the project chat's menu button goes back to the thread list", async () => {
+    renderAt("/code/p/p1");
+    fireEvent.click(await screen.findByRole("button", { name: "Open menu" }));
+    expect(where()).toBe("/code");
   });
 
   it("j and k walk the list in the order it is shown", () => {
@@ -307,10 +372,24 @@ describe("the Code workspace", () => {
     });
   });
 
-  it("shows the reason a thread needs you beside its title", () => {
+  it("shows the reason a thread needs you beside its title, but not a plain finish", () => {
+    useCodeStore.setState({
+      threads: [waiting, thread("asks", { status: { group: "needs-you", reason: "asks you" } })],
+    });
     renderAt("/code");
-    const row = document.querySelector('[data-thread="demo:a"]');
-    expect(row).toHaveTextContent("finished");
+    expect(document.querySelector('[data-thread="demo:asks"]')).toHaveTextContent("asks you");
+    expect(document.querySelector('[data-thread="demo:a"]')).toHaveTextContent(/^Thread a$/);
+  });
+
+  it("says who started a thread when you point at it", () => {
+    useCodeStore.setState({
+      threads: [thread("a", { startedBy: { botId: "b1", name: "Ada", project: false } })],
+    });
+    renderAt("/code");
+    expect(document.querySelector('[data-thread="demo:a"]')).toHaveAttribute(
+      "title",
+      "Started by Ada",
+    );
   });
 
   it("? lists the workspace's keys, and a thread's own while one is open", async () => {
@@ -384,6 +463,72 @@ describe("the Code workspace", () => {
     await waitFor(() => expect(where()).toBe("/code/t/demo%3Aa"));
   });
 
+  it("right-clicking a thread offers Open PR, Archive and Delete", async () => {
+    renderAt("/code");
+    fireEvent.contextMenu(document.querySelector('[data-thread="demo:ccc"]')!);
+    const menu = await screen.findByRole("menu");
+    expect(
+      within(menu)
+        .getAllByRole("menuitem")
+        .map((item) => item.textContent),
+    ).toEqual(["Open PR #12", "Archive", "Delete"]);
+    expect(within(menu).getByRole("menuitem", { name: "Open PR #12" })).toHaveAttribute(
+      "href",
+      "https://x/12",
+    );
+    fireEvent.click(within(menu).getByRole("menuitem", { name: "Archive" }));
+    await waitFor(() =>
+      expect(posts).toContainEqual({
+        path: "/code/threads/demo%3Accc/archive",
+        body: { archived: true },
+      }),
+    );
+
+    fireEvent.contextMenu(document.querySelector('[data-thread="demo:a"]')!);
+    const second = await screen.findByRole("menu");
+    expect(within(second).queryByRole("menuitem", { name: /Open PR/ })).toBeNull();
+    fireEvent.click(within(second).getByRole("menuitem", { name: "Delete" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Delete" }));
+    await waitFor(() => expect(deletes).toEqual(["/code/threads/demo%3Aa"]));
+  });
+
+  it("suggests the next message after a turn, Tab takes it, and typing asks for a completion", async () => {
+    renderAt("/code/t/demo%3Adddd");
+    streamAt(`/api/v1/code/threads/${encodeURIComponent(done.id)}/events`).send({
+      type: "snapshot",
+      snapshot: {
+        ...snapshot(done),
+        items: [
+          { kind: "user", id: "u1", text: "Add a thread menu", attachments: [] },
+          { kind: "assistant", id: "a1", text: "Pushed. Want me to open the PR and merge it?" },
+        ],
+      },
+    });
+    const ghost = await screen.findByTestId("code-composer-suggestion");
+    expect(ghost).toHaveTextContent("Get it merged to main");
+    const suggested = posts.find((post) => post.path.endsWith("/suggest"));
+    expect(suggested?.body).toEqual({
+      user: "Add a thread menu",
+      agent: "Pushed. Want me to open the PR and merge it?",
+    });
+
+    const box = screen.getByTestId("code-composer");
+    fireEvent.change(box, { target: { value: "Get it" } });
+    expect(screen.getByTestId("code-composer-suggestion")).toHaveTextContent(/^merged to main/);
+    fireEvent.keyDown(box, { key: "Tab" });
+    expect(box).toHaveValue("Get it merged to main");
+
+    fireEvent.change(box, { target: { value: "run" } });
+    await waitFor(
+      () =>
+        expect(screen.getByTestId("code-composer-suggestion")).toHaveTextContent(
+          /^the tests first/,
+        ),
+      { timeout: 3000 },
+    );
+    expect(posts.filter((post) => post.path.endsWith("/suggest"))).toHaveLength(2);
+  });
+
   it("a thread link lands on the thread", () => {
     renderAt("/code/t/demo%3Adddd");
     expect(where()).toBe("/code/t/demo%3Adddd");
@@ -438,6 +583,26 @@ describe("reviews in the thread list", () => {
     expect(posts).toEqual([
       { path: "/code/reviews", body: { pr: "https://github.com/acme/web/pull/2" } },
     ]);
+  });
+
+  it("shows only as many requests as Settings allows, and the rest on request", async () => {
+    inboxLimit.value = 2;
+    asked.push(pull(1), pull(2), pull(3), pull(4));
+    renderAt("/code");
+
+    const reviews = await screen.findByRole("region", { name: "Reviews" });
+    const rows = () => reviews.querySelectorAll("[data-testid=code-review-row]").length;
+    const more = await screen.findByRole("button", { name: "2 more" });
+    expect(rows()).toBe(2);
+    expect(screen.getByRole("link", { name: "Review list filters" })).toHaveAttribute(
+      "href",
+      "/code/settings/reviews",
+    );
+
+    fireEvent.click(more);
+
+    expect(rows()).toBe(4);
+    expect(screen.queryByRole("button", { name: /more$/ })).not.toBeInTheDocument();
   });
 
   it("opens a pasted pull request with the v key", async () => {

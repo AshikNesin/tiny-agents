@@ -25,6 +25,8 @@ import {
 import { cn } from "@groot/ui/lib/utils";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Spinner } from "../../components/ui/spinner";
+import { useNextMessage, type LastTurn } from "./use-next-message";
+import { Kbd } from "../../components/keys";
 import { errorMessage } from "../../lib/errors";
 import { codeApi, type HarnessInfo, type Skill } from "../../lib/code/api";
 import { RESOURCE_QUERY, wait } from "../../queries/resource";
@@ -74,6 +76,7 @@ export interface ComposerProps {
   onStop?(): void;
   hint?: string;
   submitLabel?: string;
+  lastTurn?: LastTurn | null;
   onSend(
     message: string,
     options: { queue: boolean; skills: string[]; attachments: string[] },
@@ -93,6 +96,7 @@ export function Composer({
   onStop,
   hint,
   submitLabel,
+  lastTurn = null,
   onSend,
 }: ComposerProps) {
   const reduceMotion = useReducedMotion() ?? false;
@@ -121,6 +125,7 @@ export function Composer({
   const blurTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   useEffect(() => () => clearTimeout(blurTimer.current), []);
   const fileInput = useRef<HTMLInputElement>(null);
+  const next = useNextMessage(threadId, working ? null : lastTurn, text);
 
   useEffect(() => {
     setDraft(emptyDraft(readStoredDraft(codeDraftKey(draftKey))));
@@ -271,6 +276,13 @@ export function Composer({
         return;
       }
     }
+    if (event.key === "Tab" && !event.shiftKey && next.full) {
+      event.preventDefault();
+      const full = next.full;
+      setDraft((current) => editText(current, full));
+      requestAnimationFrame(() => area.current?.setSelectionRange(full.length, full.length));
+      return;
+    }
     if (event.key === "Enter" && !event.shiftKey && !prefersCoarsePointer()) {
       event.preventDefault();
       void send(event.altKey && working && canQueue);
@@ -382,41 +394,57 @@ export function Composer({
           area.current?.focus();
         }}
       >
-        <textarea
-          ref={area}
-          autoFocus={autoFocus}
-          value={text}
-          rows={1}
-          placeholder={
-            dragging
-              ? "Drop files to attach them"
-              : (placeholder ??
-                (working
-                  ? steers
-                    ? `Steer ${name}: goes into the running turn`
-                    : `Message ${name}: sent when this turn ends`
-                  : "Send a message…"))
-          }
-          onChange={(e) => {
-            setDraft((current) => editText(current, e.target.value));
-            updateToken(e.target.value, e.target.selectionStart);
-          }}
-          onSelect={(e) => updateToken(e.currentTarget.value, e.currentTarget.selectionStart)}
-          onBlur={() => {
-            blurTimer.current = setTimeout(() => setToken(undefined), 100);
-          }}
-          onKeyDown={onKeyDown}
-          onPaste={(e) => {
-            const files = Array.from(e.clipboardData.files);
-            if (files.length && canUpload) {
-              e.preventDefault();
-              upload(files);
+        <div className="relative">
+          {next.ghost && (
+            <div
+              aria-hidden
+              className="pointer-events-none absolute inset-0 overflow-hidden px-2 pt-1.5 text-base leading-7 break-words whitespace-pre-wrap md:text-sm md:leading-6"
+            >
+              <span className="invisible">{text}</span>
+              <span className="text-fg-tertiary" data-testid="code-composer-suggestion">
+                {next.ghost}
+              </span>
+              <Kbd keys="Tab" className="ml-2 align-middle opacity-70" />
+            </div>
+          )}
+          <textarea
+            ref={area}
+            autoFocus={autoFocus}
+            value={text}
+            rows={1}
+            placeholder={
+              next.ghost && !text
+                ? ""
+                : dragging
+                  ? "Drop files to attach them"
+                  : (placeholder ??
+                    (working
+                      ? steers
+                        ? `Steer ${name}: goes into the running turn`
+                        : `Message ${name}: sent when this turn ends`
+                      : "Send a message…"))
             }
-          }}
-          className="placeholder:text-fg-tertiary field-sizing-content max-h-60 min-h-[2.75rem] w-full resize-none overflow-y-auto bg-transparent px-2 pt-1.5 text-base leading-7 outline-none md:text-sm md:leading-6"
-          data-testid="code-composer"
-          aria-label={`Message ${name}`}
-        />
+            onChange={(e) => {
+              setDraft((current) => editText(current, e.target.value));
+              updateToken(e.target.value, e.target.selectionStart);
+            }}
+            onSelect={(e) => updateToken(e.currentTarget.value, e.currentTarget.selectionStart)}
+            onBlur={() => {
+              blurTimer.current = setTimeout(() => setToken(undefined), 100);
+            }}
+            onKeyDown={onKeyDown}
+            onPaste={(e) => {
+              const files = Array.from(e.clipboardData.files);
+              if (files.length && canUpload) {
+                e.preventDefault();
+                upload(files);
+              }
+            }}
+            className="placeholder:text-fg-tertiary field-sizing-content max-h-60 min-h-[2.75rem] w-full resize-none overflow-y-auto bg-transparent px-2 pt-1.5 text-base leading-7 outline-none md:text-sm md:leading-6"
+            data-testid="code-composer"
+            aria-label={`Message ${name}`}
+          />
+        </div>
         <input
           ref={fileInput}
           type="file"

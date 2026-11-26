@@ -13,6 +13,7 @@ import type { StorageFile as FileInfo } from "@groot/shell/pages/storage/hooks/u
 import { FIXED_NOW } from "../../test-clock";
 
 let objects: Map<string, string>;
+let contentTypes: Map<string, string>;
 let requests: string[];
 
 function listing(folder: string): FileInfo[] {
@@ -62,6 +63,21 @@ async function fakeFetch(input: RequestInfo | URL, init: RequestInit = {}): Prom
     for (const key of filePaths) objects.delete(key);
     return new Response(null, { status: 204 });
   }
+  if (method === "GET" && path === "/storage/files/download") {
+    const key = url.searchParams.get("filePath") ?? "";
+    const body = objects.get(key);
+    if (body === undefined) return new Response("not found", { status: 404 });
+    const contentType = contentTypes.get(key) ?? "text/plain";
+
+    const active = /html|svg|xml|javascript/i.test(contentType);
+    return new Response(body, {
+      status: 200,
+      headers: {
+        "content-type": contentType,
+        "content-disposition": `${active ? "attachment" : "inline"}; filename=x`,
+      },
+    });
+  }
   return new Response("not found", { status: 404 });
 }
 
@@ -108,6 +124,7 @@ beforeEach(() => {
     ["root.txt", "r"],
   ]);
   requests = [];
+  contentTypes = new Map();
   vi.stubGlobal("fetch", vi.fn(fakeFetch));
 });
 
@@ -245,9 +262,11 @@ describe("Storage browser", () => {
 
       await user.click(within(rowOf("evil.html")).getByRole("button", { name: "View evil.html" }));
 
-      expect(assigned).toEqual([
-        `/api/v1/storage/files/download?filePath=${encodeURIComponent("evil.html")}`,
-      ]);
+      await waitFor(() =>
+        expect(assigned).toEqual([
+          `/api/v1/storage/files/download?filePath=${encodeURIComponent("evil.html")}`,
+        ]),
+      );
       expect(createObjectURL).not.toHaveBeenCalled();
       expect(requests.filter((r) => r.startsWith("GET /storage/files/download"))).toEqual([]);
     } finally {
@@ -257,5 +276,62 @@ describe("Storage browser", () => {
       }
       createObjectURL.mockRestore();
     }
+  });
+});
+
+describe("Storage view", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function renderViewable(): string[] {
+    const assigned: string[] = [];
+    vi.spyOn(window, "open").mockImplementation(
+      () =>
+        ({
+          location: {
+            set href(value: string) {
+              assigned.push(value);
+            },
+          },
+          close: () => {},
+        }) as never,
+    );
+    renderStorage();
+    return assigned;
+  }
+
+  it.each([
+    ["report.html", "text/html"],
+    ["logo.svg", "image/svg+xml"],
+    ["feed.xml", "application/xml"],
+    ["app.js", "text/javascript"],
+  ])("never opens %s as %s, which would run script on the app's origin", async (name, type) => {
+    const user = userEvent.setup();
+    const createObjectURL = vi.spyOn(window.URL, "createObjectURL");
+    objects.set(name, "<script>alert(1)</script>");
+    contentTypes.set(name, type);
+    const assigned = renderViewable();
+    await screen.findByText(name, { selector: "td *" });
+
+    await user.click(within(rowOf(name)).getByRole("button", { name: `View ${name}` }));
+
+    expect(assigned).toEqual([
+      `/api/v1/storage/files/download?filePath=${encodeURIComponent(name)}`,
+    ]);
+    expect(createObjectURL).not.toHaveBeenCalled();
+    createObjectURL.mockRestore();
+  });
+
+  it("still opens a text file as text", async () => {
+    const user = userEvent.setup();
+    const assigned = renderViewable();
+    await screen.findByText("root.txt", { selector: "td *" });
+
+    await user.click(within(rowOf("root.txt")).getByRole("button", { name: "View root.txt" }));
+
+    expect(assigned).toEqual([
+      `/api/v1/storage/files/download?filePath=${encodeURIComponent("root.txt")}`,
+    ]);
   });
 });

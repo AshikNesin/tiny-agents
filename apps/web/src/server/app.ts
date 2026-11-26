@@ -32,11 +32,13 @@ import { guestGuard } from "./api/people/guest.guard";
 import pushRoutes from "./api/notifications/push.routes";
 import { registerRoutineJobs } from "./api/routines/routines.jobs";
 import { registerMemoryTidyJob } from "./api/bots/memories.tidy";
+import { registerReviewPruneJob } from "./api/code/code.reviews.prune";
 
 export function registerJobHandlers(): void {
   registerRoutineJobs();
   registerMemoryTidyJob();
   registerCodeJobs();
+  registerReviewPruneJob();
 }
 
 export function createWebApp(options: Omit<CreateAppOptions, "routes"> = {}) {

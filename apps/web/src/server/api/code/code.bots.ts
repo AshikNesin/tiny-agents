@@ -1,14 +1,27 @@
 import { eq } from "drizzle-orm";
 import type { CodeHandoffRecord, CodeStore } from "@tiny-agents/agent";
 import { Boom } from "@groot/core/errors";
-import { HarnessError, type HarnessInstance, type TurnOutcome } from "@tiny-agents/code/server";
+import {
+  HarnessError,
+  type HarnessInstance,
+  type ThreadSummary,
+  type TurnOutcome,
+} from "@tiny-agents/code/server";
 import { threadKey, threadRef } from "./code.threads";
-import { botMessages, db, type CodeHandoff, type CodeProjectRow } from "../../db";
+import {
+  botMessages,
+  codeProjects,
+  codeThreads,
+  db,
+  type CodeHandoff,
+  type CodeProjectRow,
+} from "../../db";
 import { submitToBot } from "../bots/bots.conversation";
 import { createDeliveries, type DeliveryRuntime } from "../bots/bots.delivery";
-import { conversationOwner } from "../bots/bots.owner";
+import { conversationOwner, type ConversationBot } from "../bots/bots.owner";
 import { codeHub } from "./code.hub";
-import { listProjects, startProjectThread } from "./code.projects";
+import { listProjects, projectSettings, startProjectThread } from "./code.projects";
+import { onThreadArchived } from "./code.pulls";
 import { startRun } from "./code.runs";
 import {
   askedFrom,
@@ -53,11 +66,36 @@ function toRecord(row: ThreadHandoff): CodeHandoffRecord {
   };
 }
 
-async function botOf(conversationId: number): Promise<string> {
+async function ownerOf(conversationId: number): Promise<ConversationBot> {
   const owner = await conversationOwner(conversationId);
   if (!owner) throw Boom.notFound("No bot owns this conversation");
-  return owner.bot.id;
+  return owner.bot;
 }
+
+async function botOf(conversationId: number): Promise<string> {
+  return (await ownerOf(conversationId)).id;
+}
+
+const NO_PROJECT =
+  "This chat's project was removed. Ask the owner to add the repository again under Code, Settings, Projects.";
+
+async function chatProject(projectId: string): Promise<CodeProjectRow | undefined> {
+  return db.query.codeProjects.findFirst({ where: eq(codeProjects.id, projectId) });
+}
+
+const THREADS_LISTED = 20;
+
+function stateOf(status: ThreadSummary["status"]): string {
+  const group = status ? GROUP_LABEL[status.group] : "unknown";
+  return status?.reason ? `${group} (${status.reason})` : group;
+}
+
+const GROUP_LABEL: Record<NonNullable<ThreadSummary["status"]>["group"], string> = {
+  "needs-you": "needs the owner",
+  working: "working",
+  review: "in review",
+  done: "done",
+};
 
 function pickHarness(name?: string): HarnessInstance | { error: string } {
   const all = instances();
@@ -125,13 +163,30 @@ function claimedBefore(row: CodeHandoff): CodeHandoffRecord | { error: string } 
   };
 }
 
+async function scopedProject(
+  bot: ConversationBot,
+  name?: string,
+): Promise<CodeProjectRow | { error: string }> {
+  if (!bot.projectId) return pickProject(name);
+  const project = await chatProject(bot.projectId);
+  if (!project) return { error: NO_PROJECT };
+  const wanted = name?.trim().toLowerCase();
+  if (wanted && wanted !== project.name.toLowerCase() && wanted !== slugOf(project).toLowerCase()) {
+    return {
+      error: `This chat works only in ${project.name}. Ask the owner to use that project's chat.`,
+    };
+  }
+  return project;
+}
+
 async function startOnce(
-  botId: string,
+  bot: ConversationBot,
   input: StartInput,
 ): Promise<CodeHandoffRecord | { error: string }> {
+  const botId = bot.id;
   const existing = await findHandoffByKey(input.idempotencyKey);
   if (existing) return claimedBefore(existing);
-  const project = await pickProject(input.project);
+  const project = await scopedProject(bot, input.project);
   if ("error" in project) return project;
   const instance = harnessFor(project, input.harness);
   if ("error" in instance) return instance;
@@ -234,8 +289,8 @@ export const codeStore: CodeStore = {
   },
 
   async start(input) {
-    const botId = await botOf(input.conversationId);
-    const work = () => startOnce(botId, input);
+    const bot = await ownerOf(input.conversationId);
+    const work = () => startOnce(bot, input);
     return codeHub()?.serial(`start:${input.idempotencyKey}`, work) ?? work();
   },
 
@@ -293,6 +348,53 @@ export const codeStore: CodeStore = {
 
   async list(conversationId) {
     return (await listHandoffs(await botOf(conversationId))).map(toRecord);
+  },
+
+  async scope(conversationId) {
+    const bot = await ownerOf(conversationId);
+    const project = bot.projectId ? await chatProject(bot.projectId) : undefined;
+    if (!project) return undefined;
+    return {
+      name: project.name,
+      repo: slugOf(project),
+      baseBranch: project.baseBranch,
+      instructions: projectSettings(project.settings).instructions,
+    };
+  },
+
+  async threads(conversationId) {
+    const bot = await ownerOf(conversationId);
+    const hub = codeHub();
+    if (!bot.projectId || !hub) return [];
+    return (await hub.list())
+      .filter((thread) => thread.projectId === bot.projectId && thread.role !== "review")
+      .slice(0, THREADS_LISTED)
+      .map((thread) => ({
+        threadId: thread.id,
+        title: thread.title,
+        state: stateOf(thread.status),
+        branch: thread.branch ?? null,
+        pr: thread.pr?.number ?? null,
+        url: codePath(thread.id),
+      }));
+  },
+
+  async resolve(input) {
+    const bot = await ownerOf(input.conversationId);
+    const target = codeHub()?.resolve(input.threadId);
+    if (!target) return { error: `There is no thread ${input.threadId}. Use code_list.` };
+    const threadId = threadKey(target.instance.id, target.nativeId);
+    const row = await db.query.codeThreads.findFirst({ where: eq(codeThreads.id, threadId) });
+    if (!bot.projectId || row?.projectId !== bot.projectId) {
+      return { error: "Only this project's threads can be resolved here." };
+    }
+    if (target.instance.archive && target.instance.capabilities().threads.archive) {
+      await target.instance.archive(target.nativeId, true);
+    }
+    await db.update(codeThreads).set({ archived: true }).where(eq(codeThreads.id, threadId));
+    await onThreadArchived(threadId, true);
+    void codeHub()?.refresh(target.instance.id);
+    return {};
   },
 };
 

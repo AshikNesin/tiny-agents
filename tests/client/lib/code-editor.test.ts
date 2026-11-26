@@ -20,6 +20,8 @@ describe("Open in editor", () => {
     const none = { host: null, user: null, port: null, keyFile: null };
     expect(suggestedHost(none, "tiny-agents.exe.xyz")).toBe("tiny-agents.exe.xyz");
     expect(sshConfig(none, "tiny-agents.exe.xyz")).toBeNull();
+    expect(suggestedHost({ ...none, user: "exedev" }, "localhost")).toBe("exedev@127.0.0.1");
+    expect(suggestedHost(none, "[::1]")).toBe("127.0.0.1");
     expect(suggestedHost({ ...none, host: "tiny-agents-vm", user: "exedev" }, "x")).toBe(
       "exedev@tiny-agents-vm",
     );
@@ -34,7 +36,7 @@ describe("Open in editor", () => {
     expect(sshConfig(docker, "localhost")).toBe(
       [
         "Host tiny-agents-sandbox",
-        "  HostName localhost",
+        "  HostName 127.0.0.1",
         "  Port 2222",
         "  User exedev",
         "  IdentityFile /w/data/sandbox/id_ed25519",

@@ -703,7 +703,10 @@ function UserText({ text: sent }: { text: string }) {
       {review && (
         <p
           aria-label="Pull request"
-          className={cn("text-muted-foreground flex items-center gap-1.5 text-xs", monoClass)}
+          className={cn(
+            "text-muted-foreground flex max-w-full items-center gap-1.5 text-xs",
+            monoClass,
+          )}
         >
           <GitPullRequest className="size-3.5 shrink-0" aria-hidden />
           <span className="min-w-0 truncate">
@@ -717,7 +720,10 @@ function UserText({ text: sent }: { text: string }) {
       {project && (
         <p
           aria-label="Branch"
-          className={cn("text-muted-foreground flex items-center gap-1.5 text-xs", monoClass)}
+          className={cn(
+            "text-muted-foreground flex max-w-full items-center gap-1.5 text-xs",
+            monoClass,
+          )}
         >
           <GitBranch className="size-3.5 shrink-0" aria-hidden />
           <span className="min-w-0 truncate">

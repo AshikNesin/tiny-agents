@@ -46,6 +46,9 @@ service-account.json
 # Groot sync generated report
 .groot/sync-report.json
 
+# Security scan workspace (deepsec): local findings, model route and scan state
+.deepsec/
+
 settings.local.json
 .auto/
 .audit/

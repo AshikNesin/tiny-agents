@@ -77,6 +77,9 @@ export const bots = sqliteTable("bots", {
   memoryTidiedAt: ms("memory_tidied_at"),
   pinnedAt: ms("pinned_at"),
   browserProfile: text("browser_profile").$type<"shared" | "own">().notNull().default("shared"),
+  projectId: text("project_id")
+    .unique()
+    .references((): AnySQLiteColumn => codeProjects.id, { onDelete: "set null" }),
   ...timestamps,
 });
 
@@ -915,6 +918,7 @@ export type CodeRunRow = typeof codeRuns.$inferSelect;
 export type CodeFindingRow = typeof codeFindings.$inferSelect;
 export type CodeHandoff = typeof codeHandoffs.$inferSelect;
 export type CodeProjectRow = typeof codeProjects.$inferSelect;
+export type CodeReviewRow = typeof codeReviews.$inferSelect;
 export type CodePullRow = typeof codePullRequests.$inferSelect;
 export type CodeAutofixPass = typeof codeAutofixPasses.$inferSelect;
 export type CodeReviewDraft = typeof codeReviewDrafts.$inferSelect;

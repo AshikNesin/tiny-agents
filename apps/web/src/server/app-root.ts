@@ -16,6 +16,7 @@ import type { CodeBranchNamer } from "./api/code/code.naming";
 import type { CodeHub } from "./api/code/code.hub";
 import type { HarnessInstance } from "@tiny-agents/code/server";
 import type { CodeChanges } from "./api/code/code.changes";
+import type { CodeReviewRow } from "./db";
 import type { ConnectionManager } from "./api/connections/connections.manager";
 import type { HeldLiveAccess } from "./api/people/live-access";
 import type { VaultAlertSink } from "./api/vault/vault.alerts";
@@ -39,6 +40,8 @@ export interface App {
   chatTitler?: ChatTitler;
   memoryTidier?: { sideCaller: SideCaller };
   codeBranchNamer?: CodeBranchNamer;
+  codeSuggestions: Map<string, string | null>;
+  reviewCheckouts: Map<string, Promise<CodeReviewRow>>;
   sandboxConnections: Map<string, SandboxConnection>;
   sandboxHostKeys?: HostKeyStore;
   claudeWorker?: { connection: SandboxConnection; locator: ClaudeWorkerLocator };
@@ -75,6 +78,8 @@ function emptyApp(): App {
   return {
     runtime: undefined,
     runtimeReady: false,
+    codeSuggestions: new Map(),
+    reviewCheckouts: new Map(),
     sandboxConnections: new Map(),
     ownerWaits: new WaitTracker(),
     botMessagingStores: new WeakMap(),

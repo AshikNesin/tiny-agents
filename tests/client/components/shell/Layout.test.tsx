@@ -42,7 +42,9 @@ function renderAt(path: string) {
 const pathname = () => screen.getByTestId("pathname").textContent;
 
 beforeEach(() => {
-  useAuthStore.setState({ user: { id: 7, email: "demo@example.com", name: "Demo User" } });
+  useAuthStore.setState({
+    user: { id: 7, email: "demo@example.com", name: "Demo User", isAdmin: false },
+  });
 });
 
 afterEach(() => {

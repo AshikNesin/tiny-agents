@@ -14,6 +14,7 @@ import type {
   GitHubStatus,
   ProjectView,
   InboxPullView,
+  ReviewInboxSettings,
   PullReviewView,
   PullThreadsView,
   PushedReview,
@@ -35,6 +36,7 @@ import {
   startManifest,
 } from "./code.github";
 import { setFlowCookie } from "./code.webhook";
+import { openProjectChat } from "./code.chat";
 import { requireStepUp } from "../vault/vault.stepup";
 import { threadReview } from "./code.review";
 import { checkpointRange, checkpointsOf, revertTo } from "./code.checkpoints";
@@ -52,6 +54,9 @@ import {
   reviewComments,
   replyToReviewThread,
   reviewInbox,
+  inboxSettings,
+  inboxSettingsChange,
+  saveInboxSettings,
   resolveReviewThread,
   reviewTerminal,
   reviewIdOfKey,
@@ -201,6 +206,7 @@ const updateSchema = z.strictObject({
         .optional(),
       protectedPaths: z.array(z.string().trim().min(1).max(300)).max(50).optional(),
       workflowInstructions: z.string().trim().max(4000).optional(),
+      instructions: z.string().trim().max(8000).optional(),
       autofix: z
         .strictObject({
           triggers: z
@@ -225,6 +231,10 @@ router.patch("/code/projects/:project", async (c) => {
   const change = await parseBody(c, updateSchema);
   return ok<ProjectView>(c, projectView(await updateProject(c.req.param("project"), change)));
 });
+
+router.post("/code/projects/:project/chat", async (c) =>
+  ok(c, await openProjectChat(c.req.param("project"))),
+);
 
 router.delete("/code/projects/:project", async (c) => {
   await deleteProject(c.req.param("project"));
@@ -534,6 +544,15 @@ router.get("/code/reviews/inbox", async (c) => {
   const query = inboxQuery.safeParse(c.req.query());
   if (!query.success) throw Boom.badRequest("Cannot read that filter.");
   return ok<InboxPullView[]>(c, await reviewInbox(query.data));
+});
+
+router.get("/code/reviews/settings", async (c) =>
+  ok<ReviewInboxSettings>(c, await inboxSettings()),
+);
+
+router.put("/code/reviews/settings", async (c) => {
+  const change = await parseBody(c, inboxSettingsChange);
+  return ok<ReviewInboxSettings>(c, await saveInboxSettings(change));
 });
 
 router.get("/code/reviews/:review", async (c) =>

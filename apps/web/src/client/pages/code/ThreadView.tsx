@@ -46,6 +46,7 @@ import { isDialogOpen, isEditable, useHotkey } from "@groot/ui/hotkeys";
 import { Composer } from "./Composer";
 import { PageKeys, type KeyCommand } from "../../components/keys";
 import { OpenInEditor } from "./OpenInEditor";
+import type { LastTurn } from "./use-next-message";
 import { PendingComments } from "./PendingComments";
 import {
   ContextRing,
@@ -309,6 +310,19 @@ function Queued({
   );
 }
 
+function lastTurnOf(items: readonly { kind: string; text?: unknown }[]): LastTurn | null {
+  let agent: string | null = null;
+  for (let at = items.length - 1; at >= 0; at -= 1) {
+    const item = items[at]!;
+    if (item.kind === "assistant" && agent === null && typeof item.text === "string") {
+      agent = item.text;
+    } else if (item.kind === "user" && typeof item.text === "string") {
+      return agent ? { user: item.text, agent } : null;
+    }
+  }
+  return null;
+}
+
 export function ThreadView({
   id,
   harness,
@@ -322,6 +336,7 @@ export function ThreadView({
   commands = false,
   onReplaced,
   nextSteps,
+  composerTop,
 }: {
   id: string;
   harness: HarnessInfo;
@@ -335,6 +350,7 @@ export function ThreadView({
   commands?: boolean;
   onReplaced?: () => void;
   nextSteps?: ReactNode;
+  composerTop?: ReactNode;
 }) {
   const state = useCodeThread(id);
   const { thread, working, items, settings } = state;
@@ -347,6 +363,7 @@ export function ThreadView({
   const comments = useThreadComments(id, owner);
   const commentsSent = useCommentStore((s) => s.sent);
   useMarkSeen(id, state.cursor);
+  const lastTurn = useMemo(() => lastTurnOf(items), [items]);
 
   useEffect(() => {
     void loadModels(harness.id)
@@ -636,6 +653,7 @@ export function ThreadView({
             </Button>
           ) : (
             <>
+              {composerTop}
               <Running id={id} state={state} rows={rows} canKill={caps.extras.jobs} run={run} />
               <Queued
                 id={id}
@@ -667,6 +685,7 @@ export function ThreadView({
                 working={working}
                 insert={local && (!insert || local.nonce > insert.nonce) ? local : insert}
                 submitLabel={editing ? "Run again from here" : undefined}
+                lastTurn={editing ? null : lastTurn}
                 onStop={caps.turns.interrupt ? stop : undefined}
                 controls={
                   <>

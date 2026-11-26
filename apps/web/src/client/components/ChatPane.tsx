@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { isDialogOpen, isEditable, useHotkey } from "@groot/ui/hotkeys";
 import { toast } from "sonner";
@@ -36,6 +36,8 @@ interface ChatPaneProps {
   models: CatalogModel[];
   canAnswer: boolean;
   onEditBot: () => void;
+  onOpenMenu?: () => void;
+  headerActions?: ReactNode;
 }
 
 export function ChatPane(props: ChatPaneProps) {
@@ -46,7 +48,14 @@ export function ChatPane(props: ChatPaneProps) {
   );
 }
 
-function ChatPaneBody({ bot, models, canAnswer, onEditBot }: ChatPaneProps) {
+function ChatPaneBody({
+  bot,
+  models,
+  canAnswer,
+  onEditBot,
+  onOpenMenu,
+  headerActions,
+}: ChatPaneProps) {
   const providers = useBotsStore((s) => s.providers);
   const adoptBot = useBotsStore((s) => s.adoptBot);
   const chat = useChat(bot.id);
@@ -272,8 +281,9 @@ function ChatPaneBody({ bot, models, canAnswer, onEditBot }: ChatPaneProps) {
           onYoloChange={(on) => (on ? setConfirmYolo(true) : void setYolo(false))}
           live={live}
           canReset={canReset}
-          onOpenMenu={() => setMobileOpen(true)}
+          onOpenMenu={onOpenMenu ?? (() => setMobileOpen(true))}
           onNewChat={() => setConfirmReset(true)}
+          actions={headerActions}
         />
 
         {!canAnswer && (

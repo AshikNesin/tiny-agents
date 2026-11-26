@@ -20,6 +20,10 @@ const isSegment = (segment: string) =>
 
 const isKey = (path: string) => path.split("/").every(isSegment);
 
+export function isActiveContentType(contentType: string): boolean {
+  return /html|svg|xml|javascript/i.test(contentType);
+}
+
 const isFileName = (name: string) => !name.includes("/") && isSegment(name);
 
 export const filePathSchema = z

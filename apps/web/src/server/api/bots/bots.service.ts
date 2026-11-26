@@ -69,7 +69,10 @@ async function assertNameFree(name: string, selfId?: string): Promise<void> {
   if (taken) throw Boom.conflict(`A bot named "${taken.name}" already exists`);
 }
 
-export async function createBot(data: CreateBotDTO, rt: BotAgentRuntime = runtime()) {
+export async function createBot(
+  data: CreateBotDTO & { projectId?: string },
+  rt: BotAgentRuntime = runtime(),
+) {
   if (!rt.catalog.get(data.modelId)) {
     throw Boom.badRequest("Unknown model. Pick one set up in Settings → Models.");
   }
@@ -78,6 +81,7 @@ export async function createBot(data: CreateBotDTO, rt: BotAgentRuntime = runtim
   const conversationId = await startBotConversation(
     {
       modelId: data.modelId,
+      projectId: data.projectId ?? null,
       systemPrompt: data.systemPrompt,
       toolPermissions,
       autoReview: data.autoReview,
@@ -99,6 +103,7 @@ export async function createBot(data: CreateBotDTO, rt: BotAgentRuntime = runtim
       ...(data.autoReview !== undefined ? { autoReview: data.autoReview } : {}),
       ...(data.yoloByDefault !== undefined ? { yoloByDefault: data.yoloByDefault } : {}),
       ...(data.browserProfile !== undefined ? { browserProfile: data.browserProfile } : {}),
+      ...(data.projectId ? { projectId: data.projectId } : {}),
     })
     .returning();
   if (!row) throw new Error("Bot insert returned no row");

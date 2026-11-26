@@ -50,7 +50,8 @@ Set these on the host; defaults and the full list are in the
 [setup guide](../setup-guide.md#environment-variables).
 
 - **Required**: `JWT_SECRET_KEY` (≥ 32 random characters), `ADMIN_AUTH_KEY`
-  (the `X-Admin-Auth-Key` header for user management), `RP_ID` and `ORIGIN`
+  (≥ 32 random characters; the `X-Admin-Auth-Key` header for user management),
+  `RP_ID` and `ORIGIN`
   (`app.example.com`, `https://app.example.com`; passkeys depend on them).
 - **Not needed**: `NODE_ENV` (`pnpm start` sets it), `DATABASE_URL`,
   `AGENT_DB_PATH` and `UPLOADS_DIR` (they default onto the `/data` volume;

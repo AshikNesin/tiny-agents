@@ -83,6 +83,8 @@ export const codeApi = {
   archive: (id: string, archived: boolean) =>
     apiClient.post<{ moved: string[] }>(`${thread(id)}/archive`, { archived }),
   remove: (id: string) => apiClient.delete(thread(id)),
+  suggest: (id: string, body: { user: string; agent: string; typed?: string }) =>
+    apiClient.post<{ suggestion: string | null }>(`${thread(id)}/suggest`, body),
   rewind: (id: string, body: { at: string; turn: number; turns: number; text: string }) =>
     apiClient.post<{ filesRestored: boolean; replaced: string }>(`${thread(id)}/rewind`, body),
   undoRewind: (id: string, replaced: string) =>
@@ -121,6 +123,10 @@ export const codeApi = {
 
 export function threadPath(id: string): string {
   return `/code/t/${encodeURIComponent(id)}`;
+}
+
+export function projectChatPath(projectId: string): string {
+  return `/code/p/${encodeURIComponent(projectId)}`;
 }
 
 export function shortPath(path: string | null | undefined): string {

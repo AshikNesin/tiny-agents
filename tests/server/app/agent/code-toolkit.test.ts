@@ -72,6 +72,9 @@ function fakeStore() {
       url: "/code/shelley%3AcH",
     }),
     list: async () => [],
+    scope: async () => undefined,
+    threads: async () => [],
+    resolve: async () => ({}),
     models: async () => [
       { id: "glm-5-3-zai-int-exe-xyz", name: "GLM 5.3", isDefault: true },
       { id: "glm-5-3-flash-zai-int-exe-xyz", isDefault: false },

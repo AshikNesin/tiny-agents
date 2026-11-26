@@ -39,9 +39,10 @@ export function createApp(options: CreateAppOptions = {}): Hono<AppEnv> {
 
   const openPaths = options.openCorsPaths ?? [];
   const openCors = cors({ origin: "*" });
+
   const appCors = cors({
     origin: (origin) =>
-      config.cors.origins.length === 0 || config.cors.origins.includes(origin) ? origin : null,
+      config.cors.origins.includes(origin) || config.passkey.origin === origin ? origin : null,
     credentials: true,
   });
 

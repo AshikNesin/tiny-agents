@@ -1,5 +1,28 @@
 # @groot/ui
 
+## 1.3.1
+
+### Patch Changes
+
+- [#178](https://github.com/AshikNesin/groot/pull/178) [`05e6aef`](https://github.com/AshikNesin/groot/commit/05e6aefa150ed6dba7beb5c4a77ad518089dd8d9) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Smaller fixes, each with a test that failed before it.
+  
+  - **R2 `copy()` no longer reads the whole source object into memory.** It
+    called `arrayBuffer()` before writing, which a large object cannot fit in a
+    Workers isolate. It now hands `put` the source's stream, which R2 streams
+    from object to object.
+  - **Updating or deleting a todo answers `404` when the row is gone.** Each did
+    an existence check and then the write; a todo deleted in between produced a
+    `200` with no data. The write is the check now: an empty `RETURNING` is the
+    `404`.
+  - **A pending `confirm()` settles when `ConfirmProvider` unmounts.** Whoever
+    awaited it was left waiting for ever, so the code after the `await`, its
+    `finally` blocks included, never ran. It resolves `false`.
+  - **The settings page keeps its prefix on a redirect.** For a section with an
+    encoded slash (`/settings/a%2Fb`) the splat param decodes to two segments
+    while the pathname has one, and the redirect went to `/account` instead of
+    `/settings/account`. The pathname is now counted decoded. A pathname that is
+    not valid percent-encoding is counted as it is.
+
 ## 1.3.2
 
 ### Patch Changes
@@ -13,7 +36,6 @@
 - [#315](https://github.com/AshikNesin/tiny-agents/pull/315) [`db00ff3`](https://github.com/AshikNesin/tiny-agents/commit/db00ff3423d5d4e3ded1897ca4617d32d45aea4a) Thanks [@AshikNesin](https://github.com/AshikNesin)! - The FeedbackBee feedback widget now loads from `feedbackbee.nesin.io` (was `feedbackbee.nesin.workers.dev`) in headless mode: no floating button in the bottom-right corner on any page. "Send feedback" in the sidebar's account menu opens it as the embed's own centered modal, replacing the app's CSS that hid the launcher and restyled the panel. Hotkeys no longer treat an inert `aria-modal` element (a closed modal kept in the page, like the headless panel) as an open dialog, so ⌘K and other shortcuts keep working after the feedback panel closes.
 
 - [#460](https://github.com/AshikNesin/tiny-agents/pull/460) [`190dede`](https://github.com/AshikNesin/tiny-agents/commit/190dedebb005421039ab584d3dc44e630ae44990) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Remove code comments (ADR 0028)
-
 ## 1.3.0
 
 ### Minor Changes
