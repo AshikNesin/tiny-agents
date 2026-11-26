@@ -22,7 +22,7 @@ import {
   submitCredentialsSchema,
   updateItemSchema,
 } from "./vault.schema";
-import { issueStepUp, assertStepUp, requireStepUp, verifyPassword } from "./vault.stepup";
+import { issueStepUp, assertStepUp, verifyPassword } from "./vault.stepup";
 
 export const vaultNoStore: Middleware = async (c, next) => {
   await next();
@@ -70,35 +70,35 @@ router.post("/vault/step-up", authRateLimiter, async (c) => {
   return ok(c, issueStepUp(userId));
 });
 
-router.post("/vault/items", requireStepUp, async (c) => {
+router.post("/vault/items", async (c) => {
   const body = await parseBody(c, createItemSchema);
   return ok(c, await admin.createItem(body), 201);
 });
 
-router.post("/vault/links", requireStepUp, async (c) => {
+router.post("/vault/links", async (c) => {
   const body = await parseBody(c, linkItemSchema);
   return ok(c, await admin.linkItem(body), 201);
 });
 
-router.post("/vault/move-to-1password", requireStepUp, async (c) => {
+router.post("/vault/move-to-1password", async (c) => {
   return ok(c, await admin.moveLocalItemsToOnePassword());
 });
 
-router.put("/vault/items/:handle", requireStepUp, async (c) => {
+router.put("/vault/items/:handle", async (c) => {
   const handle = handleParam(c);
   return ok(c, await admin.updateItem(handle, await parseBody(c, updateItemSchema)));
 });
 
-router.patch("/vault/items/:handle", requireStepUp, async (c) => {
+router.patch("/vault/items/:handle", async (c) => {
   const body = await parseBody(c, patchValueSchema);
   return ok(c, await admin.updateItem(handleParam(c), { values: { [body.field]: body.value } }));
 });
 
-router.delete("/vault/items/:handle", requireStepUp, async (c) => {
+router.delete("/vault/items/:handle", async (c) => {
   return ok(c, await admin.deleteItem(handleParam(c), parseQuery(c, deleteQuerySchema)));
 });
 
-router.post("/vault/items/:handle/reveal", requireStepUp, async (c) => {
+router.post("/vault/items/:handle/reveal", async (c) => {
   const body = await parseBody(c, revealSchema);
   return ok(c, await admin.reveal(handleParam(c), body.field, body.purpose));
 });

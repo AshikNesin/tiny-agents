@@ -10,7 +10,7 @@ import { authRateLimiter } from "@groot/core/middlewares/rate-limit.middleware";
 import * as connectionsService from "./connections.service";
 import { getConnectionManager } from "./connections.manager";
 import { clientMetadata, clientMetadataUrl } from "./oauth";
-import { assertStepUp, requireStepUp } from "../vault/vault.stepup";
+import { assertStepUp } from "../vault/vault.stepup";
 import {
   callToolSchema,
   createConnectionSchema,
@@ -76,7 +76,7 @@ router.post("/connections/test", async (c) => {
   return ok(c, await connectionsService.test(await parseBody(c, testConnectionSchema)));
 });
 
-router.post("/connections", requireStepUp, async (c) => {
+router.post("/connections", async (c) => {
   const payload = await parseBody(c, createConnectionSchema);
   return ok(c, await connectionsService.create(payload), 201);
 });
@@ -93,7 +93,7 @@ router.patch("/connections/:id", async (c) => {
   return ok(c, await connectionsService.update(id, payload));
 });
 
-router.delete("/connections/:id", requireStepUp, async (c) => {
+router.delete("/connections/:id", async (c) => {
   await connectionsService.remove(parseStringParam(c.req.param("id"), "id"));
   return ok<Deleted>(c, { deleted: true });
 });
