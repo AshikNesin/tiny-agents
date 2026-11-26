@@ -155,6 +155,7 @@ fun ChatPane(
             onCancelCredentials = { viewModel.cancelCredentials(it) },
             onOpenComputer = { onOpenLive("computer") },
             onOpenLink = { openCardLink(container, context, it) },
+            onAllowEveryBot = { taskId, tool -> viewModel.decide(taskId, true, tool, everyBot = true) },
         )
     }
 

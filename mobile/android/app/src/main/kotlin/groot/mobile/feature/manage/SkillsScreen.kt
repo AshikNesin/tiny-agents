@@ -85,12 +85,12 @@ fun SkillsRoute(container: AppContainer, onBack: () -> Unit) {
                 creating = false
                 editing = null
             },
-            onSave = { name, description, body, botIds ->
+            onSave = { name, description, body, botIds, allBots ->
                 creating = false
                 editing = null
                 resource.act("Could not save the skill.") {
                     val saved = skill ?: container.api.createSkill(name, description, body)
-                    container.api.updateSkill(saved.id, name, description, body, botIds)
+                    container.api.updateSkill(saved.id, name, description, body, botIds, allBots)
                 }
             },
             onDelete = {
@@ -107,13 +107,14 @@ private fun SkillForm(
     skill: Skill?,
     bots: List<BotListEntry>,
     onDismiss: () -> Unit,
-    onSave: (name: String, description: String, body: String, botIds: List<String>) -> Unit,
+    onSave: (name: String, description: String, body: String, botIds: List<String>, allBots: Boolean) -> Unit,
     onDelete: () -> Unit,
 ) {
     var name by remember { mutableStateOf(skill?.name.orEmpty()) }
     var description by remember { mutableStateOf(skill?.description.orEmpty()) }
     var body by remember { mutableStateOf(skill?.body.orEmpty()) }
-    val botIds = remember { (skill?.botIds ?: emptyList()).toMutableStateList() }
+    val botIds = remember { (skill?.botIds ?: bots.map { it.id }).toMutableStateList() }
+    var allBots by remember { mutableStateOf(skill?.allBots ?: true) }
     val nameOk = SKILL_NAME.matches(name.trim())
     Sheet(onDismiss = onDismiss, title = if (skill == null) "New skill" else "Edit skill") {
         Field(
@@ -126,6 +127,7 @@ private fun SkillForm(
         )
         Field(description, { description = it }, label = "Description", placeholder = "When a bot should use it")
         Field(body, { body = it }, label = "Instructions", singleLine = false, minLines = 5, maxLines = 16)
+        EveryBotRow(checked = allBots, onCheckedChange = { allBots = it })
         if (bots.isNotEmpty()) {
             SectionLabel("Bots that can use it")
             FlowRow(horizontalArrangement = Arrangement.spacedBy(S.sm), verticalArrangement = Arrangement.spacedBy(S.sm)) {
@@ -133,7 +135,7 @@ private fun SkillForm(
             }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(S.sm)) {
-            PrimaryButton("Save", enabled = nameOk && description.isNotBlank(), onClick = { onSave(name.trim(), description.trim(), body, botIds.toList()) })
+            PrimaryButton("Save", enabled = nameOk && description.isNotBlank(), onClick = { onSave(name.trim(), description.trim(), body, botIds.toList(), allBots) })
             if (skill != null) SecondaryButton("Delete", destructive = true, onClick = onDelete)
         }
     }

@@ -178,8 +178,8 @@ class ChatViewModel(private val container: AppContainer, val botId: String) : Vi
         container.chats.withdraw(botId, requestId)
     }
 
-    fun decide(taskId: Int, approved: Boolean, alwaysAllow: String? = null, grant: Boolean = false) {
-        container.chats.decideApproval(botId, taskId, approved, alwaysAllow, grant)
+    fun decide(taskId: Int, approved: Boolean, alwaysAllow: String? = null, grant: Boolean = false, everyBot: Boolean = false) {
+        container.chats.decideApproval(botId, taskId, approved, alwaysAllow, grant, everyBot)
     }
 
     fun answer(taskId: Int, answers: List<OwnerAnswer>?) = act("Could not send your answers.") {
