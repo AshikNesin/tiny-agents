@@ -513,7 +513,7 @@ describe("passkey API", () => {
     const racingCredential = randomBytes(16);
     const racedA = await passkeyService.generateRegistrationOptions({ userId: user.id });
     const racedB = await passkeyService.generateRegistrationOptions({ userId: user.id });
-    const [won, lost] = await Promise.allSettled([
+    const outcomes = await Promise.allSettled([
       passkeyService.verifyRegistration({
         userId: user.id,
         response: registrationResponse(racedA.challenge, racingCredential),
@@ -523,9 +523,9 @@ describe("passkey API", () => {
         response: registrationResponse(racedB.challenge, racingCredential),
       }),
     ]);
-    expect(won.status).toBe("fulfilled");
-    if (lost.status !== "rejected") throw new Error("the racing registration should have lost");
-    expect(lost.reason).toMatchObject({ output: { statusCode: 409 } });
+    expect(outcomes.map((outcome) => outcome.status).toSorted()).toEqual(["fulfilled", "rejected"]);
+    const lost = outcomes.find((outcome) => outcome.status === "rejected");
+    expect(lost?.reason).toMatchObject({ output: { statusCode: 409 } });
   });
 
   it("says 404, not 500, when a rename loses its race with a delete", async () => {

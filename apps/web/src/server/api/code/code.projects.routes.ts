@@ -37,7 +37,6 @@ import {
 } from "./code.github";
 import { setFlowCookie } from "./code.webhook";
 import { openProjectChat } from "./code.chat";
-import { requireStepUp } from "../vault/vault.stepup";
 import { threadReview } from "./code.review";
 import { checkpointRange, checkpointsOf, revertTo } from "./code.checkpoints";
 import { codeHub } from "./code.hub";
@@ -120,7 +119,7 @@ const threadParam = (raw: string | undefined) => {
 
 router.get("/code/github", async (c) => ok<GitHubStatus>(c, await githubStatus()));
 
-router.put("/code/github", requireStepUp, async (c) => {
+router.put("/code/github", async (c) => {
   const { token } = await parseBody(
     c,
     z.object({ token: z.string().trim().min(10).max(400).nullable() }),
@@ -129,7 +128,7 @@ router.put("/code/github", requireStepUp, async (c) => {
   return ok<GitHubStatus>(c, await githubStatus());
 });
 
-router.post("/code/github/app/manifest", requireStepUp, async (c) => {
+router.post("/code/github/app/manifest", async (c) => {
   const { organization } = await parseBody(
     c,
     z.object({
@@ -145,7 +144,7 @@ router.post("/code/github/app/manifest", requireStepUp, async (c) => {
   return ok(c, { url: flow.url, manifest: flow.manifest, webhooks: flow.webhooks });
 });
 
-router.post("/code/github/app/install", requireStepUp, async (c) => {
+router.post("/code/github/app/install", async (c) => {
   const flow = await startInstall();
   setFlowCookie(c, flow.binding);
   return ok(c, { url: flow.url });
@@ -155,7 +154,7 @@ router.get("/code/github/app/repositories", async (c) =>
   ok(c, await codeGitHub().appRepositories()),
 );
 
-router.delete("/code/github/app", requireStepUp, async (c) => {
+router.delete("/code/github/app", async (c) => {
   await disconnectGitHubApp();
   return ok<GitHubStatus>(c, await githubStatus());
 });

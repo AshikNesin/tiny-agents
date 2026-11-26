@@ -256,7 +256,7 @@ export class Session {
     const queue = this.turnQueue;
     const signal = this.abort.signal;
     while (!signal.aborted) {
-      // eslint-disable-next-line react-doctor/async-await-in-loop -- sequential turn queue
+      // eslint-disable-next-line react-doctor/async-await-in-loop
       const next = await queue.next();
       if (signal.aborted) return;
       this.running = true;

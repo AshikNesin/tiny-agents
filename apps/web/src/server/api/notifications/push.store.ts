@@ -83,20 +83,23 @@ export async function registerDevice(userId: number, body: PushDeviceBody): Prom
         ),
       );
   } else {
-    const [row] = await db
-      .select({ n: count() })
-      .from(pushSubscriptions)
-      .where(eq(pushSubscriptions.userId, userId));
-    if ((row?.n ?? 0) >= MAX_DEVICES) {
-      throw Boom.conflict(
-        `At most ${MAX_DEVICES} devices can receive notifications. Remove one first.`,
-      );
-    }
-    const [created] = await db
-      .insert(pushSubscriptions)
-      .values({ ...fields, endpoint: body.endpoint, status: "active", createdAt: now })
-      .returning({ id: pushSubscriptions.id });
-    id = created!.id;
+    id = db.transaction((tx) => {
+      const row = tx
+        .select({ n: count() })
+        .from(pushSubscriptions)
+        .where(eq(pushSubscriptions.userId, userId))
+        .get();
+      if ((row?.n ?? 0) >= MAX_DEVICES) {
+        throw Boom.conflict(
+          `At most ${MAX_DEVICES} devices can receive notifications. Remove one first.`,
+        );
+      }
+      return tx
+        .insert(pushSubscriptions)
+        .values({ ...fields, endpoint: body.endpoint, status: "active", createdAt: now })
+        .returning({ id: pushSubscriptions.id })
+        .get().id;
+    });
   }
   await refreshActiveDevices();
   return id;

@@ -83,7 +83,7 @@ function BotRow({
           <span className="flex items-baseline gap-2">
             <span className="min-w-0 flex-1 truncate">{bot.name}</span>
             {preview && (
-              <span className="text-muted-foreground shrink-0 text-[11px] group-focus-within/row:invisible group-hover/row:invisible group-has-[[data-state=open]]/row:invisible">
+              <span className="text-muted-foreground shrink-0 text-[11px] group-focus-within/row:invisible group-hover/row:invisible group-has-[[data-popup-open]]/row:invisible">
                 {relativeTime(bot.lastActivityAt)}
               </span>
             )}
@@ -94,20 +94,22 @@ function BotRow({
             </span>
           )}
         </span>
-        <span className="group-focus-within/row:hidden group-hover/row:hidden group-has-[[data-state=open]]/row:hidden">
+        <span className="group-focus-within/row:hidden group-hover/row:hidden group-has-[[data-popup-open]]/row:hidden">
           <RowStatus bot={bot} active={active} />
         </span>
       </Link>
       {owner && (
         <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button
-              type="button"
-              aria-label={`${bot.name} actions`}
-              className="text-muted-foreground hover:bg-sidebar-accent focus-visible:ring-sidebar-ring absolute top-1.5 right-1.5 flex size-6 items-center justify-center rounded-lg opacity-0 outline-none group-focus-within/row:opacity-100 group-hover/row:opacity-100 focus-visible:ring-1 data-[state=open]:opacity-100"
-            >
-              <MoreHorizontal className="size-4" />
-            </button>
+          <DropdownMenuTrigger
+            render={
+              <button
+                type="button"
+                aria-label={`${bot.name} actions`}
+                className="text-muted-foreground hover:bg-sidebar-accent focus-visible:ring-sidebar-ring absolute top-1.5 right-1.5 flex size-6 items-center justify-center rounded-lg opacity-0 outline-none group-focus-within/row:opacity-100 group-hover/row:opacity-100 focus-visible:ring-1 data-popup-open:opacity-100"
+              />
+            }
+          >
+            <MoreHorizontal className="size-4" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" side="right">
             <DropdownMenuItem onSelect={() => void togglePin(bot.id)}>

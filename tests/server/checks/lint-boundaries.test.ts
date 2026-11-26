@@ -576,6 +576,30 @@ const FIXTURES: Record<string, Fixture> = {
     source: 'export const toModel = "clicked \u2014 now on the page";\n',
     rules: [],
   },
+  "apps/web/src/client/r18-fail.tsx": {
+    source:
+      'import { Slot } from "radix-ui";\nimport { Button } from "@base-ui/react/button";\nimport { Command } from "cmdk";\nexport const parts = [Slot, Button, Command];\n',
+    rules: ["R18", "R18", "R18"],
+    mentions: "add one there first",
+  },
+  "packages/shell/src/r18-fail.tsx": {
+    source: 'import { Command } from "cmdk";\nexport const c = Command;\n',
+    rules: ["R18"],
+  },
+  "apps/web/src/client/r18-shadcn-pass.tsx": {
+    source:
+      'import { MessageScroller } from "@shadcn/react/message-scroller";\nexport const m = MessageScroller;\n',
+    rules: [],
+  },
+  "packages/ui/src/r18-pass.tsx": {
+    source:
+      'import { Slot } from "radix-ui";\nimport { Button } from "@base-ui/react/button";\nexport const parts = [Slot, Button];\n',
+    rules: [],
+  },
+  "apps/web/src/client/r18-groot-ui-pass.tsx": {
+    source: 'import { Button } from "@groot/ui/button";\nexport const b = Button;\n',
+    rules: [],
+  },
   "packages/agent/src/r17-catch-fail.ts": {
     source:
       "export class Runtime {\n  async dismiss(): Promise<void> {}\n  watch(): void {\n    void this.dismiss().catch(() => {});\n  }\n}\n",
@@ -595,6 +619,27 @@ const FIXTURES: Record<string, Fixture> = {
   "packages/sandbox/src/r17-pass.ts": {
     source:
       'const ignoreClosedSocket = (error: unknown) => {\n  if (!(error instanceof Error && error.message.includes("closed"))) throw error;\n};\nexport async function close(socket: { end(): Promise<void> }) {\n  await socket.end().catch(ignoreClosedSocket);\n  try {\n    await socket.end();\n  } catch (error) {\n    throw new Error("Could not close the socket.", { cause: error });\n  }\n  return socket.end().then(\n    () => true,\n    (error: unknown) => {\n      throw error;\n    },\n  );\n}\n',
+    rules: [],
+  },
+  "apps/web/src/server/api/tasks/r19-query-fail.ts": {
+    source:
+      'import { eq } from "drizzle-orm";\nimport { db, tasks } from "../../db";\nexport async function createTask(sourceKey: string) {\n  const existing = await db.query.tasks.findFirst({ where: eq(tasks.sourceKey, sourceKey) });\n  if (existing) return existing;\n  const [row] = await db.insert(tasks).values({ sourceKey }).returning();\n  return row;\n}\n',
+    rules: ["R19"],
+    mentions: "onConflictDoNothing",
+  },
+  "packages/core/src/passkey/r19-select-fail.ts": {
+    source:
+      'import { eq } from "drizzle-orm";\nimport { db } from "../database";\nimport { passkeys } from "./schema";\nexport async function register(id: string) {\n  const [taken] = await db.select().from(passkeys).where(eq(passkeys.id, id));\n  if (taken) throw new Error("taken");\n  await db.insert(passkeys).values({ id });\n}\n',
+    rules: ["R19"],
+  },
+  "apps/web/src/server/api/tasks/r19-returned-insert-fail.ts": {
+    source:
+      'import { eq } from "drizzle-orm";\nimport { db, tasks } from "../../db";\nexport async function createTask(sourceKey: string) {\n  const existing = await db.query.tasks.findFirst({ where: eq(tasks.sourceKey, sourceKey) });\n  if (existing) return existing;\n  return db.insert(tasks).values({ sourceKey }).returning();\n}\n',
+    rules: ["R19"],
+  },
+  "apps/web/src/server/api/skills/r19-pass.ts": {
+    source:
+      'import { eq } from "drizzle-orm";\nimport { db, skills, users } from "../../db";\nexport async function save(name: string) {\n  const [row] = await db.insert(skills).values({ name }).onConflictDoNothing({ target: skills.name }).returning();\n  return row ?? (await db.query.skills.findFirst({ where: eq(skills.name, name) }));\n}\nexport async function addUser(email: string) {\n  await Promise.resolve();\n  return db.transaction((tx) => {\n    if (tx.select().from(users).where(eq(users.email, email)).get()) throw new Error("taken");\n    return tx.insert(users).values({ email }).returning().get();\n  });\n}\nexport async function touch(name: string) {\n  const found = await db.query.skills.findFirst({ where: eq(skills.name, name) });\n  await db.insert(users).values({ email: name });\n  return found;\n}\n',
     rules: [],
   },
   "apps/web/src/server/r8b-pass.ts": {
@@ -751,6 +796,11 @@ const FIXTURES: Record<string, Fixture> = {
     source:
       '// @ts-expect-error untyped\nimport legacy from "legacy";\n// oxlint-disable-next-line no-unused-vars\nconst unused = 1;\nexport const value = /* @__PURE__ */ legacy();\n',
     rules: [],
+  },
+  "apps/web/src/server/r16-directive-reason-fail.ts": {
+    source:
+      "// oxlint-disable-next-line no-unused-vars -- kept for the next release\nconst unused = 1;\nexport const value = 2;\n",
+    rules: ["R16"],
   },
   "apps/web/src/client/r12-elsewhere-pass.ts": {
     source: "let open = false;\nexport const toggle = () => (open = !open);\n",

@@ -12,7 +12,7 @@ import { type OwnerActions, showComputerPanel, useOwnerDecision } from "../../li
 import { useCredentialRequest } from "../../queries/vault";
 import { CredentialRequestForm } from "../vault/CredentialRequestForm";
 import { StepUpProvider } from "../vault/StepUp";
-import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "../ui/item";
+import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "@groot/ui/item";
 
 export function ApprovalCard({
   call,

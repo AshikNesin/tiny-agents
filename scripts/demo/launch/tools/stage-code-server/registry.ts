@@ -38,7 +38,7 @@ async function gate(step: number): Promise<void> {
       allowed = Number(readFileSync(path.join(DIR, "gate"), "utf8").trim()) || 0;
     } catch {}
     if (allowed >= step) return;
-    // eslint-disable-next-line no-await-in-loop -- a poll
+    // eslint-disable-next-line no-await-in-loop
     await sleep(100);
   }
 }
@@ -100,7 +100,7 @@ const brain: Brain = async (query) => {
   query.emit(init(query));
   let cost = 0;
   for (;;) {
-    // eslint-disable-next-line no-await-in-loop -- one prompt at a time
+    // eslint-disable-next-line no-await-in-loop
     const prompt = await query.nextInput();
     if (!prompt) return;
     await gate(2);

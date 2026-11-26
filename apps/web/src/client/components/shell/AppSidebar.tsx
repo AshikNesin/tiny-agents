@@ -215,37 +215,39 @@ export function AppSidebar() {
 
         <div className={cn("flex shrink-0 items-center gap-1 p-2.5", rail && "md:justify-center")}>
           <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                type="button"
-                aria-label="Account and navigation"
-                title={rail ? accountName : undefined}
-                className={cn(
-                  "flex h-10 min-w-0 flex-1 items-center gap-2 rounded-xl px-1.5 text-left text-sm outline-none focus-visible:ring-1 focus-visible:ring-sidebar-ring",
-                  inMenuPage ? "bg-sidebar-accent" : "hover:bg-sidebar-accent",
-                  rail && "md:size-10 md:flex-none md:justify-center md:px-0",
-                )}
-              >
-                <span className="bg-muted text-muted-foreground flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold">
-                  {initial}
-                </span>
-                <span className={cn("min-w-0 flex-1 truncate", rail && "md:hidden")}>
-                  {accountName}
-                </span>
-                <ChevronsUpDown
-                  className={cn("text-muted-foreground size-4 shrink-0", rail && "md:hidden")}
+            <DropdownMenuTrigger
+              render={
+                <button
+                  type="button"
+                  aria-label="Account and navigation"
+                  title={rail ? accountName : undefined}
+                  className={cn(
+                    "flex h-10 min-w-0 flex-1 items-center gap-2 rounded-xl px-1.5 text-left text-sm outline-none focus-visible:ring-1 focus-visible:ring-sidebar-ring",
+                    inMenuPage ? "bg-sidebar-accent" : "hover:bg-sidebar-accent",
+                    rail && "md:size-10 md:flex-none md:justify-center md:px-0",
+                  )}
                 />
-              </button>
+              }
+            >
+              <span className="bg-muted text-muted-foreground flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold">
+                {initial}
+              </span>
+              <span className={cn("min-w-0 flex-1 truncate", rail && "md:hidden")}>
+                {accountName}
+              </span>
+              <ChevronsUpDown
+                className={cn("text-muted-foreground size-4 shrink-0", rail && "md:hidden")}
+              />
             </DropdownMenuTrigger>
             <DropdownMenuContent
               align="start"
               side="top"
               className="w-56"
-              onCloseAutoFocus={(e) => {
-                if (!feedbackRequested.current) return;
+              finalFocus={() => {
+                if (!feedbackRequested.current) return true;
                 feedbackRequested.current = false;
-                e.preventDefault();
                 openFeedback();
+                return false;
               }}
             >
               <DropdownMenuItem

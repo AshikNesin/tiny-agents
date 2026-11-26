@@ -37,6 +37,6 @@ describe("Select", () => {
     await user.click(option);
 
     expect(onValueChange).toHaveBeenCalledWith("banana");
-    expect(screen.getByText("Banana")).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Fruit" })).toHaveTextContent("Banana");
   });
 });

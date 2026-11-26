@@ -11,7 +11,7 @@ describe("Tooltip", () => {
   it("shows content on hover", async () => {
     const user = userEvent.setup({ delay: 50, pointerEventsCheck: 0 });
     render(
-      <TooltipProvider delayDuration={0}>
+      <TooltipProvider delay={0}>
         <Tooltip content="Save the document">
           <button type="button">Save</button>
         </Tooltip>
@@ -26,7 +26,7 @@ describe("Tooltip", () => {
   it("anchors the tooltip to the wrapped trigger via aria-describedby", async () => {
     const user = userEvent.setup({ delay: 50, pointerEventsCheck: 0 });
     render(
-      <TooltipProvider delayDuration={0}>
+      <TooltipProvider delay={0}>
         <Tooltip content="Tip text">
           <button type="button">Hover me</button>
         </Tooltip>
@@ -44,7 +44,7 @@ describe("Tooltip", () => {
 
   it("requires a provider (documented usage contract)", () => {
     const { container } = render(
-      <TooltipProvider delayDuration={0}>
+      <TooltipProvider delay={0}>
         <div>content</div>
       </TooltipProvider>,
     );

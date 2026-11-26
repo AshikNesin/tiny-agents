@@ -34,7 +34,7 @@ import {
 import { useVaultItem, useVaultMutations, useVaultReveal } from "../../queries/vault";
 import { PolicyForm } from "../../components/vault/PolicyForm";
 import { useStepUp } from "../../components/vault/StepUp";
-import { Switch } from "../../components/ui/switch";
+import { Switch } from "@groot/ui/switch";
 import { ValueFieldInput } from "./NewVaultItem";
 
 const SHOW_MS = 30_000;

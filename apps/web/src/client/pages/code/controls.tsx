@@ -7,7 +7,7 @@ import {
   SearchSelect,
   searchSelectTriggerClass,
   type SearchSelectOption,
-} from "../../components/ui/search-select";
+} from "@groot/ui/search-select";
 import { errorMessage } from "../../lib/errors";
 import {
   codeApi,

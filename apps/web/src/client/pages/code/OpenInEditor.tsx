@@ -10,7 +10,7 @@ import {
   DialogTitle,
 } from "@groot/ui/dialog";
 import { cn } from "@groot/ui/lib/utils";
-import { ToggleGroup, ToggleGroupItem } from "../../components/ui/toggle-group";
+import { ToggleGroup, ToggleGroupItem } from "@groot/ui/toggle-group";
 import { copyText } from "../../lib/clipboard";
 import type { HarnessInfo } from "../../lib/code/api";
 import {
@@ -91,7 +91,6 @@ export function OpenInEditor({
           }}
         >
           <ToggleGroup
-            type="single"
             variant="outline"
             size="sm"
             spacing={0}

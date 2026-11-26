@@ -23,11 +23,9 @@ export function AddJobDialog() {
   const [open, setOpen] = useState(false);
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button>
-          <Plus className="size-4" />
-          <span className="hidden md:inline">Add Job</span>
-        </Button>
+      <DialogTrigger render={<Button />}>
+        <Plus className="size-4" />
+        <span className="hidden md:inline">Add Job</span>
       </DialogTrigger>
       <DialogContent className="max-w-2xl">
         <DialogHeader>

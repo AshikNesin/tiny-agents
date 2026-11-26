@@ -179,6 +179,22 @@ const BOUNDARY_RULES: BoundaryRule[] = [
     enabled: true,
   },
   {
+    id: "R18",
+    kind: "import",
+    scope: "**",
+    except: ["packages/ui/**"],
+    enabled: true,
+    restrict: {
+      patterns: [
+        {
+          regex: "^(radix-ui|@radix-ui/.*|@base-ui/react|@base-ui/react/.*|cmdk)$",
+          message:
+            "R18: UI primitives are imported only inside packages/ui (issue #576). Use the @groot/ui component, or add one there first.",
+        },
+      ],
+    },
+  },
+  {
     id: "R6",
     kind: "plugin",
     scope: "packages/agent/src/**",
@@ -389,6 +405,14 @@ const BOUNDARY_RULES: BoundaryRule[] = [
     scope: "**",
     rule: "repo/no-silent-fallback",
     except: [...OUT_OF_SCOPE, "tests/**", "**/*.test.ts", "**/*.test.tsx"],
+    enabled: true,
+  },
+  {
+    id: "R19",
+    kind: "plugin",
+    scope: "**/src/**/*.ts",
+    rule: "repo/no-check-then-insert",
+    except: ["**/*.test.ts"],
     enabled: true,
   },
   {

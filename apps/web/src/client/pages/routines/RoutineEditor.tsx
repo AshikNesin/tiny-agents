@@ -60,7 +60,7 @@ export function RoutineEditor({
     if (!open || !bots) return;
     const pick = landingBotId(bots);
     if (pick) setForm((current) => (current.botId ? current : { ...current, botId: pick }));
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- a list landing picks, not the editor opening on the last one
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bots]);
 
   useEffect(() => {

@@ -82,7 +82,7 @@ describe("a PR review's header", () => {
 
     expect(await screen.findByText(/retry-webhooks → main/)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "More actions" }));
-    expect(screen.getByRole("menuitem", { name: "Open on GitHub" })).toHaveAttribute(
+    expect(await screen.findByRole("menuitem", { name: "Open on GitHub" })).toHaveAttribute(
       "href",
       "https://github.com/acme/api/pull/482",
     );

@@ -1,6 +1,6 @@
 import type { SkillSummary } from "../../../shared/api/skills";
 import { toggleId, type BotDraft } from "../../lib/bot-draft";
-import { Switch } from "../ui/switch";
+import { Switch } from "@groot/ui/switch";
 
 export function SkillsSection({
   skills,

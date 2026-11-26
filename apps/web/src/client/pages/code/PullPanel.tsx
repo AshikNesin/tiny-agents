@@ -29,7 +29,7 @@ import {
 } from "@groot/ui/dropdown-menu";
 import { cn } from "@groot/ui/lib/utils";
 import { Spinner } from "../../components/ui/spinner";
-import { Switch } from "../../components/ui/switch";
+import { Switch } from "@groot/ui/switch";
 import { errorMessage } from "../../lib/errors";
 import { markdownComponents } from "../../lib/markdown";
 import { projectsApi } from "../../lib/code/projects";
@@ -145,10 +145,17 @@ export function PullPanel({
   );
   const moreMenu = (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon-xs" aria-label="More" className="text-muted-foreground">
-          <MoreHorizontal />
-        </Button>
+      <DropdownMenuTrigger
+        render={
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            aria-label="More"
+            className="text-muted-foreground"
+          />
+        }
+      >
+        <MoreHorizontal />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         <DropdownMenuItem onSelect={() => setLinking(true)}>
@@ -183,22 +190,28 @@ export function PullPanel({
               {onReview && <ReviewButton onOpen={() => onReview(pr.url)} />}
               <RefreshButton onClick={reload} />
               <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon-xs"
-                    aria-label="PR actions"
-                    className="text-muted-foreground"
-                  >
-                    <MoreHorizontal />
-                  </Button>
+                <DropdownMenuTrigger
+                  render={
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      aria-label="PR actions"
+                      className="text-muted-foreground"
+                    />
+                  }
+                >
+                  <MoreHorizontal />
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuItem asChild>
-                    <a href={pr.url} target="_blank" rel="noreferrer">
-                      <ExternalLink />
-                      Open on GitHub
-                    </a>
+                  <DropdownMenuItem
+                    render={(linkProps) => (
+                      <a {...linkProps} href={pr.url} target="_blank" rel="noreferrer">
+                        {linkProps.children}
+                      </a>
+                    )}
+                  >
+                    <ExternalLink />
+                    Open on GitHub
                   </DropdownMenuItem>
                   <DropdownMenuItem
                     variant="destructive"
@@ -558,15 +571,17 @@ function ActivePull({
       <div className="flex flex-wrap gap-2">
         {pr.state === "open" && methods.length > 0 && (
           <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                size="sm"
-                disabled={busy !== null || pr.draft || mergeBlocked !== null}
-                title={pr.draft ? "A draft cannot be merged; switch Draft off first" : undefined}
-              >
-                {busy === "merge" ? <Spinner /> : <GitMerge />}
-                Merge
-              </Button>
+            <DropdownMenuTrigger
+              render={
+                <Button
+                  size="sm"
+                  disabled={busy !== null || pr.draft || mergeBlocked !== null}
+                  title={pr.draft ? "A draft cannot be merged; switch Draft off first" : undefined}
+                />
+              }
+            >
+              {busy === "merge" ? <Spinner /> : <GitMerge />}
+              Merge
             </DropdownMenuTrigger>
             <DropdownMenuContent>
               {methods.map((m) => (

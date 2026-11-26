@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { ChevronsUpDown } from "lucide-react";
 import { cn } from "@groot/ui/lib/utils";
-import { SearchSelect, type SearchSelectOption } from "./ui/search-select";
+import { SearchSelect, type SearchSelectOption } from "@groot/ui/search-select";
 
 export interface ModelPickerOption {
   id: string;

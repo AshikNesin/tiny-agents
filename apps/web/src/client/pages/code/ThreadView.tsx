@@ -110,10 +110,14 @@ function Header({
   const place = projectName ?? row?.cwd?.split("/").findLast(Boolean);
   return (
     <header className="border-border flex h-11 shrink-0 items-center gap-2 border-b px-3">
-      <Button asChild variant="ghost" size="icon-sm" className="lg:hidden" aria-label="All threads">
-        <Link to="/code">
-          <ArrowLeft />
-        </Link>
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        className="lg:hidden"
+        aria-label="All threads"
+        render={<Link to="/code" />}
+      >
+        <ArrowLeft />
       </Button>
       <h1 className="flex min-w-0 flex-1 items-baseline gap-1.5 text-sm">
         {place && (

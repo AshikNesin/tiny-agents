@@ -191,7 +191,7 @@ export async function decideApproval(
     grant?: boolean;
   },
   rt: BotAgentRuntime = runtime(),
-  viewer?: Viewer,
+  viewer: Viewer,
 ) {
   const chat = await openBotChat(id, rt);
   const { bot } = chat;
@@ -238,11 +238,11 @@ export async function answerQuestions(
   id: string,
   input: { taskId: number; answers: OwnerAnswer[] | null },
   rt: BotAgentRuntime = runtime(),
-  viewer?: Viewer,
+  viewer: Viewer,
 ) {
   const chat = await openBotChat(id, rt);
   const answeredBy =
-    viewer?.kind === "guest" && chat.row.guests?.length
+    viewer.kind === "guest" && chat.row.guests?.length
       ? `${(await authorOf(viewer.userId)).name} (guest)`
       : undefined;
   await chat.answerQuestions(input.taskId, input.answers, answeredBy);

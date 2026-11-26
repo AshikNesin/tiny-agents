@@ -19,7 +19,7 @@ Decision records: [ADR 0005](../adr/0005-secrets-live-outside-the-app.md),
 amended by [ADR 0017](../adr/0017-local-is-the-only-vault-backend.md),
 [ADR 0019](../adr/0019-vault-values-table.md),
 [ADR 0027](../adr/0027-1password-connect-runs-inside-the-app.md) and
-[ADR 0044](../adr/0044-1password-through-service-accounts.md).
+[ADR 0045](../adr/0045-1password-through-service-accounts.md).
 
 ## How a use flows
 

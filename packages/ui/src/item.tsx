@@ -1,8 +1,7 @@
 import * as React from "react";
 import { cva, type VariantProps } from "class-variance-authority";
-import { Slot } from "radix-ui";
 
-import { cn } from "@groot/ui/lib/utils";
+import { cn } from "./lib/utils";
 
 const itemVariants = /* @__PURE__ */ cva(
   "group/item flex w-full flex-wrap items-center rounded-lg border text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 [a]:hover:bg-muted",
@@ -26,19 +25,11 @@ const itemVariants = /* @__PURE__ */ cva(
   },
 );
 
-type ItemProps = React.ComponentProps<"div"> &
-  VariantProps<typeof itemVariants> & { asChild?: boolean };
+type ItemProps = React.ComponentProps<"div"> & VariantProps<typeof itemVariants>;
 
-function Item({
-  className,
-  variant = "default",
-  size = "default",
-  asChild = false,
-  ...props
-}: ItemProps) {
-  const Comp = asChild ? Slot.Root : "div";
+function Item({ className, variant = "default", size = "default", ...props }: ItemProps) {
   return (
-    <Comp
+    <div
       data-slot="item"
       data-variant={variant}
       data-size={size}

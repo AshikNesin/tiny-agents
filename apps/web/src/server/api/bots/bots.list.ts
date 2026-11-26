@@ -58,9 +58,9 @@ export function previewText(text: string, attachments?: AttachmentRef[]): string
   return hint.slice(0, PREVIEW_CHARS);
 }
 
-export async function listBots(rt: BotListRuntime, viewer?: Viewer): Promise<BotListEntry[]> {
+export async function listBots(rt: BotListRuntime, viewer: Viewer): Promise<BotListEntry[]> {
   const all = await db.select().from(bots).orderBy(desc(bots.lastActivityAt));
-  const markers = viewer?.kind === "guest" ? await guestReadMarkers(viewer.userId) : undefined;
+  const markers = viewer.kind === "guest" ? await guestReadMarkers(viewer.userId) : undefined;
   const rows = markers
     ? all
         .filter((bot) => markers.has(bot.id))

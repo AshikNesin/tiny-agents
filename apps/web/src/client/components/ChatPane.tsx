@@ -123,7 +123,7 @@ function ChatPaneBody({
   };
   const lastTurnActions = useMemo(
     () => (turn ? { at: turn.at, edit: editLast, retry: retryLast } : null),
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- the actions read the latest turn when run
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [turn?.at, turn?.text],
   );
 

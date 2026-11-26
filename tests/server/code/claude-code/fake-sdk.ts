@@ -129,7 +129,7 @@ export class FakeQuery implements CodingQuery {
 
   async *[Symbol.asyncIterator](): AsyncGenerator<CodingSdkMessage> {
     while (true) {
-      // eslint-disable-next-line react-doctor/async-await-in-loop -- a stream
+      // eslint-disable-next-line react-doctor/async-await-in-loop
       const next = await this.out.next();
       if (next === END) return;
       if (next.type === "__crash") throw next.error;
@@ -160,7 +160,7 @@ export const echo: Brain = async (query) => {
 
 async function* prompts(query: FakeQuery): AsyncGenerator<CodingSdkUserMessage> {
   while (true) {
-    // eslint-disable-next-line react-doctor/async-await-in-loop -- one prompt at a time
+    // eslint-disable-next-line react-doctor/async-await-in-loop
     const input = await query.nextInput();
     if (!input) return;
     yield input;

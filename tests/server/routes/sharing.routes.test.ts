@@ -25,7 +25,7 @@ import {
 const app = createTestApp();
 const ownerToken = await authToken("sharing-owner@example.com", 990_001);
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- response data varies per route
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Data = any;
 
 function asOwner(path: string, init: { method?: string; json?: unknown } = {}) {

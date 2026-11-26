@@ -64,12 +64,12 @@ afterEach(async () => {
 const setup = { app, token: () => token };
 const BOT = { description: "", systemPrompt: "Be brief.", modelId: TEST_MODEL };
 
-// oxlint-disable-next-line typescript/no-explicit-any -- list rows
+// oxlint-disable-next-line typescript/no-explicit-any
 async function listRow(botId: string): Promise<any> {
   const response = await app.request("/api/v1/bots", {
     headers: { authorization: `Bearer ${token}` },
   });
-  // oxlint-disable-next-line typescript/no-explicit-any -- list rows
+  // oxlint-disable-next-line typescript/no-explicit-any
   return ((await response.json()) as { data: any[] }).data.find((b) => b.id === botId);
 }
 

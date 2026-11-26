@@ -13,7 +13,7 @@ Get the app running, sign in, and add your first feature.
 | Files | Storage adapter: local disk                                                            |
 | AI    | Bots on pi-durable with pi-ai models (`packages/agent`)                                |
 | Infra | JSON logger with request context, Sentry seam, rate limiting, health probes            |
-| UI    | Radix + Tailwind component kit, layout shell, API client                               |
+| UI    | Base UI + Tailwind component kit, layout shell, API client                             |
 
 ## 1. Install and run
 

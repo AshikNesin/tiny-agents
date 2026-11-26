@@ -3,7 +3,6 @@ import { Boom } from "@groot/core/errors";
 import type { AppContext, AppEnv } from "@groot/core/types";
 import { ok } from "@groot/core/utils/api-response.utils";
 import { parseBody, parseQuery, parseStringParam } from "@groot/core/utils/controller.utils";
-import { requireStepUp } from "../vault/vault.stepup";
 import {
   addModelSchema,
   createAccountSchema,
@@ -39,11 +38,11 @@ function ifMatch(c: AppContext): number | undefined {
 
 router.get("/models/providers", async (c) => ok(c, await service.listAccounts()));
 
-router.post("/models/discover", requireStepUp, async (c) =>
+router.post("/models/discover", async (c) =>
   ok(c, await service.discover(await parseBody(c, discoverSchema))),
 );
 
-router.post("/models/providers", requireStepUp, async (c) =>
+router.post("/models/providers", async (c) =>
   ok(c, await service.createAccount(await parseBody(c, createAccountSchema)), 201),
 );
 
@@ -51,7 +50,7 @@ router.patch("/models/providers/:id", async (c) =>
   ok(c, await service.patchAccount(idParam(c), await parseBody(c, patchAccountSchema), ifMatch(c))),
 );
 
-router.put("/models/providers/:id/connection", requireStepUp, async (c) =>
+router.put("/models/providers/:id/connection", async (c) =>
   ok(c, await service.updateConnection(idParam(c), await parseBody(c, updateConnectionSchema))),
 );
 
@@ -62,7 +61,7 @@ router.post("/models/providers/:id/refresh", async (c) =>
   ok(c, await service.refreshAccount(idParam(c))),
 );
 
-router.delete("/models/providers/:id", requireStepUp, async (c) =>
+router.delete("/models/providers/:id", async (c) =>
   ok(c, await service.deleteAccount(idParam(c), parseQuery(c, moveToSchema).moveTo)),
 );
 
@@ -70,7 +69,7 @@ router.post("/models/providers/:id/models", async (c) =>
   ok(c, await service.addModel(idParam(c), await parseBody(c, addModelSchema)), 201),
 );
 
-router.post("/models/test", requireStepUp, async (c) =>
+router.post("/models/test", async (c) =>
   ok(c, await service.testModel(await parseBody(c, testSchema))),
 );
 

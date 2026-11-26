@@ -405,6 +405,59 @@ describe("the Code workspace", () => {
     );
   });
 
+  it("is just the box and its chips, with no heading, explainer or key hints", async () => {
+    renderAt("/code");
+    await screen.findByRole("textbox", { name: "What should the agent do?" });
+    expect(screen.queryByRole("heading", { name: "New thread" })).toBeNull();
+    expect(screen.queryByText(/own worktree/)).toBeNull();
+    expect(screen.queryByText(/starts it/)).toBeNull();
+  });
+
+  it("keeps the project it picked for you when another project's thread updates", async () => {
+    more.projects = [
+      { ...project, id: "p2", name: "api", repo: { owner: "acme", name: "api" } },
+      { ...project, id: "p3", name: "docs", repo: { owner: "acme", name: "docs" } },
+    ];
+    useCodeStore.setState({ threads: [thread("a", { projectId: "p3" })] });
+    renderAt("/code");
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Project" })).toHaveTextContent("docs"),
+    );
+    act(() => {
+      useCodeStore.setState({
+        threads: [
+          thread("a", { projectId: "p3" }),
+          thread("b", { projectId: "p2", updatedAt: "2026-11-06T00:00:00Z" }),
+        ],
+      });
+    });
+    expect(screen.getByRole("button", { name: "Project" })).toHaveTextContent("docs");
+  });
+
+  it("searches projects, with the ones you worked in lately under Recent and picked first", async () => {
+    more.projects = [
+      { ...project, id: "p2", name: "api", repo: { owner: "acme", name: "api" } },
+      { ...project, id: "p3", name: "docs", repo: { owner: "acme", name: "docs" } },
+    ];
+    useCodeStore.setState({ threads: [thread("a", { projectId: "p3" })] });
+    renderAt("/code");
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Project" })).toHaveTextContent("docs"),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Project" }));
+    const search = await screen.findByPlaceholderText("Choose a project…");
+    expect(
+      within(screen.getByRole("group", { name: "Recent" })).getByRole("option"),
+    ).toHaveTextContent("docs");
+    expect(
+      within(screen.getByRole("group", { name: "Projects" }))
+        .getAllByRole("option")
+        .map((o) => o.textContent),
+    ).toEqual(["webacme/web", "apiacme/api"]);
+    await userEvent.type(search, "api");
+    expect(screen.getAllByRole("option").map((o) => o.textContent)).toEqual(["apiacme/api"]);
+  });
+
   it("clears a task as it starts, so leaving and coming back cannot send it twice", async () => {
     more.creating = new Promise(() => {});
     renderAt("/code");

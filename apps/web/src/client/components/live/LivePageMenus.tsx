@@ -55,17 +55,19 @@ export function AppsMenu({
         if (next) void load();
       }}
     >
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          className={menuTool}
-          aria-label="Apps"
-          title="Open an app on this desktop"
-          data-testid={testId}
-        >
-          <AppWindow className="size-3.5" />
-        </Button>
+      <DropdownMenuTrigger
+        render={
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className={menuTool}
+            aria-label="Apps"
+            title="Open an app on this desktop"
+            data-testid={testId}
+          />
+        }
+      >
+        <AppWindow className="size-3.5" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="max-h-80 w-64 overflow-y-auto">
         <DropdownMenuLabel>Open an app</DropdownMenuLabel>
@@ -99,17 +101,19 @@ export function KeysMenu({
 }) {
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          className={menuTool}
-          aria-label="Keys"
-          title="Send a shortcut to the desktop"
-          data-testid={testId}
-        >
-          <Keyboard className="size-3.5" />
-        </Button>
+      <DropdownMenuTrigger
+        render={
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className={menuTool}
+            aria-label="Keys"
+            title="Send a shortcut to the desktop"
+            data-testid={testId}
+          />
+        }
+      >
+        <Keyboard className="size-3.5" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-60">
         <DropdownMenuLabel>Send to the desktop</DropdownMenuLabel>

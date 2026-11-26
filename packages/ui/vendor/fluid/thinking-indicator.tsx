@@ -2,7 +2,7 @@
 
 import { forwardRef, useState, useEffect, type HTMLAttributes } from "react";
 import { motion, AnimatePresence, useReducedMotion } from "motion/react";
-import { cn } from "@groot/ui/lib/utils";
+import { cn } from "../../src/lib/utils";
 import { fontWeights } from "./lib/font-weight";
 import { useSize, typeClass, type SizeVariant } from "./lib/size-context";
 

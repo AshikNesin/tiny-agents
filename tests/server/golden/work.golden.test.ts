@@ -47,7 +47,7 @@ const BOT = { description: "", systemPrompt: "Be brief.", modelId: TEST_MODEL };
 
 async function get(path: string, as = token) {
   const response = await app.request(path, { headers: { authorization: `Bearer ${as}` } });
-  // oxlint-disable-next-line typescript/no-explicit-any -- route data varies
+  // oxlint-disable-next-line typescript/no-explicit-any
   return ((await response.json()) as { data: any }).data;
 }
 

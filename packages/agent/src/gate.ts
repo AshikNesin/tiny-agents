@@ -44,7 +44,7 @@ export interface GateCall {
   readonly context: Context;
   readonly answers: "document" | "memory";
   userMessages(): Promise<readonly GateUserMessage[]>;
-  run?(): Promise<string | undefined>;
+  run(): Promise<string | undefined>;
   instructions(): Promise<string | undefined>;
 }
 
@@ -237,7 +237,6 @@ export class ToolGate {
 
   async #overRunCap(call: GateCall): Promise<boolean> {
     const { api, context } = call;
-    if (!call.run) return false;
     const decided = await api.memo<boolean>("gate:run-cap", context);
     if (decided !== undefined) return decided;
     const key = await call.run();

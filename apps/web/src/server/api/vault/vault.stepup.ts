@@ -42,11 +42,6 @@ export function assertStepUp(c: Parameters<Middleware>[0]): void {
   }
 }
 
-export const requireStepUp: Middleware = async (c, next) => {
-  assertStepUp(c);
-  await next();
-};
-
 export async function verifyPassword(userId: number, password: string): Promise<boolean> {
   const user = await db.query.users.findFirst({
     where: eq(users.id, userId),
