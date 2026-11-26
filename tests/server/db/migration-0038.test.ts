@@ -6,6 +6,7 @@ import * as schema from "../../../apps/web/src/server/db/schema";
 import { createAppDb, sqliteConnection } from "../../../apps/web/src/server/db";
 
 const MIGRATIONS = "apps/web/drizzle";
+const T = 1_700_000_000_000;
 
 let dir: string;
 
@@ -33,25 +34,78 @@ function migrationsBefore(tag: string): string {
 }
 
 describe("migration 0038", () => {
-  it("points Connect-era 1Password items at the service account backend", async () => {
+  it("shares a connection or skill every bot already had, guest-shared bots included, and keeps narrower ones as they were", async () => {
     const file = path.join(dir, "app.db");
     const before = createAppDb(`file:${file}`, {
-      migrationsFolder: migrationsBefore("0038_vault_onepassword_backend"),
+      migrationsFolder: migrationsBefore("0038_bots_share_by_default"),
     });
     const old = sqliteConnection(before);
-    const insert = old.prepare(
-      "INSERT INTO vault_items (id, handle, kind, backend, external_id, label, created_at, updated_at) VALUES (?, ?, 'login', ?, ?, ?, ?, ?)",
+    const bot = old.prepare(
+      "INSERT INTO bots (id, name, conversation_id, chat_started_at, last_activity_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
     );
-    insert.run("i1", "github", "onepassword-connect", "op-gh", "GitHub", 1, 1);
-    insert.run("i2", "umami", "local", "loc-umami", "Umami", 1, 1);
+    bot.run("ops", "Ops", "1", T, T, T, T);
+    bot.run("news", "News", "2", T, T, T, T);
+    bot.run("guest", "Guest", "3", T, T, T, T);
+    old
+      .prepare(
+        "INSERT INTO users (id, email, password, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+      )
+      .run(7, "guest@example.com", "!", T, T);
+    old.prepare("INSERT INTO guests (user_id, created_at) VALUES (?, ?)").run(7, T);
+    old
+      .prepare("INSERT INTO bot_guests (bot_id, user_id, created_at) VALUES (?, ?, ?)")
+      .run("guest", 7, T);
+    const connection = old.prepare(
+      "INSERT INTO connections (id, name, slug, url, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+    );
+    connection.run("gmail", "Gmail", "gmail", "https://gmail.example", T, T);
+    connection.run("github", "GitHub", "github", "https://github.example", T, T);
+    const link = old.prepare(
+      "INSERT INTO bot_connections (bot_id, connection_id, created_at) VALUES (?, ?, ?)",
+    );
+    link.run("ops", "gmail", T);
+    link.run("news", "gmail", T);
+    link.run("guest", "gmail", T);
+    link.run("ops", "github", T);
+    const skill = old.prepare(
+      "INSERT INTO skills (id, name, description, body, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+    );
+    skill.run("report", "report", "Report", "", T, T);
+    skill.run("deploy", "deploy", "Deploy", "", T, T);
+    const skillLink = old.prepare(
+      "INSERT INTO bot_skills (bot_id, skill_id, created_at) VALUES (?, ?, ?)",
+    );
+    skillLink.run("ops", "report", T);
+    skillLink.run("news", "report", T);
+    skillLink.run("guest", "report", T);
+    skillLink.run("news", "deploy", T);
     old.close();
 
     const after = createAppDb(`file:${file}`, { migrationsFolder: MIGRATIONS });
-    const rows = await after.select().from(schema.vaultItems);
-    expect(rows.map((row) => [row.handle, row.backend, row.externalId]).sort()).toEqual([
-      ["github", "onepassword", "op-gh"],
-      ["umami", "local", "loc-umami"],
+    const shared = await after.select().from(schema.connections);
+    expect(
+      shared
+        .map((row) => [row.id, row.allBots])
+        .sort(([a], [b]) => String(a).localeCompare(String(b))),
+    ).toEqual([
+      ["github", false],
+      ["gmail", true],
     ]);
+    const links = await after.select().from(schema.botConnections);
+    expect(links.map((row) => [row.botId, row.connectionId, row.enabled]).sort()).toEqual([
+      ["ops", "github", true],
+    ]);
+    const skills = await after.select().from(schema.skills);
+    expect(
+      skills
+        .map((row) => [row.id, row.allBots])
+        .sort(([a], [b]) => String(a).localeCompare(String(b))),
+    ).toEqual([
+      ["deploy", false],
+      ["report", true],
+    ]);
+    const skillLinks = await after.select().from(schema.botSkills);
+    expect(skillLinks.map((row) => [row.botId, row.skillId])).toEqual([["news", "deploy"]]);
     sqliteConnection(after).close();
   });
 });

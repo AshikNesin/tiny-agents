@@ -13,6 +13,7 @@ export interface SkillData {
   files: SkillFile[];
   source: string;
   sourceUrl: string | null;
+  allBots: boolean;
   botIds: string[];
   createdAt: Date;
   updatedAt: Date;
@@ -44,6 +45,7 @@ export interface SkillCreateBody {
   files?: SkillFile[];
   source?: "manual" | "url";
   sourceUrl?: string;
+  allBots?: boolean;
   botIds?: string[];
 }
 
@@ -51,5 +53,6 @@ export interface SkillUpdateBody {
   name?: string;
   description?: string;
   body?: string;
+  allBots?: boolean;
   botIds?: string[];
 }

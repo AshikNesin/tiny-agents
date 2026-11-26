@@ -91,6 +91,7 @@ export interface ApprovalText {
   title: string;
   facts?: ApprovalFact[];
   alwaysAllowHint: string;
+  allowEveryBotHint: string;
   foldedPayload?: string;
 }
 
@@ -105,6 +106,7 @@ export function approvalText(
   return {
     title: `${botName} wants to ${ask}${summary ? `: “${summary}”` : ""}`,
     alwaysAllowHint: `Approve, and let ${botName} ${ask} without asking`,
+    allowEveryBotHint: `Approve, and let every bot ${ask} without asking`,
     ...(call.name === "create_bot" ? { facts: newBotFacts(call.args ?? {}) } : {}),
     ...(payload.length > PAYLOAD_FOLD ? { foldedPayload: payload } : {}),
   };

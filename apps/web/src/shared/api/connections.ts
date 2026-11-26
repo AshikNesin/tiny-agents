@@ -23,6 +23,7 @@ export interface ConnectionData {
   hasSecret: boolean;
   secretRef: string | null;
   tools: ConnectionTool[];
+  allBots: boolean;
   botIds: string[];
   status: ConnectionStatus;
   error?: string;
@@ -69,6 +70,7 @@ export interface ConnectionCreateBody {
   secret?: string;
   clientId?: string;
   clientSecret?: string;
+  allBots?: boolean;
   botIds?: string[];
 }
 
@@ -78,6 +80,7 @@ export interface ConnectionUpdateBody {
   headerName?: string;
   secret?: string;
   secretRef?: string | null;
+  allBots?: boolean;
   botIds?: string[];
 }
 

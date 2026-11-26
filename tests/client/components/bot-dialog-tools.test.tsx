@@ -8,13 +8,16 @@
  * bot's own browser profile.
  */
 import React from "react";
-import { render, screen, within } from "@testing-library/react";
+import { render as renderPlain, screen, within } from "@testing-library/react";
+import { AppQueryProvider } from "../query-provider";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vite-plus/test";
 import { BotDialog } from "@/components/BotDialog";
 import type { Bot } from "../../../apps/web/src/shared/api/bots";
 import type { CatalogModel } from "../../../apps/web/src/shared/api/models";
 import { botsApi } from "@/lib/bots-api";
+
+const render = (ui: React.ReactElement) => renderPlain(ui, { wrapper: AppQueryProvider });
 
 vi.mock("@/lib/bots-api", () => ({
   botsApi: {

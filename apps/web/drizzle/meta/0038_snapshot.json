@@ -1,8 +1,8 @@
 {
-  "id": "2a9da6db-760a-4388-9b3f-4931fdb09573",
-  "prevId": "63c885e6-dee8-403e-becc-0e2cc00843fe",
   "version": "6",
   "dialect": "sqlite",
+  "id": "c838f563-7a0a-4722-8230-3ba90141ea52",
+  "prevId": "63c885e6-dee8-403e-becc-0e2cc00843fe",
   "tables": {
     "bot_chats": {
       "name": "bot_chats",
@@ -81,11 +81,11 @@
         "bot_chats_bot_id_bots_id_fk": {
           "name": "bot_chats_bot_id_bots_id_fk",
           "tableFrom": "bot_chats",
-          "columnsFrom": ["bot_id"],
           "tableTo": "bots",
+          "columnsFrom": ["bot_id"],
           "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -109,6 +109,14 @@
           "notNull": true,
           "autoincrement": false
         },
+        "enabled": {
+          "name": "enabled",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": true
+        },
         "created_at": {
           "name": "created_at",
           "type": "integer",
@@ -128,20 +136,20 @@
         "bot_connections_bot_id_bots_id_fk": {
           "name": "bot_connections_bot_id_bots_id_fk",
           "tableFrom": "bot_connections",
-          "columnsFrom": ["bot_id"],
           "tableTo": "bots",
+          "columnsFrom": ["bot_id"],
           "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "bot_connections_connection_id_connections_id_fk": {
           "name": "bot_connections_connection_id_connections_id_fk",
           "tableFrom": "bot_connections",
-          "columnsFrom": ["connection_id"],
           "tableTo": "connections",
+          "columnsFrom": ["connection_id"],
           "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {
@@ -196,20 +204,20 @@
         "bot_guests_bot_id_bots_id_fk": {
           "name": "bot_guests_bot_id_bots_id_fk",
           "tableFrom": "bot_guests",
-          "columnsFrom": ["bot_id"],
           "tableTo": "bots",
+          "columnsFrom": ["bot_id"],
           "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "bot_guests_user_id_users_id_fk": {
           "name": "bot_guests_user_id_users_id_fk",
           "tableFrom": "bot_guests",
-          "columnsFrom": ["user_id"],
           "tableTo": "users",
+          "columnsFrom": ["user_id"],
           "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {
@@ -350,29 +358,29 @@
         "bot_messages_from_bot_id_bots_id_fk": {
           "name": "bot_messages_from_bot_id_bots_id_fk",
           "tableFrom": "bot_messages",
-          "columnsFrom": ["from_bot_id"],
           "tableTo": "bots",
+          "columnsFrom": ["from_bot_id"],
           "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "bot_messages_to_bot_id_bots_id_fk": {
           "name": "bot_messages_to_bot_id_bots_id_fk",
           "tableFrom": "bot_messages",
-          "columnsFrom": ["to_bot_id"],
           "tableTo": "bots",
+          "columnsFrom": ["to_bot_id"],
           "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "bot_messages_reply_to_bot_id_bots_id_fk": {
           "name": "bot_messages_reply_to_bot_id_bots_id_fk",
           "tableFrom": "bot_messages",
-          "columnsFrom": ["reply_to_bot_id"],
           "tableTo": "bots",
+          "columnsFrom": ["reply_to_bot_id"],
           "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -439,6 +447,14 @@
           "notNull": true,
           "autoincrement": false
         },
+        "enabled": {
+          "name": "enabled",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": true
+        },
         "created_at": {
           "name": "created_at",
           "type": "integer",
@@ -458,20 +474,20 @@
         "bot_skills_bot_id_bots_id_fk": {
           "name": "bot_skills_bot_id_bots_id_fk",
           "tableFrom": "bot_skills",
-          "columnsFrom": ["bot_id"],
           "tableTo": "bots",
+          "columnsFrom": ["bot_id"],
           "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "bot_skills_skill_id_skills_id_fk": {
           "name": "bot_skills_skill_id_skills_id_fk",
           "tableFrom": "bot_skills",
-          "columnsFrom": ["skill_id"],
           "tableTo": "skills",
+          "columnsFrom": ["skill_id"],
           "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {
@@ -657,20 +673,20 @@
         "bots_model_ref_models_id_fk": {
           "name": "bots_model_ref_models_id_fk",
           "tableFrom": "bots",
-          "columnsFrom": ["model_ref"],
           "tableTo": "models",
+          "columnsFrom": ["model_ref"],
           "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "restrict"
+          "onDelete": "restrict",
+          "onUpdate": "no action"
         },
         "bots_project_id_code_projects_id_fk": {
           "name": "bots_project_id_code_projects_id_fk",
           "tableFrom": "bots",
-          "columnsFrom": ["project_id"],
           "tableTo": "code_projects",
+          "columnsFrom": ["project_id"],
           "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -803,11 +819,11 @@
         "code_autofix_passes_pull_id_code_pull_requests_id_fk": {
           "name": "code_autofix_passes_pull_id_code_pull_requests_id_fk",
           "tableFrom": "code_autofix_passes",
-          "columnsFrom": ["pull_id"],
           "tableTo": "code_pull_requests",
+          "columnsFrom": ["pull_id"],
           "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -965,11 +981,11 @@
         "code_findings_review_id_code_reviews_id_fk": {
           "name": "code_findings_review_id_code_reviews_id_fk",
           "tableFrom": "code_findings",
-          "columnsFrom": ["review_id"],
           "tableTo": "code_reviews",
+          "columnsFrom": ["review_id"],
           "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -1045,11 +1061,11 @@
         "code_handoff_finishes_handoff_id_code_handoffs_id_fk": {
           "name": "code_handoff_finishes_handoff_id_code_handoffs_id_fk",
           "tableFrom": "code_handoff_finishes",
-          "columnsFrom": ["handoff_id"],
           "tableTo": "code_handoffs",
+          "columnsFrom": ["handoff_id"],
           "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -1158,11 +1174,11 @@
         "code_handoffs_bot_id_bots_id_fk": {
           "name": "code_handoffs_bot_id_bots_id_fk",
           "tableFrom": "code_handoffs",
-          "columnsFrom": ["bot_id"],
           "tableTo": "bots",
+          "columnsFrom": ["bot_id"],
           "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -1206,11 +1222,11 @@
         "code_pr_comments_pull_id_code_pull_requests_id_fk": {
           "name": "code_pr_comments_pull_id_code_pull_requests_id_fk",
           "tableFrom": "code_pr_comments",
-          "columnsFrom": ["pull_id"],
           "tableTo": "code_pull_requests",
+          "columnsFrom": ["pull_id"],
           "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -1558,8 +1574,8 @@
         "code_pull_requests_open_idx": {
           "name": "code_pull_requests_open_idx",
           "columns": ["thread_id"],
-          "where": "state = 'open'",
-          "isUnique": true
+          "isUnique": true,
+          "where": "state = 'open'"
         },
         "code_pull_requests_thread_idx": {
           "name": "code_pull_requests_thread_idx",
@@ -1571,11 +1587,11 @@
         "code_pull_requests_project_id_code_projects_id_fk": {
           "name": "code_pull_requests_project_id_code_projects_id_fk",
           "tableFrom": "code_pull_requests",
-          "columnsFrom": ["project_id"],
           "tableTo": "code_projects",
+          "columnsFrom": ["project_id"],
           "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -1878,11 +1894,11 @@
         "code_reviews_project_id_code_projects_id_fk": {
           "name": "code_reviews_project_id_code_projects_id_fk",
           "tableFrom": "code_reviews",
-          "columnsFrom": ["project_id"],
           "tableTo": "code_projects",
+          "columnsFrom": ["project_id"],
           "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -1989,11 +2005,11 @@
         "code_runs_thread_id_code_threads_id_fk": {
           "name": "code_runs_thread_id_code_threads_id_fk",
           "tableFrom": "code_runs",
-          "columnsFrom": ["thread_id"],
           "tableTo": "code_threads",
+          "columnsFrom": ["thread_id"],
           "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -2178,11 +2194,11 @@
         "code_threads_project_id_code_projects_id_fk": {
           "name": "code_threads_project_id_code_projects_id_fk",
           "tableFrom": "code_threads",
-          "columnsFrom": ["project_id"],
           "tableTo": "code_projects",
+          "columnsFrom": ["project_id"],
           "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -2287,6 +2303,14 @@
           "notNull": false,
           "autoincrement": false
         },
+        "all_bots": {
+          "name": "all_bots",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": true
+        },
         "created_at": {
           "name": "created_at",
           "type": "integer",
@@ -2337,11 +2361,11 @@
         "guests_user_id_users_id_fk": {
           "name": "guests_user_id_users_id_fk",
           "tableFrom": "guests",
-          "columnsFrom": ["user_id"],
           "tableTo": "users",
+          "columnsFrom": ["user_id"],
           "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -2473,11 +2497,11 @@
         "llm_calls_bot_id_bots_id_fk": {
           "name": "llm_calls_bot_id_bots_id_fk",
           "tableFrom": "llm_calls",
-          "columnsFrom": ["bot_id"],
           "tableTo": "bots",
+          "columnsFrom": ["bot_id"],
           "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -2585,11 +2609,11 @@
         "memories_bot_id_bots_id_fk": {
           "name": "memories_bot_id_bots_id_fk",
           "tableFrom": "memories",
-          "columnsFrom": ["bot_id"],
           "tableTo": "bots",
+          "columnsFrom": ["bot_id"],
           "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -2633,11 +2657,11 @@
         "model_roles_model_id_models_id_fk": {
           "name": "model_roles_model_id_models_id_fk",
           "tableFrom": "model_roles",
-          "columnsFrom": ["model_id"],
           "tableTo": "models",
+          "columnsFrom": ["model_id"],
           "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "restrict"
+          "onDelete": "restrict",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -2774,11 +2798,11 @@
         "models_provider_id_providers_id_fk": {
           "name": "models_provider_id_providers_id_fk",
           "tableFrom": "models",
-          "columnsFrom": ["provider_id"],
           "tableTo": "providers",
+          "columnsFrom": ["provider_id"],
           "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -2842,11 +2866,11 @@
         "prompt_revisions_bot_id_bots_id_fk": {
           "name": "prompt_revisions_bot_id_bots_id_fk",
           "tableFrom": "prompt_revisions",
-          "columnsFrom": ["bot_id"],
           "tableTo": "bots",
+          "columnsFrom": ["bot_id"],
           "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -2987,20 +3011,20 @@
         "providers_credential_item_id_vault_items_id_fk": {
           "name": "providers_credential_item_id_vault_items_id_fk",
           "tableFrom": "providers",
-          "columnsFrom": ["credential_item_id"],
           "tableTo": "vault_items",
+          "columnsFrom": ["credential_item_id"],
           "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "restrict"
+          "onDelete": "restrict",
+          "onUpdate": "no action"
         },
         "providers_via_provider_id_providers_id_fk": {
           "name": "providers_via_provider_id_providers_id_fk",
           "tableFrom": "providers",
-          "columnsFrom": ["via_provider_id"],
           "tableTo": "providers",
+          "columnsFrom": ["via_provider_id"],
           "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "restrict"
+          "onDelete": "restrict",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -3128,11 +3152,11 @@
         "push_subscriptions_user_id_users_id_fk": {
           "name": "push_subscriptions_user_id_users_id_fk",
           "tableFrom": "push_subscriptions",
-          "columnsFrom": ["user_id"],
           "tableTo": "users",
+          "columnsFrom": ["user_id"],
           "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -3201,11 +3225,11 @@
         "routine_events_routine_id_routines_id_fk": {
           "name": "routine_events_routine_id_routines_id_fk",
           "tableFrom": "routine_events",
-          "columnsFrom": ["routine_id"],
           "tableTo": "routines",
+          "columnsFrom": ["routine_id"],
           "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -3341,11 +3365,11 @@
         "routine_runs_routine_id_routines_id_fk": {
           "name": "routine_runs_routine_id_routines_id_fk",
           "tableFrom": "routine_runs",
-          "columnsFrom": ["routine_id"],
           "tableTo": "routines",
+          "columnsFrom": ["routine_id"],
           "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -3501,11 +3525,11 @@
         "routines_bot_id_bots_id_fk": {
           "name": "routines_bot_id_bots_id_fk",
           "tableFrom": "routines",
-          "columnsFrom": ["bot_id"],
           "tableTo": "bots",
+          "columnsFrom": ["bot_id"],
           "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -3565,6 +3589,14 @@
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
+        },
+        "all_bots": {
+          "name": "all_bots",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": true
         },
         "created_at": {
           "name": "created_at",
@@ -3928,11 +3960,11 @@
         "vault_audit_events_item_id_vault_items_id_fk": {
           "name": "vault_audit_events_item_id_vault_items_id_fk",
           "tableFrom": "vault_audit_events",
-          "columnsFrom": ["item_id"],
           "tableTo": "vault_items",
+          "columnsFrom": ["item_id"],
           "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -4448,11 +4480,11 @@
         "passkeys_user_id_users_id_fk": {
           "name": "passkeys_user_id_users_id_fk",
           "tableFrom": "passkeys",
-          "columnsFrom": ["user_id"],
           "tableTo": "users",
+          "columnsFrom": ["user_id"],
           "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -4795,8 +4827,8 @@
         "jobs_singleton_idx": {
           "name": "jobs_singleton_idx",
           "columns": ["name", "singleton_key"],
-          "where": "\"jobs\".\"state\" IN ('created', 'active')",
-          "isUnique": true
+          "isUnique": true,
+          "where": "\"jobs\".\"state\" IN ('created', 'active')"
         }
       },
       "foreignKeys": {},
@@ -4808,9 +4840,9 @@
   "views": {},
   "enums": {},
   "_meta": {
-    "columns": {},
     "schemas": {},
-    "tables": {}
+    "tables": {},
+    "columns": {}
   },
   "internal": {
     "indexes": {}

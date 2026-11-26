@@ -24,6 +24,7 @@ import type {
   ClaudeCodeAccount,
   ClaudeCodeStatus,
   PastChatListData,
+  ToolPermissionsData,
 } from "../../../shared/api/bots";
 import type { ModelsResponse } from "../../../shared/api/models";
 import {
@@ -35,7 +36,9 @@ import {
   yoloSchema,
   updateBotSchema,
   sendMessageSchema,
+  toolPermissionsSchema,
 } from "./bots.schema";
+import { ownerToolPermissions, setOwnerToolPermissions } from "./tool-permissions";
 
 const router = new Hono<AppEnv>();
 
@@ -65,6 +68,17 @@ router.get("/models", (c) => {
 
 router.get("/capabilities", (c) => {
   return ok<CapabilityList>(c, { capabilities: getAgentRuntime().listCapabilities() });
+});
+
+router.get("/tool-permissions", async (c) => {
+  return ok<ToolPermissionsData>(c, { permissions: await ownerToolPermissions() });
+});
+
+router.put("/tool-permissions", async (c) => {
+  const { permissions } = await parseBody(c, toolPermissionsSchema);
+  const saved = await setOwnerToolPermissions(permissions);
+  await botsService.reconcileAllBots();
+  return ok<ToolPermissionsData>(c, { permissions: saved });
 });
 
 router.get("/events", (c) => {

@@ -271,8 +271,15 @@
     {
       "idx": 38,
       "version": "6",
-      "when": 1795668642858,
-      "tag": "0038_vault_onepassword_backend",
+      "when": 1795695044445,
+      "tag": "0038_bots_share_by_default",
+      "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "6",
+      "when": 1795701124619,
+      "tag": "0039_vault_onepassword_backend",
       "breakpoints": true
     }
   ]

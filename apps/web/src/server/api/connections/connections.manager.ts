@@ -11,7 +11,8 @@ import {
   type McpToolInfo,
   type McpTransportKind,
 } from "@tiny-agents/agent";
-import { botConnections, connections, db, type Connection } from "../../db";
+import { connections, db, type Connection } from "../../db";
+import { itemBotIds } from "../bots/bot-reach";
 import { reconcileBotConversation } from "../bots/bots.conversation";
 import { connectionCapabilityId, connectionTools, parseTools } from "../bots/bot-toolkits";
 import {
@@ -237,6 +238,7 @@ export class ConnectionManager {
     this.#runtime?.installCapability(
       createMcpCapability({
         slug: row.slug,
+        shared: row.allBots,
         name: row.name,
         url: row.url,
         tools,
@@ -257,11 +259,9 @@ export class ConnectionManager {
   }
 
   async #reconcileLinked(id: string): Promise<void> {
-    const links = await db
-      .select({ botId: botConnections.botId })
-      .from(botConnections)
-      .where(eq(botConnections.connectionId, id));
-    await this.#reconcile(links.map((link) => link.botId));
+    const row = await findConnection(id);
+    if (!row) return;
+    await this.#reconcile((await itemBotIds("connections", [row])).get(id) ?? []);
   }
 
   #reconcile(botIds: Iterable<string>): Promise<void> {

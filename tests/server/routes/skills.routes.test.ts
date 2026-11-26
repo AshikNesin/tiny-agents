@@ -3,9 +3,17 @@ import { eq } from "drizzle-orm";
 import { skillStore } from "../../../apps/web/src/server/api/skills/skills.store";
 import * as skillsService from "../../../apps/web/src/server/api/skills/skills.service";
 import { parseGitHubUrl } from "../../../apps/web/src/server/api/skills/skills.parse";
-import { bots, db, skills } from "../../../apps/web/src/server/db";
+import {
+  botGuests,
+  botSkills,
+  bots,
+  db,
+  guests,
+  skills,
+  users,
+} from "../../../apps/web/src/server/db";
 import { api, createTestApp } from "../helpers";
-import { authToken, seedBot as seedBotRow } from "../fixtures";
+import { authToken, fakeCatalog, seedBot as seedBotRow, useTestRuntime } from "../fixtures";
 
 const token = await authToken("skills@example.com");
 const buildApp = () => createTestApp();
@@ -15,6 +23,7 @@ interface SkillBody {
   name: string;
   source: string;
   botIds: string[];
+  allBots: boolean;
   warnings: string[];
   [key: string]: unknown;
 }
@@ -39,6 +48,8 @@ describe("Skills API", () => {
     vi.unstubAllGlobals();
     await db.delete(skills);
     await db.delete(bots);
+    await db.delete(users).where(eq(users.id, 990_930));
+    useTestRuntime(undefined);
   });
 
   it("previews a pasted SKILL.md and creates it assigned to a bot", async () => {
@@ -210,6 +221,64 @@ describe("Skills API", () => {
     expect(deleted.status).toBe(200);
     expect(deleted.body.data).toEqual({ deleted: true });
     expect((await skillStore.list(901)).map((s) => s.name)).toEqual(["inbox-zero"]);
+  });
+
+  it("gives a new skill to every bot, including bots made later and a bot shared with a guest", async () => {
+    const app = buildApp();
+    const ops = await seedBot("930");
+    const shared = await seedBot("931");
+    await db.insert(users).values({ id: 990_930, email: "skill-guest@example.com", password: "!" });
+    await db.insert(guests).values({ userId: 990_930 });
+    await db.insert(botGuests).values({ botId: shared.id, userId: 990_930 });
+
+    const created = await api<SkillBody>(app, "/api/v1/skills", {
+      method: "POST",
+      json: { name: "deploy", description: "Deploy", body: "careful" },
+      token,
+    });
+    expect(created.status).toBe(201);
+    expect(created.body.data).toMatchObject({ allBots: true });
+    expect([...created.body.data!.botIds].sort()).toEqual([ops.id, shared.id].sort());
+
+    const later = await seedBot("932");
+    expect((await skillStore.list(932)).map((skill) => skill.name)).toEqual(["deploy"]);
+    expect((await skillStore.list(931)).map((skill) => skill.name)).toEqual(["deploy"]);
+    const bot = await api<{ skillIds: string[] }>(app, `/api/v1/bots/${later.id}`, { token });
+    expect(bot.body.data!.skillIds).toEqual([created.body.data!.id]);
+    expect(await db.$count(botSkills)).toBe(0);
+  });
+
+  it("turns a shared skill off for one bot, keeping it for every other bot", async () => {
+    useTestRuntime({ configure: async () => undefined, catalog: fakeCatalog() } as never);
+    const app = buildApp();
+    const ops = await seedBot("940");
+    const news = await seedBot("941");
+    const created = await api<SkillBody>(app, "/api/v1/skills", {
+      method: "POST",
+      json: { name: "deploy", description: "Deploy", body: "careful" },
+      token,
+    });
+    const id = created.body.data!.id;
+
+    const off = await api<{ skillIds: string[] }>(app, `/api/v1/bots/${news.id}`, {
+      method: "PATCH",
+      json: { skillIds: [] },
+      token,
+    });
+    expect(off.body.data!.skillIds).toEqual([]);
+    expect(await skillStore.list(941)).toEqual([]);
+    const third = await seedBot("942");
+    const detail = await api<SkillBody>(app, `/api/v1/skills/${id}`, { token });
+    expect(detail.body.data).toMatchObject({ allBots: true });
+    expect([...detail.body.data!.botIds].sort()).toEqual([ops.id, third.id].sort());
+
+    const narrowed = await api<SkillBody>(app, `/api/v1/skills/${id}`, {
+      method: "PATCH",
+      json: { allBots: false, botIds: [ops.id] },
+      token,
+    });
+    expect(narrowed.body.data).toMatchObject({ allBots: false, botIds: [ops.id] });
+    expect(await skillStore.list(942)).toEqual([]);
   });
 
   it("never lets a bot overwrite a skill it is not assigned: a new version of its own, or a new name", async () => {

@@ -7,21 +7,27 @@ import { Section } from "@groot/shell/components/layout/Section";
 import type { BotListEntry } from "../../../../shared/api/bots";
 import type { Connection } from "../../../../shared/api/connections";
 import { BotAvatar } from "../../../components/BotAvatar";
+import { EveryBotSwitch } from "../../../components/EveryBotSwitch";
 
 export function ConnectionBotsSection({
   connection,
   bots,
   onToggleBot,
+  onSetAllBots,
 }: {
   connection: Connection;
   bots: BotListEntry[] | null;
   onToggleBot: (botId: string, enable: boolean) => void;
+  onSetAllBots: (allBots: boolean) => void;
 }) {
   return (
     <Section
       title="Used by bots"
       meta={connection.botIds.length === 1 ? "1 bot" : `${connection.botIds.length} bots`}
     >
+      <div className="mb-3">
+        <EveryBotSwitch checked={connection.allBots} onCheckedChange={onSetAllBots} />
+      </div>
       {bots === null ? (
         <p className="py-4 text-center text-sm text-muted-foreground">Loading…</p>
       ) : bots.length === 0 ? (

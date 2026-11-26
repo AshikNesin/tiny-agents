@@ -21,6 +21,7 @@ export function ToolsSection({
   setToolQuery,
   expanded,
   setExpanded,
+  inherited = {},
 }: {
   draft: BotDraft;
   edit: <K extends keyof BotDraft>(key: K, value: BotDraft[K]) => void;
@@ -35,8 +36,10 @@ export function ToolsSection({
   setToolQuery: (query: string) => void;
   expanded: Record<string, boolean>;
   setExpanded: (next: (current: Record<string, boolean>) => Record<string, boolean>) => void;
+  inherited?: Record<string, ToolPermission>;
 }) {
-  const { toolPermissions, browserProfile, autoReview, yoloByDefault } = draft;
+  const { browserProfile, autoReview, yoloByDefault } = draft;
+  const toolPermissions = { ...inherited, ...draft.toolPermissions };
   const searching = toolQuery.trim().length > 0;
   const toolGroups = toolkitsList.map((toolkit) => ({
     toolkit,

@@ -8,6 +8,7 @@ import {
   ShieldCheck,
   UserRound,
   Users,
+  Wrench,
 } from "lucide-react";
 
 export type SettingsSectionInfo = Omit<SettingsSection, "element" | "items">;
@@ -54,6 +55,14 @@ const OWNER_SECTIONS: SettingsSectionInfo[] = [
     description: "Provider accounts, their models and the default models.",
     keywords: ["anthropic", "openai", "gemini", "claude", "gateway", "api key", "provider"],
     wide: true,
+  },
+  {
+    id: "tools",
+    label: "Tools",
+    group: "App",
+    icon: Wrench,
+    description: "Allow, Ask or Off for each tool, once for every bot.",
+    keywords: ["permissions", "allow", "ask", "approval", "bots", "always allow"],
   },
   {
     id: "notifications",

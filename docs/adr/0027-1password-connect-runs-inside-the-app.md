@@ -2,7 +2,7 @@
 
 - Status: accepted (amends [0005](0005-secrets-live-outside-the-app.md) and
   [0017](0017-local-is-the-only-vault-backend.md)); its Connect parts are
-  superseded by [0041](0041-1password-through-service-accounts.md): 1Password
+  superseded by [0042](0042-1password-through-service-accounts.md): 1Password
   is reached through service accounts and the SDK, and Connect is removed
 - Date: 2026-11-20
 
