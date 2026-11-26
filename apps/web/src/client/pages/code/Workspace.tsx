@@ -19,7 +19,6 @@ import { useLiveChanges } from "../../lib/code/use-live-changes";
 import { useResource } from "../../queries/resource";
 import { harnessOf, useCodeStore } from "../../store/code";
 import { useUiStore, type CodePane } from "../../store/ui";
-import { CodeSettings } from "./CodeSettings";
 import { PageKeys, Kbd, useKeyCommands, type KeyCommand } from "../../components/keys";
 import { FilesPane, type FilesFocus } from "./FilesPane";
 import { NewThreadDialog } from "./NewThreadDialog";
@@ -56,7 +55,7 @@ function useGitHubSetupResult(reloadProjects: () => void) {
       toast.error("GitHub could not finish the App setup. Start it again from Projects.");
     }
     reloadProjects();
-    navigate("/code/settings/github", { replace: true });
+    navigate("/settings/github", { replace: true });
   }, [result, reloadProjects, navigate]);
 }
 
@@ -133,13 +132,7 @@ function PaneHeader({
 }
 
 export function CodeWorkspace() {
-  const {
-    threadId: rawId,
-    section,
-    projectId: settingsProjectId,
-    reviewId,
-    chatProjectId,
-  } = useParams();
+  const { threadId: rawId, reviewId, chatProjectId } = useParams();
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const { brand } = useShellConfig();
@@ -160,7 +153,6 @@ export function CodeWorkspace() {
   useGitHubSetupResult(reloadProjects);
 
   const threadId = rawId ? decodeURIComponent(rawId) : undefined;
-  const inSettings = pathname === "/code/settings" || pathname.startsWith("/code/settings/");
   const composing = pathname === "/code/new";
 
   const harnesses = useMemo(
@@ -482,7 +474,7 @@ export function CodeWorkspace() {
   if (harnessList.length === 0) return <NotConfigured brand={brand} />;
   if (reviewId) return <PullReview reviewId={reviewId} harnesses={harnesses} rows={rows} />;
 
-  const full = Boolean(threadId) || inSettings || Boolean(chatProjectId);
+  const full = Boolean(threadId) || Boolean(chatProjectId);
   return (
     <div className="flex h-dvh min-h-0">
       <PageKeys commands={commands} />
@@ -525,14 +517,6 @@ export function CodeWorkspace() {
       >
         {chatProjectId ? (
           <ProjectChat projectId={chatProjectId} />
-        ) : inSettings ? (
-          <CodeSettings
-            section={settingsProjectId ? "projects" : section}
-            projectId={settingsProjectId}
-            harnesses={harnesses}
-            projects={projects}
-            onChange={reloadProjects}
-          />
         ) : threadId && harness && row ? (
           <ThreadView
             key={`${threadId}:${epoch}`}

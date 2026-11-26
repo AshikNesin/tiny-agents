@@ -172,7 +172,7 @@ export function AppShell() {
           { label: "Settings", icon: Settings, onSelect: () => navigate("/settings") },
         ],
       },
-      settingsCommandGroup(restricted, navigate),
+      settingsCommandGroup(restricted, codeConfigured, navigate),
       {
         heading: "Theme",
         items: [

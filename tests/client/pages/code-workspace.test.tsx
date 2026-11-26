@@ -584,7 +584,7 @@ describe("reviews in the thread list", () => {
     expect(rows()).toBe(2);
     expect(screen.getByRole("link", { name: "Review list filters" })).toHaveAttribute(
       "href",
-      "/code/settings/reviews",
+      "/settings/reviews",
     );
 
     fireEvent.click(more);

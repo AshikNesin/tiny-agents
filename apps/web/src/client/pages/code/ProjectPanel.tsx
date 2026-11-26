@@ -30,6 +30,7 @@ import { useResource } from "../../queries/resource";
 import { harnessOf, useCodeStore } from "../../store/code";
 import { PullChip, pullState } from "./controls";
 import { ThreadView } from "./ThreadView";
+import { projectSettingsPath } from "./CodeSettings";
 
 type Tab = "threads" | "context";
 
@@ -369,7 +370,7 @@ function ContextTab({ project }: { project: ProjectView | undefined }) {
         title="Instructions"
         action={
           <Link
-            to={`/code/settings/projects/${encodeURIComponent(project.id)}`}
+            to={projectSettingsPath(project.id)}
             className="text-muted-foreground hover:text-foreground text-xs"
           >
             Edit

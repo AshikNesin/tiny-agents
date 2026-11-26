@@ -137,7 +137,7 @@ export function NewThreadDialog({
           <p className="text-sm">
             A thread needs a project.{" "}
             <Link
-              to="/code/settings/projects"
+              to="/settings/projects"
               className="underline underline-offset-2"
               onClick={() => onOpenChange(false)}
             >

@@ -325,7 +325,7 @@ export function ThreadList({
       ))}
       <div className="border-sidebar-border flex items-center gap-1 border-t p-2">
         <Link
-          to="/code/settings"
+          to="/settings/projects"
           data-testid="code-settings"
           className="text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-foreground flex h-8 items-center gap-2 rounded-lg px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
         >
