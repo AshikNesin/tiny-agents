@@ -76,7 +76,7 @@ exports[`BotDialog, pinned > a new bot > markup 1`] = `
             aria-hidden="true"
             class="rounded-full bg-muted size-10 shrink-0"
             loading="lazy"
-            src="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2048%2048%22%3E%3Crect%20width%3D%2248%22%20height%3D%2248%22%20rx%3D%2224%22%20fill%3D%22%23f43f5e%22%2F%3E%3Ctext%20x%3D%2224%22%20y%3D%2230%22%20font-family%3D%22system-ui%2C%20sans-serif%22%20font-size%3D%2218%22%20font-weight%3D%22600%22%20fill%3D%22%23ffffff%22%20text-anchor%3D%22middle%22%3EBO%3C%2Ftext%3E%3C%2Fsvg%3E"
+            src="https://api.dicebear.com/10.x/gaze/svg?seed=Bot"
           />
           <input
             aria-invalid="false"
@@ -335,7 +335,7 @@ exports[`BotDialog, pinned > a new bot before the catalog > markup 1`] = `
             aria-hidden="true"
             class="rounded-full bg-muted size-10 shrink-0"
             loading="lazy"
-            src="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2048%2048%22%3E%3Crect%20width%3D%2248%22%20height%3D%2248%22%20rx%3D%2224%22%20fill%3D%22%23f43f5e%22%2F%3E%3Ctext%20x%3D%2224%22%20y%3D%2230%22%20font-family%3D%22system-ui%2C%20sans-serif%22%20font-size%3D%2218%22%20font-weight%3D%22600%22%20fill%3D%22%23ffffff%22%20text-anchor%3D%22middle%22%3EBO%3C%2Ftext%3E%3C%2Fsvg%3E"
+            src="https://api.dicebear.com/10.x/gaze/svg?seed=Bot"
           />
           <input
             aria-invalid="false"
@@ -681,7 +681,7 @@ exports[`BotDialog, pinned > edit: Profile > markup 1`] = `
                 aria-hidden="true"
                 class="rounded-full bg-muted size-10 shrink-0"
                 loading="lazy"
-                src="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2048%2048%22%3E%3Crect%20width%3D%2248%22%20height%3D%2248%22%20rx%3D%2224%22%20fill%3D%22%236366f1%22%2F%3E%3Ctext%20x%3D%2224%22%20y%3D%2230%22%20font-family%3D%22system-ui%2C%20sans-serif%22%20font-size%3D%2218%22%20font-weight%3D%22600%22%20fill%3D%22%23ffffff%22%20text-anchor%3D%22middle%22%3ECH%3C%2Ftext%3E%3C%2Fsvg%3E"
+                src="https://api.dicebear.com/10.x/gaze/svg?seed=Chief"
               />
               <input
                 aria-invalid="false"
@@ -1107,7 +1107,7 @@ exports[`BotDialog, pinned > edit: Profile with a missing model and a long promp
                 aria-hidden="true"
                 class="rounded-full bg-muted size-10 shrink-0"
                 loading="lazy"
-                src="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2048%2048%22%3E%3Crect%20width%3D%2248%22%20height%3D%2248%22%20rx%3D%2224%22%20fill%3D%22%236366f1%22%2F%3E%3Ctext%20x%3D%2224%22%20y%3D%2230%22%20font-family%3D%22system-ui%2C%20sans-serif%22%20font-size%3D%2218%22%20font-weight%3D%22600%22%20fill%3D%22%23ffffff%22%20text-anchor%3D%22middle%22%3ECH%3C%2Ftext%3E%3C%2Fsvg%3E"
+                src="https://api.dicebear.com/10.x/gaze/svg?seed=Chief"
               />
               <input
                 aria-invalid="false"
@@ -12445,7 +12445,7 @@ exports[`BotDialog, pinned > edit: a taken name > markup 1`] = `
                 aria-hidden="true"
                 class="rounded-full bg-muted size-10 shrink-0"
                 loading="lazy"
-                src="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2048%2048%22%3E%3Crect%20width%3D%2248%22%20height%3D%2248%22%20rx%3D%2224%22%20fill%3D%22%236366f1%22%2F%3E%3Ctext%20x%3D%2224%22%20y%3D%2230%22%20font-family%3D%22system-ui%2C%20sans-serif%22%20font-size%3D%2218%22%20font-weight%3D%22600%22%20fill%3D%22%23ffffff%22%20text-anchor%3D%22middle%22%3ECH%3C%2Ftext%3E%3C%2Fsvg%3E"
+                src="https://api.dicebear.com/10.x/gaze/svg?seed=Chief"
               />
               <input
                 aria-describedby="bot-name-error"
@@ -12879,7 +12879,7 @@ exports[`BotDialog, pinned > edit: saving > markup 1`] = `
                 aria-hidden="true"
                 class="rounded-full bg-muted size-10 shrink-0"
                 loading="lazy"
-                src="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2048%2048%22%3E%3Crect%20width%3D%2248%22%20height%3D%2248%22%20rx%3D%2224%22%20fill%3D%22%236366f1%22%2F%3E%3Ctext%20x%3D%2224%22%20y%3D%2230%22%20font-family%3D%22system-ui%2C%20sans-serif%22%20font-size%3D%2218%22%20font-weight%3D%22600%22%20fill%3D%22%23ffffff%22%20text-anchor%3D%22middle%22%3ECH%3C%2Ftext%3E%3C%2Fsvg%3E"
+                src="https://api.dicebear.com/10.x/gaze/svg?seed=Chief"
               />
               <input
                 aria-invalid="false"
@@ -13309,7 +13309,7 @@ exports[`BotDialog, pinned > edit: the delete confirmation > asking markup 1`] =
                 aria-hidden="true"
                 class="rounded-full bg-muted size-10 shrink-0"
                 loading="lazy"
-                src="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2048%2048%22%3E%3Crect%20width%3D%2248%22%20height%3D%2248%22%20rx%3D%2224%22%20fill%3D%22%236366f1%22%2F%3E%3Ctext%20x%3D%2224%22%20y%3D%2230%22%20font-family%3D%22system-ui%2C%20sans-serif%22%20font-size%3D%2218%22%20font-weight%3D%22600%22%20fill%3D%22%23ffffff%22%20text-anchor%3D%22middle%22%3ECH%3C%2Ftext%3E%3C%2Fsvg%3E"
+                src="https://api.dicebear.com/10.x/gaze/svg?seed=Chief"
               />
               <input
                 aria-invalid="false"
@@ -13731,7 +13731,7 @@ exports[`BotDialog, pinned > edit: the delete confirmation > deleting markup 1`]
                 aria-hidden="true"
                 class="rounded-full bg-muted size-10 shrink-0"
                 loading="lazy"
-                src="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2048%2048%22%3E%3Crect%20width%3D%2248%22%20height%3D%2248%22%20rx%3D%2224%22%20fill%3D%22%236366f1%22%2F%3E%3Ctext%20x%3D%2224%22%20y%3D%2230%22%20font-family%3D%22system-ui%2C%20sans-serif%22%20font-size%3D%2218%22%20font-weight%3D%22600%22%20fill%3D%22%23ffffff%22%20text-anchor%3D%22middle%22%3ECH%3C%2Ftext%3E%3C%2Fsvg%3E"
+                src="https://api.dicebear.com/10.x/gaze/svg?seed=Chief"
               />
               <input
                 aria-invalid="false"
