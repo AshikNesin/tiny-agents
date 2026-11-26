@@ -501,7 +501,12 @@ async function reconcile(pullId: string, now = Date.now()): Promise<number | nul
       reason: "The pull request was closed.",
       autofix: false,
     });
-    if (projectSettings(project.settings).archiveOnMerge) await archiveThread(pull.threadId);
+    if (
+      projectSettings(project.settings).archiveOnMerge &&
+      !(await holdsUncommittedWork(services, project, found.thread.worktree))
+    ) {
+      await archiveThread(pull.threadId);
+    }
     return null;
   }
 
@@ -606,6 +611,17 @@ async function reconcile(pullId: string, now = Date.now()): Promise<number | nul
   const latest = (await getPull(pull.id)) ?? pull;
   const next = nextLookMs(snapshot, latest.loopStatus, lastPushAt, now, settings.stallHours);
   return latest.yoloMethod && next !== null ? Math.min(next, YOLO_LOOK_MS) : next;
+}
+
+async function holdsUncommittedWork(
+  services: ReturnType<typeof codeGitHub>,
+  project: CodeProjectRow,
+  worktree: string | null,
+): Promise<boolean> {
+  if (!worktree) return false;
+  const ws = await services.workspace(project);
+  if (!(await ws.exists(worktree))) return false;
+  return (await ws.uncommitted(worktree)).length > 0;
 }
 
 async function archiveThread(threadId: string): Promise<void> {
