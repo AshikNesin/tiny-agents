@@ -78,7 +78,7 @@ function useRefresh(queryKey: QueryKey): () => Promise<void> {
       await client.cancelQueries({ queryKey });
       await client.invalidateQueries({ queryKey });
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- the key is compared by its hash
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [client, hash],
   );
 }

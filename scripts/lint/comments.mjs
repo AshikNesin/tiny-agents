@@ -29,7 +29,9 @@ export const OUT_OF_SCOPE = [
 const KEPT =
   /^[\s*!]*(?:eslint-|oxlint-|@ts-|biome-ignore|prettier-ignore|istanbul |c8 |v8 |@vite-ignore|webpack[A-Z]|[#@]__PURE__|[#@]__NO_SIDE_EFFECTS__|<reference |@jsx|@license|@preserve|SPDX-|Copyright |@vitest-environment|react-doctor-disable|@suppress|noinspection|ktlint-disable|detekt:|language=|@formatter:|@tailwind |stylelint-|gitleaks:allow|Adapted from |Ported from |@deprecated)/i;
 
-export const isKeptComment = (value) => KEPT.test(value);
+const DIRECTIVE_REASON = /^[\s*]*(?:eslint|oxlint)-[\w-]+.*\s--\s/;
+
+export const isKeptComment = (value) => KEPT.test(value) && !DIRECTIVE_REASON.test(value);
 
 export const inScope = (file) =>
   COMMENT_FILES.test(file) && !micromatch.isMatch(file, OUT_OF_SCOPE);

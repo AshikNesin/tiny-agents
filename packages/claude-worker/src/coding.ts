@@ -106,7 +106,7 @@ class InputQueue {
 
   async *iterate(): AsyncGenerator<CodingSdkUserMessage> {
     while (!this.closed) {
-      // eslint-disable-next-line react-doctor/async-await-in-loop -- sequential input stream
+      // eslint-disable-next-line react-doctor/async-await-in-loop
       const item = await this.next();
       if (!item) return;
       item.taken = true;

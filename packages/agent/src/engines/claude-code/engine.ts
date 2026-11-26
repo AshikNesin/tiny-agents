@@ -458,7 +458,7 @@ export class ClaudeCodeEngine implements AgentEngine {
     const rest = [input, ...session.queue.splice(0)];
     for (const message of rest) {
       try {
-        // eslint-disable-next-line react-doctor/async-await-in-loop -- pi admits them in order
+        // eslint-disable-next-line react-doctor/async-await-in-loop
         await this.options.fallback?.(ref, message);
       } catch (error) {
         this.report(error);
@@ -849,13 +849,13 @@ export class ClaudeCodeEngine implements AgentEngine {
           for (const [key, session] of Object.entries(parsed.sessions ?? {})) {
             const ref = Number(key);
             if (!Number.isFinite(ref)) continue;
-            // eslint-disable-next-line react-doctor/async-await-in-loop -- one commit, in order
+            // eslint-disable-next-line react-doctor/async-await-in-loop
             if (await tx.conversation(ref as ConversationId)) sessions.push([key, session]);
           }
           for (const [key, session] of sessions) {
             const ref = Number(key);
             for (const entry of legacyEntries(session)) {
-              // eslint-disable-next-line react-doctor/async-await-in-loop -- entries keep their order
+              // eslint-disable-next-line react-doctor/async-await-in-loop
               await tx.appendEntry(ref as ConversationId, entry);
             }
             const left = session.surface === "pi" || state.conversations[key]?.left === true;

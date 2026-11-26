@@ -91,7 +91,7 @@ export async function readSseFrames(
   const decoder = new TextDecoder();
   let buffer = "";
   for (;;) {
-    // eslint-disable-next-line react-doctor/async-await-in-loop -- one stream, read in order
+    // eslint-disable-next-line react-doctor/async-await-in-loop
     const { done, value } = await reader.read();
     if (done) return;
     buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, "\n");

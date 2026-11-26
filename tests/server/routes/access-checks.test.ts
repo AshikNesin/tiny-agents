@@ -23,7 +23,7 @@ const guestToken = await authToken("access-guest@example.com", GUEST_ID);
 
 const app = createTestApp();
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- response data varies per route
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Data = any;
 
 type Init = { method?: string; json?: unknown };

@@ -21,7 +21,7 @@ interface RequestInit {
 }
 
 export interface Recorder {
-  // oxlint-disable-next-line typescript/no-explicit-any -- each route's data differs
+  // oxlint-disable-next-line typescript/no-explicit-any
   http(name: string, path: string, init?: RequestInit): Promise<any>;
   sse(
     name: string,
