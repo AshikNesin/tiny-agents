@@ -583,9 +583,13 @@ const FIXTURES: Record<string, Fixture> = {
     mentions: "add one there first",
   },
   "packages/shell/src/r18-fail.tsx": {
+    source: 'import { Command } from "cmdk";\nexport const c = Command;\n',
+    rules: ["R18"],
+  },
+  "apps/web/src/client/r18-shadcn-pass.tsx": {
     source:
       'import { MessageScroller } from "@shadcn/react/message-scroller";\nexport const m = MessageScroller;\n',
-    rules: ["R18"],
+    rules: [],
   },
   "packages/ui/src/r18-pass.tsx": {
     source:
