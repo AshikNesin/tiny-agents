@@ -44,7 +44,7 @@ function runtime(): BotAgentRuntime {
   return getAgentRuntime();
 }
 
-export async function listBots(rt: BotAgentRuntime = runtime(), viewer?: Viewer) {
+export async function listBots(rt: BotAgentRuntime = runtime(), viewer: Viewer) {
   return listBotEntries(rt, viewer);
 }
 
@@ -175,9 +175,9 @@ export async function setPinned(id: string, pinned: boolean) {
   return getBot(id);
 }
 
-export async function markRead(id: string, viewer?: Viewer) {
+export async function markRead(id: string, viewer: Viewer) {
   await findBotRow(id);
-  if (viewer?.kind === "guest") await markGuestRead(id, viewer.userId);
+  if (viewer.kind === "guest") await markGuestRead(id, viewer.userId);
   else await updateBotRow(id, { lastReadAt: new Date() });
   return getBot(id);
 }

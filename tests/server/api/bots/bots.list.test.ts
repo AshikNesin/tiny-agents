@@ -105,7 +105,7 @@ describe("botListStep", () => {
     const fake = createFakeRuntime();
     fake.busyConversations.mockReturnValue([504]);
     fake.pendingQuestions.mockImplementation((ref) => (Number(ref) === 504 ? 2 : 0));
-    const [entry] = await listBots(fake);
+    const [entry] = await listBots(fake, { kind: "owner", userId: 1 });
     expect(entry).toMatchObject({
       id: bot.id,
       replying: true,
