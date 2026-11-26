@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.16.0
+
+### Minor Changes
+
+- An approval card has **Allow for every bot** next to **Always allow**, so you can let every bot use that
+  tool without asking. A skill's and a connection's screens have an **Every bot** switch, and new skills
+  reach every bot by default, bots you make later included.
+
 ## 0.15.0
 
 ### Minor Changes

@@ -131,8 +131,8 @@ class ChatStore(
         dispatch(botId, ChatAction.Stream(BotStreamEvent.Yolo(on)))
     }
 
-    fun decideApproval(botId: String, taskId: Int, approved: Boolean, alwaysAllow: String? = null, grant: Boolean = false) =
-        act("Could not send your decision.") { api.decideApproval(botId, taskId, approved, alwaysAllow, grant) }
+    fun decideApproval(botId: String, taskId: Int, approved: Boolean, alwaysAllow: String? = null, grant: Boolean = false, everyBot: Boolean = false) =
+        act("Could not send your decision.") { api.decideApproval(botId, taskId, approved, alwaysAllow, grant, everyBot) }
 
     fun loadOlder(key: String) {
         val session = _sessions.value[key] ?: return

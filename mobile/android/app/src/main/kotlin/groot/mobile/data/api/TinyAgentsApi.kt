@@ -105,13 +105,14 @@ class TinyAgentsApi(private val client: ApiClient) {
         client.post("/bots/${enc(botId)}/reset")
     }
 
-    suspend fun decideApproval(botId: String, taskId: Int, approved: Boolean, alwaysAllow: String? = null, grant: Boolean = false) {
+    suspend fun decideApproval(botId: String, taskId: Int, approved: Boolean, alwaysAllow: String? = null, grant: Boolean = false, everyBot: Boolean = false) {
         client.post(
             "/bots/${enc(botId)}/approvals/$taskId",
             jsonOfNotNull(
                 "decision" to if (approved) "approved" else "denied",
                 "alwaysAllow" to alwaysAllow,
                 "grant" to true.takeIf { grant },
+                "everyBot" to true.takeIf { everyBot },
             ),
         )
     }
@@ -320,9 +321,9 @@ class TinyAgentsApi(private val client: ApiClient) {
     suspend fun createSkill(name: String, description: String, body: String): Skill =
         Skill.from(client.postObject("/skills", jsonOf("name" to name, "description" to description, "body" to body)))
 
-    suspend fun updateSkill(id: String, name: String? = null, description: String? = null, body: String? = null, botIds: List<String>? = null): Skill =
+    suspend fun updateSkill(id: String, name: String? = null, description: String? = null, body: String? = null, botIds: List<String>? = null, allBots: Boolean? = null): Skill =
         Skill.from(
-            client.patch("/skills/${enc(id)}", jsonOfNotNull("name" to name, "description" to description, "body" to body, "botIds" to botIds))
+            client.patch("/skills/${enc(id)}", jsonOfNotNull("name" to name, "description" to description, "body" to body, "botIds" to botIds, "allBots" to allBots))
                 as? JSONObject ?: JSONObject(),
         )
 
@@ -368,6 +369,9 @@ class TinyAgentsApi(private val client: ApiClient) {
 
     suspend fun setConnectionBots(id: String, botIds: List<String>): Connection =
         Connection.from(client.patch("/connections/${enc(id)}", jsonOf("botIds" to botIds)) as? JSONObject ?: JSONObject())
+
+    suspend fun setConnectionAllBots(id: String, allBots: Boolean): Connection =
+        Connection.from(client.patch("/connections/${enc(id)}", jsonOf("allBots" to allBots)) as? JSONObject ?: JSONObject())
 
     suspend fun deleteConnection(id: String, stepUp: String) {
         client.delete("/connections/${enc(id)}", headers = stepUpHeader(stepUp))

@@ -173,6 +173,10 @@ private fun ConnectionSheet(
             SecondaryButton("Reconnect", icon = AppIcons.Refresh, onClick = { onAct("Could not reconnect.") { container.api.reconnectConnection(connection.id) } })
             SecondaryButton("Remove", destructive = true, onClick = onDelete)
         }
+        EveryBotRow(
+            checked = connection.allBots,
+            onCheckedChange = { on -> onAct("Could not update the connection.") { container.api.setConnectionAllBots(connection.id, on) } },
+        )
         if (bots.isNotEmpty()) {
             SectionLabel("Bots that can use it")
             FlowRow(horizontalArrangement = Arrangement.spacedBy(S.sm), verticalArrangement = Arrangement.spacedBy(S.sm)) {

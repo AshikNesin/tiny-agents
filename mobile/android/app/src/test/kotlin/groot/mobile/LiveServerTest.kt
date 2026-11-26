@@ -250,7 +250,9 @@ class LiveServerTest {
         api.deleteRoutine(routine.id)
 
         val skill = api.createSkill("android-$stamp".lowercase().filter { it.isLetterOrDigit() || it == '-' }, "Used by the Android test", "Be brief.")
-        assertEquals(listOf(botId), api.updateSkill(skill.id, botIds = listOf(botId)).botIds)
+        assertTrue(skill.allBots)
+        assertTrue(api.bot(botId).skillIds.contains(skill.id))
+        assertEquals(listOf(botId), api.updateSkill(skill.id, botIds = listOf(botId), allBots = false).botIds)
         assertTrue(api.bot(botId).skillIds.contains(skill.id))
         api.deleteSkill(skill.id)
 
