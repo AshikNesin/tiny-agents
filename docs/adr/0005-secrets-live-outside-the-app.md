@@ -6,7 +6,7 @@
   is removed, `local` is the only backend; amended by
   [0027](0027-1password-connect-runs-inside-the-app.md): the Connect backend is
   back, and the app can run Connect inside its own container; amended by
-  [0043](0043-1password-through-service-accounts.md): 1Password is read through
+  [0044](0044-1password-through-service-accounts.md): 1Password is read through
   service accounts with the SDK, Connect is removed)
 - Date: 2026-10-29
 - Issue: #56

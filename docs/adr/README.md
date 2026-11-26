@@ -21,7 +21,7 @@ that the code alone cannot show.
 | 0002 | [Adopt @cloudflare/kumo directly](0002-adopt-kumo-directly.md)                                                       | reverted by 0003                                               |
 | 0003 | [Revert Kumo adoption; reinstate own DLS](0003-revert-kumo-adoption.md)                                              | accepted                                                       |
 | 0004 | [Every bot has every built-in toolkit](0004-every-bot-has-every-toolkit.md)                                          | accepted                                                       |
-| 0005 | [Secrets bots use live outside the app](0005-secrets-live-outside-the-app.md)                                        | accepted (amended by 0015, 0017, 0027, 0043)                   |
+| 0005 | [Secrets bots use live outside the app](0005-secrets-live-outside-the-app.md)                                        | accepted (amended by 0015, 0017, 0027, 0044)                   |
 | 0006 | [The computer is a desktop on the sandbox VM](0006-computer-is-a-desktop-on-the-sandbox-vm.md)                       | accepted                                                       |
 | 0007 | [A local sandbox container for machines off the tailnet](0007-local-sandbox-container.md)                            | accepted                                                       |
 | 0008 | [Claude subscription inference goes through Claude Code](0008-claude-code-engine.md)                                 | accepted (amended by 0010, 0014, 0016, 0018)                   |
@@ -43,7 +43,7 @@ that the code alone cannot show.
 | 0024 | [The GitHub App transport, auto-merge, checkpoints and the rest of phase 6](0024-code-github-app-and-checkpoints.md) | accepted (amends 0021, 0022, 0023; amended by 0025)            |
 | 0025 | [Steady diffs: one git reader, plumbing reads, pushed change versions](0025-steady-code-diffs.md)                    | accepted (amends 0021, 0024)                                   |
 | 0026 | [Web Push is the push transport; the server holds no provider credentials](0026-web-push-transport.md)               | accepted                                                       |
-| 0027 | [1Password Connect comes back, and runs inside the app's container](0027-1password-connect-runs-inside-the-app.md)   | accepted (amends 0005, 0017; Connect parts superseded by 0043) |
+| 0027 | [1Password Connect comes back, and runs inside the app's container](0027-1password-connect-runs-inside-the-app.md)   | accepted (amends 0005, 0017; Connect parts superseded by 0044) |
 | 0028 | [Code carries no comments; decisions live in ADRs](0028-code-carries-no-comments.md)                                 | accepted                                                       |
 | 0029 | [Decisions recorded from code comments: client components](0029-decisions-from-comments-client-components.md)        | accepted                                                       |
 | 0030 | [Decisions recorded from code comments: web client](0030-decisions-from-comments-client.md)                          | accepted                                                       |
@@ -58,7 +58,8 @@ that the code alone cannot show.
 | 0040 | [A project chat is a bot tied to one Code project](0040-project-chat-is-a-bot.md)                                    | accepted                                                       |
 | 0041 | [Bots share what the owner sets up, guests included](0041-bots-share-what-the-owner-sets-up.md)                      | accepted (extends 0004)                                        |
 | 0042 | [Code threads use the owner's shared connections and skills](0042-code-threads-use-shared-connections.md)            | accepted (extends 0041)                                        |
-| 0043 | [1Password through service accounts; Connect is removed](0043-1password-through-service-accounts.md)                 | accepted (supersedes 0027's Connect parts, amends 0005)        |
+| 0043 | [Bot avatars load from DiceBear](0043-bot-avatars-from-dicebear.md)                                                  | accepted                                                       |
+| 0044 | [1Password through service accounts; Connect is removed](0044-1password-through-service-accounts.md)                 | accepted (supersedes 0027's Connect parts, amends 0005)        |
 | G4   | [Hono + Drizzle on SQLite, for Node and Cloudflare Workers](0004-hono-drizzle-sqlite-workers.md)                     | accepted (groot)                                               |
 
 `G4` is groot's ADR 0004, synced from the boilerplate; tiny-agents' own 0004
