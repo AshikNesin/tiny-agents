@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   branchSlug,
@@ -222,6 +222,43 @@ describe("push", () => {
     expect(await sh(local, `git -C ${bare} rev-parse refs/heads/ta/a-1`)).toBe(theirs);
   });
 
+  async function githubRefuses(message: string) {
+    writeFileSync(
+      join(bare, "hooks", "pre-receive"),
+      `#!/bin/sh\ncat >&2 <<'EOF'\n${message}\nEOF\nexit 1\n`,
+      {
+        mode: 0o755,
+      },
+    );
+  }
+
+  it("names the missing workflow scope instead of a moved branch", async () => {
+    const a = await worktree("a", "ta/a-1");
+    await sh(local, `cd ${a} && printf 'x\\n' > x.txt && git add -A && git commit --quiet -m x`);
+    await githubRefuses(
+      "refusing to allow an OAuth App to create or update workflow `.github/workflows/ci.yml` without `workflow` scope",
+    );
+
+    const error = (await ws.push(a, repo, "ta/a-1").catch((e: unknown) => e)) as WorkspaceError;
+    expect(error).toBeInstanceOf(WorkspaceError);
+    expect(error.code).toBe("denied");
+    expect(error.message).toBe(
+      "GitHub refused the push: it changes .github/workflows and the GitHub login lacks the workflow scope. Run `gh auth refresh -h github.com -s workflow`, then push again.",
+    );
+  });
+
+  it("passes on GitHub's own reason for any other refusal", async () => {
+    const a = await worktree("a", "ta/a-1");
+    await sh(local, `cd ${a} && printf 'x\\n' > x.txt && git add -A && git commit --quiet -m x`);
+    await githubRefuses("GH006: Protected branch update failed for refs/heads/ta/a-1.");
+
+    const error = (await ws.push(a, repo, "ta/a-1").catch((e: unknown) => e)) as WorkspaceError;
+    expect(error.code).toBe("denied");
+    expect(error.message).toContain("GitHub refused the push");
+    expect(error.message).toContain("GH006: Protected branch update failed");
+    expect(error.message).not.toContain("moved there");
+  });
+
   it("never runs a pre-push hook the agent wrote", async () => {
     const a = await worktree("a", "ta/a-1");
     const marker = join(local.home, "hook-ran");
@@ -283,6 +320,11 @@ describe("sync to the remote head", () => {
     expect(await ws.branchTaken(checkout, "ta/fix-login")).toBe(true);
     expect(await ws.branchTaken(checkout, "ta/on-remote")).toBe(true);
     expect(await ws.branchTaken(checkout, "ta/fix-login-2")).toBe(false);
+  });
+
+  it("sees a branch pushed to GitHub since the checkout last fetched", async () => {
+    await sh(local, `git -C ${bare} branch ta/github-actions-job-failing main`);
+    expect(await ws.branchTaken(checkout, "ta/github-actions-job-failing")).toBe(true);
   });
 
   it("does nothing for a branch not on the remote yet", async () => {
