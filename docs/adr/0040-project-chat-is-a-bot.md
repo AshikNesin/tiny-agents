@@ -48,3 +48,7 @@ they started with.
   coordinator rules come from the section, so they change with the code.
 - Threads the owner starts in the project do not report to the chat; only
   the ones it started or took over with `code_send` do.
+- On the web, a project chat lives only in Code: the Chat sidebar, its
+  phone list and the palette's Bots leave it out, and its `/chats/<id>` link
+  opens `/code/p/<project>` (issue #567). Android lists it with the bots,
+  since it has no project chat screen.

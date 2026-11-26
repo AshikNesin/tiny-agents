@@ -85,7 +85,8 @@
           "replying": false,
           "approvals": 0,
           "questions": 0,
-          "pinnedAt": null
+          "pinnedAt": null,
+          "projectId": null
         }
       ]
     }
@@ -219,7 +220,8 @@
           "replying": false,
           "approvals": 0,
           "questions": 0,
-          "pinnedAt": "2026-11-06T06:30:00.000Z"
+          "pinnedAt": "2026-11-06T06:30:00.000Z",
+          "projectId": null
         }
       ]
     }

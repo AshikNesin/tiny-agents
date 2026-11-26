@@ -26,6 +26,7 @@ function bot(id: string, overrides: Partial<BotListEntry> = {}): BotListEntry {
     approvals: 0,
     questions: 0,
     pinnedAt: null,
+    projectId: null,
     ...overrides,
   };
 }

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { Link, matchPath, useLocation, useNavigate } from "react-router-dom";
 import {
   ChevronsUpDown,
@@ -19,7 +19,7 @@ import { cn } from "@groot/ui/lib/utils";
 import { useAuthStore } from "@groot/shell/store/auth";
 import { toast } from "sonner";
 import { useCommandPaletteStore } from "@groot/shell/store/command-palette";
-import { useBotsStore } from "../../store/bots";
+import { chatBots, useBotsStore } from "../../store/bots";
 import { useUiStore } from "../../store/ui";
 import { PRIMARY_NAV, SECONDARY_NAV, guestNav } from "./nav";
 import { useViewerRole } from "../../store/people";
@@ -82,7 +82,8 @@ function NavRow({
 export function AppSidebar() {
   const { pathname } = useLocation();
   const navigate = useNavigate();
-  const bots = useBotsStore((s) => s.bots);
+  const allBots = useBotsStore((s) => s.bots);
+  const bots = useMemo(() => chatBots(allBots), [allBots]);
   const collapsed = useUiStore((s) => s.collapsed);
   const mobileOpen = useUiStore((s) => s.mobileOpen);
   const setMobileOpen = useUiStore((s) => s.setMobileOpen);

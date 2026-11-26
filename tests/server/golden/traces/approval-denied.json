@@ -194,7 +194,8 @@
           "replying": false,
           "approvals": 0,
           "questions": 0,
-          "pinnedAt": null
+          "pinnedAt": null,
+          "projectId": null
         }
       ]
     }

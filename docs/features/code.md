@@ -583,7 +583,10 @@ Known limits (register row C7):
 
 Each project has one chat, a bot tied to it (`bots.project_id`), opened from
 the top of the Code sidebar and made on first open (`code.chat.ts`, ADR
-0040). On a phone the chat's menu button goes back to the thread list. It
+0040). On a phone the chat's menu button goes back to the thread list. The
+web Chat side leaves project chats out of its bot list and the search
+palette's Bots, and a `/chats/<id>` link to one opens it here (`chatBots` in
+`store/bots.ts`). The Android app still lists them with the other bots. It
 coordinates instead of coding: its `project` toolkit
 (`createProjectToolkit` in `packages/agent/src/toolkits/code.ts`) starts and
 follows up threads of that project only, lists them with their state,
