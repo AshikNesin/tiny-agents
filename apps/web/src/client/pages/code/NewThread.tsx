@@ -70,9 +70,13 @@ function useProjectOptions(projects: ProjectView[] | null): {
     }
     const all = projects ?? [];
     const recent = all
-      .filter((p) => lastUsed.has(p.id))
-      .sort((a, b) => lastUsed.get(b.id)!.localeCompare(lastUsed.get(a.id)!))
-      .slice(0, RECENT_PROJECTS);
+      .flatMap((p) => {
+        const at = lastUsed.get(p.id);
+        return at ? [{ p, at }] : [];
+      })
+      .sort((a, b) => b.at.localeCompare(a.at))
+      .slice(0, RECENT_PROJECTS)
+      .map(({ p }) => p);
     const rest = all.filter((p) => !recent.includes(p));
     const grouped = recent.length > 0 && rest.length > 0;
     const option = (p: ProjectView, group: string): SearchSelectOption => ({
