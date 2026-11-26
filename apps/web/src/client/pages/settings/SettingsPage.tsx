@@ -11,7 +11,7 @@ import { PhoneNotificationSettings } from "../../components/PhoneNotificationSet
 import { ToolDefaultsSettings } from "../../components/ToolDefaultsSettings";
 import { UpdatesSettings } from "../../components/UpdatesSettings";
 import { useViewerRole } from "../../store/people";
-import { useCodeAvailable } from "../../components/shell/ModeSwitch";
+import { useCodeStore } from "../../store/code";
 import { CodeSettingsSection } from "../code/CodeSettings";
 import { ModelsSettings } from "./models/ModelsSettings";
 import { settingsSectionsFor } from "./sections";
@@ -41,7 +41,7 @@ export function SettingsPage() {
   const { pathname, search } = useLocation();
   const legacyTab = new URLSearchParams(search).get("tab");
   const restricted = useViewerRole() !== "owner";
-  const code = useCodeAvailable();
+  const code = useCodeStore((s) => s.harnesses === null || s.harnesses.length > 0);
   const sections = useMemo<SettingsSection[]>(
     () => settingsSectionsFor(restricted, code).map((s) => ({ ...s, element: ELEMENTS[s.id] })),
     [restricted, code],

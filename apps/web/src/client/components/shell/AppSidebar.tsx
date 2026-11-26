@@ -83,7 +83,8 @@ export function AppSidebar() {
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const allBots = useBotsStore((s) => s.bots);
-  const bots = useMemo(() => chatBots(allBots), [allBots]);
+  const owner = useViewerRole() === "owner";
+  const bots = useMemo(() => chatBots(allBots, owner), [allBots, owner]);
   const collapsed = useUiStore((s) => s.collapsed);
   const mobileOpen = useUiStore((s) => s.mobileOpen);
   const setMobileOpen = useUiStore((s) => s.setMobileOpen);

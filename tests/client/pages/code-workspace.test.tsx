@@ -225,7 +225,12 @@ beforeEach(() => {
   asked.length = 0;
   openReviews.length = 0;
   inboxLimit.value = 10;
-  useUiStore.setState({ codeSidebarOpen: true, codePane: null, lastCodePane: "changes" });
+  useUiStore.setState({
+    codeSidebarOpen: true,
+    codePane: null,
+    lastCodePane: "changes",
+    newThreadDraft: "",
+  });
   useCodeStore.setState({
     harnesses: [agent],
     statuses: {},
@@ -363,6 +368,18 @@ describe("the Code workspace", () => {
       await screen.findByRole("textbox", { name: "What should the agent do?" }),
     ).toBeInTheDocument();
     expect(screen.queryByText("No thread open")).toBeNull();
+  });
+
+  it("keeps an unsent task while you look at another thread", async () => {
+    renderAt("/code");
+    const box = await screen.findByRole("textbox", { name: "What should the agent do?" });
+    fireEvent.change(box, { target: { value: "Fix the login callback" } });
+    fireEvent.click(document.querySelector('[data-thread="demo:a"]')!);
+    await waitFor(() => expect(where()).toBe("/code/t/demo%3Aa"));
+    press("n");
+    expect(await screen.findByRole("textbox", { name: "What should the agent do?" })).toHaveValue(
+      "Fix the login callback",
+    );
   });
 
   it("n focuses the new thread box, not a dialog; Enter starts the thread in the remembered project", async () => {

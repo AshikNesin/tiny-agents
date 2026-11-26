@@ -16,6 +16,7 @@ import {
 import type { ProjectView } from "../../../shared/api/code";
 import { DEFAULT, ModelPicker, PermissionPicker, composerPermission, loadModels } from "./controls";
 import { Kbd } from "../../components/keys";
+import { useUiStore } from "../../store/ui";
 
 const PROJECT_KEY = "tiny-agents:code-project";
 
@@ -69,7 +70,8 @@ export function NewThread({
   const [instanceId, setInstanceId] = useState<string>("");
   const [model, setModel] = useState(DEFAULT);
   const [permission, setPermission] = useState<PermissionMode | null>(null);
-  const [text, setText] = useState("");
+  const text = useUiStore((s) => s.newThreadDraft);
+  const setText = useUiStore((s) => s.setNewThreadDraft);
   const [starting, setStarting] = useState(false);
   const [remembered] = useState(lastProject);
 

@@ -22,12 +22,12 @@ import { chatBots, useBotsStore } from "../../store/bots";
 import { modeOf, useUiStore } from "../../store/ui";
 import { useCodeStore } from "../../store/code";
 import { useKeyCommands } from "../keys";
-import { threadPath } from "../../lib/code/api";
 import type { Bot as BotRow } from "../../../shared/api/bots";
 import { BotDialog } from "../BotDialog";
 import { AppSidebar } from "./AppSidebar";
 import { APP_NAV, guestNav } from "./nav";
 import { settingsCommandGroup } from "./settings-commands";
+import { codeThreadGroup } from "./code-thread-commands";
 import { sidebarCommand } from "./sidebar-command";
 import { useViewerRole, usePeopleStore } from "../../store/people";
 import { BADGED_FAVICON, documentTitle, waitingCount } from "../../lib/attention";
@@ -87,7 +87,7 @@ export function AppShell() {
   useEffect(() => rememberPath(pathname, search), [pathname, search, rememberPath]);
 
   const commandGroups = useMemo<CommandGroupEntry[]>(() => {
-    const listed = chatBots(bots);
+    const listed = chatBots(bots, !restricted);
     const botGroup: CommandGroupEntry[] =
       listed.length === 0
         ? []
@@ -102,24 +102,7 @@ export function AppShell() {
               })),
             },
           ];
-    const codeGroup: CommandGroupEntry[] =
-      codeThreads && codeThreads.length > 0
-        ? [
-            {
-              heading: "Code",
-              items: codeThreads
-                .filter((c) => !c.parentId)
-                .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-                .slice(0, 30)
-                .map((c) => ({
-                  id: `code-${c.id}`,
-                  label: c.title,
-                  icon: Code2,
-                  onSelect: () => navigate(threadPath(c.id)),
-                })),
-            },
-          ]
-        : [];
+    const codeGroup = codeThreadGroup(codeThreads, navigate);
     const codeActions: CommandGroupEntry[] =
       codeCommands.length > 0
         ? [
