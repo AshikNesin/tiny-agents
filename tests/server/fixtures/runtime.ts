@@ -83,7 +83,7 @@ const FAKE_METHODS = [
 ] as const;
 
 type FakeMethod = (typeof FAKE_METHODS)[number];
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- a method's parameter list
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Procedure = (...args: any[]) => any;
 type MockOf<F> = F extends Procedure ? ReturnType<typeof vi.fn<F>> : never;
 

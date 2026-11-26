@@ -14,7 +14,7 @@ import { fakeComputer, type FakeComputer } from "../app/agent/computer-fakes";
 
 const token = await authToken("computer-page@example.com");
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- response data varies per route
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Data = any;
 
 const agentRuntime = {

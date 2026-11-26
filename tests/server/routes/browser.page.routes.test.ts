@@ -17,7 +17,7 @@ import {
 
 const token = await authToken("browser-page@example.com");
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- response data varies per route
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Data = any;
 
 const agentRuntime = {

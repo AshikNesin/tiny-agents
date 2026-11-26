@@ -87,7 +87,7 @@ afterEach(async () => {
   await connect.close();
 });
 
-// oxlint-disable-next-line typescript/no-explicit-any -- response data varies per route
+// oxlint-disable-next-line typescript/no-explicit-any
 type Data = any;
 
 function vault(path: string, init: { method?: string; json?: unknown; stepUp?: string } = {}) {

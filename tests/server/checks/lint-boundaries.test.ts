@@ -797,6 +797,11 @@ const FIXTURES: Record<string, Fixture> = {
       '// @ts-expect-error untyped\nimport legacy from "legacy";\n// oxlint-disable-next-line no-unused-vars\nconst unused = 1;\nexport const value = /* @__PURE__ */ legacy();\n',
     rules: [],
   },
+  "apps/web/src/server/r16-directive-reason-fail.ts": {
+    source:
+      "// oxlint-disable-next-line no-unused-vars -- kept for the next release\nconst unused = 1;\nexport const value = 2;\n",
+    rules: ["R16"],
+  },
   "apps/web/src/client/r12-elsewhere-pass.ts": {
     source: "let open = false;\nexport const toggle = () => (open = !open);\n",
     rules: [],

@@ -34,7 +34,7 @@ const BOT = { description: "Says it back", systemPrompt: "Be brief.", modelId: T
 
 async function settled(r: Recorder, botId: string, preview: string) {
   await until(async () => {
-    // oxlint-disable-next-line typescript/no-explicit-any -- list rows
+    // oxlint-disable-next-line typescript/no-explicit-any
     const rows: any[] = (
       await (
         await app.request("/api/v1/bots", { headers: { authorization: `Bearer ${token}` } })

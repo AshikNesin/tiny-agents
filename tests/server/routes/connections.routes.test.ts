@@ -37,7 +37,7 @@ beforeAll(async () => {
 
 const buildApp = (): TestApp => createTestApp();
 
-// oxlint-disable-next-line typescript/no-explicit-any -- response data varies per route
+// oxlint-disable-next-line typescript/no-explicit-any
 type Data = any;
 
 async function call(

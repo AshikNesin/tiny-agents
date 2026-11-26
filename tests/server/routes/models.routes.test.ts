@@ -166,7 +166,7 @@ afterEach(async () => {
   await db.delete(vaultItems);
 });
 
-// oxlint-disable-next-line typescript/no-explicit-any -- response data varies per route
+// oxlint-disable-next-line typescript/no-explicit-any
 type Data = any;
 
 function call(
