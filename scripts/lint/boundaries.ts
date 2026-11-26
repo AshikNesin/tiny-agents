@@ -81,14 +81,9 @@ const R12_ALLOWED = [
 const R18_BASELINE = ["ask-user-questions.tsx", "button.tsx"]
   .map((file) => `apps/web/src/client/components/fluid/${file}`)
   .concat(
-    [
-      "collapsible.tsx",
-      "item.tsx",
-      "message-scroller.tsx",
-      "search-select.tsx",
-      "switch.tsx",
-      "toggle-group.tsx",
-    ].map((file) => `apps/web/src/client/components/ui/${file}`),
+    ["collapsible.tsx", "item.tsx", "search-select.tsx", "switch.tsx", "toggle-group.tsx"].map(
+      (file) => `apps/web/src/client/components/ui/${file}`,
+    ),
   );
 
 const BOUNDARY_RULES: BoundaryRule[] = [
@@ -200,8 +195,7 @@ const BOUNDARY_RULES: BoundaryRule[] = [
     restrict: {
       patterns: [
         {
-          regex:
-            "^(radix-ui|@radix-ui/.*|@base-ui/react|@base-ui/react/.*|@shadcn/react|@shadcn/react/.*|cmdk)$",
+          regex: "^(radix-ui|@radix-ui/.*|@base-ui/react|@base-ui/react/.*|cmdk)$",
           message:
             "R18: UI primitives are imported only inside packages/ui (issue #576). Use the @groot/ui component, or add one there first.",
         },
