@@ -68,6 +68,8 @@ function ToggleGroup({
     () => ({ variant, size, spacing, orientation }),
     [variant, size, spacing, orientation],
   );
+  const [own, setOwn] = React.useState(defaultValue ?? "");
+  const selected = value ?? own;
 
   return (
     <ToggleGroupPrimitive
@@ -78,9 +80,12 @@ function ToggleGroup({
       data-spacing={spacing}
       data-orientation={orientation}
       orientation={orientation}
-      value={value === undefined ? undefined : value ? [value] : []}
-      defaultValue={defaultValue === undefined ? undefined : [defaultValue]}
-      onValueChange={onValueChange ? (next) => onValueChange(String(next[0] ?? "")) : undefined}
+      value={selected ? [selected] : []}
+      onValueChange={(next) => {
+        const picked = String(next[0] ?? "");
+        if (value === undefined) setOwn(picked);
+        onValueChange?.(picked);
+      }}
       style={{ "--gap": spacing } as React.CSSProperties}
       className={cn(
         "group/toggle-group flex w-fit flex-row items-center gap-[--spacing(var(--gap))] rounded-lg data-[size=sm]:rounded-[min(var(--radius-md),10px)] data-vertical:flex-col data-vertical:items-stretch",
@@ -89,7 +94,7 @@ function ToggleGroup({
       {...props}
     >
       <ToggleGroupContext.Provider value={context}>
-        <SelectedContext.Provider value={value}>{children}</SelectedContext.Provider>
+        <SelectedContext.Provider value={selected}>{children}</SelectedContext.Provider>
       </ToggleGroupContext.Provider>
     </ToggleGroupPrimitive>
   );
