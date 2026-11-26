@@ -24,7 +24,7 @@ import { PageKeys, Kbd, useKeyCommands, type KeyCommand } from "../../components
 import { FilesPane, type FilesFocus } from "./FilesPane";
 import { NewThreadDialog } from "./NewThreadDialog";
 import { TerminalPane } from "./TerminalPane";
-import { CodeCommandMenu } from "./CodeCommandMenu";
+import { useCommandPaletteStore } from "@groot/shell/store/command-palette";
 import { PullPanel } from "./PullPanel";
 import { useArchive } from "./controls";
 import { NextSteps } from "./NextSteps";
@@ -153,7 +153,6 @@ export function CodeWorkspace() {
   const paneWide = useUiStore((s) => s.codePaneWide);
   const toggleWide = useUiStore((s) => s.toggleCodePaneWide);
   const setHelp = useKeyCommands((s) => s.setHelp);
-  const [menuOpen, setMenuOpen] = useState(false);
   const { projects, reload: reloadProjects } = useProjects();
   const [insert, setInsert] = useState<{ text: string; nonce: number } | null>(null);
   const [epoch, setEpoch] = useState(0);
@@ -202,7 +201,6 @@ export function CodeWorkspace() {
     },
     [threadId, setPane],
   );
-  const openThread = useCallback((id: string) => navigate(threadPath(id)), [navigate]);
   const [filesFocus, setFilesFocus] = useState<FilesFocus | null>(null);
   const clearFilesFocus = useCallback(() => setFilesFocus(null), []);
   const focusFiles = useCallback(
@@ -440,8 +438,8 @@ export function CodeWorkspace() {
         id: "commands",
         group: "Go to",
         keys: ":",
-        label: "Run a command",
-        run: () => setMenuOpen(true),
+        label: "Open the command palette",
+        run: () => useCommandPaletteStore.getState().setOpen(true),
       },
     ],
     [
@@ -488,13 +486,6 @@ export function CodeWorkspace() {
   return (
     <div className="flex h-dvh min-h-0">
       <PageKeys commands={commands} />
-      <CodeCommandMenu
-        open={menuOpen}
-        onOpenChange={setMenuOpen}
-        commands={commands}
-        threads={listed ?? []}
-        onThread={openThread}
-      />
       <NewThreadDialog
         open={composing}
         onOpenChange={(open) => !open && navigate(threadId ? threadPath(threadId) : "/code")}

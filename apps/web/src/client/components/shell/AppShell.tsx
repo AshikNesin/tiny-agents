@@ -126,7 +126,7 @@ export function AppShell() {
             {
               heading: pathname.startsWith("/code") ? "Code actions" : "Chat actions",
               items: codeCommands
-                .filter((command) => command.enabled !== false)
+                .filter((command) => command.enabled !== false && command.keys !== ":")
                 .map((command) => ({
                   id: `code-command-${command.id}`,
                   label: command.label,
