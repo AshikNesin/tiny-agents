@@ -17,7 +17,6 @@ export const OUT_OF_SCOPE = [
   "mobile/.groot/**",
   "site/demos/kit/**",
   "site/assets/**",
-  "apps/web/src/client/components/fluid/**",
   "packages/ui/src/command-menu.tsx",
   "mobile/android/kit/**",
   "mobile/android/build-logic/**",

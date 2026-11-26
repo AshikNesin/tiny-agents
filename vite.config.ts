@@ -215,7 +215,7 @@ export default defineConfig({
           "apps/web/src/client/components/Attachments.tsx",
           "apps/web/src/client/components/ChatComposer.tsx",
           "apps/web/src/client/components/chat-message/ToolRow.tsx",
-          "apps/web/src/client/components/fluid/ask-user-questions.tsx",
+          "packages/ui/vendor/fluid/ask-user-questions.tsx",
           "apps/web/src/client/components/ui/code-block.tsx",
           "apps/web/src/client/components/vault/PolicyForm.tsx",
           "apps/web/src/client/pages/code/CodeSettings.tsx",

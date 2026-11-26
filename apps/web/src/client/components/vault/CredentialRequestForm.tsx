@@ -10,7 +10,7 @@ import type { CredentialRequestView } from "../../../shared/api/vault";
 import { apiError } from "../../lib/vault-api";
 import { useVaultMutations } from "../../queries/vault";
 import { useStepUp } from "./StepUp";
-import { Switch } from "../ui/switch";
+import { Switch } from "@groot/ui/switch";
 import { SecretInput } from "./SecretInput";
 
 const MASKED = new Set(["password", "otp", "card_number", "cvc"]);

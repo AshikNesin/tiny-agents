@@ -168,15 +168,20 @@ function PanelTools<S extends PanelStatus>({
         </Button>
       )}
       {configured && (panel.openPage.forGuests || !guest) && (
-        <Button variant="ghost" size="icon-sm" className={tool} asChild>
-          <Link
-            to={panel.openPage.to(status, bot)}
-            aria-label={panel.openPage.label}
-            title={panel.openPage.label}
-            data-testid={`${kind}-open-page`}
-          >
-            <SquareArrowOutUpRight className="size-3.5" />
-          </Link>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          className={tool}
+          render={
+            <Link
+              to={panel.openPage.to(status, bot)}
+              aria-label={panel.openPage.label}
+              title={panel.openPage.label}
+              data-testid={`${kind}-open-page`}
+            />
+          }
+        >
+          <SquareArrowOutUpRight className="size-3.5" />
         </Button>
       )}
       {configured && !guest && (

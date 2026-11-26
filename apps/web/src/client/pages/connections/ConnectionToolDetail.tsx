@@ -38,7 +38,7 @@ import {
   useSetConnectionTool,
 } from "../../queries/connections";
 import { onConnectionChange } from "../../store/bots";
-import { Switch } from "../../components/ui/switch";
+import { Switch } from "@groot/ui/switch";
 import { errorMessage } from "../../components/connections/connection-status";
 import {
   buildArgs,
@@ -469,11 +469,9 @@ export function ConnectionToolDetail({ id, tool: serverName }: { id: string; too
           variant="destructive"
           action={
             <>
-              <Button variant="outline" asChild>
-                <Link to={backTo}>
-                  <ArrowLeft className="size-4" />
-                  Back to connection
-                </Link>
+              <Button variant="outline" render={<Link to={backTo} />}>
+                <ArrowLeft className="size-4" />
+                Back to connection
               </Button>
               <Button onClick={() => void refresh()}>Retry</Button>
             </>

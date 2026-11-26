@@ -17,26 +17,28 @@ import { parseJobData } from "@groot/jobs/client/utils";
 import { useAction } from "@groot/shell/lib/feedback";
 import { JobDataEditor } from "./JobDataEditor";
 import { JobTypeSelect } from "./JobTypeSelect";
-import { useState, type ReactNode } from "react";
+import { useState, type ReactElement } from "react";
 import { Calendar as CalendarIcon } from "lucide-react";
 
 type Props = {
   schedule?: JobSchedule;
-  trigger?: ReactNode;
+  trigger?: ReactElement;
 };
 
 export function ScheduleJobDialog({ schedule, trigger }: Props) {
   const [open, setOpen] = useState(false);
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        {trigger ?? (
-          <Button variant="outline">
-            <CalendarIcon className="size-4" />
-            <span className="hidden md:inline">Schedule</span>
-          </Button>
-        )}
-      </DialogTrigger>
+      <DialogTrigger
+        render={
+          trigger ?? (
+            <Button variant="outline">
+              <CalendarIcon className="size-4" />
+              <span className="hidden md:inline">Schedule</span>
+            </Button>
+          )
+        }
+      />
       <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>{schedule ? "Edit Scheduled Job" : "Schedule Recurring Job"}</DialogTitle>

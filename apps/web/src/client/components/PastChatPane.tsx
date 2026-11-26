@@ -128,17 +128,19 @@ function PastChatPaneBody({ bot, chatId }: PastChatPaneProps) {
             activeChatId={chatId}
           />
           <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                className="text-muted-foreground hover:text-foreground"
-                aria-label="Past chat actions"
-                title="More"
-                disabled={!chat}
-              >
-                <MoreHorizontal className="size-4" />
-              </Button>
+            <DropdownMenuTrigger
+              render={
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  className="text-muted-foreground hover:text-foreground"
+                  aria-label="Past chat actions"
+                  title="More"
+                  disabled={!chat}
+                />
+              }
+            >
+              <MoreHorizontal className="size-4" />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem onSelect={() => void continueChat()} disabled={busy}>

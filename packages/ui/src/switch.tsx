@@ -1,10 +1,10 @@
 "use client";
 
 import * as React from "react";
-import { Switch as SwitchPrimitive } from "radix-ui";
+import { Switch as SwitchPrimitive } from "@base-ui/react/switch";
 import { animate, motion, useMotionValue, useReducedMotion } from "motion/react";
 
-import { cn } from "@groot/ui/lib/utils";
+import { cn } from "./lib/utils";
 
 const METRICS = {
   default: { trackWidth: 34, trackHeight: 20, thumb: 16, hoverExtend: 2, pressExtend: 4 },
@@ -29,8 +29,10 @@ function Switch({
   onPointerEnter,
   onPointerLeave,
   ...props
-}: React.ComponentProps<typeof SwitchPrimitive.Root> & {
+}: Omit<React.ComponentProps<typeof SwitchPrimitive.Root>, "className" | "onCheckedChange"> & {
+  className?: string;
   size?: "sm" | "default";
+  onCheckedChange?: (checked: boolean) => void;
 }) {
   const [uncontrolled, setUncontrolled] = React.useState(defaultChecked ?? false);
   const checked = checkedProp ?? uncontrolled;
@@ -83,7 +85,7 @@ function Switch({
       data-slot="switch"
       data-size={size}
       checked={checked}
-      onCheckedChange={setChecked}
+      onCheckedChange={(next) => setChecked(next)}
       disabled={disabled}
       className={cn(
         "peer relative inline-flex shrink-0 touch-none rounded-full outline-none select-none after:absolute after:-inset-x-3 after:-inset-y-2 focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:ring-3 aria-invalid:ring-destructive/20 data-checked:bg-primary data-unchecked:bg-input dark:data-unchecked:bg-input/80 data-disabled:cursor-not-allowed data-disabled:opacity-50",
@@ -131,19 +133,23 @@ function Switch({
         if (swallowClick.current) {
           swallowClick.current = false;
           e.preventDefault();
+          e.preventBaseUIHandler();
         }
       }}
       {...props}
     >
-      <SwitchPrimitive.Thumb data-slot="switch-thumb" asChild>
-        <motion.span
-          className="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
-          initial={false}
-          style={{ x }}
-          animate={{ y: OFFSET + (m.thumb - height) / 2, width, height }}
-          transition={mounted.current && !reduceMotion ? SPRING : { duration: 0 }}
-        />
-      </SwitchPrimitive.Thumb>
+      <SwitchPrimitive.Thumb
+        data-slot="switch-thumb"
+        render={
+          <motion.span
+            className="pointer-events-none absolute top-0 left-0 block rounded-full bg-background shadow-sm dark:data-checked:bg-primary-foreground dark:data-unchecked:bg-foreground"
+            initial={false}
+            style={{ x }}
+            animate={{ y: OFFSET + (m.thumb - height) / 2, width, height }}
+            transition={mounted.current && !reduceMotion ? SPRING : { duration: 0 }}
+          />
+        }
+      />
     </SwitchPrimitive.Root>
   );
 }

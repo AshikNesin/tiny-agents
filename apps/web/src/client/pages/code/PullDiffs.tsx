@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { ChevronDown, FileDiff as FileDiffIcon } from "lucide-react";
 import { EmptyState } from "@groot/ui";
-import { SearchSelect } from "../../components/ui/search-select";
+import { SearchSelect } from "@groot/ui/search-select";
 import type { ThreadCommenting } from "../../lib/code/comments";
 import type { PullReviewView } from "../../../shared/api/code";
 import type { FileConversations } from "./PullThreads";

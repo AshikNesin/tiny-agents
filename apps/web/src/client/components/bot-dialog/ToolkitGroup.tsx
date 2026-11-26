@@ -10,7 +10,7 @@ import {
   toolTitle,
   type ToolInfo,
 } from "../../lib/tool-permissions";
-import { ToggleGroup, ToggleGroupItem } from "../ui/toggle-group";
+import { ToggleGroup, ToggleGroupItem } from "@groot/ui/toggle-group";
 
 type Permissions = Record<string, ToolPermission>;
 type SetPermissions = (next: (current: Permissions) => Permissions) => void;
@@ -28,7 +28,6 @@ function PermissionToggle({
 }) {
   return (
     <ToggleGroup
-      type="single"
       value={value}
       onValueChange={(next: string) => {
         if (next) onChange(next as ToolPermission);
@@ -99,7 +98,6 @@ function BrowserProfileRow({
         </p>
       </div>
       <ToggleGroup
-        type="single"
         value={browserProfile}
         onValueChange={(next: string) => {
           if (next) onChange(next as BrowserProfile);

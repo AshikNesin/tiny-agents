@@ -1,4 +1,4 @@
-import { ThinkingIndicator } from "../fluid/thinking-indicator";
+import { ThinkingIndicator } from "@groot/ui/fluid/thinking-indicator";
 
 export const USER_PILL =
   "bg-bubble-user text-bubble-user-foreground min-w-0 max-w-full rounded-2xl px-3.5 py-2 text-[15px] leading-[22.5px] wrap-break-word text-pretty";

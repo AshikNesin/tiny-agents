@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { ArrowLeft, ArrowUp, ChevronDown, FolderGit2 } from "lucide-react";
 import { Button } from "@groot/ui";
-import { SearchSelect, type SearchSelectOption } from "../../components/ui/search-select";
+import { SearchSelect, type SearchSelectOption } from "@groot/ui/search-select";
 import { Spinner } from "../../components/ui/spinner";
 import { errorMessage } from "../../lib/errors";
 import {
@@ -173,10 +173,13 @@ export function NewThread({
   return (
     <div className="flex h-full min-h-0 flex-col" data-testid="code-new-thread">
       <header className="flex h-13 shrink-0 items-center px-2 lg:hidden">
-        <Button asChild variant="ghost" size="icon-sm" aria-label="All threads">
-          <Link to="/code">
-            <ArrowLeft />
-          </Link>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label="All threads"
+          render={<Link to="/code" />}
+        >
+          <ArrowLeft />
         </Button>
       </header>
       <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-4 pb-[12vh]">

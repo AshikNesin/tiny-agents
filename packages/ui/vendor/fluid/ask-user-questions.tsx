@@ -18,7 +18,7 @@ import { Radio as RadioPrimitive } from "@base-ui/react/radio";
 import { CheckboxGroup as CheckboxGroupPrimitive } from "@base-ui/react/checkbox-group";
 import { Checkbox as CheckboxPrimitive } from "@base-ui/react/checkbox";
 import { Field } from "@base-ui/react/field";
-import { cn } from "@groot/ui/lib/utils";
+import { cn } from "../../src/lib/utils";
 import { spring } from "./lib/springs";
 import { fontWeights } from "./lib/font-weight";
 import { useShape } from "./lib/shape-context";

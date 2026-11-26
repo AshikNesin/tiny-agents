@@ -28,15 +28,18 @@ export function JobTypeSelect({ id, value, onChange, disabled }: Props) {
         if (!open) setSearch("");
       }}
     >
-      <DropdownMenuTrigger asChild disabled={disabled}>
-        <Button
-          variant="outline"
-          id={id}
-          className="w-full justify-between border-input pr-2.5 pl-3 font-normal hover:bg-transparent aria-expanded:bg-transparent dark:bg-input/30 dark:hover:bg-input/50"
-        >
-          <span className={value ? "" : "text-muted-foreground"}>{value || "Select job type"}</span>
-          <ChevronDown className="size-4 text-muted-foreground" />
-        </Button>
+      <DropdownMenuTrigger
+        disabled={disabled}
+        render={
+          <Button
+            variant="outline"
+            id={id}
+            className="w-full justify-between border-input pr-2.5 pl-3 font-normal hover:bg-transparent aria-expanded:bg-transparent dark:bg-input/30 dark:hover:bg-input/50"
+          />
+        }
+      >
+        <span className={value ? "" : "text-muted-foreground"}>{value || "Select job type"}</span>
+        <ChevronDown className="size-4 text-muted-foreground" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-[var(--radix-dropdown-menu-trigger-width)]">
         <div className="px-2 pt-1">

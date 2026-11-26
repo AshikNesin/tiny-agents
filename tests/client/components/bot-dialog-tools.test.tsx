@@ -113,11 +113,11 @@ describe("BotDialog tool permissions", () => {
     const off = within(group).getByRole("radio", { name: "Off" });
     const ask = within(group).getByRole("radio", { name: "Ask" });
 
-    expect(ask).toHaveAttribute("data-state", "on");
+    expect(ask).toHaveAttribute("aria-checked", "true");
 
     await user.click(off);
-    expect(off).toHaveAttribute("data-state", "on");
-    expect(ask).toHaveAttribute("data-state", "off");
+    expect(off).toHaveAttribute("aria-checked", "true");
+    expect(ask).toHaveAttribute("aria-checked", "false");
   });
 });
 
@@ -145,8 +145,8 @@ describe("BotDialog browser profile", () => {
     await user.click(await screen.findByRole("tab", { name: "Tools" }));
     const group = await screen.findByRole("radiogroup", { name: "Browser profile" });
     expect(within(group).getByRole("radio", { name: "Shared" })).toHaveAttribute(
-      "data-state",
-      "on",
+      "aria-checked",
+      "true",
     );
     await user.click(within(group).getByRole("radio", { name: "Own" }));
     expect(screen.getByText("A browser of its own, with separate sign-ins.")).toBeInTheDocument();

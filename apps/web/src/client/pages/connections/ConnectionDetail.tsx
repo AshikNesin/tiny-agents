@@ -148,11 +148,9 @@ export function ConnectionDetail({ id }: { id: string }) {
           variant="destructive"
           action={
             <>
-              <Button variant="outline" asChild>
-                <Link to="/connections">
-                  <ArrowLeft className="size-4" />
-                  Back to connections
-                </Link>
+              <Button variant="outline" render={<Link to="/connections" />}>
+                <ArrowLeft className="size-4" />
+                Back to connections
               </Button>
               <Button onClick={() => void refresh()}>Retry</Button>
             </>

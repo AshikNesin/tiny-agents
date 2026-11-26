@@ -9,11 +9,11 @@ metadata:
 
 **Source of truth:** [`docs/features/dls.md`](../../../docs/features/dls.md)
 **Enforcement:** `pnpm check:tokens` (9 rules, runs in pre-commit + CI)
-**Primitives:** `@groot/ui` (Radix + cva + Tailwind v4), composition in
+**Primitives:** `@groot/ui` (Base UI + cva + Tailwind v4), composition in
 `@groot/shell/components/layout/`
 
 Rules adapted from Cloudflare Kumo's design skill (MIT) — re-derived for our
-Radix/shadcn stack, not copied. Kumo is the reference, not a dependency.
+Base UI/shadcn stack, not copied. Kumo is the reference, not a dependency.
 
 ## When to use this skill
 

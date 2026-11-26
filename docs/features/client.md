@@ -236,7 +236,7 @@ keeps data and editor apart:
 
 ## UI system
 
-Primitives live in [`@groot/ui`](../../packages/ui) (shadcn-style, on Radix
+Primitives live in [`@groot/ui`](../../packages/ui) (shadcn-style, on Base UI
 and cva); page chrome (`PageLayout`, `PageContainer`, `Section`) lives in
 `@groot/shell/components/layout/`. Tailwind v4 is configured CSS-first in
 `packages/shell/src/index.css`, which also defines the tokens. Which primitive

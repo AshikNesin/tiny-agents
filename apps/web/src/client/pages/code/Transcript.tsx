@@ -47,11 +47,7 @@ import {
   CodeBlockTitle,
 } from "../../components/ui/code-block";
 import { Spinner } from "../../components/ui/spinner";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "../../components/ui/collapsible";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@groot/ui/collapsible";
 import {
   codeApi,
   threadPath,
@@ -255,11 +251,9 @@ function SubagentHead({
 
 function OpenThreadLink({ threadId }: { threadId: string }) {
   return (
-    <Button asChild size="sm" variant="outline">
-      <Link to={threadPath(threadId)}>
-        Open
-        <ArrowUpRight />
-      </Link>
+    <Button size="sm" variant="outline" render={<Link to={threadPath(threadId)} />}>
+      Open
+      <ArrowUpRight />
     </Button>
   );
 }

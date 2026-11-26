@@ -23,9 +23,9 @@ import { Button, EmptyState, Input, monoClass, metaLabelClass } from "@groot/ui"
 import { useConfirm } from "@groot/ui/primitives";
 import { Textarea } from "@groot/ui/textarea";
 import { cn } from "@groot/ui/lib/utils";
-import { SearchSelect } from "../../components/ui/search-select";
+import { SearchSelect } from "@groot/ui/search-select";
 import { Spinner } from "../../components/ui/spinner";
-import { Switch } from "../../components/ui/switch";
+import { Switch } from "@groot/ui/switch";
 import { errorMessage } from "../../lib/errors";
 import { projectsApi, reviewsApi, useProjects } from "../../lib/code/projects";
 import { useCodeStore } from "../../store/code";
@@ -371,7 +371,7 @@ function AddProject({ harnesses, onChange }: { harnesses: HarnessInfo[]; onChang
                   : "Install the App on a repository first."
               }
               triggerClassName="border-input h-9 min-w-56 flex-1 justify-between rounded-lg border px-3"
-              contentClassName="w-(--radix-popover-trigger-width)"
+              contentClassName="w-(--anchor-width)"
             >
               <span className={cn("truncate", !repo && "text-muted-foreground")}>
                 {repo ||

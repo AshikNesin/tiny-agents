@@ -19,6 +19,13 @@ function normalized(root: Element): Element {
   const clone = root.cloneNode(true) as Element;
   clone.normalize();
   for (const svg of clone.querySelectorAll("svg")) svg.replaceChildren();
+  for (const attr of ["data-starting-style", "data-ending-style", "data-instant"]) {
+    for (const el of clone.querySelectorAll(`[${attr}]`)) el.removeAttribute(attr);
+  }
+  if (clone instanceof HTMLElement && clone.tagName === "BODY") {
+    clone.style.removeProperty("overflow");
+    if (!clone.getAttribute("style")) clone.removeAttribute("style");
+  }
   for (const el of clone.querySelectorAll<HTMLElement>("[style]")) {
     el.style.removeProperty("opacity");
     el.style.removeProperty("transform");

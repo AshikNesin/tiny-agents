@@ -78,14 +78,6 @@ const R12_ALLOWED = [
   "api/routines/routines.runs.ts:CREDENTIAL_TOOLS",
 ].map((entry) => `${SERVER}/${entry}`);
 
-const R18_BASELINE = ["ask-user-questions.tsx", "button.tsx"]
-  .map((file) => `apps/web/src/client/components/fluid/${file}`)
-  .concat(
-    ["collapsible.tsx", "item.tsx", "search-select.tsx", "switch.tsx", "toggle-group.tsx"].map(
-      (file) => `apps/web/src/client/components/ui/${file}`,
-    ),
-  );
-
 const BOUNDARY_RULES: BoundaryRule[] = [
   {
     id: "R1",
@@ -190,7 +182,7 @@ const BOUNDARY_RULES: BoundaryRule[] = [
     id: "R18",
     kind: "import",
     scope: "**",
-    except: ["packages/ui/**", ...R18_BASELINE],
+    except: ["packages/ui/**"],
     enabled: true,
     restrict: {
       patterns: [

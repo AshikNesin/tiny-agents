@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@groot/ui/textarea";
 import type { VaultApproval, VaultKind, VaultPolicy } from "../../../shared/api/vault";
 import { useBotsStore } from "../../store/bots";
-import { Switch } from "../ui/switch";
+import { Switch } from "@groot/ui/switch";
 
 const APPROVAL_LABEL: Record<VaultApproval, string> = {
   every_use: "Ask every time",

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Plus } from "lucide-react";
 import type { DiscoveredModel } from "../../../../shared/api/models";
 import { useModelDiscovery } from "../../../queries/models";
-import { SearchSelect, type SearchSelectOption } from "../../../components/ui/search-select";
+import { SearchSelect, type SearchSelectOption } from "@groot/ui/search-select";
 import { formatTokens } from "./model-labels";
 
 export function AddModel({

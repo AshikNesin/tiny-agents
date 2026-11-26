@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { Button, EmptyState, monoClass } from "@groot/ui";
 import { useConfirm } from "@groot/ui/primitives";
 import { cn } from "@groot/ui/lib/utils";
-import { SearchSelect } from "../../components/ui/search-select";
+import { SearchSelect } from "@groot/ui/search-select";
 import { errorMessage } from "../../lib/errors";
 import { projectsApi } from "../../lib/code/projects";
 import { useRefreshOn, useResource } from "../../queries/resource";
