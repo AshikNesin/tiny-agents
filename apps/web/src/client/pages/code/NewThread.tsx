@@ -16,6 +16,7 @@ import {
 import type { ProjectView } from "../../../shared/api/code";
 import { DEFAULT, ModelPicker, PermissionPicker, composerPermission, loadModels } from "./controls";
 import { Kbd } from "../../components/keys";
+import { useUiStore } from "../../store/ui";
 
 const PROJECT_KEY = "tiny-agents:code-project";
 
@@ -65,11 +66,13 @@ export function NewThread({
 }) {
   const navigate = useNavigate();
   const box = useRef<HTMLTextAreaElement>(null);
-  const [chosenProject, setProjectId] = useState<string>("");
   const [instanceId, setInstanceId] = useState<string>("");
   const [model, setModel] = useState(DEFAULT);
   const [permission, setPermission] = useState<PermissionMode | null>(null);
-  const [text, setText] = useState("");
+  const { text, projectId: chosenProject } = useUiStore((s) => s.newThreadDraft);
+  const setDraft = useUiStore((s) => s.setNewThreadDraft);
+  const setText = (next: string) => setDraft({ text: next });
+  const setProjectId = (next: string) => setDraft({ projectId: next });
   const [starting, setStarting] = useState(false);
   const [remembered] = useState(lastProject);
 
@@ -101,6 +104,7 @@ export function NewThread({
     const message = text.trim();
     if (!message || !project || !harness || starting) return;
     setStarting(true);
+    setText("");
     try {
       const { threadId } = await codeApi.create({
         projectId: project.id,
@@ -110,9 +114,10 @@ export function NewThread({
         ...(permission ? { permissionMode: permission } : {}),
       });
       rememberProject(project.id);
-      setText("");
+      setDraft({ projectId: "" });
       navigate(threadPath(threadId));
     } catch (error) {
+      if (!useUiStore.getState().newThreadDraft.text) setText(message);
       toast.error(errorMessage(error, "Could not start the thread."));
     } finally {
       setStarting(false);

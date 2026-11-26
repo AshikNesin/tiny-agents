@@ -159,6 +159,15 @@ describe("Code settings", () => {
     expect(await screen.findByRole("textbox", { name: "Base branch" })).toHaveValue("main");
   });
 
+  it("keeps a deep link while Code's agents are still loading", async () => {
+    useCodeStore.setState({ harnesses: null });
+    renderAt("/settings/projects?project=p1");
+    expect(screen.getByTestId("where")).toHaveTextContent("/settings/projects?project=p1");
+    useCodeStore.setState({ harnesses: [shelley] });
+    expect(await screen.findByRole("textbox", { name: "Base branch" })).toHaveValue("main");
+    expect(screen.getByTestId("where")).toHaveTextContent("/settings/projects?project=p1");
+  });
+
   it("lists the projects as pages, not a dialog", async () => {
     renderAt("/settings/projects");
     const main = await screen.findByRole("main");

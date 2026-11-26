@@ -4,6 +4,7 @@ import { Bot, Menu } from "lucide-react";
 import { Button } from "@groot/ui/button";
 import { chatBots, useBotsStore } from "../../store/bots";
 import { useUiStore } from "../../store/ui";
+import { useViewerRole } from "../../store/people";
 import { landingBotId, rememberLastBot } from "../../lib/last-bot";
 import { useFocusParam } from "../../lib/focus-param";
 import { ChatPane } from "../../components/ChatPane";
@@ -26,7 +27,8 @@ export function ChatWorkspace() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const allBots = useBotsStore((s) => s.bots);
-  const bots = useMemo(() => chatBots(allBots), [allBots]);
+  const owner = useViewerRole() === "owner";
+  const bots = useMemo(() => chatBots(allBots, owner), [allBots, owner]);
   const loading = useBotsStore((s) => s.loading);
   const models = useBotsStore((s) => s.models);
   const canAnswer = useBotsStore((s) => s.canAnswer);
@@ -44,8 +46,11 @@ export function ChatWorkspace() {
     setSearchParams(next, { replace: true });
   }, [searchParams, setSearchParams, openCreateBot]);
 
-  const projectId = allBots.find((b) => b.id === botId)?.projectId;
-  const currentListBot = useMemo(() => bots.find((b) => b.id === botId) ?? null, [bots, botId]);
+  const projectId = owner && !chatId ? allBots.find((b) => b.id === botId)?.projectId : null;
+  const currentListBot = useMemo(
+    () => allBots.find((b) => b.id === botId && (chatId || !owner || !b.projectId)) ?? null,
+    [allBots, botId, chatId, owner],
+  );
   const currentId = currentListBot?.id;
   const currentConversation = currentListBot?.conversationId;
 
