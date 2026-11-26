@@ -15,7 +15,9 @@ import {
 import { createCodingToolkit } from "../../../../packages/agent/src/toolkits/coding";
 import { createMcpCapability, type McpToolInfo } from "../../../../packages/agent/src/mcp";
 import type { Capability } from "../../../../packages/agent/src/capabilities";
-import { connections, db } from "../../../../apps/web/src/server/db";
+import { connections, db, skills } from "../../../../apps/web/src/server/db";
+import { createSkillsCapability } from "../../../../packages/agent/src/skills";
+import { skillStore } from "../../../../apps/web/src/server/api/skills/skills.store";
 import { setOwnerToolPermissions } from "../../../../apps/web/src/server/api/bots/tool-permissions";
 import type {
   HarnessHost,
@@ -718,6 +720,49 @@ describe("Native harness", () => {
     expect(kinds((await harness.getThread(nativeId)).items)).toContain(
       "tool:mcp__linear__search_issues:done",
     );
+  });
+
+  it("lists the owner's shared skills and loads one on demand", async () => {
+    await db.insert(skills).values([
+      {
+        name: "release-notes",
+        description: "Write release notes",
+        body: "Group changes by area.",
+        allBots: true,
+      },
+      { name: "diary", description: "Keep the diary", body: "Private.", allBots: false },
+    ]);
+    cleanups.push(async () => {
+      await db.delete(skills);
+    });
+    const plan = [fauxToolCall("load_skill", { name: "release-notes" })];
+    const prompts: string[] = [];
+    const offered: string[][] = [];
+    const { harness, events } = await setup(
+      (context) => {
+        prompts.push(JSON.stringify(context.messages));
+        const system = context.messages.find((message) => message.role === "system") as
+          | { toolsAdded?: { name: string }[] }
+          | undefined;
+        offered.push((system?.toolsAdded ?? []).map((tool) => tool.name));
+        const last = context.messages.at(-1);
+        if (last?.role === "toolResult") return fauxAssistantMessage(fauxText(textOf(last)));
+        const next = plan[context.messages.filter((m) => m.role === "toolResult").length];
+        return next
+          ? { ...fauxAssistantMessage([next]), stopReason: "toolUse" as const }
+          : fauxAssistantMessage(fauxText("done"));
+      },
+      { capabilities: [createSkillsCapability(skillStore)] },
+    );
+
+    await harness.createThread({ message: "write the notes", cwd: CWD });
+    const [ended] = await waitTurnEnds(events, 1);
+
+    expect(prompts[0]).toContain("- release-notes: Write release notes");
+    expect(prompts[0]).not.toContain("diary");
+    expect(offered[0]).toEqual(expect.arrayContaining(["load_skill", "read_skill_file"]));
+    expect(offered[0]).not.toContain("save_skill");
+    expect(ended!.outcome.text).toContain("Group changes by area.");
   });
 
   it("changes the model and the permission mode of a thread", async () => {

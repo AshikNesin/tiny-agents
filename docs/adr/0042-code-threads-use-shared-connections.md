@@ -1,4 +1,4 @@
-# ADR 0042: Code threads use the owner's shared connections
+# ADR 0042: Code threads use the owner's shared connections and skills
 
 - Status: **accepted** (extends [0041](0041-bots-share-what-the-owner-sets-up.md))
 - Date: 2026-11-26
@@ -36,7 +36,16 @@ Settings > Tools.
   on Claude Code's own tool search (`ENABLE_TOOL_SEARCH`) unless the worker's
   environment sets it, so tool schemas load on demand. The list is read when
   the Claude Code process starts, so a change applies to the next process.
-- **Shelley** keeps its own MCP configuration.
+- **Skills shared with every bot** reach Code threads the same way. Native
+  threads get the `skills` toolkit (a name and description per skill, the
+  body only on `load_skill`), with `save_skill` off because a Code thread has
+  no bot to save to. Claude Code threads get them as a local plugin the
+  worker writes under `~/.tiny-agents/code-skills/<session>/`
+  (`packages/claude-worker/src/coding-skills.ts`) and passes with the SDK's
+  `plugins` option, so Claude Code lists descriptions and loads a body only
+  when it uses the skill. A skill file path that leaves its skill's folder is
+  skipped.
+- **Shelley** keeps its own MCP configuration and skills.
 
 ## Consequences
 
@@ -46,4 +55,4 @@ Settings > Tools.
 - A Claude Code tool call that is running when the app restarts runs again
   once the app reconnects, since only the worker's `tool_call_closed` event
   marks it done. A call the app never answers fails after ten minutes.
-- Skills, vault and memory stay out of Code threads.
+- Vault and memory stay out of Code threads.

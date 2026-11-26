@@ -14,9 +14,13 @@ function files(raw: string): SkillFile[] {
   }
 }
 
+export async function sharedSkills() {
+  return db.select().from(skills).where(eq(skills.allBots, true)).orderBy(asc(skills.name));
+}
+
 async function assigned(conversationId: number) {
   const owner = await conversationOwner(conversationId);
-  if (!owner) return { botId: undefined, skills: [] };
+  if (!owner) return { botId: undefined, skills: await sharedSkills() };
   const bot = await reachBot(owner.bot.id);
   if (!bot) return { botId: undefined, skills: [] };
   const ids = await botItemIds("skills", bot);
@@ -51,6 +55,7 @@ export const skillStore: SkillStore = {
 
   async save(conversationId, input) {
     const { botId, skills: own } = await assigned(conversationId);
+    if (!botId) throw new Error("Only a bot can save skills.");
     const mine = own.find((skill) => skill.name === input.name);
     if (mine) {
       await db
@@ -75,12 +80,10 @@ export const skillStore: SkillStore = {
         `A skill named "${input.name}" already exists and is not assigned to you. Pick another name, or ask the owner to assign it.`,
       );
     }
-    if (botId) {
-      await db
-        .insert(botSkills)
-        .values({ botId, skillId: skill!.id })
-        .onConflictDoNothing({ target: [botSkills.botId, botSkills.skillId] });
-    }
+    await db
+      .insert(botSkills)
+      .values({ botId, skillId: skill!.id })
+      .onConflictDoNothing({ target: [botSkills.botId, botSkills.skillId] });
     return { created: true };
   },
 };

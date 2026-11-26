@@ -89,6 +89,7 @@ export async function createClaudeWorkerServer(
       book: options.coding
         ? new CodingBook({
             sdk: options.coding.sdk,
+            home: options.coding.home,
             env,
             limits: codingLimits,
             authStatus: options.authStatus,

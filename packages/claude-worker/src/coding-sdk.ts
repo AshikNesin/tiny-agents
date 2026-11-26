@@ -52,6 +52,7 @@ export interface CodingQueryOptions {
   stderr?: (data: string) => void;
   mcpServers?: Record<string, unknown>;
   allowedTools?: string[];
+  plugins?: Array<{ type: "local"; path: string }>;
 }
 
 export interface CodingSdkMessage {
@@ -129,6 +130,7 @@ export function buildCodingSdkOptions(input: {
   stderr?: (data: string) => void;
   mcpServers?: Record<string, unknown>;
   allowedTools?: string[];
+  skillsPlugin?: string;
 }): CodingQueryOptions {
   const env = workerProcessEnv(input.env);
   const appTools = input.mcpServers !== undefined && Object.keys(input.mcpServers).length > 0;
@@ -152,5 +154,8 @@ export function buildCodingSdkOptions(input: {
     env,
     ...(input.stderr ? { stderr: input.stderr } : {}),
     ...(appTools ? { mcpServers: input.mcpServers, allowedTools: input.allowedTools ?? [] } : {}),
+    ...(input.skillsPlugin
+      ? { plugins: [{ type: "local" as const, path: input.skillsPlugin }] }
+      : {}),
   };
 }

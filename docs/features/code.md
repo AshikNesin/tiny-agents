@@ -757,6 +757,8 @@ chat bots use, with a working directory and five coding tools.
   offered, deferred behind `tool_search`, with Settings > Tools deciding
   allow, ask or off ([ADR 0042](../adr/0042-code-threads-use-shared-connections.md)).
   The mode's permissions cover only the coding tools.
+- **Skills:** every skill shared with every bot is listed by name and
+  description, and `load_skill` reads one; `save_skill` is off (ADR 0042).
 - **While it works:** a message steers (it joins after the running tool
   round, and waits in the queue until then) or is held with the queue
   button. A held message can be sent now, which makes it a steer, or

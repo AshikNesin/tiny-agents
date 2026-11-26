@@ -18,6 +18,7 @@ import {
   type CodingSessionConfig,
   type CodingSettingsChange,
   type CodingState,
+  type CodingSkill,
   type CodingToolSpec,
   type CodingAsset,
   type CodingOp,
@@ -77,6 +78,7 @@ export interface ClaudeCodeHarnessOptions {
   id?: string;
   host: HarnessHost;
   tools?: AppToolPort;
+  skills?: () => Promise<CodingSkill[]>;
   resolveWorker: () => Promise<{ url: string; token: string }>;
   status?: () => InstanceStatus;
   timings?: Partial<ConnectionTimings>;
@@ -612,10 +614,15 @@ export function createClaudeCodeHarness(options: ClaudeCodeHarnessOptions): Clau
   }
 
   async function sessionWithTools(row: IndexedThread): Promise<CodingSessionConfig> {
-    const session = sessionConfig(row);
-    if (!options.tools) return session;
-    const tools = await options.tools.list();
-    return tools.length > 0 ? { ...session, tools } : session;
+    const [tools, skills] = await Promise.all([
+      options.tools?.list() ?? [],
+      options.skills?.() ?? [],
+    ]);
+    return {
+      ...sessionConfig(row),
+      ...(tools.length > 0 ? { tools } : {}),
+      ...(skills.length > 0 ? { skills } : {}),
+    };
   }
 
   function notifyOpenRequests(runtime: Runtime): void {
