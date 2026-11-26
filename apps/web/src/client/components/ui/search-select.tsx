@@ -47,6 +47,7 @@ export interface SearchSelectProps {
   triggerClassName?: string;
   disabled?: boolean;
   searchable?: boolean;
+  inlineDescriptions?: boolean;
   "data-testid"?: string;
 }
 
@@ -76,6 +77,7 @@ export function SearchSelect({
   triggerClassName,
   disabled,
   searchable = true,
+  inlineDescriptions = false,
   "data-testid": testId,
 }: SearchSelectProps) {
   const [open, setOpen] = React.useState(false);
@@ -182,10 +184,20 @@ export function SearchSelect({
                           onValueChange(option.value);
                           close();
                         }}
-                        className={cn("h-auto min-h-8 py-1.5", option.description && "items-start")}
+                        className={cn(
+                          "h-auto min-h-8 py-1.5",
+                          option.description && !inlineDescriptions && "items-start",
+                        )}
                       >
                         {option.icon}
-                        <span className="flex min-w-0 flex-1 flex-col">
+                        <span
+                          className={cn(
+                            "flex min-w-0 flex-1",
+                            inlineDescriptions
+                              ? "items-baseline justify-between gap-3"
+                              : "flex-col",
+                          )}
+                        >
                           <span className="truncate">{option.label}</span>
                           {option.description && (
                             <span className="text-muted-foreground truncate text-xs">

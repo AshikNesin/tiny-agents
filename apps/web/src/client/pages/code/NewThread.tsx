@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { ArrowLeft, ArrowUp } from "lucide-react";
+import { ArrowLeft, ArrowUp, ChevronDown, FolderGit2 } from "lucide-react";
 import { Button } from "@groot/ui";
-import { SearchSelect } from "../../components/ui/search-select";
+import { SearchSelect, type SearchSelectOption } from "../../components/ui/search-select";
 import { Spinner } from "../../components/ui/spinner";
 import { errorMessage } from "../../lib/errors";
 import {
@@ -15,10 +15,11 @@ import {
 } from "../../lib/code/api";
 import type { ProjectView } from "../../../shared/api/code";
 import { DEFAULT, ModelPicker, PermissionPicker, composerPermission, loadModels } from "./controls";
-import { Kbd } from "../../components/keys";
+import { useCodeStore } from "../../store/code";
 import { useUiStore } from "../../store/ui";
 
 const PROJECT_KEY = "tiny-agents:code-project";
+const RECENT_PROJECTS = 5;
 
 const storageIsBlockedInPrivateWindows = (): void => undefined;
 
@@ -55,6 +56,41 @@ function useModels(instanceId: string | undefined): ModelOption[] {
   return models;
 }
 
+function useProjectOptions(projects: ProjectView[] | null): {
+  options: SearchSelectOption[];
+  latest: string | undefined;
+} {
+  const threads = useCodeStore((s) => s.threads);
+  return useMemo(() => {
+    const lastUsed = new Map<string, string>();
+    for (const thread of threads ?? []) {
+      if (!thread.projectId) continue;
+      const seen = lastUsed.get(thread.projectId);
+      if (!seen || thread.updatedAt > seen) lastUsed.set(thread.projectId, thread.updatedAt);
+    }
+    const all = projects ?? [];
+    const recent = all
+      .filter((p) => lastUsed.has(p.id))
+      .sort((a, b) => lastUsed.get(b.id)!.localeCompare(lastUsed.get(a.id)!))
+      .slice(0, RECENT_PROJECTS);
+    const rest = all.filter((p) => !recent.includes(p));
+    const grouped = recent.length > 0 && rest.length > 0;
+    const option = (p: ProjectView, group: string): SearchSelectOption => ({
+      value: p.id,
+      label: p.name,
+      description: `${p.repo.owner}/${p.repo.name}`,
+      ...(grouped ? { group } : {}),
+    });
+    return {
+      options: [
+        ...recent.map((p) => option(p, "Recent")),
+        ...rest.map((p) => option(p, "Projects")),
+      ],
+      latest: recent[0]?.id,
+    };
+  }, [projects, threads]);
+}
+
 export function NewThread({
   focused,
   projects,
@@ -76,9 +112,11 @@ export function NewThread({
   const [starting, setStarting] = useState(false);
   const [remembered] = useState(lastProject);
 
+  const { options: projectOptions, latest } = useProjectOptions(projects);
   const projectId =
     projects?.find((p) => p.id === chosenProject)?.id ??
     projects?.find((p) => p.id === remembered)?.id ??
+    latest ??
     projects?.[0]?.id ??
     "";
   const project = projects?.find((p) => p.id === projectId) ?? null;
@@ -134,14 +172,7 @@ export function NewThread({
         </Button>
       </header>
       <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-4 pb-[12vh]">
-        <div className="w-full max-w-2xl space-y-3">
-          <div className="space-y-1 px-1">
-            <h1 className="text-lg font-semibold">New thread</h1>
-            <p className="text-muted-foreground text-sm">
-              The agent works on its own branch of the project, in its own worktree. Paste a link to
-              one of the project's issues to have it fixed.
-            </p>
-          </div>
+        <div className="w-full max-w-2xl">
           {projects && projects.length === 0 ? (
             <p className="px-1 text-sm">
               A thread needs a project.{" "}
@@ -170,7 +201,7 @@ export function NewThread({
                 }}
                 rows={3}
                 aria-label="What should the agent do?"
-                placeholder="What should the agent do?"
+                placeholder="What should the agent do? Paste an issue link to have it fixed."
                 className="placeholder:text-fg-tertiary field-sizing-content max-h-60 min-h-[4.5rem] w-full resize-none overflow-y-auto bg-transparent px-2 pt-1.5 text-base leading-7 outline-none md:text-sm md:leading-6"
                 data-testid="code-new-message"
               />
@@ -180,14 +211,17 @@ export function NewThread({
                     label="Project"
                     value={projectId}
                     onValueChange={setProjectId}
-                    options={(projects ?? []).map((p) => ({
-                      value: p.id,
-                      label: p.name,
-                      description: `${p.repo.owner}/${p.repo.name}`,
-                    }))}
-                    searchable={(projects?.length ?? 0) > 6}
+                    options={projectOptions}
+                    searchPlaceholder="Choose a project…"
+                    emptyText="No project matches."
+                    inlineDescriptions
+                    contentClassName="w-96"
                     data-testid="code-new-project"
-                  />
+                  >
+                    <FolderGit2 />
+                    <span className="truncate">{project?.name ?? "Project"}</span>
+                    <ChevronDown className="opacity-60" />
+                  </SearchSelect>
                   {harnesses.length > 1 && (
                     <SearchSelect
                       label="Agent"
@@ -227,10 +261,6 @@ export function NewThread({
               </div>
             </form>
           )}
-          <p className="text-muted-foreground flex flex-wrap items-center gap-1.5 px-1 text-xs pointer-coarse:hidden">
-            <Kbd keys="enter" /> starts it, <Kbd keys="shift+enter" /> new line, <Kbd keys="j" />{" "}
-            and <Kbd keys="k" /> move through the list, <Kbd keys="?" /> shows every key.
-          </p>
         </div>
       </div>
     </div>
