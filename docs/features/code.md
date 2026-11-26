@@ -639,7 +639,12 @@ points to the thread for the rest.
   - `claude-code`: the worker's coding mode (`coding.*`) on its own Worker
     connection (`@tiny-agents/claude-worker/client`, shared with the bot
     engine: heartbeat, reconnect, resume, restart detection), SDK messages
-    and session history normalized.
+    and session history normalized. Shared connections reach it as one in-process
+    SDK MCP server per connection (`appServers` in
+    `packages/claude-worker/src/coding.ts`); a call comes back to the app as a
+    `tool_call` event and runs through `claudeCodeTools`
+    (`apps/web/src/server/api/code/code.tools.ts`), answered with
+    `coding.tool_result` (ADR 0042).
   - `pi`: the native harness (below). It takes the agent runtime through
     `PiPort` (`port.ts`), normalizes its chat state, and keeps its threads in
     the app's thread index.

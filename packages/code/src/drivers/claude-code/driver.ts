@@ -18,6 +18,7 @@ import {
   type CodingSessionConfig,
   type CodingSettingsChange,
   type CodingState,
+  type CodingToolSpec,
   type CodingAsset,
   type CodingOp,
 } from "@tiny-agents/claude-worker";
@@ -57,9 +58,25 @@ import {
 } from "./normalize";
 import { usageReportOf, type ModelTotals } from "./usage";
 
+export interface AppToolPort {
+  list(): Promise<CodingToolSpec[]>;
+  call(
+    server: string,
+    tool: string,
+    input: Record<string, unknown>,
+  ): Promise<{ content: string; isError?: boolean }>;
+}
+
+interface AppToolCall {
+  server: string;
+  tool: string;
+  input: Record<string, unknown>;
+}
+
 export interface ClaudeCodeHarnessOptions {
   id?: string;
   host: HarnessHost;
+  tools?: AppToolPort;
   resolveWorker: () => Promise<{ url: string; token: string }>;
   status?: () => InstanceStatus;
   timings?: Partial<ConnectionTimings>;
@@ -150,6 +167,8 @@ interface Runtime {
   liveIndex: Map<string, number>;
   requests: Map<string, ApprovalRecord>;
   notified: Set<string>;
+  calls: Map<string, AppToolCall>;
+  calling: Set<string>;
   working: boolean;
   ending: boolean;
   queued: QueuedMessage[];
@@ -258,6 +277,8 @@ export function createClaudeCodeHarness(options: ClaudeCodeHarnessOptions): Clau
           liveIndex: new Map(),
           requests: new Map(),
           notified: new Set(),
+          calls: new Map(),
+          calling: new Set(),
           working: false,
           ending: false,
           queued: [],
@@ -550,8 +571,51 @@ export function createClaudeCodeHarness(options: ClaudeCodeHarnessOptions): Clau
         emitItems(runtime);
         break;
       }
+      case "tool_call":
+        runtime.calls.set(event.callId, {
+          server: event.server,
+          tool: event.tool,
+          input: event.input,
+        });
+        break;
+      case "tool_call_closed":
+        runtime.calls.delete(event.callId);
+        break;
     }
-    if (seq >= runtime.replayUntil) notifyOpenRequests(runtime);
+    if (seq >= runtime.replayUntil) {
+      notifyOpenRequests(runtime);
+      runOpenCalls(runtime);
+    }
+  }
+
+  function runOpenCalls(runtime: Runtime): void {
+    for (const [callId, call] of runtime.calls) {
+      if (runtime.calling.has(callId)) continue;
+      runtime.calling.add(callId);
+      void answerCall(runtime.nativeId, callId, call).finally(() => runtime.calling.delete(callId));
+    }
+  }
+
+  async function answerCall(nativeId: string, callId: string, call: AppToolCall): Promise<void> {
+    const outcome = options.tools
+      ? await options.tools.call(call.server, call.tool, call.input).catch(callFailed)
+      : { content: "This app offers no tools to Claude Code.", isError: true };
+    await client
+      .request({ type: "coding.tool_result", sessionId: nativeId, callId, ...outcome })
+      .catch((error: unknown) =>
+        log.warn("claude-code tool result not delivered", { callId, error: String(error) }),
+      );
+  }
+
+  function callFailed(error: unknown): { content: string; isError: true } {
+    return { content: error instanceof Error ? error.message : String(error), isError: true };
+  }
+
+  async function sessionWithTools(row: IndexedThread): Promise<CodingSessionConfig> {
+    const session = sessionConfig(row);
+    if (!options.tools) return session;
+    const tools = await options.tools.list();
+    return tools.length > 0 ? { ...session, tools } : session;
   }
 
   function notifyOpenRequests(runtime: Runtime): void {
@@ -890,7 +954,7 @@ export function createClaudeCodeHarness(options: ClaudeCodeHarnessOptions): Clau
       const result = await client.request<CodingSendResult>({
         type: "coding.send",
         sessionId: nativeId,
-        session: sessionConfig(runtime.row),
+        session: await sessionWithTools(runtime.row),
         uuid: randomUUID(),
         text: input.message,
         mode: input.queue ? "queue" : "steer",
@@ -949,7 +1013,7 @@ export function createClaudeCodeHarness(options: ClaudeCodeHarnessOptions): Clau
       await client.request({
         type: "coding.settings",
         sessionId: nativeId,
-        session: sessionConfig(runtime.row),
+        session: await sessionWithTools(runtime.row),
         change: workerChange,
       });
       emitState(runtime);

@@ -26,8 +26,8 @@ first:
    every bot starts from; a bot's own `Bot.toolPermissions` entry wins for
    that bot (`apps/web/src/server/api/bots/tool-permissions.ts`).
 
-Native Code threads get every `allBots` connection under the same Settings >
-Tools map (ADR 0042).
+Native and Claude Code threads get every `allBots` connection under the same
+Settings > Tools map (ADR 0042).
 
 Turning a tool on or off re-installs the capability from the cached tool list
 and re-applies every linked bot's configuration (`ConnectionManager.reinstall`).
