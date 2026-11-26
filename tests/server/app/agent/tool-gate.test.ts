@@ -525,6 +525,7 @@ describe("Tool gate without a permissions doc", () => {
       context,
       answers: "memory",
       userMessages: async () => [],
+      run: async () => undefined,
       instructions: async () => undefined,
     };
   }
