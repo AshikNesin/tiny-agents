@@ -187,8 +187,10 @@ export async function createProject(input: ProjectCreateBody): Promise<CodeProje
       defaultModel: input.defaultModel ?? null,
       settings: JSON.stringify({}),
     })
+    .onConflictDoNothing({ target: [codeProjects.repoOwner, codeProjects.repoName] })
     .returning();
-  return row!;
+  if (!row) throw Boom.conflict(`${repoSlug(repo)} is already a project.`);
+  return row;
 }
 
 export async function updateProject(

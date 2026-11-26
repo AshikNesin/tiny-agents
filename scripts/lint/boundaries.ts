@@ -408,6 +408,14 @@ const BOUNDARY_RULES: BoundaryRule[] = [
     enabled: true,
   },
   {
+    id: "R19",
+    kind: "plugin",
+    scope: "**/src/**/*.ts",
+    rule: "repo/no-check-then-insert",
+    except: ["**/*.test.ts"],
+    enabled: true,
+  },
+  {
     id: "R13",
     kind: "plugin",
     scope: "apps/web/src/client/lib/*-api.ts",

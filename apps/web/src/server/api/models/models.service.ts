@@ -460,23 +460,33 @@ export async function createAccount(input: CreateAccountDTO): Promise<AccountDat
     PROVIDER_TEMPLATES.find((t) => t.kind === kind && t.baseUrl === baseUrl)?.label ??
     (baseUrl ? new URL(baseUrl).host : PROVIDER_KINDS[kind].label);
   const item = input.apiKey ? await storeKey(kind, name, baseUrl, input.apiKey) : undefined;
-  const [row] = await db
-    .insert(providers)
-    .values({
-      name,
-      kind,
-      baseUrl: input.viaProviderId ? null : baseUrl,
-      credentialItemId: item?.id ?? null,
-      credentialHint: input.apiKey ? keyHint(input.apiKey) : null,
-      viaProviderId: input.viaProviderId ?? null,
-      settingsJson: JSON.stringify(settings),
-      discovery: input.discovery,
-      allowPrivateNetwork: input.allowPrivateNetwork,
-      status: input.discovery === "auto" && !input.viaProviderId ? "ok" : "unchecked",
-      checkedAt: input.discovery === "auto" ? new Date() : null,
-    })
-    .returning();
-  const account = row!;
+  const account = db.transaction((tx) => {
+    if (kind === "claude-plan") {
+      const plan = tx
+        .select({ id: providers.id })
+        .from(providers)
+        .where(eq(providers.kind, kind))
+        .get();
+      if (plan) throw Boom.conflict("There is already a Claude plan account.");
+    }
+    return tx
+      .insert(providers)
+      .values({
+        name,
+        kind,
+        baseUrl: input.viaProviderId ? null : baseUrl,
+        credentialItemId: item?.id ?? null,
+        credentialHint: input.apiKey ? keyHint(input.apiKey) : null,
+        viaProviderId: input.viaProviderId ?? null,
+        settingsJson: JSON.stringify(settings),
+        discovery: input.discovery,
+        allowPrivateNetwork: input.allowPrivateNetwork,
+        status: input.discovery === "auto" && !input.viaProviderId ? "ok" : "unchecked",
+        checkedAt: input.discovery === "auto" ? new Date() : null,
+      })
+      .returning()
+      .get();
+  });
   if (chosen.length > 0) {
     await db.insert(models).values(
       chosen.map((m) =>
@@ -808,9 +818,11 @@ export async function addModel(
         ...(input.compat !== undefined ? { compat: input.compat } : {}),
       }),
     )
+    .onConflictDoNothing({ target: [models.providerId, models.upstreamId] })
     .returning();
+  if (!created) throw Boom.conflict("The account already has that model.");
   await reloadModels();
-  return modelView(created!, 0);
+  return modelView(created, 0);
 }
 
 export async function patchModel(
