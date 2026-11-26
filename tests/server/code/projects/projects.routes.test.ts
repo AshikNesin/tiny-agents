@@ -527,6 +527,35 @@ describe("publish and the PR tab", () => {
     off();
   });
 
+  it("archives the thread and frees its worktree when its PR is closed without merging", async () => {
+    const project = await newProject();
+    const thread = await newThread(project.id);
+    await commit(thread.worktree, "src/login.ts");
+    await call("POST", `/threads/${encodeURIComponent(thread.id)}/publish`, {});
+
+    github.pull(1).state = "closed";
+    await pr(thread.id);
+
+    const row = (await db.query.codeThreads.findFirst({ where: eq(codeThreads.id, thread.id) }))!;
+    expect(row.worktree).toBeNull();
+    expect(existsSync(thread.worktree)).toBe(false);
+  });
+
+  it("keeps the worktree of a closed PR's thread that has uncommitted changes", async () => {
+    const project = await newProject();
+    const thread = await newThread(project.id);
+    await commit(thread.worktree, "src/login.ts");
+    await call("POST", `/threads/${encodeURIComponent(thread.id)}/publish`, {});
+    await sh(local, `echo follow-up > ${thread.worktree}/notes.txt`);
+
+    github.pull(1).state = "closed";
+    await pr(thread.id);
+
+    const row = (await db.query.codeThreads.findFirst({ where: eq(codeThreads.id, thread.id) }))!;
+    expect(row.worktree).toBe(thread.worktree);
+    expect(await sh(local, `cat ${thread.worktree}/notes.txt`)).toBe("follow-up");
+  });
+
   it("tells the project chat that started a thread when its PR opens and merges", async () => {
     const project = await newProject();
     const thread = await newThread(project.id);
