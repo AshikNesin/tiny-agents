@@ -18,7 +18,7 @@ export {
 } from "./errors";
 export * as shelley from "../drivers/shelley";
 export { createShelleyHarness, type ShelleyHarness } from "../drivers/shelley";
-export { createClaudeCodeHarness } from "../drivers/claude-code";
+export { createClaudeCodeHarness, type AppToolPort } from "../drivers/claude-code";
 export {
   createPiHarness,
   type PiChatEvent,

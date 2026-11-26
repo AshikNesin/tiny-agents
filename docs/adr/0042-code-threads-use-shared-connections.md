@@ -26,11 +26,24 @@ Settings > Tools.
 - **Native** threads get this through `nativeConfig` in
   `apps/web/src/server/api/code/code.registry.ts`, which re-reads the
   connections on every message, so a change applies from the next message.
+- **Claude Code** threads get each shared connection as an in-process SDK
+  MCP server on the worker, so tools keep their `mcp__<slug>__<tool>` names.
+  The tool's body only sends a `tool_call` event back to the app, which runs
+  the call on its own connection, so OAuth tokens never reach the sandbox. A
+  tool on "ask" raises the thread's usual approval card from inside the call,
+  so it asks in every permission mode, Bypass included; the tools are on
+  `allowedTools` so Claude Code does not ask a second time. The worker turns
+  on Claude Code's own tool search (`ENABLE_TOOL_SEARCH`) unless the worker's
+  environment sets it, so tool schemas load on demand. The list is read when
+  the Claude Code process starts, so a change applies to the next process.
 - **Shelley** keeps its own MCP configuration.
 
 ## Consequences
 
 - A connection the owner shares with every bot can be used from any Native
-  Code thread, including in Bypass mode; Bypass covers only the coding tools,
-  so a connection tool on "ask" still asks.
+  or Claude Code thread, including in Bypass mode; Bypass covers only the
+  coding tools, so a connection tool on "ask" still asks.
+- A Claude Code tool call that is running when the app restarts runs again
+  once the app reconnects, since only the worker's `tool_call_closed` event
+  marks it done. A call the app never answers fails after ten minutes.
 - Skills, vault and memory stay out of Code threads.

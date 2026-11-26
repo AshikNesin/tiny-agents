@@ -22,15 +22,14 @@ import {
   type PiThreadConfig,
 } from "@tiny-agents/code/server";
 import type { ModelOption } from "@tiny-agents/code/contracts";
-import { eq } from "drizzle-orm";
 import { appEnv, type AppEnv } from "../../env";
-import { connections, db } from "../../db";
-import { connectionCapabilityId, TOOL_SEARCH_TOOLKIT } from "../bots/bot-toolkits";
+import { TOOL_SEARCH_TOOLKIT } from "../bots/bot-toolkits";
 import { ownerToolPermissions } from "../bots/tool-permissions";
 import { sharedClaudeWorkerLocator } from "../bots/claude-worker";
 import { agentRuntimeReady, getAgentRuntime } from "../bots/bots.runtime";
 import { sandboxConnection } from "../bots/sandbox-host";
 import { threadIndex } from "./code.store";
+import { claudeCodeTools, sharedConnectionToolkits } from "./code.tools";
 
 function harnessHost(): HarnessHost {
   return {
@@ -81,6 +80,7 @@ function claudeCodeHarness(env: AppEnv, host: HarnessHost): HarnessInstance | un
   return createClaudeCodeHarness({
     host,
     resolveWorker: () => locator.resolve(),
+    tools: claudeCodeTools(),
     status: () => hint ?? { state: "connected" },
     models: claudePlanModels,
   });
@@ -115,14 +115,6 @@ function nativeModels(runtime: AgentRuntime): ModelOption[] {
       supportsImages: model.vision,
     }))
     .sort((a, b) => Number(b.isDefault ?? false) - Number(a.isDefault ?? false));
-}
-
-async function sharedConnectionToolkits(): Promise<string[]> {
-  const rows = await db
-    .select({ slug: connections.slug })
-    .from(connections)
-    .where(eq(connections.allBots, true));
-  return rows.map((row) => connectionCapabilityId(row.slug));
 }
 
 async function nativeConfig(config: PiThreadConfig): Promise<BotAgentConfig> {

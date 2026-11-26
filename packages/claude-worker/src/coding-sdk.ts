@@ -1,4 +1,5 @@
 import { workerProcessEnv } from "./guards";
+import type { ClaudeSdkModule } from "./sdk";
 import {
   DEFAULT_CODING_PERMISSION_MODE,
   type CodingEffortLevel,
@@ -49,6 +50,8 @@ export interface CodingQueryOptions {
   effort?: CodingEffortLevel;
   env: Record<string, string>;
   stderr?: (data: string) => void;
+  mcpServers?: Record<string, unknown>;
+  allowedTools?: string[];
 }
 
 export interface CodingSdkMessage {
@@ -90,18 +93,29 @@ export interface CodingSdk {
     sessionId: string,
     options?: { dir?: string; upToMessageId?: string; title?: string },
   ): Promise<{ sessionId: string }>;
+  tool?: ClaudeSdkModule["tool"];
+  createSdkMcpServer?: ClaudeSdkModule["createSdkMcpServer"];
 }
 
 export function codingSdkOf(module: {
   query: CodingSdk["query"];
   getSessionMessages?: CodingSdk["getSessionMessages"] | undefined;
   forkSession?: CodingSdk["forkSession"] | undefined;
+  tool?: ClaudeSdkModule["tool"] | undefined;
+  createSdkMcpServer?: ClaudeSdkModule["createSdkMcpServer"] | undefined;
 }): CodingSdk | undefined {
-  const { query, getSessionMessages, forkSession } = module;
+  const { query, getSessionMessages, forkSession, tool, createSdkMcpServer } = module;
   if (typeof getSessionMessages !== "function" || typeof forkSession !== "function") {
     return undefined;
   }
-  return { query, getSessionMessages, forkSession };
+  return {
+    query,
+    getSessionMessages,
+    forkSession,
+    ...(typeof tool === "function" && typeof createSdkMcpServer === "function"
+      ? { tool, createSdkMcpServer }
+      : {}),
+  };
 }
 
 export function buildCodingSdkOptions(input: {
@@ -113,8 +127,12 @@ export function buildCodingSdkOptions(input: {
   env: Record<string, string | undefined>;
   canUseTool: CodingCanUseTool;
   stderr?: (data: string) => void;
+  mcpServers?: Record<string, unknown>;
+  allowedTools?: string[];
 }): CodingQueryOptions {
   const env = workerProcessEnv(input.env);
+  const appTools = input.mcpServers !== undefined && Object.keys(input.mcpServers).length > 0;
+  if (appTools) env.ENABLE_TOOL_SEARCH ??= "true";
   if ("ANTHROPIC_BASE_URL" in env) {
     throw new Error("Refusing to set ANTHROPIC_BASE_URL.");
   }
@@ -133,5 +151,6 @@ export function buildCodingSdkOptions(input: {
     ...(input.effort ? { effort: input.effort } : {}),
     env,
     ...(input.stderr ? { stderr: input.stderr } : {}),
+    ...(appTools ? { mcpServers: input.mcpServers, allowedTools: input.allowedTools ?? [] } : {}),
   };
 }

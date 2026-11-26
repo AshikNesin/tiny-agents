@@ -62,8 +62,19 @@ const id = z.string().min(1).max(200);
 const requestId = z.string().min(1).max(100);
 const absolutePath = z.string().min(1).max(4096);
 
+export const codingToolSpecSchema = z.strictObject({
+  server: z.string().regex(/^[a-zA-Z0-9_-]{1,64}$/),
+  name: z.string().min(1).max(128),
+  description: z.string().max(4000),
+  inputSchema: z.record(z.string(), z.unknown()),
+  ask: z.boolean(),
+});
+
+export type CodingToolSpec = z.infer<typeof codingToolSpecSchema>;
+
 export const codingSessionConfigSchema = z.strictObject({
   cwd: absolutePath,
+  tools: z.array(codingToolSpecSchema).max(500).optional(),
   resume: z.string().min(1).max(200).optional(),
   model: z.string().min(1).max(200).nullable().optional(),
   effort: z.enum(CODING_EFFORT_LEVELS).nullable().optional(),
@@ -143,6 +154,14 @@ export const codingClientMessageSchema = z.discriminatedUnion("type", [
     attachments: z.array(codingAttachmentSchema).max(20).optional(),
   }),
   z.strictObject({ type: z.literal("coding.interrupt"), requestId, sessionId: id }),
+  z.strictObject({
+    type: z.literal("coding.tool_result"),
+    requestId,
+    sessionId: id,
+    callId: id,
+    content: z.string().max(1_000_000),
+    isError: z.boolean().optional(),
+  }),
   z.strictObject({
     type: z.literal("coding.respond"),
     requestId,
@@ -234,6 +253,14 @@ export const codingEventSchema = z.discriminatedUnion("type", [
   }),
   z.strictObject({ type: z.literal("state"), state: codingStateSchema }),
   z.strictObject({ type: z.literal("request"), approval: codingApprovalSchema }),
+  z.strictObject({
+    type: z.literal("tool_call"),
+    callId: id,
+    server: z.string(),
+    tool: z.string(),
+    input: z.record(z.string(), z.unknown()),
+  }),
+  z.strictObject({ type: z.literal("tool_call_closed"), callId: id }),
   z.strictObject({
     type: z.literal("request_closed"),
     approvalId: id,
