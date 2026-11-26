@@ -178,6 +178,52 @@ const silentFallbacks = (node) => {
   return ignoresError(handler) ? [handler] : [];
 };
 
+const RACE_MESSAGE =
+  "R19: another request can insert between this read and the insert below it, because an `await` sits between them. Agents shipped this race four times in e511da5 (task idempotency key, skill name, passkey register, singleton jobs). Put a unique index on the key and insert with `.onConflictDoNothing()` or `.onConflictDoUpdate()`, then read the row back; or do the read and the insert in one sync `db.transaction()` in apps/.";
+
+const READ_METHODS = new Set(["findFirst", "findMany"]);
+
+const readTable = (node) => {
+  if (node.type !== "CallExpression" || node.callee.type !== "MemberExpression") return null;
+  const { object, property, computed } = node.callee;
+  if (computed) return null;
+  if (property.name === "from" && node.arguments[0]?.type === "Identifier") {
+    return node.arguments[0].name;
+  }
+  if (
+    READ_METHODS.has(property.name) &&
+    object.type === "MemberExpression" &&
+    !object.computed &&
+    object.object.type === "MemberExpression" &&
+    !object.object.computed &&
+    object.object.property.name === "query"
+  ) {
+    return object.property.name;
+  }
+  return null;
+};
+
+const guardedByConflict = (call) => {
+  for (let node = call; node.parent; node = node.parent) {
+    const { parent } = node;
+    if (parent.type === "MemberExpression" && parent.object === node) {
+      if (!parent.computed && parent.property.name.startsWith("onConflict")) return true;
+    } else if (!(parent.type === "CallExpression" && parent.callee === node)) {
+      return false;
+    }
+  }
+  return false;
+};
+
+const insertTable = (node) =>
+  node.type === "CallExpression" &&
+  calledMethod(node) === "insert" &&
+  node.arguments.length === 1 &&
+  node.arguments[0].type === "Identifier" &&
+  !guardedByConflict(node)
+    ? node.arguments[0].name
+    : null;
+
 const MODULE_SCOPES = new Set(["module", "global"]);
 
 const MODULE_STATE_MESSAGE =
@@ -312,6 +358,45 @@ export default {
                 message: `R17: ${SILENT_FALLBACK_BASELINE} allows ${allowed} silent fallbacks here but the file has ${found.length}. Lower its count to ${found.length} to lock in the cut; the baseline only shrinks.`,
               });
             }
+          },
+        };
+      },
+    },
+    "no-check-then-insert": {
+      create(context) {
+        const frames = [];
+        const enter = () => frames.push({ reads: [], inserts: [], awaits: [] });
+        const exit = () => {
+          const { reads, inserts, awaits } = frames.pop();
+          for (const insert of inserts) {
+            const raced = reads.some(
+              (read) =>
+                read.table === insert.table &&
+                awaits.some((resumed) => resumed >= read.end && resumed <= insert.start),
+            );
+            if (raced) context.report({ node: insert.node, message: RACE_MESSAGE });
+          }
+        };
+        return {
+          Program: enter,
+          "Program:exit": exit,
+          FunctionDeclaration: enter,
+          "FunctionDeclaration:exit": exit,
+          FunctionExpression: enter,
+          "FunctionExpression:exit": exit,
+          ArrowFunctionExpression: enter,
+          "ArrowFunctionExpression:exit": exit,
+          AwaitExpression(node) {
+            frames.at(-1).awaits.push(node.end ?? node.range[1]);
+          },
+          CallExpression(node) {
+            const frame = frames.at(-1);
+            const start = node.start ?? node.range[0];
+            const end = node.end ?? node.range[1];
+            const read = readTable(node);
+            if (read) frame.reads.push({ table: read, end });
+            const insert = insertTable(node);
+            if (insert) frame.inserts.push({ table: insert, start, node });
           },
         };
       },

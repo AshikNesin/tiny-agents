@@ -7,7 +7,7 @@ and `pnpm verify:static` runs the gates CI runs. Guides start at
 
 ## Rules and their enforcers
 
-R1 to R18 are lint rules in `scripts/lint/boundaries.ts`, run by `pnpm check`.
+R1 to R19 are lint rules in `scripts/lint/boundaries.ts`, run by `pnpm check`.
 
 | Rule                                                                                                                                                                                       | Enforcer                                                                         |
 | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------- |
@@ -32,6 +32,7 @@ R1 to R18 are lint rules in `scripts/lint/boundaries.ts`, run by `pnpm check`.
 | Code features work for every harness: shared git and diff logic lives in `packages/git`; only `code.registry.ts` names a harness's package.                                                | R14                                                                              |
 | `packages/agent` parses stored JSON with `durable-json.ts`.                                                                                                                                | R6, R6b                                                                          |
 | No transactions in `packages/`; sync ones are fine in `apps/`.                                                                                                                             | R7                                                                               |
+| Never read a row, `await`, then insert into its table: use `onConflictDoNothing()` on a unique index, or one sync `db.transaction()` in `apps/`.                                           | R19                                                                              |
 | Only `bootstrap()` sets `db`; never open a driver.                                                                                                                                         | R8a, R8b                                                                         |
 | Test dates derive from `FIXED_NOW` in `tests/test-clock.ts`.                                                                                                                               | `tests/server/setup.ts` freezes `Date`                                           |
 | A server test file leaves nothing for the next one: env and globals through `vi.stubEnv`/`vi.stubGlobal`, servers, sockets, children and due timers closed.                                | `tests/server/fixtures/file-isolation.ts`, run after every file                  |
