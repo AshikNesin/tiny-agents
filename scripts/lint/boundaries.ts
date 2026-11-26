@@ -78,6 +78,19 @@ const R12_ALLOWED = [
   "api/routines/routines.runs.ts:CREDENTIAL_TOOLS",
 ].map((entry) => `${SERVER}/${entry}`);
 
+const R18_BASELINE = ["ask-user-questions.tsx", "button.tsx"]
+  .map((file) => `apps/web/src/client/components/fluid/${file}`)
+  .concat(
+    [
+      "collapsible.tsx",
+      "item.tsx",
+      "message-scroller.tsx",
+      "search-select.tsx",
+      "switch.tsx",
+      "toggle-group.tsx",
+    ].map((file) => `apps/web/src/client/components/ui/${file}`),
+  );
+
 const BOUNDARY_RULES: BoundaryRule[] = [
   {
     id: "R1",
@@ -177,6 +190,23 @@ const BOUNDARY_RULES: BoundaryRule[] = [
     scope: "**/*.tsx",
     rule: "repo/breadcrumbs-children",
     enabled: true,
+  },
+  {
+    id: "R18",
+    kind: "import",
+    scope: "**",
+    except: ["packages/ui/**", ...R18_BASELINE],
+    enabled: true,
+    restrict: {
+      patterns: [
+        {
+          regex:
+            "^(radix-ui|@radix-ui/.*|@base-ui/react|@base-ui/react/.*|@shadcn/react|@shadcn/react/.*|cmdk)$",
+          message:
+            "R18: UI primitives are imported only inside packages/ui (issue #576). Use the @groot/ui component, or add one there first.",
+        },
+      ],
+    },
   },
   {
     id: "R6",

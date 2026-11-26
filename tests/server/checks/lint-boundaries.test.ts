@@ -576,6 +576,26 @@ const FIXTURES: Record<string, Fixture> = {
     source: 'export const toModel = "clicked \u2014 now on the page";\n',
     rules: [],
   },
+  "apps/web/src/client/r18-fail.tsx": {
+    source:
+      'import { Slot } from "radix-ui";\nimport { Button } from "@base-ui/react/button";\nimport { Command } from "cmdk";\nexport const parts = [Slot, Button, Command];\n',
+    rules: ["R18", "R18", "R18"],
+    mentions: "add one there first",
+  },
+  "packages/shell/src/r18-fail.tsx": {
+    source:
+      'import { MessageScroller } from "@shadcn/react/message-scroller";\nexport const m = MessageScroller;\n',
+    rules: ["R18"],
+  },
+  "packages/ui/src/r18-pass.tsx": {
+    source:
+      'import { Slot } from "radix-ui";\nimport { Button } from "@base-ui/react/button";\nexport const parts = [Slot, Button];\n',
+    rules: [],
+  },
+  "apps/web/src/client/r18-groot-ui-pass.tsx": {
+    source: 'import { Button } from "@groot/ui/button";\nexport const b = Button;\n',
+    rules: [],
+  },
   "packages/agent/src/r17-catch-fail.ts": {
     source:
       "export class Runtime {\n  async dismiss(): Promise<void> {}\n  watch(): void {\n    void this.dismiss().catch(() => {});\n  }\n}\n",
