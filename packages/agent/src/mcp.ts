@@ -182,6 +182,7 @@ export interface McpCapabilityOptions {
     signal?: AbortSignal,
   ) => Promise<McpCallResult>;
   setupHint?: string;
+  shared?: boolean;
 }
 
 function resultOf(result: McpCallResult): ToolExecutionResult {
@@ -212,7 +213,7 @@ export function createMcpCapability(options: McpCapabilityOptions): Capability {
       sum + name.length + description.length + JSON.stringify(schema).length,
     0,
   );
-  const defer = size > MCP_DEFER_CHARS;
+  const defer = options.shared === true || size > MCP_DEFER_CHARS;
   const tools = sent.map(({ tool, name, description, schema }) =>
     defineTool({
       name,
@@ -250,5 +251,6 @@ export function createMcpCapability(options: McpCapabilityOptions): Capability {
       description: tool.description ?? "",
     })),
     ...(options.setupHint ? { setupHint: options.setupHint } : {}),
+    ...(options.shared ? { shared: true } : {}),
   };
 }

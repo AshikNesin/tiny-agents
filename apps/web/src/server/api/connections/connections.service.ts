@@ -1,4 +1,4 @@
-import { asc, eq, inArray } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
 import { env } from "@groot/core/env";
 import { Boom } from "@groot/core/errors";
 import {
@@ -8,14 +8,8 @@ import {
   type McpTransportKind,
 } from "@tiny-agents/agent";
 import { checkPublicUrl } from "@tiny-agents/sandbox";
-import {
-  botConnections,
-  bots as botsTable,
-  connections,
-  db,
-  vaultItems,
-  type Connection,
-} from "../../db";
+import { connections, db, vaultItems, type Connection } from "../../db";
+import { itemBotIds, setItemReach } from "../bots/bot-reach";
 import { getConnectionManager } from "./connections.manager";
 import type {
   ConnectionData,
@@ -39,9 +33,7 @@ import type {
   UpdateToolDTO,
 } from "./connections.schema";
 
-type Row = Connection & {
-  bots: { botId: string }[];
-};
+type Row = Connection & { botIds: string[] };
 
 type ConnectionRow = Pick<Row, "slug" | "disabledTools">;
 
@@ -70,14 +62,18 @@ function toDTO(row: Row): ConnectionData {
     hasSecret: Boolean(row.secretRef || row.secretItemId || row.secretEnc),
     secretRef: row.secretRef,
     tools: parseTools(row.toolsCache).map((tool) => toToolDTO(row, tool, disabled)),
-    botIds: row.bots.map((link) => link.botId),
+    allBots: row.allBots,
+    botIds: row.botIds,
     status: live.status,
     ...(live.error ? { error: live.error } : {}),
     createdAt: row.createdAt,
   };
 }
 
-const withBots = { bots: { columns: { botId: true } } } as const;
+async function withBotIds(rows: Connection[]): Promise<Row[]> {
+  const reach = await itemBotIds("connections", rows);
+  return rows.map((row) => ({ ...row, botIds: reach.get(row.id) ?? [] }));
+}
 
 function checkUrl(url: string): void {
   if (env.NODE_ENV !== "production") return;
@@ -111,42 +107,26 @@ async function uniqueSlug(name: string): Promise<string> {
   }
 }
 
-async function setBots(connectionId: string, botIds: string[]): Promise<void> {
-  const before = await db
-    .select()
-    .from(botConnections)
-    .where(eq(botConnections.connectionId, connectionId));
-  const bots =
-    botIds.length > 0
-      ? await db.select({ id: botsTable.id }).from(botsTable).where(inArray(botsTable.id, botIds))
-      : [];
-  db.transaction((tx) => {
-    tx.delete(botConnections).where(eq(botConnections.connectionId, connectionId)).run();
-    if (bots.length > 0) {
-      tx.insert(botConnections)
-        .values(bots.map((bot) => ({ botId: bot.id, connectionId })))
-        .run();
-    }
-  });
-  const affected = new Set([...before.map((link) => link.botId), ...bots.map((bot) => bot.id)]);
+async function setBots(connection: Connection, allBots: boolean, botIds: string[]): Promise<void> {
+  const affected = await setItemReach("connections", { id: connection.id, allBots }, botIds);
+  if (allBots !== connection.allBots) await getConnectionManager().reinstall(connection.id);
   await getConnectionManager().botsChanged(affected);
 }
 
+async function findRow(id: string): Promise<Connection> {
+  const row = await db.query.connections.findFirst({ where: eq(connections.id, id) });
+  if (!row) throw Boom.notFound("Connection not found");
+  return row;
+}
+
 export async function list(): Promise<ConnectionData[]> {
-  const rows = await db.query.connections.findMany({
-    with: withBots,
-    orderBy: asc(connections.name),
-  });
-  return rows.map(toDTO);
+  const rows = await db.query.connections.findMany({ orderBy: asc(connections.name) });
+  return (await withBotIds(rows)).map(toDTO);
 }
 
 export async function get(id: string): Promise<ConnectionData> {
-  const row = await db.query.connections.findFirst({
-    where: eq(connections.id, id),
-    with: withBots,
-  });
-  if (!row) throw Boom.notFound("Connection not found");
-  return toDTO(row);
+  const [row] = await withBotIds([await findRow(id)]);
+  return toDTO(row!);
 }
 
 export async function create(data: CreateConnectionDTO): Promise<ConnectionData> {
@@ -165,6 +145,7 @@ export async function create(data: CreateConnectionDTO): Promise<ConnectionData>
         transport: data.transport,
         authType: data.authType,
         headerName: data.authType === "header" ? (data.headerName ?? null) : null,
+        allBots: data.allBots ?? data.botIds === undefined,
         oauthEnc: manualClient
           ? sealOAuthState(connectionId, {
               client: {
@@ -183,7 +164,9 @@ export async function create(data: CreateConnectionDTO): Promise<ConnectionData>
   if (data.authType === "header" && data.secret) vaultItemsChanged();
   const id = connectionId;
   await getConnectionManager().rowChanged(id);
-  if (data.botIds) await setBots(id, data.botIds);
+  const created = await findRow(id);
+  if (data.botIds) await setBots(created, created.allBots, data.botIds);
+  else await getConnectionManager().botsChanged((await get(id)).botIds);
   return get(id);
 }
 
@@ -236,7 +219,10 @@ export async function update(id: string, data: UpdateConnectionDTO): Promise<Con
   });
   if (writesSecret || dropSecret) vaultItemsChanged();
   if (reconnect) await getConnectionManager().rowChanged(id);
-  if (data.botIds) await setBots(id, data.botIds);
+  if (data.botIds !== undefined || data.allBots !== undefined) {
+    const row = await findRow(id);
+    await setBots(row, data.allBots ?? row.allBots, data.botIds ?? current.botIds);
+  }
   return get(id);
 }
 

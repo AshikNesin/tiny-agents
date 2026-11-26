@@ -2,20 +2,26 @@ import { Checkbox } from "@groot/ui/checkbox";
 import { Section } from "@groot/shell/components/layout/Section";
 import type { BotListEntry } from "../../../../shared/api/bots";
 import type { Skill } from "../../../../shared/api/skills";
+import { EveryBotSwitch } from "../../../components/EveryBotSwitch";
 
 export function SkillBotsSection({
   skill,
   bots,
   usedBy,
   toggleBot,
+  setAllBots,
 }: {
   skill: Skill;
   bots: BotListEntry[] | null;
   usedBy: number;
   toggleBot: (botId: string) => Promise<void>;
+  setAllBots: (allBots: boolean) => Promise<void>;
 }) {
   return (
     <Section title="Used by bots" meta={bots ? `${usedBy} of ${bots.length}` : undefined}>
+      <div className="mb-3">
+        <EveryBotSwitch checked={skill.allBots} onCheckedChange={(on) => void setAllBots(on)} />
+      </div>
       {bots === null ? (
         <p className="text-muted-foreground py-4 text-center text-sm">Loading…</p>
       ) : bots.length === 0 ? (

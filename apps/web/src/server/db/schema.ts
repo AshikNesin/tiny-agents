@@ -119,6 +119,7 @@ export const skills = sqliteTable("skills", {
   files: text("files").notNull().default("[]"),
   source: text("source").notNull().default("manual"),
   sourceUrl: text("source_url"),
+  allBots: bool("all_bots").notNull().default(true),
   ...timestamps,
 });
 
@@ -455,6 +456,7 @@ export const botSkills = sqliteTable(
     skillId: text("skill_id")
       .notNull()
       .references(() => skills.id, { onDelete: "cascade" }),
+    enabled: bool("enabled").notNull().default(true),
     createdAt: createdAt(),
   },
   (t) => [
@@ -477,6 +479,7 @@ export const connections = sqliteTable("connections", {
   disabledTools: text("disabled_tools").notNull().default("[]"),
   secretRef: text("secret_ref"),
   secretItemId: text("secret_item_id"),
+  allBots: bool("all_bots").notNull().default(true),
   ...timestamps,
 });
 
@@ -489,6 +492,7 @@ export const botConnections = sqliteTable(
     connectionId: text("connection_id")
       .notNull()
       .references(() => connections.id, { onDelete: "cascade" }),
+    enabled: bool("enabled").notNull().default(true),
     createdAt: createdAt(),
   },
   (t) => [

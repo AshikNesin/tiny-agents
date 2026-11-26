@@ -30,6 +30,7 @@ function skill(partial: Partial<Skill> = {}): Skill {
     files: [],
     source: "manual",
     sourceUrl: null,
+    allBots: false,
     botIds: [],
     createdAt: "2026-11-02T00:00:00.000Z",
     updatedAt: "2026-11-02T00:00:00.000Z",
