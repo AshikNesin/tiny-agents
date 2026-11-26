@@ -29,7 +29,10 @@ import { sharedClaudeWorkerLocator } from "../bots/claude-worker";
 import { agentRuntimeReady, getAgentRuntime } from "../bots/bots.runtime";
 import { sandboxConnection } from "../bots/sandbox-host";
 import { threadIndex } from "./code.store";
-import { claudeCodeTools, sharedConnectionToolkits } from "./code.tools";
+import { claudeCodeSkills, claudeCodeTools, sharedConnectionToolkits } from "./code.tools";
+import { sharedSkills } from "../skills/skills.store";
+
+const SKILLS_TOOLKIT = "skills";
 
 function harnessHost(): HarnessHost {
   return {
@@ -81,6 +84,7 @@ function claudeCodeHarness(env: AppEnv, host: HarnessHost): HarnessInstance | un
     host,
     resolveWorker: () => locator.resolve(),
     tools: claudeCodeTools(),
+    skills: claudeCodeSkills,
     status: () => hint ?? { state: "connected" },
     models: claudePlanModels,
   });
@@ -118,15 +122,24 @@ function nativeModels(runtime: AgentRuntime): ModelOption[] {
 }
 
 async function nativeConfig(config: PiThreadConfig): Promise<BotAgentConfig> {
-  const [shared, owner] = await Promise.all([sharedConnectionToolkits(), ownerToolPermissions()]);
+  const [shared, skills, owner] = await Promise.all([
+    sharedConnectionToolkits(),
+    sharedSkills(),
+    ownerToolPermissions(),
+  ]);
   const coding = codingSelection(config.permissionMode);
   return {
     systemPrompt: "",
     modelId: config.modelId,
     cwd: config.cwd,
     capabilities: {
-      enabled: [...coding.enabled, ...shared, ...(shared.length > 0 ? [TOOL_SEARCH_TOOLKIT] : [])],
-      permissions: { ...owner, ...coding.permissions },
+      enabled: [
+        ...coding.enabled,
+        ...(skills.length > 0 ? [SKILLS_TOOLKIT] : []),
+        ...shared,
+        ...(shared.length > 0 ? [TOOL_SEARCH_TOOLKIT] : []),
+      ],
+      permissions: { ...owner, ...coding.permissions, save_skill: "off" },
     },
   };
 }

@@ -1,4 +1,6 @@
 import { randomBytes, randomUUID } from "node:crypto";
+import { homedir } from "node:os";
+import path from "node:path";
 import { assertSessionMayStart, type ClaudeAuthStatus } from "./auth";
 import {
   DEFAULT_CODING_PERMISSION_MODE,
@@ -29,6 +31,7 @@ import {
 import type { JsonSchema } from "./protocol";
 import { zodShape, type SdkToolResult } from "./sdk";
 import { SessionLog } from "./session-log";
+import { writeSkillsPlugin } from "./coding-skills";
 import { asRateLimitInfo, usagePauseReason } from "./usage";
 
 export class CodingError extends Error {
@@ -43,6 +46,7 @@ export class CodingError extends Error {
 
 export interface CodingDeps {
   sdk: CodingSdk;
+  home?: string;
   env: Record<string, string | undefined>;
   limits: CodingLimits;
   authStatus: () => Promise<ClaudeAuthStatus>;
@@ -415,6 +419,7 @@ export class CodingSession {
       const input = new InputQueue();
       const canUseTool: CodingCanUseTool = (name, toolInput, options) =>
         this.canUseTool(generation, name, toolInput, options);
+      const skillsPlugin = await this.skillsPlugin();
       const options = buildCodingSdkOptions({
         cwd: this.config.cwd,
         resume: this.claudeSessionId ?? this.config.resume,
@@ -427,6 +432,7 @@ export class CodingSession {
           this.stderrTail = (this.stderrTail + data).slice(-2_000);
         },
         ...this.appServers(generation),
+        ...(skillsPlugin ? { skillsPlugin } : {}),
       });
       const query = this.deps.sdk.query({ prompt: input.iterate(), options });
       this.query = query;
@@ -823,6 +829,19 @@ export class CodingSession {
     pending.resolve(outcome);
     this.publish({ type: "tool_call_closed", callId });
     return true;
+  }
+
+  private async skillsPlugin(): Promise<string | undefined> {
+    const root = path.join(
+      this.deps.home ?? homedir(),
+      ".tiny-agents",
+      "code-skills",
+      this.id.replace(/[^\w-]/g, "_"),
+    );
+    const skills = this.config.skills ?? [];
+    if (skills.length === 0) return undefined;
+    await writeSkillsPlugin(root, skills);
+    return root;
   }
 
   private appServers(generation: number): {

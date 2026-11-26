@@ -1,10 +1,17 @@
-import { mcpToolName, type McpCallResult, type ToolPermission } from "@tiny-agents/agent";
+import {
+  mcpToolName,
+  SKILL_NAME,
+  type McpCallResult,
+  type ToolPermission,
+} from "@tiny-agents/agent";
 import type { AppToolPort } from "@tiny-agents/code/server";
 import { and, eq } from "drizzle-orm";
 import { connections, db } from "../../db";
 import { connectionCapabilityId, connectionTools } from "../bots/bot-toolkits";
 import { ownerToolPermissions } from "../bots/tool-permissions";
 import { getConnectionManager, type ConnectionManager } from "../connections/connections.manager";
+import { sharedSkills } from "../skills/skills.store";
+import type { SkillFile } from "../../../shared/api/skills";
 
 type Connections = Pick<ConnectionManager, "call" | "status">;
 
@@ -79,4 +86,20 @@ export function claudeCodeTools(live: () => Connections = getConnectionManager):
       return { content: textOf(result), ...(result.isError ? { isError: true } : {}) };
     },
   };
+}
+
+function skillFiles(raw: string): SkillFile[] {
+  const parsed = JSON.parse(raw) as unknown;
+  return Array.isArray(parsed) ? (parsed as SkillFile[]) : [];
+}
+
+export async function claudeCodeSkills() {
+  return (await sharedSkills())
+    .filter((skill) => SKILL_NAME.test(skill.name))
+    .map((skill) => ({
+      name: skill.name,
+      description: skill.description,
+      body: skill.body,
+      files: skillFiles(skill.files).map(({ path, content }) => ({ path, content })),
+    }));
 }

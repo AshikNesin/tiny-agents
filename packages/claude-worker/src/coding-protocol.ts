@@ -72,9 +72,24 @@ export const codingToolSpecSchema = z.strictObject({
 
 export type CodingToolSpec = z.infer<typeof codingToolSpecSchema>;
 
+export const codingSkillSchema = z.strictObject({
+  name: z
+    .string()
+    .regex(/^[a-z0-9]+(-[a-z0-9]+)*$/)
+    .max(64),
+  description: z.string().max(1024),
+  body: z.string().max(50_000),
+  files: z
+    .array(z.strictObject({ path: z.string().min(1).max(300), content: z.string().max(200_000) }))
+    .max(50),
+});
+
+export type CodingSkill = z.infer<typeof codingSkillSchema>;
+
 export const codingSessionConfigSchema = z.strictObject({
   cwd: absolutePath,
   tools: z.array(codingToolSpecSchema).max(500).optional(),
+  skills: z.array(codingSkillSchema).max(200).optional(),
   resume: z.string().min(1).max(200).optional(),
   model: z.string().min(1).max(200).nullable().optional(),
   effort: z.enum(CODING_EFFORT_LEVELS).nullable().optional(),

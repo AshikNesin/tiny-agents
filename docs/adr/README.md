@@ -57,7 +57,7 @@ that the code alone cannot show.
 | 0039 | [Code threads own their id, belong to a project, and record runs](0039-code-threads-and-runs.md)                     | accepted                                            |
 | 0040 | [A project chat is a bot tied to one Code project](0040-project-chat-is-a-bot.md)                                    | accepted                                            |
 | 0041 | [Bots share what the owner sets up, guests included](0041-bots-share-what-the-owner-sets-up.md)                      | accepted (extends 0004)                             |
-| 0042 | [Code threads use the owner's shared connections](0042-code-threads-use-shared-connections.md)                       | accepted (extends 0041)                             |
+| 0042 | [Code threads use the owner's shared connections and skills](0042-code-threads-use-shared-connections.md)            | accepted (extends 0041)                             |
 | G4   | [Hono + Drizzle on SQLite, for Node and Cloudflare Workers](0004-hono-drizzle-sqlite-workers.md)                     | accepted (groot)                                    |
 
 `G4` is groot's ADR 0004, synced from the boilerplate; tiny-agents' own 0004
