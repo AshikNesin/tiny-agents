@@ -1,6 +1,6 @@
 import type { Guest } from "../../../shared/api/people";
 import type { BotDraft } from "../../lib/bot-draft";
-import { Switch } from "../ui/switch";
+import { Switch } from "@groot/ui/switch";
 
 export function SharingSection({
   guests,

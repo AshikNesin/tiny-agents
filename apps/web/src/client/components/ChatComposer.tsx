@@ -65,7 +65,7 @@ import {
   type MentionableBot,
 } from "./MentionAutocomplete";
 import { Spinner } from "./ui/spinner";
-import { SearchSelect, type SearchSelectOption } from "./ui/search-select";
+import { SearchSelect, type SearchSelectOption } from "@groot/ui/search-select";
 
 const ACCEPTED_FILES =
   "image/png,image/jpeg,image/webp,image/gif,.pdf,.txt,.md,.json,.csv,.yaml,.yml,.xml,.html,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.odt,.ods,.odp,.zip,.tar,.gz,.tgz,.bz2,.7z,.rar,.mp3,.wav,.ogg,.m4a,.mp4,.webm,.mov,.tsv,.log,.ts,.tsx,.js,.jsx,.mjs,.cjs,.py,.go,.rs,.java,.kt,.rb,.php,.sh,.sql,.toml,.ini,.cfg,.diff,.patch,.css,.c,.h,.cpp,.swift";
@@ -463,28 +463,30 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
           />
           <div className="flex min-w-0 items-center gap-1">
             <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  disabled={!enabled}
-                  aria-label="Add files or mention a bot"
-                  title="Add files or mention a bot"
-                  className="text-muted-foreground shrink-0 rounded-full"
-                  data-testid="composer-add"
-                >
-                  <Plus />
-                </Button>
+              <DropdownMenuTrigger
+                render={
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    disabled={!enabled}
+                    aria-label="Add files or mention a bot"
+                    title="Add files or mention a bot"
+                    className="text-muted-foreground shrink-0 rounded-full"
+                    data-testid="composer-add"
+                  />
+                }
+              >
+                <Plus />
               </DropdownMenuTrigger>
               <DropdownMenuContent
                 align="start"
                 side="top"
                 className="w-64"
-                onCloseAutoFocus={(event) => {
-                  if (!mentionFromMenu.current) return;
+                finalFocus={() => {
+                  if (!mentionFromMenu.current) return true;
                   mentionFromMenu.current = false;
-                  event.preventDefault();
                   textareaRef.current?.focus({ preventScroll: true });
+                  return false;
                 }}
               >
                 <DropdownMenuItem

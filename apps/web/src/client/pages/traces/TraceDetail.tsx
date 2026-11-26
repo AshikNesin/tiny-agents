@@ -420,8 +420,8 @@ export function TraceDetailPage() {
       }
       actions={
         link ? (
-          <Button variant="outline" size="sm" asChild>
-            <Link to={link}>Open chat</Link>
+          <Button variant="outline" size="sm" render={<Link to={link} />}>
+            Open chat
           </Button>
         ) : undefined
       }

@@ -6,7 +6,7 @@ import type { CapabilityInfo, ToolPermission } from "../../../shared/api/bots";
 import type { ConnectionSummary } from "../../../shared/api/connections";
 import { toggleId, type BotDraft } from "../../lib/bot-draft";
 import { applyPreset, matchesQuery, summary, type ToolInfo } from "../../lib/tool-permissions";
-import { Switch } from "../ui/switch";
+import { Switch } from "@groot/ui/switch";
 import { ToolkitGroup } from "./ToolkitGroup";
 
 export function ToolsSection({

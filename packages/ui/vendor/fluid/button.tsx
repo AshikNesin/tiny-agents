@@ -8,7 +8,7 @@ import {
   type ReactElement,
   type ReactNode,
 } from "react";
-import { Slot as SlotPrimitive } from "radix-ui";
+import { useRender } from "@base-ui/react/use-render";
 import { cva, type VariantProps } from "class-variance-authority";
 import type { IconComponent } from "./lib/icon-context";
 import { cn } from "../../src/lib/utils";
@@ -161,10 +161,9 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     const props = omit(rest, ["nativeButton"]);
 
     // asChild: the user's element becomes the root, but the button's internal
-    // structure (bg layer, content wrapper, spinner, icons) must survive. Slot
-    // requires exactly one child, so instead of Slottable we clone the user's
-    // element with our internals as its children — the element's own children
-    // become the label inside the content wrapper.
+    // structure (bg layer, content wrapper, spinner, icons) must survive, so
+    // we clone the user's element with our internals as its children — the
+    // element's own children become the label inside the content wrapper.
     // `render` is the same thing written the Base UI way: its element is the
     // root and the children, when given, are the label (otherwise the
     // element keeps its own).
@@ -176,7 +175,6 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         : asChild && isValidElement(children)
           ? (children as ReactElement<{ children?: ReactNode }>)
           : null;
-    const Comp = asChildElement ? SlotPrimitive.Root : "button";
     const label = asChildElement ? asChildElement.props.children : children;
     // Resolve the size: explicit prop (legacy aliases mapped onto the
     // canonical ladder) > surrounding SizeProvider > default.
@@ -262,10 +260,13 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       </>
     );
 
-    return (
-      <Comp
-        ref={ref}
-        className={cn(
+    return useRender({
+      ref,
+      render: asChildElement
+        ? cloneElement(asChildElement, undefined, internals)
+        : (buttonProps) => <button {...buttonProps} />,
+      props: {
+        className: cn(
           buttonVariants({
             variant,
             size: resolvedSize,
@@ -274,16 +275,14 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
           }),
           shape.button,
           className,
-        )}
-        // asChild roots (e.g. an anchor) don't take the disabled attribute —
-        // Slot would spread it onto the element as invalid HTML.
-        disabled={asChildElement ? undefined : disabled || loading}
-        style={style}
-        {...props}
-      >
-        {asChildElement ? cloneElement(asChildElement, undefined, internals) : internals}
-      </Comp>
-    );
+        ),
+        // asChild roots (e.g. an anchor) don't take the disabled attribute.
+        disabled: asChildElement ? undefined : disabled || loading,
+        style,
+        ...props,
+        ...(asChildElement ? {} : { children: internals }),
+      },
+    });
   },
 );
 

@@ -1,7 +1,7 @@
 import * as React from "react";
 import { ChevronRightIcon } from "lucide-react";
 
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "./collapsible";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@groot/ui/collapsible";
 import { cn } from "@groot/ui/lib/utils";
 
 function Trace({ className, ...props }: React.ComponentProps<"div">) {
@@ -125,7 +125,7 @@ function TraceCollapsibleContent({
   return (
     <CollapsibleContent
       data-slot="trace-collapsible-content"
-      className="min-w-0 overflow-hidden duration-200 [--radix-accordion-content-height:var(--radix-collapsible-content-height)] data-open:animate-accordion-down data-closed:animate-accordion-up"
+      className="min-w-0 overflow-hidden duration-200 [--radix-accordion-content-height:var(--collapsible-panel-height)] data-open:animate-accordion-down data-closed:animate-accordion-up"
       {...props}
     >
       <div

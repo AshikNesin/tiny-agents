@@ -7,7 +7,7 @@ import { listRowClass } from "@groot/ui/list-row";
 import { cn } from "@groot/ui/lib/utils";
 import { Section } from "@groot/shell/components/layout/Section";
 import type { Connection } from "../../../../shared/api/connections";
-import { Switch } from "../../../components/ui/switch";
+import { Switch } from "@groot/ui/switch";
 
 function toolsMeta(tools: Connection["tools"]): string {
   const count = tools.length === 1 ? "1 tool" : `${tools.length} tools`;

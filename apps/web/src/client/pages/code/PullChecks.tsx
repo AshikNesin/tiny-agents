@@ -207,16 +207,21 @@ function CheckRow({
           />
         </button>
         {check.url && (
-          <Button asChild variant="ghost" size="icon-xs" className="text-muted-foreground">
-            <a
-              href={check.url}
-              target="_blank"
-              rel="noreferrer"
-              aria-label={`Open ${check.name} on GitHub`}
-              title="Open on GitHub"
-            >
-              <ExternalLink />
-            </a>
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            className="text-muted-foreground"
+            render={
+              <a
+                href={check.url}
+                target="_blank"
+                rel="noreferrer"
+                aria-label={`Open ${check.name} on GitHub`}
+                title="Open on GitHub"
+              />
+            }
+          >
+            <ExternalLink />
           </Button>
         )}
       </div>

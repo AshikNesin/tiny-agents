@@ -896,16 +896,18 @@ function Sidebar({
               <Search />
             </Button>
             <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label="Filter by status"
-                  title="Filter by status"
-                  className={cn(hidden.size > 0 ? "text-foreground" : "text-muted-foreground")}
-                >
-                  <ListFilter />
-                </Button>
+              <DropdownMenuTrigger
+                render={
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label="Filter by status"
+                    title="Filter by status"
+                    className={cn(hidden.size > 0 ? "text-foreground" : "text-muted-foreground")}
+                  />
+                }
+              >
+                <ListFilter />
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48">
                 <DropdownMenuLabel>Show files</DropdownMenuLabel>

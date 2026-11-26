@@ -164,7 +164,7 @@ export function isEditable(target: EventTarget | null): boolean {
 }
 
 const OPEN_DIALOG =
-  '[role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"], [aria-modal="true"]:not([inert]), dialog[open]';
+  '[role="dialog"][data-open], [role="alertdialog"][data-open], [role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"], [aria-modal="true"]:not([inert]), dialog[open]';
 
 export function isDialogOpen(): boolean {
   if (bindings.some((b) => b.scope === "dialog" && b.isOpen())) return true;

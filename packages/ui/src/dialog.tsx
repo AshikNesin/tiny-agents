@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Dialog as DialogPrimitive } from "radix-ui";
+import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
 import { motion } from "motion/react";
 
 import { cn } from "./lib/utils";
@@ -36,27 +36,32 @@ function panelMotion(open: boolean, position: "center" | "top") {
 }
 
 const DialogOpenContext = React.createContext(false);
+const DialogPointerDismissContext = React.createContext<{ current: boolean }>({ current: true });
 
 function Dialog({
   open: controlledOpen,
   defaultOpen,
   onOpenChange,
   ...props
-}: React.ComponentProps<typeof DialogPrimitive.Root>) {
+}: Omit<React.ComponentProps<typeof DialogPrimitive.Root>, "onOpenChange"> & {
+  onOpenChange?: (open: boolean) => void;
+}) {
   const [uncontrolledOpen, setUncontrolledOpen] = React.useState(defaultOpen ?? false);
   const open = controlledOpen ?? uncontrolledOpen;
-  const handleOpenChange = (next: boolean) => {
+  const pointerDismiss = React.useRef(true);
+  const handleOpenChange = (next: boolean, details: DialogPrimitive.Root.ChangeEventDetails) => {
+    if (!next && details.reason === "outside-press" && !pointerDismiss.current) {
+      details.cancel();
+      return;
+    }
     setUncontrolledOpen(next);
     onOpenChange?.(next);
   };
   return (
     <DialogOpenContext.Provider value={open}>
-      <DialogPrimitive.Root
-        data-slot="dialog"
-        open={open}
-        onOpenChange={handleOpenChange}
-        {...props}
-      />
+      <DialogPointerDismissContext.Provider value={pointerDismiss}>
+        <DialogPrimitive.Root open={open} onOpenChange={handleOpenChange} {...props} />
+      </DialogPointerDismissContext.Provider>
     </DialogOpenContext.Provider>
   );
 }
@@ -76,9 +81,9 @@ function DialogClose({ ...props }: React.ComponentProps<typeof DialogPrimitive.C
 function DialogOverlay({
   className,
   ...props
-}: React.ComponentProps<typeof DialogPrimitive.Overlay>) {
+}: React.ComponentProps<typeof DialogPrimitive.Backdrop>) {
   return (
-    <DialogPrimitive.Overlay
+    <DialogPrimitive.Backdrop
       data-slot="dialog-overlay"
       className={cn(
         overlayClass,
@@ -97,69 +102,59 @@ function DialogContent({
   size = "sm",
   position = "center",
   dismissOnOutsideClick = true,
-  onPointerDownOutside,
-  onInteractOutside,
   ...props
-}: Omit<React.ComponentProps<typeof DialogPrimitive.Content>, "asChild" | "forceMount"> & {
+}: Omit<React.ComponentProps<typeof DialogPrimitive.Popup>, "render" | "className"> & {
+  className?: string;
   showCloseButton?: boolean;
   dismissOnOutsideClick?: boolean;
   size?: keyof typeof dialogSizes;
   position?: "center" | "top";
 }) {
   const open = React.useContext(DialogOpenContext);
+  const pointerDismiss = React.useContext(DialogPointerDismissContext);
   const { mounted, transition, onExitComplete } = useModalPresence(open);
-
-  const handlePointerDownOutside = dismissOnOutsideClick
-    ? onPointerDownOutside
-    : (e: { preventDefault(): void }) => {
-        e.preventDefault();
-        onPointerDownOutside?.(e as Parameters<NonNullable<typeof onPointerDownOutside>>[0]);
-      };
-
-  const handleInteractOutside = dismissOnOutsideClick
-    ? onInteractOutside
-    : (e: { preventDefault(): void }) => {
-        e.preventDefault();
-        onInteractOutside?.(e as Parameters<NonNullable<typeof onInteractOutside>>[0]);
-      };
+  React.useEffect(() => {
+    pointerDismiss.current = dismissOnOutsideClick;
+  }, [pointerDismiss, dismissOnOutsideClick]);
 
   if (!mounted) return null;
 
   return (
-    <DialogPortal forceMount>
-      <DialogPrimitive.Overlay data-slot="dialog-overlay" asChild forceMount>
-        <motion.div
-          className={overlayClass}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: open ? 1 : 0 }}
-          transition={transition}
-        />
-      </DialogPrimitive.Overlay>
-      <DialogPrimitive.Content
+    <DialogPortal keepMounted>
+      <DialogPrimitive.Backdrop
+        data-slot="dialog-overlay"
+        render={
+          <motion.div
+            className={overlayClass}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: open ? 1 : 0 }}
+            transition={transition}
+          />
+        }
+      />
+      <DialogPrimitive.Popup
         data-slot="dialog-content"
-        asChild
-        forceMount
-        onPointerDownOutside={handlePointerDownOutside}
-        onInteractOutside={handleInteractOutside}
         {...props}
+        render={
+          <motion.div
+            className={cn(dialogPanelClass, panelPlacement(position), dialogSizes[size], className)}
+            {...panelMotion(open, position)}
+            transition={transition}
+            onAnimationComplete={onExitComplete}
+          />
+        }
       >
-        <motion.div
-          className={cn(dialogPanelClass, panelPlacement(position), dialogSizes[size], className)}
-          {...panelMotion(open, position)}
-          transition={transition}
-          onAnimationComplete={onExitComplete}
-        >
-          {children}
-          {showCloseButton && (
-            <DialogPrimitive.Close data-slot="dialog-close" asChild>
-              <Button variant="ghost" className="absolute top-4 right-4" size="icon-sm">
-                <XIcon />
-                <span className="sr-only">Close</span>
-              </Button>
-            </DialogPrimitive.Close>
-          )}
-        </motion.div>
-      </DialogPrimitive.Content>
+        {children}
+        {showCloseButton && (
+          <DialogPrimitive.Close
+            data-slot="dialog-close"
+            render={<Button variant="ghost" className="absolute top-4 right-4" size="icon-sm" />}
+          >
+            <XIcon />
+            <span className="sr-only">Close</span>
+          </DialogPrimitive.Close>
+        )}
+      </DialogPrimitive.Popup>
     </DialogPortal>
   );
 }
@@ -200,9 +195,7 @@ function DialogFooter({
     >
       {children}
       {showCloseButton && (
-        <DialogPrimitive.Close asChild>
-          <Button variant="outline">Close</Button>
-        </DialogPrimitive.Close>
+        <DialogPrimitive.Close render={<Button variant="outline" />}>Close</DialogPrimitive.Close>
       )}
     </div>
   );

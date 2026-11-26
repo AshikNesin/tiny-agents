@@ -48,24 +48,26 @@ export function JobsFilters({ filter }: Props) {
             ))}
           </TabsList>
           <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                type="button"
-                aria-label={
-                  activeSecondaryTab ? `State: ${activeSecondaryTab.label}` : "More job states"
-                }
-                className={`inline-flex h-[calc(100%-1px)] items-center justify-center whitespace-nowrap rounded-lg border border-transparent px-1.5 py-0.5 text-sm font-medium focus-visible:outline-none ${
-                  activeSecondaryTab
-                    ? "bg-background text-foreground shadow-sm dark:border-input dark:bg-input/30"
-                    : "text-foreground/60 hover:text-foreground dark:text-muted-foreground dark:hover:text-foreground"
-                }`}
-              >
-                {activeSecondaryTab ? (
-                  <span className="max-w-[5rem] truncate">{activeSecondaryTab.label}</span>
-                ) : (
-                  <MoreHorizontal className="size-4" />
-                )}
-              </button>
+            <DropdownMenuTrigger
+              render={
+                <button
+                  type="button"
+                  aria-label={
+                    activeSecondaryTab ? `State: ${activeSecondaryTab.label}` : "More job states"
+                  }
+                  className={`inline-flex h-[calc(100%-1px)] items-center justify-center whitespace-nowrap rounded-lg border border-transparent px-1.5 py-0.5 text-sm font-medium focus-visible:outline-none ${
+                    activeSecondaryTab
+                      ? "bg-background text-foreground shadow-sm dark:border-input dark:bg-input/30"
+                      : "text-foreground/60 hover:text-foreground dark:text-muted-foreground dark:hover:text-foreground"
+                  }`}
+                />
+              }
+            >
+              {activeSecondaryTab ? (
+                <span className="max-w-[5rem] truncate">{activeSecondaryTab.label}</span>
+              ) : (
+                <MoreHorizontal className="size-4" />
+              )}
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start">
               {secondaryOptions.map((option) => (
@@ -94,13 +96,11 @@ export function JobsFilters({ filter }: Props) {
               if (!open) setQueueSearch("");
             }}
           >
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline">
-                <Filter className="size-4" />
-                <span className="hidden md:inline max-w-[6rem] truncate">
-                  {filter.queue !== "all" ? filter.queue : "Queue"}
-                </span>
-              </Button>
+            <DropdownMenuTrigger render={<Button variant="outline" />}>
+              <Filter className="size-4" />
+              <span className="hidden md:inline max-w-[6rem] truncate">
+                {filter.queue !== "all" ? filter.queue : "Queue"}
+              </span>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48">
               <div className="px-2 pt-1">
@@ -133,15 +133,13 @@ export function JobsFilters({ filter }: Props) {
           </DropdownMenu>
         )}
         <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline">
-              <CalendarIcon className="size-4" />
-              <span className="hidden md:inline">
-                {filter.preset !== "all"
-                  ? DATE_PRESETS.find((p) => p.value === filter.preset)?.label
-                  : "Date"}
-              </span>
-            </Button>
+          <DropdownMenuTrigger render={<Button variant="outline" />}>
+            <CalendarIcon className="size-4" />
+            <span className="hidden md:inline">
+              {filter.preset !== "all"
+                ? DATE_PRESETS.find((p) => p.value === filter.preset)?.label
+                : "Date"}
+            </span>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             {DATE_PRESETS.map(({ value, label }) => (

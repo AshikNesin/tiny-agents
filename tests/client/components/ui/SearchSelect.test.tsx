@@ -5,7 +5,7 @@ import React from "react";
 import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vite-plus/test";
-import { SearchSelect } from "@/components/ui/search-select";
+import { SearchSelect } from "@groot/ui/search-select";
 
 const options = [
   { value: "claude-opus-5-5", label: "Claude Opus 5.5" },

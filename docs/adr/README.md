@@ -59,6 +59,7 @@ that the code alone cannot show.
 | 0041 | [Bots share what the owner sets up, guests included](0041-bots-share-what-the-owner-sets-up.md)                      | accepted (extends 0004)                             |
 | 0042 | [Code threads use the owner's shared connections and skills](0042-code-threads-use-shared-connections.md)            | accepted (extends 0041)                             |
 | 0043 | [Bot avatars load from DiceBear](0043-bot-avatars-from-dicebear.md)                                                  | accepted                                            |
+| 0044 | [Base UI replaces Radix as the one primitive layer](0044-base-ui-replaces-radix.md)                                  | accepted (amends 0001, 0003)                        |
 | G4   | [Hono + Drizzle on SQLite, for Node and Cloudflare Workers](0004-hono-drizzle-sqlite-workers.md)                     | accepted (groot)                                    |
 
 `G4` is groot's ADR 0004, synced from the boilerplate; tiny-agents' own 0004

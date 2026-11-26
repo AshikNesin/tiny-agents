@@ -458,20 +458,22 @@ export function Composer({
         <div className="flex min-w-0 items-center gap-1">
           {(canUpload || canSkills) && (
             <DropdownMenu onOpenChange={(open) => open && loadSkills()}>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label="Add files or skills"
-                  title="Add files or skills"
-                  className={cn(
-                    "text-muted-foreground shrink-0 rounded-full",
-                    selectedSkills.length > 0 && "text-foreground",
-                  )}
-                  data-testid="code-composer-add"
-                >
-                  <Plus />
-                </Button>
+              <DropdownMenuTrigger
+                render={
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label="Add files or skills"
+                    title="Add files or skills"
+                    className={cn(
+                      "text-muted-foreground shrink-0 rounded-full",
+                      selectedSkills.length > 0 && "text-foreground",
+                    )}
+                    data-testid="code-composer-add"
+                  />
+                }
+              >
+                <Plus />
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" side="top" className="max-h-96 w-72">
                 {canUpload && (

@@ -32,24 +32,26 @@ export function BotMenu({ bot, view, onViewChange, onEditBot }: BotMenuProps) {
     return () => cancelAnimationFrame(frame);
   }, [view]);
 
-  const goTo = (next: BotMenuView) => (event: Event) => {
+  const goTo = (next: BotMenuView) => (event: { preventDefault(): void }) => {
     event.preventDefault();
     onViewChange(next);
   };
 
   return (
     <DropdownMenu open={view !== null} onOpenChange={(open) => onViewChange(open ? "main" : null)}>
-      <DropdownMenuTrigger asChild>
-        <button
-          type="button"
-          className="text-foreground hover:bg-muted data-[state=open]:bg-muted focus-visible:ring-ring/50 flex h-8 min-w-0 items-center gap-2 rounded-lg px-2 text-left font-medium outline-none focus-visible:ring-3"
-          aria-label={`${bot.name} menu`}
-          title={bot.description || undefined}
-        >
-          <BotAvatar name={bot.name} className="size-5" />
-          <span className="truncate">{bot.name}</span>
-          <ChevronDown className="text-muted-foreground size-3.5 shrink-0" />
-        </button>
+      <DropdownMenuTrigger
+        render={
+          <button
+            type="button"
+            className="text-foreground hover:bg-muted data-popup-open:bg-muted focus-visible:ring-ring/50 flex h-8 min-w-0 items-center gap-2 rounded-lg px-2 text-left font-medium outline-none focus-visible:ring-3"
+            aria-label={`${bot.name} menu`}
+            title={bot.description || undefined}
+          />
+        }
+      >
+        <BotAvatar name={bot.name} className="size-5" />
+        <span className="truncate">{bot.name}</span>
+        <ChevronDown className="text-muted-foreground size-3.5 shrink-0" />
       </DropdownMenuTrigger>
       <DropdownMenuContent
         ref={contentRef}

@@ -107,15 +107,16 @@ exports[`ChatMessageView, pinned > a failed tool row opens to a destructive outp
         >
           <div
             class="flex w-full min-w-0 flex-col"
+            data-open=""
             data-slot="trace-collapsible"
-            data-state="open"
           >
             <button
-              aria-controls="radix-<id1>"
+              aria-controls="base-ui-<id1>"
               aria-expanded="true"
               class="group/trace-collapsible-trigger flex w-fit max-w-full min-w-0 cursor-pointer items-center gap-1 rounded-md text-left text-muted-foreground outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 has-[[data-status=error]]:text-destructive"
+              data-panel-open=""
               data-slot="trace-collapsible-trigger"
-              data-state="open"
+              tabindex="0"
               type="button"
             >
               <span
@@ -157,10 +158,10 @@ exports[`ChatMessageView, pinned > a failed tool row opens to a destructive outp
               </span>
             </button>
             <div
-              class="min-w-0 overflow-hidden duration-200 [--radix-accordion-content-height:var(--radix-collapsible-content-height)] data-open:animate-accordion-down data-closed:animate-accordion-up"
+              class="min-w-0 overflow-hidden duration-200 [--radix-accordion-content-height:var(--collapsible-panel-height)] data-open:animate-accordion-down data-closed:animate-accordion-up"
+              data-open=""
               data-slot="trace-collapsible-content"
-              data-state="open"
-              id="radix-<id1>"
+              id="base-ui-<id1>"
             >
               <div
                 class="mt-2 mb-1 ml-[calc(--spacing(2)-1px)] min-w-0 border-l pr-1 pl-4 leading-relaxed wrap-break-word text-muted-foreground space-y-2"
@@ -262,15 +263,16 @@ exports[`ChatMessageView, pinned > a group opens to its calls > markup 1`] = `
         >
           <div
             class="flex w-full min-w-0 flex-col"
+            data-open=""
             data-slot="trace-collapsible"
-            data-state="open"
           >
             <button
-              aria-controls="radix-<id1>"
+              aria-controls="base-ui-<id1>"
               aria-expanded="true"
               class="group/trace-collapsible-trigger flex w-fit max-w-full min-w-0 cursor-pointer items-center gap-1 rounded-md text-left text-muted-foreground outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 has-[[data-status=error]]:text-destructive"
+              data-panel-open=""
               data-slot="trace-collapsible-trigger"
-              data-state="open"
+              tabindex="0"
               type="button"
             >
               <span
@@ -336,10 +338,10 @@ exports[`ChatMessageView, pinned > a group opens to its calls > markup 1`] = `
               </span>
             </button>
             <div
-              class="min-w-0 overflow-hidden duration-200 [--radix-accordion-content-height:var(--radix-collapsible-content-height)] data-open:animate-accordion-down data-closed:animate-accordion-up"
+              class="min-w-0 overflow-hidden duration-200 [--radix-accordion-content-height:var(--collapsible-panel-height)] data-open:animate-accordion-down data-closed:animate-accordion-up"
+              data-open=""
               data-slot="trace-collapsible-content"
-              data-state="open"
-              id="radix-<id1>"
+              id="base-ui-<id1>"
             >
               <div
                 class="mt-2 mb-1 ml-[calc(--spacing(2)-1px)] min-w-0 border-l pr-1 pl-4 leading-relaxed wrap-break-word text-muted-foreground space-y-1"
@@ -395,14 +397,14 @@ exports[`ChatMessageView, pinned > a group opens to its calls > markup 1`] = `
                 >
                   <div
                     class="flex w-full min-w-0 flex-col"
+                    data-closed=""
                     data-slot="trace-collapsible"
-                    data-state="closed"
                   >
                     <button
                       aria-expanded="false"
                       class="group/trace-collapsible-trigger flex w-fit max-w-full min-w-0 cursor-pointer items-center gap-1 rounded-md text-left text-muted-foreground outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 has-[[data-status=error]]:text-destructive"
                       data-slot="trace-collapsible-trigger"
-                      data-state="closed"
+                      tabindex="0"
                       type="button"
                     >
                       <span
@@ -443,13 +445,6 @@ exports[`ChatMessageView, pinned > a group opens to its calls > markup 1`] = `
                         />
                       </span>
                     </button>
-                    <div
-                      class="min-w-0 overflow-hidden duration-200 [--radix-accordion-content-height:var(--radix-collapsible-content-height)] data-open:animate-accordion-down data-closed:animate-accordion-up"
-                      data-slot="trace-collapsible-content"
-                      data-state="closed"
-                      hidden=""
-                      id="radix-<id2>"
-                    />
                   </div>
                 </div>
               </div>
@@ -520,15 +515,16 @@ exports[`ChatMessageView, pinned > a tool row opens to its input, output and sou
         >
           <div
             class="flex w-full min-w-0 flex-col"
+            data-open=""
             data-slot="trace-collapsible"
-            data-state="open"
           >
             <button
-              aria-controls="radix-<id1>"
+              aria-controls="base-ui-<id1>"
               aria-expanded="true"
               class="group/trace-collapsible-trigger flex w-fit max-w-full min-w-0 cursor-pointer items-center gap-1 rounded-md text-left text-muted-foreground outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 has-[[data-status=error]]:text-destructive"
+              data-panel-open=""
               data-slot="trace-collapsible-trigger"
-              data-state="open"
+              tabindex="0"
               type="button"
             >
               <span
@@ -569,10 +565,10 @@ exports[`ChatMessageView, pinned > a tool row opens to its input, output and sou
               </span>
             </button>
             <div
-              class="min-w-0 overflow-hidden duration-200 [--radix-accordion-content-height:var(--radix-collapsible-content-height)] data-open:animate-accordion-down data-closed:animate-accordion-up"
+              class="min-w-0 overflow-hidden duration-200 [--radix-accordion-content-height:var(--collapsible-panel-height)] data-open:animate-accordion-down data-closed:animate-accordion-up"
+              data-open=""
               data-slot="trace-collapsible-content"
-              data-state="open"
-              id="radix-<id1>"
+              id="base-ui-<id1>"
             >
               <div
                 class="mt-2 mb-1 ml-[calc(--spacing(2)-1px)] min-w-0 border-l pr-1 pl-4 leading-relaxed wrap-break-word text-muted-foreground space-y-2"
@@ -1358,14 +1354,14 @@ exports[`ChatMessageView, pinned > assistant: reasoning done > markup 1`] = `
     >
       <div
         class="flex w-full min-w-0 flex-col mb-2"
+        data-closed=""
         data-slot="trace-collapsible"
-        data-state="closed"
       >
         <button
           aria-expanded="false"
           class="group/trace-collapsible-trigger flex w-fit max-w-full min-w-0 cursor-pointer items-center gap-1 rounded-md text-left text-muted-foreground outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 has-[[data-status=error]]:text-destructive"
           data-slot="trace-collapsible-trigger"
-          data-state="closed"
+          tabindex="0"
           type="button"
         >
           <span
@@ -1399,13 +1395,6 @@ exports[`ChatMessageView, pinned > assistant: reasoning done > markup 1`] = `
             />
           </span>
         </button>
-        <div
-          class="min-w-0 overflow-hidden duration-200 [--radix-accordion-content-height:var(--radix-collapsible-content-height)] data-open:animate-accordion-down data-closed:animate-accordion-up"
-          data-slot="trace-collapsible-content"
-          data-state="closed"
-          hidden=""
-          id="radix-<id1>"
-        />
       </div>
       <div
         class="flex min-w-0 flex-col items-start gap-1"
@@ -1485,15 +1474,16 @@ exports[`ChatMessageView, pinned > assistant: reasoning while streaming > markup
     >
       <div
         class="flex w-full min-w-0 flex-col mb-2"
+        data-open=""
         data-slot="trace-collapsible"
-        data-state="open"
       >
         <button
-          aria-controls="radix-<id1>"
+          aria-controls="base-ui-<id1>"
           aria-expanded="true"
           class="group/trace-collapsible-trigger flex w-fit max-w-full min-w-0 cursor-pointer items-center gap-1 rounded-md text-left text-muted-foreground outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 has-[[data-status=error]]:text-destructive"
+          data-panel-open=""
           data-slot="trace-collapsible-trigger"
-          data-state="open"
+          tabindex="0"
           type="button"
         >
           <span
@@ -1529,10 +1519,10 @@ exports[`ChatMessageView, pinned > assistant: reasoning while streaming > markup
           </span>
         </button>
         <div
-          class="min-w-0 overflow-hidden duration-200 [--radix-accordion-content-height:var(--radix-collapsible-content-height)] data-open:animate-accordion-down data-closed:animate-accordion-up"
+          class="min-w-0 overflow-hidden duration-200 [--radix-accordion-content-height:var(--collapsible-panel-height)] data-open:animate-accordion-down data-closed:animate-accordion-up"
+          data-open=""
           data-slot="trace-collapsible-content"
-          data-state="open"
-          id="radix-<id1>"
+          id="base-ui-<id1>"
         >
           <div
             class="mt-2 mb-1 ml-[calc(--spacing(2)-1px)] min-w-0 border-l pr-1 pl-4 leading-relaxed wrap-break-word text-muted-foreground"
@@ -2310,14 +2300,14 @@ exports[`ChatMessageView, pinned > card: asked questions > markup 1`] = `
         >
           <div
             class="flex w-full min-w-0 flex-col"
+            data-closed=""
             data-slot="trace-collapsible"
-            data-state="closed"
           >
             <button
               aria-expanded="false"
               class="group/trace-collapsible-trigger flex w-fit max-w-full min-w-0 cursor-pointer items-center gap-1 rounded-md text-left text-muted-foreground outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 has-[[data-status=error]]:text-destructive"
               data-slot="trace-collapsible-trigger"
-              data-state="closed"
+              tabindex="0"
               type="button"
             >
               <span
@@ -2370,13 +2360,6 @@ exports[`ChatMessageView, pinned > card: asked questions > markup 1`] = `
                 />
               </span>
             </button>
-            <div
-              class="min-w-0 overflow-hidden duration-200 [--radix-accordion-content-height:var(--radix-collapsible-content-height)] data-open:animate-accordion-down data-closed:animate-accordion-up"
-              data-slot="trace-collapsible-content"
-              data-state="closed"
-              hidden=""
-              id="radix-<id1>"
-            />
           </div>
         </div>
       </div>
@@ -3779,14 +3762,14 @@ exports[`ChatMessageView, pinned > read-only (no owner actions) card: approval >
         >
           <div
             class="flex w-full min-w-0 flex-col"
+            data-closed=""
             data-slot="trace-collapsible"
-            data-state="closed"
           >
             <button
               aria-expanded="false"
               class="group/trace-collapsible-trigger flex w-fit max-w-full min-w-0 cursor-pointer items-center gap-1 rounded-md text-left text-muted-foreground outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 has-[[data-status=error]]:text-destructive"
               data-slot="trace-collapsible-trigger"
-              data-state="closed"
+              tabindex="0"
               type="button"
             >
               <span
@@ -3846,13 +3829,6 @@ exports[`ChatMessageView, pinned > read-only (no owner actions) card: approval >
                 />
               </span>
             </button>
-            <div
-              class="min-w-0 overflow-hidden duration-200 [--radix-accordion-content-height:var(--radix-collapsible-content-height)] data-open:animate-accordion-down data-closed:animate-accordion-up"
-              data-slot="trace-collapsible-content"
-              data-state="closed"
-              hidden=""
-              id="radix-<id1>"
-            />
           </div>
         </div>
       </div>
@@ -3890,14 +3866,14 @@ exports[`ChatMessageView, pinned > read-only (no owner actions) card: approval, 
         >
           <div
             class="flex w-full min-w-0 flex-col"
+            data-closed=""
             data-slot="trace-collapsible"
-            data-state="closed"
           >
             <button
               aria-expanded="false"
               class="group/trace-collapsible-trigger flex w-fit max-w-full min-w-0 cursor-pointer items-center gap-1 rounded-md text-left text-muted-foreground outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 has-[[data-status=error]]:text-destructive"
               data-slot="trace-collapsible-trigger"
-              data-state="closed"
+              tabindex="0"
               type="button"
             >
               <span
@@ -3957,13 +3933,6 @@ exports[`ChatMessageView, pinned > read-only (no owner actions) card: approval, 
                 />
               </span>
             </button>
-            <div
-              class="min-w-0 overflow-hidden duration-200 [--radix-accordion-content-height:var(--radix-collapsible-content-height)] data-open:animate-accordion-down data-closed:animate-accordion-up"
-              data-slot="trace-collapsible-content"
-              data-state="closed"
-              hidden=""
-              id="radix-<id1>"
-            />
           </div>
         </div>
       </div>
@@ -4001,14 +3970,14 @@ exports[`ChatMessageView, pinned > read-only (no owner actions) card: approval, 
         >
           <div
             class="flex w-full min-w-0 flex-col"
+            data-closed=""
             data-slot="trace-collapsible"
-            data-state="closed"
           >
             <button
               aria-expanded="false"
               class="group/trace-collapsible-trigger flex w-fit max-w-full min-w-0 cursor-pointer items-center gap-1 rounded-md text-left text-muted-foreground outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 has-[[data-status=error]]:text-destructive"
               data-slot="trace-collapsible-trigger"
-              data-state="closed"
+              tabindex="0"
               type="button"
             >
               <span
@@ -4072,13 +4041,6 @@ Do t”
                 />
               </span>
             </button>
-            <div
-              class="min-w-0 overflow-hidden duration-200 [--radix-accordion-content-height:var(--radix-collapsible-content-height)] data-open:animate-accordion-down data-closed:animate-accordion-up"
-              data-slot="trace-collapsible-content"
-              data-state="closed"
-              hidden=""
-              id="radix-<id1>"
-            />
           </div>
         </div>
       </div>
@@ -4116,14 +4078,14 @@ exports[`ChatMessageView, pinned > read-only (no owner actions) card: asked ques
         >
           <div
             class="flex w-full min-w-0 flex-col"
+            data-closed=""
             data-slot="trace-collapsible"
-            data-state="closed"
           >
             <button
               aria-expanded="false"
               class="group/trace-collapsible-trigger flex w-fit max-w-full min-w-0 cursor-pointer items-center gap-1 rounded-md text-left text-muted-foreground outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 has-[[data-status=error]]:text-destructive"
               data-slot="trace-collapsible-trigger"
-              data-state="closed"
+              tabindex="0"
               type="button"
             >
               <span
@@ -4176,13 +4138,6 @@ exports[`ChatMessageView, pinned > read-only (no owner actions) card: asked ques
                 />
               </span>
             </button>
-            <div
-              class="min-w-0 overflow-hidden duration-200 [--radix-accordion-content-height:var(--radix-collapsible-content-height)] data-open:animate-accordion-down data-closed:animate-accordion-up"
-              data-slot="trace-collapsible-content"
-              data-state="closed"
-              hidden=""
-              id="radix-<id1>"
-            />
           </div>
         </div>
       </div>
@@ -4433,14 +4388,14 @@ exports[`ChatMessageView, pinned > read-only (no owner actions) card: question >
         >
           <div
             class="flex w-full min-w-0 flex-col"
+            data-closed=""
             data-slot="trace-collapsible"
-            data-state="closed"
           >
             <button
               aria-expanded="false"
               class="group/trace-collapsible-trigger flex w-fit max-w-full min-w-0 cursor-pointer items-center gap-1 rounded-md text-left text-muted-foreground outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 has-[[data-status=error]]:text-destructive"
               data-slot="trace-collapsible-trigger"
-              data-state="closed"
+              tabindex="0"
               type="button"
             >
               <span
@@ -4500,13 +4455,6 @@ exports[`ChatMessageView, pinned > read-only (no owner actions) card: question >
                 />
               </span>
             </button>
-            <div
-              class="min-w-0 overflow-hidden duration-200 [--radix-accordion-content-height:var(--radix-collapsible-content-height)] data-open:animate-accordion-down data-closed:animate-accordion-up"
-              data-slot="trace-collapsible-content"
-              data-state="closed"
-              hidden=""
-              id="radix-<id1>"
-            />
           </div>
         </div>
       </div>
@@ -4680,14 +4628,14 @@ exports[`ChatMessageView, pinned > read-only (no owner actions) card: vault appr
         >
           <div
             class="flex w-full min-w-0 flex-col"
+            data-closed=""
             data-slot="trace-collapsible"
-            data-state="closed"
           >
             <button
               aria-expanded="false"
               class="group/trace-collapsible-trigger flex w-fit max-w-full min-w-0 cursor-pointer items-center gap-1 rounded-md text-left text-muted-foreground outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 has-[[data-status=error]]:text-destructive"
               data-slot="trace-collapsible-trigger"
-              data-state="closed"
+              tabindex="0"
               type="button"
             >
               <span
@@ -4747,13 +4695,6 @@ exports[`ChatMessageView, pinned > read-only (no owner actions) card: vault appr
                 />
               </span>
             </button>
-            <div
-              class="min-w-0 overflow-hidden duration-200 [--radix-accordion-content-height:var(--radix-collapsible-content-height)] data-open:animate-accordion-down data-closed:animate-accordion-up"
-              data-slot="trace-collapsible-content"
-              data-state="closed"
-              hidden=""
-              id="radix-<id1>"
-            />
           </div>
         </div>
       </div>
@@ -4784,14 +4725,14 @@ exports[`ChatMessageView, pinned > reasoning folds when the turn finishes and op
     >
       <div
         class="flex w-full min-w-0 flex-col mb-2"
+        data-closed=""
         data-slot="trace-collapsible"
-        data-state="closed"
       >
         <button
           aria-expanded="false"
           class="group/trace-collapsible-trigger flex w-fit max-w-full min-w-0 cursor-pointer items-center gap-1 rounded-md text-left text-muted-foreground outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 has-[[data-status=error]]:text-destructive"
           data-slot="trace-collapsible-trigger"
-          data-state="closed"
+          tabindex="0"
           type="button"
         >
           <span
@@ -4825,13 +4766,6 @@ exports[`ChatMessageView, pinned > reasoning folds when the turn finishes and op
             />
           </span>
         </button>
-        <div
-          class="min-w-0 overflow-hidden duration-200 [--radix-accordion-content-height:var(--radix-collapsible-content-height)] data-open:animate-accordion-down data-closed:animate-accordion-up"
-          data-slot="trace-collapsible-content"
-          data-state="closed"
-          hidden=""
-          id="radix-<id1>"
-        />
       </div>
       <div
         class="flex min-w-0 flex-col items-start gap-1"
@@ -4899,15 +4833,16 @@ exports[`ChatMessageView, pinned > reasoning folds when the turn finishes and op
     >
       <div
         class="flex w-full min-w-0 flex-col mb-2"
+        data-open=""
         data-slot="trace-collapsible"
-        data-state="open"
       >
         <button
-          aria-controls="radix-<id1>"
+          aria-controls="base-ui-<id1>"
           aria-expanded="true"
           class="group/trace-collapsible-trigger flex w-fit max-w-full min-w-0 cursor-pointer items-center gap-1 rounded-md text-left text-muted-foreground outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 has-[[data-status=error]]:text-destructive"
+          data-panel-open=""
           data-slot="trace-collapsible-trigger"
-          data-state="open"
+          tabindex="0"
           type="button"
         >
           <span
@@ -4942,10 +4877,10 @@ exports[`ChatMessageView, pinned > reasoning folds when the turn finishes and op
           </span>
         </button>
         <div
-          class="min-w-0 overflow-hidden duration-200 [--radix-accordion-content-height:var(--radix-collapsible-content-height)] data-open:animate-accordion-down data-closed:animate-accordion-up"
+          class="min-w-0 overflow-hidden duration-200 [--radix-accordion-content-height:var(--collapsible-panel-height)] data-open:animate-accordion-down data-closed:animate-accordion-up"
+          data-open=""
           data-slot="trace-collapsible-content"
-          data-state="open"
-          id="radix-<id1>"
+          id="base-ui-<id1>"
         >
           <div
             class="mt-2 mb-1 ml-[calc(--spacing(2)-1px)] min-w-0 border-l pr-1 pl-4 leading-relaxed wrap-break-word text-muted-foreground"
@@ -5261,14 +5196,14 @@ exports[`ChatMessageView, pinned > tool: error > markup 1`] = `
         >
           <div
             class="flex w-full min-w-0 flex-col"
+            data-closed=""
             data-slot="trace-collapsible"
-            data-state="closed"
           >
             <button
               aria-expanded="false"
               class="group/trace-collapsible-trigger flex w-fit max-w-full min-w-0 cursor-pointer items-center gap-1 rounded-md text-left text-muted-foreground outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 has-[[data-status=error]]:text-destructive"
               data-slot="trace-collapsible-trigger"
-              data-state="closed"
+              tabindex="0"
               type="button"
             >
               <span
@@ -5309,13 +5244,6 @@ exports[`ChatMessageView, pinned > tool: error > markup 1`] = `
                 />
               </span>
             </button>
-            <div
-              class="min-w-0 overflow-hidden duration-200 [--radix-accordion-content-height:var(--radix-collapsible-content-height)] data-open:animate-accordion-down data-closed:animate-accordion-up"
-              data-slot="trace-collapsible-content"
-              data-state="closed"
-              hidden=""
-              id="radix-<id1>"
-            />
           </div>
         </div>
       </div>
@@ -5420,14 +5348,14 @@ exports[`ChatMessageView, pinned > tool: group of finished > markup 1`] = `
         >
           <div
             class="flex w-full min-w-0 flex-col"
+            data-closed=""
             data-slot="trace-collapsible"
-            data-state="closed"
           >
             <button
               aria-expanded="false"
               class="group/trace-collapsible-trigger flex w-fit max-w-full min-w-0 cursor-pointer items-center gap-1 rounded-md text-left text-muted-foreground outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 has-[[data-status=error]]:text-destructive"
               data-slot="trace-collapsible-trigger"
-              data-state="closed"
+              tabindex="0"
               type="button"
             >
               <span
@@ -5492,13 +5420,6 @@ exports[`ChatMessageView, pinned > tool: group of finished > markup 1`] = `
                 />
               </span>
             </button>
-            <div
-              class="min-w-0 overflow-hidden duration-200 [--radix-accordion-content-height:var(--radix-collapsible-content-height)] data-open:animate-accordion-down data-closed:animate-accordion-up"
-              data-slot="trace-collapsible-content"
-              data-state="closed"
-              hidden=""
-              id="radix-<id1>"
-            />
           </div>
         </div>
         <div
@@ -5556,14 +5477,14 @@ exports[`ChatMessageView, pinned > tool: load_skill > markup 1`] = `
         >
           <div
             class="flex w-full min-w-0 flex-col"
+            data-closed=""
             data-slot="trace-collapsible"
-            data-state="closed"
           >
             <button
               aria-expanded="false"
               class="group/trace-collapsible-trigger flex w-fit max-w-full min-w-0 cursor-pointer items-center gap-1 rounded-md text-left text-muted-foreground outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 has-[[data-status=error]]:text-destructive"
               data-slot="trace-collapsible-trigger"
-              data-state="closed"
+              tabindex="0"
               type="button"
             >
               <span
@@ -5614,13 +5535,6 @@ exports[`ChatMessageView, pinned > tool: load_skill > markup 1`] = `
                 />
               </span>
             </button>
-            <div
-              class="min-w-0 overflow-hidden duration-200 [--radix-accordion-content-height:var(--radix-collapsible-content-height)] data-open:animate-accordion-down data-closed:animate-accordion-up"
-              data-slot="trace-collapsible-content"
-              data-state="closed"
-              hidden=""
-              id="radix-<id1>"
-            />
           </div>
         </div>
       </div>
@@ -5656,14 +5570,14 @@ exports[`ChatMessageView, pinned > tool: with output, sources, duration > markup
         >
           <div
             class="flex w-full min-w-0 flex-col"
+            data-closed=""
             data-slot="trace-collapsible"
-            data-state="closed"
           >
             <button
               aria-expanded="false"
               class="group/trace-collapsible-trigger flex w-fit max-w-full min-w-0 cursor-pointer items-center gap-1 rounded-md text-left text-muted-foreground outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 has-[[data-status=error]]:text-destructive"
               data-slot="trace-collapsible-trigger"
-              data-state="closed"
+              tabindex="0"
               type="button"
             >
               <span
@@ -5703,13 +5617,6 @@ exports[`ChatMessageView, pinned > tool: with output, sources, duration > markup
                 />
               </span>
             </button>
-            <div
-              class="min-w-0 overflow-hidden duration-200 [--radix-accordion-content-height:var(--radix-collapsible-content-height)] data-open:animate-accordion-down data-closed:animate-accordion-up"
-              data-slot="trace-collapsible-content"
-              data-state="closed"
-              hidden=""
-              id="radix-<id1>"
-            />
           </div>
         </div>
       </div>
