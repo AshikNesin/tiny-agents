@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { Brain, ChevronDown, Cpu, GitMerge, GitPullRequest, ShieldCheck } from "lucide-react";
+import { Brain, ChevronDown, Cpu, GitMerge, GitPullRequest, ShieldCheck, Zap } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@groot/ui/lib/utils";
 import {
@@ -174,14 +174,14 @@ const MODE_LABEL: Record<PermissionMode, string> = {
   default: "Ask",
   acceptEdits: "Accept edits",
   plan: "Plan",
-  bypassPermissions: "Bypass",
+  bypassPermissions: "YOLO",
 };
 
 const MODE_HINT: Record<PermissionMode, string> = {
   default: "Ask before edits and commands",
   acceptEdits: "Edit files without asking; ask before commands",
   plan: "Read and plan only; no edits",
-  bypassPermissions: "Never ask (YOLO)",
+  bypassPermissions: "Never ask",
 };
 
 export function composerPermission(settings: {
@@ -217,7 +217,11 @@ export function PermissionPicker({
       contentClassName="w-72"
       data-testid="code-permission"
     >
-      <ShieldCheck className="opacity-70" />
+      {value === "bypassPermissions" ? (
+        <Zap className="text-warning" />
+      ) : (
+        <ShieldCheck className="opacity-70" />
+      )}
       <span className="hidden truncate @[16rem]:inline">{MODE_LABEL[value]}</span>
       <ChevronDown className="opacity-50" />
     </SearchSelect>

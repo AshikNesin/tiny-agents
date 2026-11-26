@@ -1,6 +1,6 @@
-// Feature: yolo (features/yolo.md). Per-chat YOLO switch in the bot menu: confirm dialog,
-// banner, survives reload, Ask (always) tools run unasked and show
-// "auto-approved (YOLO)", turning it on approves a waiting card, Turn off
+// Feature: yolo (features/yolo.md). Per-chat YOLO chip in the composer: confirm dialog,
+// pressed while on, survives reload, Ask (always) tools run unasked and show
+// "auto-approved (YOLO)", turning it on approves a waiting card, turning it off
 // brings cards back, New chat turns it off.
 import { journey, expect } from "../scripts/lib.mjs";
 
@@ -9,20 +9,10 @@ await journey("yolo", async ({ page, step, proof, cleanup, api, stamp }) => {
   const base = `Base prompt ${stamp}.`;
   const line = "Self-improvement e2e: append this line.";
   const composer = page.getByRole("textbox", { name: `Message ${name}` });
-  // The switch is a checkbox row in the bot menu (the header's bot name).
-  const toggle = page.getByTestId("yolo-toggle");
-  const openMenu = () => page.getByRole("button", { name: `${name} menu` }).click();
-  const clickToggle = async () => {
-    await openMenu();
-    await toggle.click();
-  };
-  const expectYolo = async (on) => {
-    await openMenu();
-    await expect(toggle).toHaveAttribute("aria-checked", String(on), { timeout: 15_000 });
-    await page.keyboard.press("Escape");
-    await expect(toggle).toHaveCount(0);
-  };
-  const banner = page.getByTestId("yolo-banner");
+  const toggle = page.getByTestId("yolo-chip");
+  const clickToggle = () => toggle.click();
+  const expectYolo = (on) =>
+    expect(toggle).toHaveAttribute("aria-pressed", String(on), { timeout: 15_000 });
   const card = page.getByText(`${name} wants to update own instructions`);
   const yoloRows = page.getByText(/auto-approved \(YOLO\)/);
   const confirm = page.getByRole("dialog", { name: "Turn on YOLO mode?" });
@@ -57,17 +47,14 @@ await journey("yolo", async ({ page, step, proof, cleanup, api, stamp }) => {
     await confirm.getByRole("button", { name: "Cancel" }).click();
     await expect(confirm).not.toBeVisible();
     await expectYolo(false);
-    await expect(banner).toHaveCount(0);
   });
-  await step("Turn on: menu row checked, banner shown", async () => {
+  await step("Turn on: the chip is pressed", async () => {
     await clickToggle();
     await confirm.getByRole("button", { name: "Turn on", exact: true }).click();
-    await expect(banner).toContainText("no approval needed, except vault items");
     await expectYolo(true);
   });
   await step("YOLO survives a reload (server-side, per chat)", async () => {
     await page.reload();
-    await expect(banner).toBeVisible({ timeout: 15_000 });
     await expectYolo(true);
   });
   await proof("on");
@@ -81,9 +68,8 @@ await journey("yolo", async ({ page, step, proof, cleanup, api, stamp }) => {
   });
   await proof("auto-approved");
 
-  await step("Turn off from the banner: a card asks again", async () => {
-    await banner.getByRole("button", { name: "Turn off" }).click();
-    await expect(banner).toHaveCount(0);
+  await step("Turn off from the chip: a card asks again", async () => {
+    await clickToggle();
     await expectYolo(false);
     await send("/improve");
     await expect(card).toBeVisible({ timeout: 30_000 });
@@ -94,7 +80,7 @@ await journey("yolo", async ({ page, step, proof, cleanup, api, stamp }) => {
   await step("turning YOLO on approves the card already waiting", async () => {
     await clickToggle();
     await confirm.getByRole("button", { name: "Turn on", exact: true }).click();
-    await expect(banner).toBeVisible();
+    await expectYolo(true);
     await expect(card).toHaveCount(0, { timeout: 15_000 });
     // The waiting call ran. Its row is recorded as an ordinary approval
     // ("waited … for you"), not "auto-approved (YOLO)": see features/yolo.md Gotchas.
@@ -109,7 +95,6 @@ await journey("yolo", async ({ page, step, proof, cleanup, api, stamp }) => {
   await step("New chat turns YOLO off", async () => {
     await page.getByRole("button", { name: "Start a new chat" }).click();
     await page.getByRole("button", { name: "New chat", exact: true }).click();
-    await expect(banner).toHaveCount(0, { timeout: 15_000 });
     await expectYolo(false);
     await page.reload();
     await expect(composer).toBeVisible({ timeout: 15_000 });

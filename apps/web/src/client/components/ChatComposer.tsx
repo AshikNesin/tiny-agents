@@ -9,7 +9,17 @@ import {
   useRef,
   useState,
 } from "react";
-import { ArrowUp, AtSign, ChevronDown, Cpu, ListPlus, Paperclip, Plus, Square } from "lucide-react";
+import {
+  ArrowUp,
+  AtSign,
+  ChevronDown,
+  Cpu,
+  ListPlus,
+  Paperclip,
+  Plus,
+  Square,
+  Zap,
+} from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { Button } from "@groot/ui/button";
 import {
@@ -82,6 +92,30 @@ interface ChatComposerProps {
   onStop: () => Promise<void>;
   onEditBot: () => void;
   onNewChat?: () => boolean;
+  yolo?: boolean;
+  onYoloChange?: (on: boolean) => void;
+}
+
+function YoloChip({ on, onChange }: { on: boolean; onChange?: (on: boolean) => void }) {
+  if (!on && !onChange) return null;
+  return (
+    <button
+      type="button"
+      aria-pressed={on}
+      disabled={!onChange}
+      onClick={() => onChange?.(!on)}
+      title={on ? "YOLO: tools run without asking, except vault items" : "Run tools without asking"}
+      className={cn(
+        "inline-flex h-7 shrink-0 items-center gap-1 rounded-full px-2 text-xs font-medium outline-none focus-visible:ring-1 focus-visible:ring-ring [&_svg]:size-3.5",
+        on ? "text-warning" : "text-muted-foreground hover:text-foreground",
+        onChange ? "hover:bg-muted" : "cursor-default",
+      )}
+      data-testid="yolo-chip"
+    >
+      <Zap className={on ? "" : "opacity-70"} />
+      YOLO
+    </button>
+  );
 }
 
 function formatContext(tokens: number): string {
@@ -149,7 +183,20 @@ function ModelChip({
 }
 
 export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function ChatComposer(
-  { bot, model, models = [], onModelChange, canAnswer, busy, onSend, onStop, onEditBot, onNewChat },
+  {
+    bot,
+    model,
+    models = [],
+    onModelChange,
+    canAnswer,
+    busy,
+    onSend,
+    onStop,
+    onEditBot,
+    onNewChat,
+    yolo,
+    onYoloChange,
+  },
   ref,
 ) {
   const [draft, setDraft] = useState<ComposerDraft<AttachmentRef>>(() =>
@@ -465,6 +512,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
                   onChange={onModelChange}
                 />
               )}
+              {yolo !== undefined && <YoloChip on={yolo} onChange={onYoloChange} />}
             </div>
             {busy && !showStop && (
               <Button

@@ -316,8 +316,7 @@ describe("ChatPane, pinned", () => {
     mount();
     open([done("u1", "user", "hi")]);
     await settle();
-    await user.click(screen.getByRole("button", { name: "Host Bot menu" }));
-    await user.click(await screen.findByTestId("yolo-toggle"));
+    await user.click(screen.getByRole("button", { name: "YOLO" }));
     await screen.findByRole("dialog");
     pin();
   });

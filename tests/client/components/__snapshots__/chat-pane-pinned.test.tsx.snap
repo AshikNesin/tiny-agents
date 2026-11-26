@@ -352,6 +352,28 @@ exports[`ChatPane, pinned > ?history=1 opens the bot menu on Chat history > mark
                       xmlns="http://www.w3.org/2000/svg"
                     />
                   </button>
+                  <button
+                    aria-pressed="false"
+                    class="inline-flex h-7 shrink-0 items-center gap-1 rounded-full px-2 text-xs font-medium outline-none focus-visible:ring-1 focus-visible:ring-ring [&_svg]:size-3.5 text-muted-foreground hover:text-foreground hover:bg-muted"
+                    data-testid="yolo-chip"
+                    title="Run tools without asking"
+                    type="button"
+                  >
+                    <svg
+                      aria-hidden="true"
+                      class="lucide lucide-zap opacity-70"
+                      fill="none"
+                      height="24"
+                      stroke="currentColor"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      viewBox="0 0 24 24"
+                      width="24"
+                      xmlns="http://www.w3.org/2000/svg"
+                    />
+                    YOLO
+                  </button>
                 </div>
                 <div
                   class="shrink-0"
@@ -504,6 +526,9 @@ div [aria-hidden=true]
     icon lucide-cpu
     "Test Model"
     icon lucide-chevron-down
+  button "YOLO" [testid=yolo-chip, title="Run tools without asking"]
+    icon lucide-zap
+    "YOLO"
   button "Send message" [disabled]
     icon lucide-arrow-up
   p [testid=composer-hint, aria-hidden=true]
@@ -792,32 +817,6 @@ exports[`ChatPane, pinned > YOLO on > markup 1`] = `
           </div>
         </div>
         <div
-          class="text-muted-foreground mx-auto flex w-full max-w-[784px] items-center gap-2 px-5 pt-2 text-xs md:px-6"
-          data-testid="yolo-banner"
-          role="status"
-        >
-          <span
-            aria-hidden="true"
-            class="bg-warning size-1.5 shrink-0 rounded-full"
-          />
-          <span
-            class="min-w-0 flex-1 truncate"
-          >
-            <span
-              class="text-foreground font-medium"
-            >
-              YOLO
-            </span>
-             · no approval needed, except vault items
-          </span>
-          <button
-            class="hover:text-foreground shrink-0 font-medium underline-offset-2 hover:underline"
-            type="button"
-          >
-            Turn off
-          </button>
-        </div>
-        <div
           class="px-3 pt-2 md:px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))]"
           data-slot="chat-composer"
         >
@@ -917,6 +916,28 @@ exports[`ChatPane, pinned > YOLO on > markup 1`] = `
                       xmlns="http://www.w3.org/2000/svg"
                     />
                   </button>
+                  <button
+                    aria-pressed="true"
+                    class="inline-flex h-7 shrink-0 items-center gap-1 rounded-full px-2 text-xs font-medium outline-none focus-visible:ring-1 focus-visible:ring-ring [&_svg]:size-3.5 text-warning hover:bg-muted"
+                    data-testid="yolo-chip"
+                    title="YOLO: tools run without asking, except vault items"
+                    type="button"
+                  >
+                    <svg
+                      aria-hidden="true"
+                      class="lucide lucide-zap"
+                      fill="none"
+                      height="24"
+                      stroke="currentColor"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      viewBox="0 0 24 24"
+                      width="24"
+                      xmlns="http://www.w3.org/2000/svg"
+                    />
+                    YOLO
+                  </button>
                 </div>
                 <div
                   class="shrink-0"
@@ -992,12 +1013,6 @@ region "Messages"
 button "Jump to the latest message"
   icon lucide-arrow-down
   "Scroll to end"
-status [testid=yolo-banner]
-  span [aria-hidden=true]
-  "YOLO"
-  "· no approval needed, except vault items"
-  button "Turn off"
-    "Turn off"
 input "Attach files" [testid=file-input]
 textbox
 button "Add files or mention a bot" [testid=composer-add, title="Add files or mention a bot", aria-expanded=false, aria-haspopup=menu]
@@ -1006,6 +1021,9 @@ button "Model" [testid=chat-model, title="Model", aria-expanded=false, aria-hasp
   icon lucide-cpu
   "Test Model"
   icon lucide-chevron-down
+button "YOLO" [testid=yolo-chip, title="YOLO: tools run without asking, except vault items"]
+  icon lucide-zap
+  "YOLO"
 button "Send message" [disabled]
   icon lucide-arrow-up
 p [testid=composer-hint, aria-hidden=true]
@@ -1348,6 +1366,28 @@ exports[`ChatPane, pinned > a computer: the toggle, then the tabs > browser in f
                       xmlns="http://www.w3.org/2000/svg"
                     />
                   </button>
+                  <button
+                    aria-pressed="false"
+                    class="inline-flex h-7 shrink-0 items-center gap-1 rounded-full px-2 text-xs font-medium outline-none focus-visible:ring-1 focus-visible:ring-ring [&_svg]:size-3.5 text-muted-foreground hover:text-foreground hover:bg-muted"
+                    data-testid="yolo-chip"
+                    title="Run tools without asking"
+                    type="button"
+                  >
+                    <svg
+                      aria-hidden="true"
+                      class="lucide lucide-zap opacity-70"
+                      fill="none"
+                      height="24"
+                      stroke="currentColor"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      viewBox="0 0 24 24"
+                      width="24"
+                      xmlns="http://www.w3.org/2000/svg"
+                    />
+                    YOLO
+                  </button>
                 </div>
                 <div
                   class="shrink-0"
@@ -1495,6 +1535,9 @@ button "Model" [testid=chat-model, title="Model", aria-expanded=false, aria-hasp
   icon lucide-cpu
   "Test Model"
   icon lucide-chevron-down
+button "YOLO" [testid=yolo-chip, title="Run tools without asking"]
+  icon lucide-zap
+  "YOLO"
 button "Send message" [disabled]
   icon lucide-arrow-up
 p [testid=composer-hint, aria-hidden=true]
@@ -1847,6 +1890,28 @@ exports[`ChatPane, pinned > a computer: the toggle, then the tabs > closed again
                       xmlns="http://www.w3.org/2000/svg"
                     />
                   </button>
+                  <button
+                    aria-pressed="false"
+                    class="inline-flex h-7 shrink-0 items-center gap-1 rounded-full px-2 text-xs font-medium outline-none focus-visible:ring-1 focus-visible:ring-ring [&_svg]:size-3.5 text-muted-foreground hover:text-foreground hover:bg-muted"
+                    data-testid="yolo-chip"
+                    title="Run tools without asking"
+                    type="button"
+                  >
+                    <svg
+                      aria-hidden="true"
+                      class="lucide lucide-zap opacity-70"
+                      fill="none"
+                      height="24"
+                      stroke="currentColor"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      viewBox="0 0 24 24"
+                      width="24"
+                      xmlns="http://www.w3.org/2000/svg"
+                    />
+                    YOLO
+                  </button>
                 </div>
                 <div
                   class="shrink-0"
@@ -1927,6 +1992,9 @@ button "Model" [testid=chat-model, title="Model", aria-expanded=false, aria-hasp
   icon lucide-cpu
   "Test Model"
   icon lucide-chevron-down
+button "YOLO" [testid=yolo-chip, title="Run tools without asking"]
+  icon lucide-zap
+  "YOLO"
 button "Send message" [disabled]
   icon lucide-arrow-up
 p [testid=composer-hint, aria-hidden=true]
@@ -2269,6 +2337,28 @@ exports[`ChatPane, pinned > a computer: the toggle, then the tabs > closed marku
                       xmlns="http://www.w3.org/2000/svg"
                     />
                   </button>
+                  <button
+                    aria-pressed="false"
+                    class="inline-flex h-7 shrink-0 items-center gap-1 rounded-full px-2 text-xs font-medium outline-none focus-visible:ring-1 focus-visible:ring-ring [&_svg]:size-3.5 text-muted-foreground hover:text-foreground hover:bg-muted"
+                    data-testid="yolo-chip"
+                    title="Run tools without asking"
+                    type="button"
+                  >
+                    <svg
+                      aria-hidden="true"
+                      class="lucide lucide-zap opacity-70"
+                      fill="none"
+                      height="24"
+                      stroke="currentColor"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      viewBox="0 0 24 24"
+                      width="24"
+                      xmlns="http://www.w3.org/2000/svg"
+                    />
+                    YOLO
+                  </button>
                 </div>
                 <div
                   class="shrink-0"
@@ -2349,6 +2439,9 @@ button "Model" [testid=chat-model, title="Model", aria-expanded=false, aria-hasp
   icon lucide-cpu
   "Test Model"
   icon lucide-chevron-down
+button "YOLO" [testid=yolo-chip, title="Run tools without asking"]
+  icon lucide-zap
+  "YOLO"
 button "Send message" [disabled]
   icon lucide-arrow-up
 p [testid=composer-hint, aria-hidden=true]
@@ -2691,6 +2784,28 @@ exports[`ChatPane, pinned > a computer: the toggle, then the tabs > computer in 
                       xmlns="http://www.w3.org/2000/svg"
                     />
                   </button>
+                  <button
+                    aria-pressed="false"
+                    class="inline-flex h-7 shrink-0 items-center gap-1 rounded-full px-2 text-xs font-medium outline-none focus-visible:ring-1 focus-visible:ring-ring [&_svg]:size-3.5 text-muted-foreground hover:text-foreground hover:bg-muted"
+                    data-testid="yolo-chip"
+                    title="Run tools without asking"
+                    type="button"
+                  >
+                    <svg
+                      aria-hidden="true"
+                      class="lucide lucide-zap opacity-70"
+                      fill="none"
+                      height="24"
+                      stroke="currentColor"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      viewBox="0 0 24 24"
+                      width="24"
+                      xmlns="http://www.w3.org/2000/svg"
+                    />
+                    YOLO
+                  </button>
                 </div>
                 <div
                   class="shrink-0"
@@ -2838,6 +2953,9 @@ button "Model" [testid=chat-model, title="Model", aria-expanded=false, aria-hasp
   icon lucide-cpu
   "Test Model"
   icon lucide-chevron-down
+button "YOLO" [testid=yolo-chip, title="Run tools without asking"]
+  icon lucide-zap
+  "YOLO"
 button "Send message" [disabled]
   icon lucide-arrow-up
 p [testid=composer-hint, aria-hidden=true]
@@ -3307,6 +3425,28 @@ exports[`ChatPane, pinned > a conversation > markup 1`] = `
                       xmlns="http://www.w3.org/2000/svg"
                     />
                   </button>
+                  <button
+                    aria-pressed="false"
+                    class="inline-flex h-7 shrink-0 items-center gap-1 rounded-full px-2 text-xs font-medium outline-none focus-visible:ring-1 focus-visible:ring-ring [&_svg]:size-3.5 text-muted-foreground hover:text-foreground hover:bg-muted"
+                    data-testid="yolo-chip"
+                    title="Run tools without asking"
+                    type="button"
+                  >
+                    <svg
+                      aria-hidden="true"
+                      class="lucide lucide-zap opacity-70"
+                      fill="none"
+                      height="24"
+                      stroke="currentColor"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      viewBox="0 0 24 24"
+                      width="24"
+                      xmlns="http://www.w3.org/2000/svg"
+                    />
+                    YOLO
+                  </button>
                 </div>
                 <div
                   class="shrink-0"
@@ -3399,6 +3539,9 @@ button "Model" [testid=chat-model, title="Model", aria-expanded=false, aria-hasp
   icon lucide-cpu
   "Test Model"
   icon lucide-chevron-down
+button "YOLO" [testid=yolo-chip, title="Run tools without asking"]
+  icon lucide-zap
+  "YOLO"
 button "Send message" [disabled]
   icon lucide-arrow-up
 p [testid=composer-hint, aria-hidden=true]
@@ -3615,26 +3758,6 @@ exports[`ChatPane, pinned > a guest's pane > markup 1`] = `
           </div>
         </div>
         <div
-          class="text-muted-foreground mx-auto flex w-full max-w-[784px] items-center gap-2 px-5 pt-2 text-xs md:px-6"
-          data-testid="yolo-banner"
-          role="status"
-        >
-          <span
-            aria-hidden="true"
-            class="bg-warning size-1.5 shrink-0 rounded-full"
-          />
-          <span
-            class="min-w-0 flex-1 truncate"
-          >
-            <span
-              class="text-foreground font-medium"
-            >
-              YOLO
-            </span>
-             · no approval needed, except vault items
-          </span>
-        </div>
-        <div
           class="px-3 pt-2 md:px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))]"
           data-slot="chat-composer"
         >
@@ -3715,6 +3838,29 @@ exports[`ChatPane, pinned > a guest's pane > markup 1`] = `
                       Test Model
                     </span>
                   </span>
+                  <button
+                    aria-pressed="true"
+                    class="inline-flex h-7 shrink-0 items-center gap-1 rounded-full px-2 text-xs font-medium outline-none focus-visible:ring-1 focus-visible:ring-ring [&_svg]:size-3.5 text-warning cursor-default"
+                    data-testid="yolo-chip"
+                    disabled=""
+                    title="YOLO: tools run without asking, except vault items"
+                    type="button"
+                  >
+                    <svg
+                      aria-hidden="true"
+                      class="lucide lucide-zap"
+                      fill="none"
+                      height="24"
+                      stroke="currentColor"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      viewBox="0 0 24 24"
+                      width="24"
+                      xmlns="http://www.w3.org/2000/svg"
+                    />
+                    YOLO
+                  </button>
                 </div>
                 <div
                   class="shrink-0"
@@ -3785,10 +3931,6 @@ region "Messages"
 button "Jump to the latest message"
   icon lucide-arrow-down
   "Scroll to end"
-status [testid=yolo-banner]
-  span [aria-hidden=true]
-  "YOLO"
-  "· no approval needed, except vault items"
 input "Attach files" [testid=file-input]
 textbox
 button "Add files or mention a bot" [testid=composer-add, title="Add files or mention a bot", aria-expanded=false, aria-haspopup=menu]
@@ -3796,6 +3938,9 @@ button "Add files or mention a bot" [testid=composer-add, title="Add files or me
 span [title="Model"]
   icon lucide-cpu
   "Test Model"
+button "YOLO" [testid=yolo-chip, title="YOLO: tools run without asking, except vault items", disabled]
+  icon lucide-zap
+  "YOLO"
 button "Send message" [disabled]
   icon lucide-arrow-up
 p [testid=composer-hint, aria-hidden=true]
@@ -4161,6 +4306,28 @@ exports[`ChatPane, pinned > a shared chat > markup 1`] = `
                       xmlns="http://www.w3.org/2000/svg"
                     />
                   </button>
+                  <button
+                    aria-pressed="false"
+                    class="inline-flex h-7 shrink-0 items-center gap-1 rounded-full px-2 text-xs font-medium outline-none focus-visible:ring-1 focus-visible:ring-ring [&_svg]:size-3.5 text-muted-foreground hover:text-foreground hover:bg-muted"
+                    data-testid="yolo-chip"
+                    title="Run tools without asking"
+                    type="button"
+                  >
+                    <svg
+                      aria-hidden="true"
+                      class="lucide lucide-zap opacity-70"
+                      fill="none"
+                      height="24"
+                      stroke="currentColor"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      viewBox="0 0 24 24"
+                      width="24"
+                      xmlns="http://www.w3.org/2000/svg"
+                    />
+                    YOLO
+                  </button>
                 </div>
                 <div
                   class="shrink-0"
@@ -4244,6 +4411,9 @@ button "Model" [testid=chat-model, title="Model", aria-expanded=false, aria-hasp
   icon lucide-cpu
   "Test Model"
   icon lucide-chevron-down
+button "YOLO" [testid=yolo-chip, title="Run tools without asking"]
+  icon lucide-zap
+  "YOLO"
 button "Send message" [disabled]
   icon lucide-arrow-up
 p [testid=composer-hint, aria-hidden=true]
@@ -4668,6 +4838,28 @@ exports[`ChatPane, pinned > a takeover request leaves the computer closed > mark
                       xmlns="http://www.w3.org/2000/svg"
                     />
                   </button>
+                  <button
+                    aria-pressed="false"
+                    class="inline-flex h-7 shrink-0 items-center gap-1 rounded-full px-2 text-xs font-medium outline-none focus-visible:ring-1 focus-visible:ring-ring [&_svg]:size-3.5 text-muted-foreground hover:text-foreground hover:bg-muted"
+                    data-testid="yolo-chip"
+                    title="Run tools without asking"
+                    type="button"
+                  >
+                    <svg
+                      aria-hidden="true"
+                      class="lucide lucide-zap opacity-70"
+                      fill="none"
+                      height="24"
+                      stroke="currentColor"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      viewBox="0 0 24 24"
+                      width="24"
+                      xmlns="http://www.w3.org/2000/svg"
+                    />
+                    YOLO
+                  </button>
                 </div>
                 <div
                   class="shrink-0"
@@ -4759,6 +4951,9 @@ button "Model" [testid=chat-model, title="Model", aria-expanded=false, aria-hasp
   icon lucide-cpu
   "Test Model"
   icon lucide-chevron-down
+button "YOLO" [testid=yolo-chip, title="Run tools without asking"]
+  icon lucide-zap
+  "YOLO"
 button "Send message" [disabled]
   icon lucide-arrow-up
 p [testid=composer-hint, aria-hidden=true]
@@ -5101,6 +5296,28 @@ exports[`ChatPane, pinned > an empty chat > markup 1`] = `
                       xmlns="http://www.w3.org/2000/svg"
                     />
                   </button>
+                  <button
+                    aria-pressed="false"
+                    class="inline-flex h-7 shrink-0 items-center gap-1 rounded-full px-2 text-xs font-medium outline-none focus-visible:ring-1 focus-visible:ring-ring [&_svg]:size-3.5 text-muted-foreground hover:text-foreground hover:bg-muted"
+                    data-testid="yolo-chip"
+                    title="Run tools without asking"
+                    type="button"
+                  >
+                    <svg
+                      aria-hidden="true"
+                      class="lucide lucide-zap opacity-70"
+                      fill="none"
+                      height="24"
+                      stroke="currentColor"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      viewBox="0 0 24 24"
+                      width="24"
+                      xmlns="http://www.w3.org/2000/svg"
+                    />
+                    YOLO
+                  </button>
                 </div>
                 <div
                   class="shrink-0"
@@ -5181,6 +5398,9 @@ button "Model" [testid=chat-model, title="Model", aria-expanded=false, aria-hasp
   icon lucide-cpu
   "Test Model"
   icon lucide-chevron-down
+button "YOLO" [testid=yolo-chip, title="Run tools without asking"]
+  icon lucide-zap
+  "YOLO"
 button "Send message" [disabled]
   icon lucide-arrow-up
 p [testid=composer-hint, aria-hidden=true]
@@ -5498,6 +5718,28 @@ exports[`ChatPane, pinned > before the first snapshot > markup 1`] = `
                       xmlns="http://www.w3.org/2000/svg"
                     />
                   </button>
+                  <button
+                    aria-pressed="false"
+                    class="inline-flex h-7 shrink-0 items-center gap-1 rounded-full px-2 text-xs font-medium outline-none focus-visible:ring-1 focus-visible:ring-ring [&_svg]:size-3.5 text-muted-foreground hover:text-foreground hover:bg-muted"
+                    data-testid="yolo-chip"
+                    title="Run tools without asking"
+                    type="button"
+                  >
+                    <svg
+                      aria-hidden="true"
+                      class="lucide lucide-zap opacity-70"
+                      fill="none"
+                      height="24"
+                      stroke="currentColor"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      viewBox="0 0 24 24"
+                      width="24"
+                      xmlns="http://www.w3.org/2000/svg"
+                    />
+                    YOLO
+                  </button>
                 </div>
                 <div
                   class="shrink-0"
@@ -5575,6 +5817,9 @@ button "Model" [testid=chat-model, title="Model", aria-expanded=false, aria-hasp
   icon lucide-cpu
   "Test Model"
   icon lucide-chevron-down
+button "YOLO" [testid=yolo-chip, title="Run tools without asking"]
+  icon lucide-zap
+  "YOLO"
 button "Send message" [disabled]
   icon lucide-arrow-up
 p [testid=composer-hint, aria-hidden=true]
@@ -6108,6 +6353,28 @@ exports[`ChatPane, pinned > messages held over the composer > markup 1`] = `
                       xmlns="http://www.w3.org/2000/svg"
                     />
                   </button>
+                  <button
+                    aria-pressed="false"
+                    class="inline-flex h-7 shrink-0 items-center gap-1 rounded-full px-2 text-xs font-medium outline-none focus-visible:ring-1 focus-visible:ring-ring [&_svg]:size-3.5 text-muted-foreground hover:text-foreground hover:bg-muted"
+                    data-testid="yolo-chip"
+                    title="Run tools without asking"
+                    type="button"
+                  >
+                    <svg
+                      aria-hidden="true"
+                      class="lucide lucide-zap opacity-70"
+                      fill="none"
+                      height="24"
+                      stroke="currentColor"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      viewBox="0 0 24 24"
+                      width="24"
+                      xmlns="http://www.w3.org/2000/svg"
+                    />
+                    YOLO
+                  </button>
                 </div>
                 <div
                   class="shrink-0"
@@ -6212,6 +6479,9 @@ button "Model" [testid=chat-model, title="Model", aria-expanded=false, aria-hasp
   icon lucide-cpu
   "Test Model"
   icon lucide-chevron-down
+button "YOLO" [testid=yolo-chip, title="Run tools without asking"]
+  icon lucide-zap
+  "YOLO"
 button "Stop generating" [title="Stop generating (Esc)"]
   icon lucide-square
 p [testid=composer-hint, aria-hidden=false]
@@ -6569,6 +6839,28 @@ exports[`ChatPane, pinned > no model can run > markup 1`] = `
                       xmlns="http://www.w3.org/2000/svg"
                     />
                   </button>
+                  <button
+                    aria-pressed="false"
+                    class="inline-flex h-7 shrink-0 items-center gap-1 rounded-full px-2 text-xs font-medium outline-none focus-visible:ring-1 focus-visible:ring-ring [&_svg]:size-3.5 text-muted-foreground hover:text-foreground hover:bg-muted"
+                    data-testid="yolo-chip"
+                    title="Run tools without asking"
+                    type="button"
+                  >
+                    <svg
+                      aria-hidden="true"
+                      class="lucide lucide-zap opacity-70"
+                      fill="none"
+                      height="24"
+                      stroke="currentColor"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      viewBox="0 0 24 24"
+                      width="24"
+                      xmlns="http://www.w3.org/2000/svg"
+                    />
+                    YOLO
+                  </button>
                 </div>
                 <div
                   class="shrink-0"
@@ -6653,6 +6945,9 @@ button "Model" [testid=chat-model, title="Model", aria-expanded=false, aria-hasp
   icon lucide-cpu
   "Test Model"
   icon lucide-chevron-down
+button "YOLO" [testid=yolo-chip, title="Run tools without asking"]
+  icon lucide-zap
+  "YOLO"
 button "Send message" [disabled]
   icon lucide-arrow-up
 p [testid=composer-hint, aria-hidden=true]
@@ -7010,6 +7305,28 @@ exports[`ChatPane, pinned > no model is set up > markup 1`] = `
                       xmlns="http://www.w3.org/2000/svg"
                     />
                   </button>
+                  <button
+                    aria-pressed="false"
+                    class="inline-flex h-7 shrink-0 items-center gap-1 rounded-full px-2 text-xs font-medium outline-none focus-visible:ring-1 focus-visible:ring-ring [&_svg]:size-3.5 text-muted-foreground hover:text-foreground hover:bg-muted"
+                    data-testid="yolo-chip"
+                    title="Run tools without asking"
+                    type="button"
+                  >
+                    <svg
+                      aria-hidden="true"
+                      class="lucide lucide-zap opacity-70"
+                      fill="none"
+                      height="24"
+                      stroke="currentColor"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      viewBox="0 0 24 24"
+                      width="24"
+                      xmlns="http://www.w3.org/2000/svg"
+                    />
+                    YOLO
+                  </button>
                 </div>
                 <div
                   class="shrink-0"
@@ -7094,6 +7411,9 @@ button "Model" [testid=chat-model, title="Model", aria-expanded=false, aria-hasp
   icon lucide-cpu
   "Test Model"
   icon lucide-chevron-down
+button "YOLO" [testid=yolo-chip, title="Run tools without asking"]
+  icon lucide-zap
+  "YOLO"
 button "Send message" [disabled]
   icon lucide-arrow-up
 p [testid=composer-hint, aria-hidden=true]
@@ -7486,6 +7806,28 @@ exports[`ChatPane, pinned > the New chat confirmation > markup 1`] = `
                       xmlns="http://www.w3.org/2000/svg"
                     />
                   </button>
+                  <button
+                    aria-pressed="false"
+                    class="inline-flex h-7 shrink-0 items-center gap-1 rounded-full px-2 text-xs font-medium outline-none focus-visible:ring-1 focus-visible:ring-ring [&_svg]:size-3.5 text-muted-foreground hover:text-foreground hover:bg-muted"
+                    data-testid="yolo-chip"
+                    title="Run tools without asking"
+                    type="button"
+                  >
+                    <svg
+                      aria-hidden="true"
+                      class="lucide lucide-zap opacity-70"
+                      fill="none"
+                      height="24"
+                      stroke="currentColor"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      viewBox="0 0 24 24"
+                      width="24"
+                      xmlns="http://www.w3.org/2000/svg"
+                    />
+                    YOLO
+                  </button>
                 </div>
                 <div
                   class="shrink-0"
@@ -7664,6 +8006,9 @@ div [aria-hidden=true]
     icon lucide-cpu
     "Test Model"
     icon lucide-chevron-down
+  button "YOLO" [testid=yolo-chip, title="Run tools without asking"]
+    icon lucide-zap
+    "YOLO"
   button "Send message" [disabled]
     icon lucide-arrow-up
   p [testid=composer-hint, aria-hidden=true]
@@ -8069,6 +8414,28 @@ exports[`ChatPane, pinned > the New chat shortcut > markup 1`] = `
                       xmlns="http://www.w3.org/2000/svg"
                     />
                   </button>
+                  <button
+                    aria-pressed="false"
+                    class="inline-flex h-7 shrink-0 items-center gap-1 rounded-full px-2 text-xs font-medium outline-none focus-visible:ring-1 focus-visible:ring-ring [&_svg]:size-3.5 text-muted-foreground hover:text-foreground hover:bg-muted"
+                    data-testid="yolo-chip"
+                    title="Run tools without asking"
+                    type="button"
+                  >
+                    <svg
+                      aria-hidden="true"
+                      class="lucide lucide-zap opacity-70"
+                      fill="none"
+                      height="24"
+                      stroke="currentColor"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      viewBox="0 0 24 24"
+                      width="24"
+                      xmlns="http://www.w3.org/2000/svg"
+                    />
+                    YOLO
+                  </button>
                 </div>
                 <div
                   class="shrink-0"
@@ -8247,6 +8614,9 @@ div [aria-hidden=true]
     icon lucide-cpu
     "Test Model"
     icon lucide-chevron-down
+  button "YOLO" [testid=yolo-chip, title="Run tools without asking"]
+    icon lucide-zap
+    "YOLO"
   button "Send message" [disabled]
     icon lucide-arrow-up
   p [testid=composer-hint, aria-hidden=true]
@@ -8652,6 +9022,28 @@ exports[`ChatPane, pinned > the YOLO confirmation > markup 1`] = `
                       xmlns="http://www.w3.org/2000/svg"
                     />
                   </button>
+                  <button
+                    aria-pressed="false"
+                    class="inline-flex h-7 shrink-0 items-center gap-1 rounded-full px-2 text-xs font-medium outline-none focus-visible:ring-1 focus-visible:ring-ring [&_svg]:size-3.5 text-muted-foreground hover:text-foreground hover:bg-muted"
+                    data-testid="yolo-chip"
+                    title="Run tools without asking"
+                    type="button"
+                  >
+                    <svg
+                      aria-hidden="true"
+                      class="lucide lucide-zap opacity-70"
+                      fill="none"
+                      height="24"
+                      stroke="currentColor"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      viewBox="0 0 24 24"
+                      width="24"
+                      xmlns="http://www.w3.org/2000/svg"
+                    />
+                    YOLO
+                  </button>
                 </div>
                 <div
                   class="shrink-0"
@@ -8830,6 +9222,9 @@ div [aria-hidden=true]
     icon lucide-cpu
     "Test Model"
     icon lucide-chevron-down
+  button "YOLO" [testid=yolo-chip, title="Run tools without asking"]
+    icon lucide-zap
+    "YOLO"
   button "Send message" [disabled]
     icon lucide-arrow-up
   p [testid=composer-hint, aria-hidden=true]
@@ -9221,6 +9616,28 @@ exports[`ChatPane, pinned > the bot using the browser leaves its panel closed an
                       xmlns="http://www.w3.org/2000/svg"
                     />
                   </button>
+                  <button
+                    aria-pressed="false"
+                    class="inline-flex h-7 shrink-0 items-center gap-1 rounded-full px-2 text-xs font-medium outline-none focus-visible:ring-1 focus-visible:ring-ring [&_svg]:size-3.5 text-muted-foreground hover:text-foreground hover:bg-muted"
+                    data-testid="yolo-chip"
+                    title="Run tools without asking"
+                    type="button"
+                  >
+                    <svg
+                      aria-hidden="true"
+                      class="lucide lucide-zap opacity-70"
+                      fill="none"
+                      height="24"
+                      stroke="currentColor"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      viewBox="0 0 24 24"
+                      width="24"
+                      xmlns="http://www.w3.org/2000/svg"
+                    />
+                    YOLO
+                  </button>
                 </div>
                 <div
                   class="shrink-0"
@@ -9305,6 +9722,9 @@ button "Model" [testid=chat-model, title="Model", aria-expanded=false, aria-hasp
   icon lucide-cpu
   "Test Model"
   icon lucide-chevron-down
+button "YOLO" [testid=yolo-chip, title="Run tools without asking"]
+  icon lucide-zap
+  "YOLO"
 button "Send message" [disabled]
   icon lucide-arrow-up
 p [testid=composer-hint, aria-hidden=true]
@@ -9678,6 +10098,28 @@ exports[`ChatPane, pinned > the bot using the browser leaves its panel closed an
                       xmlns="http://www.w3.org/2000/svg"
                     />
                   </button>
+                  <button
+                    aria-pressed="false"
+                    class="inline-flex h-7 shrink-0 items-center gap-1 rounded-full px-2 text-xs font-medium outline-none focus-visible:ring-1 focus-visible:ring-ring [&_svg]:size-3.5 text-muted-foreground hover:text-foreground hover:bg-muted"
+                    data-testid="yolo-chip"
+                    title="Run tools without asking"
+                    type="button"
+                  >
+                    <svg
+                      aria-hidden="true"
+                      class="lucide lucide-zap opacity-70"
+                      fill="none"
+                      height="24"
+                      stroke="currentColor"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      viewBox="0 0 24 24"
+                      width="24"
+                      xmlns="http://www.w3.org/2000/svg"
+                    />
+                    YOLO
+                  </button>
                 </div>
                 <div
                   class="shrink-0"
@@ -9770,6 +10212,9 @@ button "Model" [testid=chat-model, title="Model", aria-expanded=false, aria-hasp
   icon lucide-cpu
   "Test Model"
   icon lucide-chevron-down
+button "YOLO" [testid=yolo-chip, title="Run tools without asking"]
+  icon lucide-zap
+  "YOLO"
 button "Send message" [disabled]
   icon lucide-arrow-up
 p [testid=composer-hint, aria-hidden=true]
@@ -10151,6 +10596,28 @@ exports[`ChatPane, pinned > the bot using the computer, with a computer > closed
                       xmlns="http://www.w3.org/2000/svg"
                     />
                   </button>
+                  <button
+                    aria-pressed="false"
+                    class="inline-flex h-7 shrink-0 items-center gap-1 rounded-full px-2 text-xs font-medium outline-none focus-visible:ring-1 focus-visible:ring-ring [&_svg]:size-3.5 text-muted-foreground hover:text-foreground hover:bg-muted"
+                    data-testid="yolo-chip"
+                    title="Run tools without asking"
+                    type="button"
+                  >
+                    <svg
+                      aria-hidden="true"
+                      class="lucide lucide-zap opacity-70"
+                      fill="none"
+                      height="24"
+                      stroke="currentColor"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      viewBox="0 0 24 24"
+                      width="24"
+                      xmlns="http://www.w3.org/2000/svg"
+                    />
+                    YOLO
+                  </button>
                 </div>
                 <div
                   class="shrink-0"
@@ -10235,6 +10702,9 @@ button "Model" [testid=chat-model, title="Model", aria-expanded=false, aria-hasp
   icon lucide-cpu
   "Test Model"
   icon lucide-chevron-down
+button "YOLO" [testid=yolo-chip, title="Run tools without asking"]
+  icon lucide-zap
+  "YOLO"
 button "Send message" [disabled]
   icon lucide-arrow-up
 p [testid=composer-hint, aria-hidden=true]
@@ -10608,6 +11078,28 @@ exports[`ChatPane, pinned > the bot using the computer, with a computer > opened
                       xmlns="http://www.w3.org/2000/svg"
                     />
                   </button>
+                  <button
+                    aria-pressed="false"
+                    class="inline-flex h-7 shrink-0 items-center gap-1 rounded-full px-2 text-xs font-medium outline-none focus-visible:ring-1 focus-visible:ring-ring [&_svg]:size-3.5 text-muted-foreground hover:text-foreground hover:bg-muted"
+                    data-testid="yolo-chip"
+                    title="Run tools without asking"
+                    type="button"
+                  >
+                    <svg
+                      aria-hidden="true"
+                      class="lucide lucide-zap opacity-70"
+                      fill="none"
+                      height="24"
+                      stroke="currentColor"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      viewBox="0 0 24 24"
+                      width="24"
+                      xmlns="http://www.w3.org/2000/svg"
+                    />
+                    YOLO
+                  </button>
                 </div>
                 <div
                   class="shrink-0"
@@ -10758,6 +11250,9 @@ button "Model" [testid=chat-model, title="Model", aria-expanded=false, aria-hasp
   icon lucide-cpu
   "Test Model"
   icon lucide-chevron-down
+button "YOLO" [testid=yolo-chip, title="Run tools without asking"]
+  icon lucide-zap
+  "YOLO"
 button "Send message" [disabled]
   icon lucide-arrow-up
 p [testid=composer-hint, aria-hidden=true]
@@ -11129,6 +11624,28 @@ exports[`ChatPane, pinned > the bot's model is not in the catalog > markup 1`] =
                       xmlns="http://www.w3.org/2000/svg"
                     />
                   </button>
+                  <button
+                    aria-pressed="false"
+                    class="inline-flex h-7 shrink-0 items-center gap-1 rounded-full px-2 text-xs font-medium outline-none focus-visible:ring-1 focus-visible:ring-ring [&_svg]:size-3.5 text-muted-foreground hover:text-foreground hover:bg-muted"
+                    data-testid="yolo-chip"
+                    title="Run tools without asking"
+                    type="button"
+                  >
+                    <svg
+                      aria-hidden="true"
+                      class="lucide lucide-zap opacity-70"
+                      fill="none"
+                      height="24"
+                      stroke="currentColor"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      viewBox="0 0 24 24"
+                      width="24"
+                      xmlns="http://www.w3.org/2000/svg"
+                    />
+                    YOLO
+                  </button>
                 </div>
                 <div
                   class="shrink-0"
@@ -11212,6 +11729,9 @@ button "Model" [testid=chat-model, title="Model", aria-expanded=false, aria-hasp
   icon lucide-cpu
   "gone"
   icon lucide-chevron-down
+button "YOLO" [testid=yolo-chip, title="Run tools without asking"]
+  icon lucide-zap
+  "YOLO"
 button "Send message" [disabled]
   icon lucide-arrow-up
 p [testid=composer-hint, aria-hidden=true]
@@ -11573,6 +12093,28 @@ exports[`ChatPane, pinned > the file-drop overlay > dragging markup 1`] = `
                       xmlns="http://www.w3.org/2000/svg"
                     />
                   </button>
+                  <button
+                    aria-pressed="false"
+                    class="inline-flex h-7 shrink-0 items-center gap-1 rounded-full px-2 text-xs font-medium outline-none focus-visible:ring-1 focus-visible:ring-ring [&_svg]:size-3.5 text-muted-foreground hover:text-foreground hover:bg-muted"
+                    data-testid="yolo-chip"
+                    title="Run tools without asking"
+                    type="button"
+                  >
+                    <svg
+                      aria-hidden="true"
+                      class="lucide lucide-zap opacity-70"
+                      fill="none"
+                      height="24"
+                      stroke="currentColor"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      viewBox="0 0 24 24"
+                      width="24"
+                      xmlns="http://www.w3.org/2000/svg"
+                    />
+                    YOLO
+                  </button>
                 </div>
                 <div
                   class="shrink-0"
@@ -11656,6 +12198,9 @@ button "Model" [testid=chat-model, title="Model", aria-expanded=false, aria-hasp
   icon lucide-cpu
   "Test Model"
   icon lucide-chevron-down
+button "YOLO" [testid=yolo-chip, title="Run tools without asking"]
+  icon lucide-zap
+  "YOLO"
 button "Send message" [disabled]
   icon lucide-arrow-up
 p [testid=composer-hint, aria-hidden=true]
@@ -11998,6 +12543,28 @@ exports[`ChatPane, pinned > the file-drop overlay > left markup 1`] = `
                       xmlns="http://www.w3.org/2000/svg"
                     />
                   </button>
+                  <button
+                    aria-pressed="false"
+                    class="inline-flex h-7 shrink-0 items-center gap-1 rounded-full px-2 text-xs font-medium outline-none focus-visible:ring-1 focus-visible:ring-ring [&_svg]:size-3.5 text-muted-foreground hover:text-foreground hover:bg-muted"
+                    data-testid="yolo-chip"
+                    title="Run tools without asking"
+                    type="button"
+                  >
+                    <svg
+                      aria-hidden="true"
+                      class="lucide lucide-zap opacity-70"
+                      fill="none"
+                      height="24"
+                      stroke="currentColor"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      viewBox="0 0 24 24"
+                      width="24"
+                      xmlns="http://www.w3.org/2000/svg"
+                    />
+                    YOLO
+                  </button>
                 </div>
                 <div
                   class="shrink-0"
@@ -12078,6 +12645,9 @@ button "Model" [testid=chat-model, title="Model", aria-expanded=false, aria-hasp
   icon lucide-cpu
   "Test Model"
   icon lucide-chevron-down
+button "YOLO" [testid=yolo-chip, title="Run tools without asking"]
+  icon lucide-zap
+  "YOLO"
 button "Send message" [disabled]
   icon lucide-arrow-up
 p [testid=composer-hint, aria-hidden=true]
@@ -12457,6 +13027,28 @@ exports[`ChatPane, pinned > the transcript's Open computer brings the computer u
                       xmlns="http://www.w3.org/2000/svg"
                     />
                   </button>
+                  <button
+                    aria-pressed="false"
+                    class="inline-flex h-7 shrink-0 items-center gap-1 rounded-full px-2 text-xs font-medium outline-none focus-visible:ring-1 focus-visible:ring-ring [&_svg]:size-3.5 text-muted-foreground hover:text-foreground hover:bg-muted"
+                    data-testid="yolo-chip"
+                    title="Run tools without asking"
+                    type="button"
+                  >
+                    <svg
+                      aria-hidden="true"
+                      class="lucide lucide-zap opacity-70"
+                      fill="none"
+                      height="24"
+                      stroke="currentColor"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      viewBox="0 0 24 24"
+                      width="24"
+                      xmlns="http://www.w3.org/2000/svg"
+                    />
+                    YOLO
+                  </button>
                 </div>
                 <div
                   class="shrink-0"
@@ -12607,6 +13199,9 @@ button "Model" [testid=chat-model, title="Model", aria-expanded=false, aria-hasp
   icon lucide-cpu
   "Test Model"
   icon lucide-chevron-down
+button "YOLO" [testid=yolo-chip, title="Run tools without asking"]
+  icon lucide-zap
+  "YOLO"
 button "Send message" [disabled]
   icon lucide-arrow-up
 p [testid=composer-hint, aria-hidden=true]
