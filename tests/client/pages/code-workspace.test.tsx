@@ -357,11 +357,21 @@ describe("the Code workspace", () => {
     );
   });
 
-  it("n opens the new thread dialog; Enter starts the thread in the remembered project", async () => {
+  it("with no thread open, the page is the new thread box, as a new chat is", async () => {
+    renderAt("/code");
+    expect(
+      await screen.findByRole("textbox", { name: "What should the agent do?" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("No thread open")).toBeNull();
+  });
+
+  it("n focuses the new thread box, not a dialog; Enter starts the thread in the remembered project", async () => {
     renderAt("/code");
     press("n");
     expect(where()).toBe("/code/new");
     const box = await screen.findByRole("textbox", { name: "What should the agent do?" });
+    await waitFor(() => expect(box).toHaveFocus());
+    expect(screen.queryByRole("dialog")).toBeNull();
     await screen.findByText("web");
     fireEvent.change(box, { target: { value: "Fix the login callback" } });
     fireEvent.keyDown(box, { key: "Enter" });

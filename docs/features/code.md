@@ -111,9 +111,11 @@ A harness that is not connected says so at the foot of the list, above
 `ThreadView.tsx`, `Composer.tsx`, `Transcript.tsx`. The header shows the
 project, the title, the branch and the pull request.
 
-**Start.** `n` (or `/code/new`) opens the new thread dialog: the project
-(the last one used is remembered), the agent when there are several, the
-model and the permission mode, and the task. Enter starts it. The thread
+**Start.** With no thread open, the page is the new thread box
+(`NewThread.tsx`), the way a new chat is: the task, with chips for the
+project (the last one used is remembered), the agent when there are
+several, the model and the permission mode. `n` (or `/code/new`) focuses it,
+and on a phone opens it over the list. Enter starts it. The thread
 gets its own worktree on a new branch from the freshly fetched base branch,
 and its first message starts with one line naming the branch and telling the
 agent to commit but not push.
@@ -401,7 +403,7 @@ names are `WORKFLOW_LABEL` in `apps/web/src/shared/code-status.ts`.
 | **Fix issue**         | a new thread whose task contains a link to one of the project's issues |
 | **Review PR**         | `r` in a PR review                                                     |
 
-- **Fix issue.** Paste the issue's link into the new thread dialog. The app
+- **Fix issue.** Paste the issue's link into the new thread box. The app
   reads the issue from GitHub and adds its title and text to the first
   message (`issueFor` in `code.routes.ts`).
 - **By hand.** `POST /code/threads/:id/workflows/:name` starts one pass now.
