@@ -1003,6 +1003,15 @@ Do the thing.
               >
                 Always allow
               </button>
+              <button
+                class="group/button inline-flex shrink-0 items-center justify-center rounded-xl border border-transparent bg-clip-padding font-medium whitespace-nowrap transition-transform duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:scale-[0.97] motion-reduce:transition-none disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50 h-6 gap-1 px-2 text-xs in-data-[slot=button-group]:rounded-lg has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3"
+                data-size="xs"
+                data-slot="button"
+                data-variant="ghost"
+                title="Approve, and let every bot use update instructions without asking"
+              >
+                Allow for every bot
+              </button>
             </div>
           </div>
         </div>
@@ -1023,7 +1032,9 @@ button "Deny"
 button "Approve"
   "Approve"
 button "Always allow" [title="Approve, and let Chief use update instructions without asking"]
-  "Always allow""
+  "Always allow"
+button "Allow for every bot" [title="Approve, and let every bot use update instructions without asking"]
+  "Allow for every bot""
 `;
 
 exports[`ChatMessageView, pinned > assistant: done tool while streaming > markup 1`] = `
@@ -1976,6 +1987,15 @@ exports[`ChatMessageView, pinned > card: approval > markup 1`] = `
               >
                 Always allow
               </button>
+              <button
+                class="group/button inline-flex shrink-0 items-center justify-center rounded-xl border border-transparent bg-clip-padding font-medium whitespace-nowrap transition-transform duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:scale-[0.97] motion-reduce:transition-none disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50 h-6 gap-1 px-2 text-xs in-data-[slot=button-group]:rounded-lg has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3"
+                data-size="xs"
+                data-slot="button"
+                data-variant="ghost"
+                title="Approve, and let every bot open a page without asking"
+              >
+                Allow for every bot
+              </button>
             </div>
           </div>
         </div>
@@ -1993,7 +2013,9 @@ button "Deny"
 button "Approve"
   "Approve"
 button "Always allow" [title="Approve, and let Chief open a page without asking"]
-  "Always allow""
+  "Always allow"
+button "Allow for every bot" [title="Approve, and let every bot open a page without asking"]
+  "Allow for every bot""
 `;
 
 exports[`ChatMessageView, pinned > card: approval, create_bot facts > markup 1`] = `
@@ -2110,6 +2132,15 @@ exports[`ChatMessageView, pinned > card: approval, create_bot facts > markup 1`]
               >
                 Always allow
               </button>
+              <button
+                class="group/button inline-flex shrink-0 items-center justify-center rounded-xl border border-transparent bg-clip-padding font-medium whitespace-nowrap transition-transform duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:scale-[0.97] motion-reduce:transition-none disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50 h-6 gap-1 px-2 text-xs in-data-[slot=button-group]:rounded-lg has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3"
+                data-size="xs"
+                data-slot="button"
+                data-variant="ghost"
+                title="Approve, and let every bot use create bot without asking"
+              >
+                Allow for every bot
+              </button>
             </div>
           </div>
         </div>
@@ -2139,7 +2170,9 @@ button "Deny"
 button "Approve"
   "Approve"
 button "Always allow" [title="Approve, and let Chief use create bot without asking"]
-  "Always allow""
+  "Always allow"
+button "Allow for every bot" [title="Approve, and let every bot use create bot without asking"]
+  "Allow for every bot""
 `;
 
 exports[`ChatMessageView, pinned > card: approval, folded payload > markup 1`] = `
@@ -2225,6 +2258,15 @@ Do t”
               >
                 Always allow
               </button>
+              <button
+                class="group/button inline-flex shrink-0 items-center justify-center rounded-xl border border-transparent bg-clip-padding font-medium whitespace-nowrap transition-transform duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:scale-[0.97] motion-reduce:transition-none disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50 h-6 gap-1 px-2 text-xs in-data-[slot=button-group]:rounded-lg has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3"
+                data-size="xs"
+                data-slot="button"
+                data-variant="ghost"
+                title="Approve, and let every bot use update instructions without asking"
+              >
+                Allow for every bot
+              </button>
             </div>
           </div>
         </div>
@@ -2244,7 +2286,9 @@ button "Deny"
 button "Approve"
   "Approve"
 button "Always allow" [title="Approve, and let Chief use update instructions without asking"]
-  "Always allow""
+  "Always allow"
+button "Allow for every bot" [title="Approve, and let every bot use update instructions without asking"]
+  "Allow for every bot""
 `;
 
 exports[`ChatMessageView, pinned > card: asked questions > markup 1`] = `

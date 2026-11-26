@@ -1,3 +1,4 @@
+import { ownerToolPermissions, setOwnerToolPermissions } from "./tool-permissions";
 import { eq } from "drizzle-orm";
 import { Boom } from "@groot/core/errors";
 import { logger } from "@groot/core/logger";
@@ -186,6 +187,7 @@ export async function decideApproval(
     taskId: number;
     decision: "approved" | "denied";
     alwaysAllow?: string;
+    everyBot?: boolean;
     grant?: boolean;
   },
   rt: BotAgentRuntime = runtime(),
@@ -207,7 +209,12 @@ export async function decideApproval(
     );
   }
   if (call?.vault) throw Boom.badRequest("Vault uses can't be always allowed");
-  if (call) {
+  if (call && input.everyBot) {
+    await setOwnerToolPermissions({ ...(await ownerToolPermissions()), [call.name]: "allow" });
+    const { [call.name]: _own, ...toolPermissions } = bot.toolPermissions;
+    await updateBotRow(id, { toolPermissions: JSON.stringify(toolPermissions) });
+    await reconcileBotConversation(id, rt);
+  } else if (call) {
     const toolPermissions = { ...bot.toolPermissions, [call.name]: "allow" as const };
     await updateBotRow(id, { toolPermissions: JSON.stringify(toolPermissions) });
     await reconcileBotConversation(id, rt);

@@ -28,6 +28,7 @@ import { SharingSection } from "./bot-dialog/SharingSection";
 import { SkillsSection } from "./bot-dialog/SkillsSection";
 import { ToolsSection } from "./bot-dialog/ToolsSection";
 import { useBotDialogLists } from "./bot-dialog/use-bot-dialog-lists";
+import { useToolPermissions } from "../queries/tool-permissions";
 
 interface BotDialogProps {
   open: boolean;
@@ -83,6 +84,7 @@ export function BotDialog({
   }, [open, fallbackModel]);
 
   const { toolkitsList, allTools, connections, skills, guests } = useBotDialogLists(open);
+  const ownerPermissions = useToolPermissions(open);
 
   const save = async () => {
     const problem = draftProblem(draft);
@@ -191,6 +193,7 @@ export function BotDialog({
                   setToolQuery={setToolQuery}
                   expanded={expanded}
                   setExpanded={setExpanded}
+                  inherited={ownerPermissions.data?.permissions}
                 />
               </TabsContent>
               <TabsContent value="skills">
