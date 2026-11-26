@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it } from "vite-plus/test";
-import { db } from "@groot/core/database";
-import { jobRunner, jobs, registerJobHandler, runTick } from "@groot/jobs/server";
+import { VALID_JOB_STATES, jobRunner, registerJobHandler, runTick } from "@groot/jobs/server";
 import { api, createTestApp, signIn } from "../helpers";
 
 const app = createTestApp();
@@ -10,10 +9,12 @@ let memberToken: string;
 
 beforeEach(async () => {
   jobRunner.reset();
-  await db.delete(jobs);
   registerJobHandler("report", () => ({ ok: true }));
   if (!token) ({ token } = await signIn(app, { isAdmin: true }));
   memberToken ??= (await signIn(app)).token;
+  for (const state of VALID_JOB_STATES) {
+    await api(app, `/api/v1/jobs/state/${state}`, { method: "DELETE", token });
+  }
 });
 
 describe("jobs API", () => {

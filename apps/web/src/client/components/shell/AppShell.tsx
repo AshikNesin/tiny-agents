@@ -18,16 +18,16 @@ import type { CommandGroupEntry } from "@groot/shell/components/CommandPalette";
 import { useAuthStore } from "@groot/shell/store/auth";
 import { useTheme } from "@groot/shell/lib/theme";
 import { toast } from "sonner";
-import { useBotsStore } from "../../store/bots";
+import { chatBots, useBotsStore } from "../../store/bots";
 import { modeOf, useUiStore } from "../../store/ui";
 import { useCodeStore } from "../../store/code";
 import { useKeyCommands } from "../keys";
-import { threadPath } from "../../lib/code/api";
 import type { Bot as BotRow } from "../../../shared/api/bots";
 import { BotDialog } from "../BotDialog";
 import { AppSidebar } from "./AppSidebar";
 import { APP_NAV, guestNav } from "./nav";
 import { settingsCommandGroup } from "./settings-commands";
+import { codeThreadGroup } from "./code-thread-commands";
 import { sidebarCommand } from "./sidebar-command";
 import { useViewerRole, usePeopleStore } from "../../store/people";
 import { BADGED_FAVICON, documentTitle, waitingCount } from "../../lib/attention";
@@ -87,13 +87,14 @@ export function AppShell() {
   useEffect(() => rememberPath(pathname, search), [pathname, search, rememberPath]);
 
   const commandGroups = useMemo<CommandGroupEntry[]>(() => {
+    const listed = chatBots(bots, !restricted);
     const botGroup: CommandGroupEntry[] =
-      bots.length === 0
+      listed.length === 0
         ? []
         : [
             {
               heading: "Bots",
-              items: bots.map((bot) => ({
+              items: listed.map((bot) => ({
                 id: bot.id,
                 label: bot.name,
                 icon: Bot,
@@ -101,31 +102,14 @@ export function AppShell() {
               })),
             },
           ];
-    const codeGroup: CommandGroupEntry[] =
-      codeThreads && codeThreads.length > 0
-        ? [
-            {
-              heading: "Code",
-              items: codeThreads
-                .filter((c) => !c.parentId)
-                .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-                .slice(0, 30)
-                .map((c) => ({
-                  id: `code-${c.id}`,
-                  label: c.title,
-                  icon: Code2,
-                  onSelect: () => navigate(threadPath(c.id)),
-                })),
-            },
-          ]
-        : [];
+    const codeGroup = codeThreadGroup(codeThreads, navigate);
     const codeActions: CommandGroupEntry[] =
       codeCommands.length > 0
         ? [
             {
               heading: pathname.startsWith("/code") ? "Code actions" : "Chat actions",
               items: codeCommands
-                .filter((command) => command.enabled !== false)
+                .filter((command) => command.enabled !== false && command.keys !== ":")
                 .map((command) => ({
                   id: `code-command-${command.id}`,
                   label: command.label,
@@ -171,7 +155,7 @@ export function AppShell() {
           { label: "Settings", icon: Settings, onSelect: () => navigate("/settings") },
         ],
       },
-      settingsCommandGroup(restricted, navigate),
+      settingsCommandGroup(restricted, codeConfigured, navigate),
       {
         heading: "Theme",
         items: [

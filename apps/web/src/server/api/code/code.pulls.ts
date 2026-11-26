@@ -501,6 +501,12 @@ async function reconcile(pullId: string, now = Date.now()): Promise<number | nul
       reason: "The pull request was closed.",
       autofix: false,
     });
+    if (
+      projectSettings(project.settings).archiveOnMerge &&
+      !(await holdsUncommittedWork(services, project, found.thread.worktree))
+    ) {
+      await archiveThread(pull.threadId);
+    }
     return null;
   }
 
@@ -607,6 +613,17 @@ async function reconcile(pullId: string, now = Date.now()): Promise<number | nul
   return latest.yoloMethod && next !== null ? Math.min(next, YOLO_LOOK_MS) : next;
 }
 
+async function holdsUncommittedWork(
+  services: ReturnType<typeof codeGitHub>,
+  project: CodeProjectRow,
+  worktree: string | null,
+): Promise<boolean> {
+  if (!worktree) return false;
+  const ws = await services.workspace(project);
+  if (!(await ws.exists(worktree))) return false;
+  return (await ws.uncommitted(worktree)).length > 0;
+}
+
 async function archiveThread(threadId: string): Promise<void> {
   const target = codeHub()?.resolve(threadId);
   try {
@@ -616,7 +633,7 @@ async function archiveThread(threadId: string): Promise<void> {
     }
     await onProjectThreadArchived(threadId, true);
   } catch (error) {
-    logger.warn({ error, threadId }, "Code: could not archive a merged thread");
+    logger.warn({ error, threadId }, "Code: could not archive a finished thread");
   }
 }
 

@@ -167,6 +167,17 @@ async function* prompts(query: FakeQuery): AsyncGenerator<CodingSdkUserMessage> 
   }
 }
 
+export interface FakeTool {
+  name: string;
+  description: string;
+  handler: (args: Record<string, unknown>) => Promise<unknown>;
+}
+
+export interface FakeMcpServer {
+  name: string;
+  tools: FakeTool[];
+}
+
 export class FakeSdk implements CodingSdk {
   readonly queries: FakeQuery[] = [];
   readonly transcripts = new Map<string, CodingHistoryMessage[]>();
@@ -205,6 +216,14 @@ export class FakeSdk implements CodingSdk {
       (error: unknown) => query.out.push({ type: "__crash", error }),
     );
     return query;
+  }
+
+  tool(name: string, description: string, _shape: unknown, handler: FakeTool["handler"]): FakeTool {
+    return { name, description, handler };
+  }
+
+  createSdkMcpServer(options: { name: string; tools: unknown[] }): FakeMcpServer {
+    return { name: options.name, tools: options.tools as FakeTool[] };
   }
 
   async getSessionMessages(sessionId: string): Promise<CodingHistoryMessage[]> {

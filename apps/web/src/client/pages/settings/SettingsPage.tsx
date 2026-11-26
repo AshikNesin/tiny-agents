@@ -11,6 +11,8 @@ import { PhoneNotificationSettings } from "../../components/PhoneNotificationSet
 import { ToolDefaultsSettings } from "../../components/ToolDefaultsSettings";
 import { UpdatesSettings } from "../../components/UpdatesSettings";
 import { useViewerRole } from "../../store/people";
+import { useCodeStore } from "../../store/code";
+import { CodeSettingsSection } from "../code/CodeSettings";
 import { ModelsSettings } from "./models/ModelsSettings";
 import { settingsSectionsFor } from "./sections";
 
@@ -28,6 +30,9 @@ const ELEMENTS: Record<string, ReactNode> = {
   people: <PeopleSettings />,
   configuration: <AppSettings />,
   updates: <UpdatesSettings />,
+  projects: <CodeSettingsSection section="projects" />,
+  github: <CodeSettingsSection section="github" />,
+  reviews: <CodeSettingsSection section="reviews" />,
 };
 
 const LEGACY_TABS: Record<string, string> = { general: "account", claude: "models" };
@@ -36,9 +41,10 @@ export function SettingsPage() {
   const { pathname, search } = useLocation();
   const legacyTab = new URLSearchParams(search).get("tab");
   const restricted = useViewerRole() !== "owner";
+  const code = useCodeStore((s) => s.harnesses === null || s.harnesses.length > 0);
   const sections = useMemo<SettingsSection[]>(
-    () => settingsSectionsFor(restricted).map((s) => ({ ...s, element: ELEMENTS[s.id] })),
-    [restricted],
+    () => settingsSectionsFor(restricted, code).map((s) => ({ ...s, element: ELEMENTS[s.id] })),
+    [restricted, code],
   );
   if (legacyTab && pathname.replace(/\/+$/, "") === "/settings") {
     return <Navigate to={`/settings/${LEGACY_TABS[legacyTab] ?? legacyTab}`} replace />;

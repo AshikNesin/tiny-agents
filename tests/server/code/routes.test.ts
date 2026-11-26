@@ -366,8 +366,7 @@ describe("Code API", () => {
   });
 
   it("rejects odd ids, traversal and unknown settings before calling a harness", async () => {
-    const calls = () =>
-      shelley.seen.filter((s) => !/^\/api\/(stream2|conversations\/snapshot)/.test(s.url)).length;
+    const calls = () => shelley.seen.filter((s) => s.method === "POST").length;
     const before = calls();
     expect((await post("/threads/..%2Fx/interrupt")).status).toBe(404);
     expect((await post("/threads/shelley:cA/settings", { system_prompt: "pwned" })).status).toBe(
@@ -395,11 +394,14 @@ describe("Code API", () => {
       row("cB", { parent_conversation_id: "cA" }),
       row("cD", { parent_conversation_id: "cB" }),
     );
-    const archived = await post<{ moved: string[] }>("/threads/shelley:cA/archive", {
-      archived: true,
+    shelley.push({ conversation_list_patch: { patch: [] } });
+    await eventually(async () => {
+      const archived = await post<{ moved: string[] }>("/threads/shelley:cA/archive", {
+        archived: true,
+      });
+      expect(archived.status).toBe(200);
+      expect(archived.body.data?.moved).toEqual(["shelley:cB", "shelley:cD"]);
     });
-    expect(archived.status).toBe(200);
-    expect(archived.body.data?.moved).toEqual(["shelley:cB", "shelley:cD"]);
   });
 
   it("takes raw uploads and serves assets sandboxed", async () => {

@@ -68,7 +68,8 @@
           "replying": true,
           "approvals": 1,
           "questions": 0,
-          "pinnedAt": null
+          "pinnedAt": null,
+          "projectId": null
         }
       ]
     }

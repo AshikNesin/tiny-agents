@@ -13,6 +13,12 @@ import {
   type TestRuntimeOptions,
 } from "../../../../packages/agent/src/testing";
 import { createCodingToolkit } from "../../../../packages/agent/src/toolkits/coding";
+import { createMcpCapability, type McpToolInfo } from "../../../../packages/agent/src/mcp";
+import type { Capability } from "../../../../packages/agent/src/capabilities";
+import { connections, db, skills } from "../../../../apps/web/src/server/db";
+import { createSkillsCapability } from "../../../../packages/agent/src/skills";
+import { skillStore } from "../../../../apps/web/src/server/api/skills/skills.store";
+import { setOwnerToolPermissions } from "../../../../apps/web/src/server/api/bots/tool-permissions";
 import type {
   HarnessHost,
   HarnessInstance,
@@ -104,6 +110,7 @@ async function setup(
     exec?: NonNullable<Parameters<typeof fakeSandboxConnection>[0]>["exec"];
     tokensPerSecond?: number;
     settings?: TestRuntimeOptions["settings"];
+    capabilities?: Capability[];
   } = {},
 ): Promise<Setup> {
   const connection = fakeSandboxConnection({
@@ -111,7 +118,7 @@ async function setup(
   });
   const runtime = await openTestRuntime({
     storePath: ":memory:",
-    capabilities: [createCodingToolkit({ connection })],
+    capabilities: [createCodingToolkit({ connection }), ...(options.capabilities ?? [])],
     respondWith: brain,
     ...(options.tokensPerSecond ? { tokensPerSecond: options.tokensPerSecond } : {}),
     ...(options.settings ? { settings: options.settings } : {}),
@@ -617,6 +624,145 @@ describe("Native harness", () => {
 
     const ends = await waitTurnEnds(events, 2);
     expect(ends[1]!.outcome).toMatchObject({ failed: false, text: "Echo: go" });
+  });
+
+  it("offers the owner's shared connections on demand, under Settings > Tools", async () => {
+    const issues: McpToolInfo[] = [
+      {
+        name: "search_issues",
+        description: "Search issues",
+        inputSchema: { type: "object" },
+      },
+      {
+        name: "delete_issue",
+        description: "Delete an issue",
+        inputSchema: { type: "object" },
+      },
+    ];
+    const searched: string[] = [];
+    const linear = createMcpCapability({
+      slug: "linear",
+      name: "Linear",
+      url: "https://mcp.linear.test/mcp",
+      tools: issues,
+      shared: true,
+      call: async (tool) => {
+        searched.push(tool);
+        return { content: [{ type: "text", text: "LIN-7 Fix SSE" }] };
+      },
+    });
+    const diary = createMcpCapability({
+      slug: "diary",
+      name: "Diary",
+      url: "https://mcp.diary.test/mcp",
+      tools: [
+        {
+          name: "read_diary",
+          description: "Read the diary",
+          inputSchema: { type: "object" },
+        },
+      ],
+      call: async () => ({ content: [{ type: "text", text: "secret" }] }),
+    });
+    await db.insert(connections).values([
+      {
+        name: "Linear",
+        slug: "linear",
+        url: "https://mcp.linear.test/mcp",
+        allBots: true,
+      },
+      {
+        name: "Diary",
+        slug: "diary",
+        url: "https://mcp.diary.test/mcp",
+        allBots: false,
+      },
+    ]);
+    await setOwnerToolPermissions({
+      mcp__linear__search_issues: "allow",
+      mcp__linear__delete_issue: "off",
+    });
+    cleanups.push(async () => {
+      await db.delete(connections);
+      await setOwnerToolPermissions({});
+    });
+    const plan = [
+      fauxToolCall("tool_search", { query: "mcp:linear", limit: 2 }),
+      fauxToolCall("mcp__linear__search_issues", { query: "sse" }),
+    ];
+    const prompts: string[] = [];
+    const { harness, events } = await setup(
+      (context) => {
+        prompts.push(JSON.stringify(context.messages));
+        const next = plan[context.messages.filter((m) => m.role === "toolResult").length];
+        return next
+          ? { ...fauxAssistantMessage([next]), stopReason: "toolUse" as const }
+          : fauxAssistantMessage(fauxText("Found LIN-7"));
+      },
+      { capabilities: [linear, diary] },
+    );
+
+    const { nativeId } = await harness.createThread({
+      message: "find the SSE issue",
+      cwd: CWD,
+      permissionMode: "bypassPermissions",
+    });
+    const [ended] = await waitTurnEnds(events, 1);
+
+    expect(prompts[0]).toContain("- mcp:linear (1 tool): Linear, a connection.");
+    expect(prompts[0]).not.toContain("delete_issue");
+    expect(prompts[0]).not.toContain("diary");
+    expect(searched).toEqual(["search_issues"]);
+    expect(ended!.outcome).toMatchObject({
+      failed: false,
+      text: "Found LIN-7",
+    });
+    expect(kinds((await harness.getThread(nativeId)).items)).toContain(
+      "tool:mcp__linear__search_issues:done",
+    );
+  });
+
+  it("lists the owner's shared skills and loads one on demand", async () => {
+    await db.insert(skills).values([
+      {
+        name: "release-notes",
+        description: "Write release notes",
+        body: "Group changes by area.",
+        allBots: true,
+      },
+      { name: "diary", description: "Keep the diary", body: "Private.", allBots: false },
+    ]);
+    cleanups.push(async () => {
+      await db.delete(skills);
+    });
+    const plan = [fauxToolCall("load_skill", { name: "release-notes" })];
+    const prompts: string[] = [];
+    const offered: string[][] = [];
+    const { harness, events } = await setup(
+      (context) => {
+        prompts.push(JSON.stringify(context.messages));
+        const system = context.messages.find((message) => message.role === "system") as
+          | { toolsAdded?: { name: string }[] }
+          | undefined;
+        offered.push((system?.toolsAdded ?? []).map((tool) => tool.name));
+        const last = context.messages.at(-1);
+        if (last?.role === "toolResult") return fauxAssistantMessage(fauxText(textOf(last)));
+        const next = plan[context.messages.filter((m) => m.role === "toolResult").length];
+        return next
+          ? { ...fauxAssistantMessage([next]), stopReason: "toolUse" as const }
+          : fauxAssistantMessage(fauxText("done"));
+      },
+      { capabilities: [createSkillsCapability(skillStore)] },
+    );
+
+    await harness.createThread({ message: "write the notes", cwd: CWD });
+    const [ended] = await waitTurnEnds(events, 1);
+
+    expect(prompts[0]).toContain("- release-notes: Write release notes");
+    expect(prompts[0]).not.toContain("diary");
+    expect(offered[0]).toEqual(expect.arrayContaining(["load_skill", "read_skill_file"]));
+    expect(offered[0]).not.toContain("save_skill");
+    expect(ended!.outcome.text).toContain("Group changes by area.");
   });
 
   it("changes the model and the permission mode of a thread", async () => {

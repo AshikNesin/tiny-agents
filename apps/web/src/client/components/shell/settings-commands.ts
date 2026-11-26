@@ -5,9 +5,10 @@ import { settingsSectionsFor } from "../../pages/settings/sections";
 
 export function settingsCommandGroup(
   guest: boolean,
+  code: boolean,
   navigate: (to: string) => void,
 ): CommandGroupEntry {
-  const sections = settingsSectionsFor(guest);
+  const sections = settingsSectionsFor(guest, code);
   return {
     heading: "Settings",
     items: [

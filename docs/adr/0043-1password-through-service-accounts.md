@@ -1,4 +1,4 @@
-# 0042 — 1Password through service accounts; Connect is removed
+# 0043 — 1Password through service accounts; Connect is removed
 
 - Status: accepted (supersedes the Connect parts of
   [0027](0027-1password-connect-runs-inside-the-app.md); amends

@@ -9,16 +9,16 @@ The owner's coding workspace at `/code`: threads grouped by status on the left, 
 - `code-thread` shows the transcript streaming: thinking, a row per tool call, the answer.
 - `code-steer` `c` focuses the composer. `Enter` steers a running turn, `Alt+Enter` queues for its end, a queued message can be sent now or cancelled, and `Escape` leaves the composer, then stops the agent.
 - `code-pane` `1` Changes (the branch against its base), `2` Pull request, `\` hides or shows the pane, `[` the list.
-- `code-new` `n` opens the new thread dialog; `Enter` starts the thread in its own worktree and branch.
+- `code-new` with no thread open the page is the new thread box, and `n` focuses it; `Enter` starts the thread in its own worktree and branch.
 - `code-rewind` `t` runs the last turn again and `e` edits it first: the files go back to how they were before that turn, with Undo.
 - `code-files` `3` Files: the worktree as a folder tree with changed files marked; `p` filters it by name, `s` searches inside the files, a file opens beside the tree and saves with `⌘S`. `z` widens the work pane over the thread.
 - `code-terminal` `4` (or `` ` ``) opens the work pane's Terminal tab, a shell in the thread's worktree.
-- `code-commands` `:` opens the Code command menu: the page's commands and its threads.
+- `code-commands` `:` opens the command palette (the same one as ⌘K), which runs the page's commands and jumps to threads.
 - `code-keys` `?` lists every key; the command palette's `Code actions` group (`Chat actions` on the chat page) runs them.
 - `code-legacy-links` a link from before the rebuild (`/code/<thread id>`, with `/changes` or `/pr`) lands on `/code/t/<thread id>` with that pane.
 - `code-review-row` a pull request that waits for your review is a row under `Reviews` in the list; a click checks it out and opens `/code/reviews/<id>`. `v` takes a pasted link.
 - `code-agent-review` `r` has the agent review the pull request: a brief and findings. `y` adds a finding to your review as a pending comment, `d` dismisses it. `Shift+A` and `Shift+X` open Submit review on Approve or Request changes.
-- Not driven here: Code settings (`/code/settings`), which `tests/client/pages/code-settings.test.tsx` covers.
+- Not driven here: Code settings (`/settings/projects`, `/settings/github`, `/settings/reviews`), which `tests/client/pages/code-settings.test.tsx` covers.
 
 ## How to get to it (user POV)
 

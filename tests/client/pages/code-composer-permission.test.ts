@@ -2,7 +2,7 @@ import { describe, expect, it } from "vite-plus/test";
 import { composerPermission } from "@/pages/code/controls";
 
 describe("the new-thread composer's permission mode", () => {
-  it("starts in Bypass when the harness offers it", () => {
+  it("starts in YOLO when the harness offers it", () => {
     expect(
       composerPermission({
         permissionModes: ["default", "acceptEdits", "plan", "bypassPermissions"],
@@ -11,7 +11,7 @@ describe("the new-thread composer's permission mode", () => {
     ).toBe("bypassPermissions");
   });
 
-  it("falls back to the harness default when Bypass is not offered (a guest)", () => {
+  it("falls back to the harness default when YOLO is not offered (a guest)", () => {
     expect(
       composerPermission({
         permissionModes: ["default", "acceptEdits", "plan"],

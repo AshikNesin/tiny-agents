@@ -91,6 +91,7 @@ function seedStore(bots: Array<{ id: string; name: string; description: string }
       approvals: 0,
       questions: 0,
       pinnedAt: null,
+      projectId: null,
     })),
     canAnswer: true,
   });

@@ -12,4 +12,5 @@ export interface BotListEntry {
   approvals: number;
   questions: number;
   pinnedAt: Date | null;
+  projectId: string | null;
 }

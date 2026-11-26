@@ -23,10 +23,16 @@ import {
 } from "@tiny-agents/code/server";
 import type { ModelOption } from "@tiny-agents/code/contracts";
 import { appEnv, type AppEnv } from "../../env";
+import { TOOL_SEARCH_TOOLKIT } from "../bots/bot-toolkits";
+import { ownerToolPermissions } from "../bots/tool-permissions";
 import { sharedClaudeWorkerLocator } from "../bots/claude-worker";
 import { agentRuntimeReady, getAgentRuntime } from "../bots/bots.runtime";
 import { sandboxConnection } from "../bots/sandbox-host";
 import { threadIndex } from "./code.store";
+import { claudeCodeSkills, claudeCodeTools, sharedConnectionToolkits } from "./code.tools";
+import { sharedSkills } from "../skills/skills.store";
+
+const SKILLS_TOOLKIT = "skills";
 
 function harnessHost(): HarnessHost {
   return {
@@ -77,6 +83,8 @@ function claudeCodeHarness(env: AppEnv, host: HarnessHost): HarnessInstance | un
   return createClaudeCodeHarness({
     host,
     resolveWorker: () => locator.resolve(),
+    tools: claudeCodeTools(),
+    skills: claudeCodeSkills,
     status: () => hint ?? { state: "connected" },
     models: claudePlanModels,
   });
@@ -113,12 +121,26 @@ function nativeModels(runtime: AgentRuntime): ModelOption[] {
     .sort((a, b) => Number(b.isDefault ?? false) - Number(a.isDefault ?? false));
 }
 
-function nativeConfig(config: PiThreadConfig): BotAgentConfig {
+async function nativeConfig(config: PiThreadConfig): Promise<BotAgentConfig> {
+  const [shared, skills, owner] = await Promise.all([
+    sharedConnectionToolkits(),
+    sharedSkills(),
+    ownerToolPermissions(),
+  ]);
+  const coding = codingSelection(config.permissionMode);
   return {
     systemPrompt: "",
     modelId: config.modelId,
     cwd: config.cwd,
-    capabilities: codingSelection(config.permissionMode),
+    capabilities: {
+      enabled: [
+        ...coding.enabled,
+        ...(skills.length > 0 ? [SKILLS_TOOLKIT] : []),
+        ...shared,
+        ...(shared.length > 0 ? [TOOL_SEARCH_TOOLKIT] : []),
+      ],
+      permissions: { ...owner, ...coding.permissions, save_skill: "off" },
+    },
   };
 }
 
@@ -139,9 +161,14 @@ function asHarnessError(error: unknown): never {
 export function agentRuntimePort(runtime: () => AgentRuntime): PiPort {
   return {
     models: () => nativeModels(runtime()),
-    create: (config) => runtime().createConversation(nativeConfig(config)).catch(asHarnessError),
-    configure: (ref, config) =>
-      runtime().configure(ref, nativeConfig(config)).catch(asHarnessError),
+    create: async (config) =>
+      runtime()
+        .createConversation(await nativeConfig(config))
+        .catch(asHarnessError),
+    configure: async (ref, config) =>
+      runtime()
+        .configure(ref, await nativeConfig(config))
+        .catch(asHarnessError),
     submit: (ref, input) => runtime().submit(ref, input),
     abort: (ref) => runtime().abort(ref),
     withdraw: (ref, requestId) => runtime().withdraw(ref, requestId),

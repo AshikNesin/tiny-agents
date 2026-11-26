@@ -1,1 +1,1 @@
-export { createClaudeCodeHarness, type ClaudeCodeHarness } from "./driver";
+export { createClaudeCodeHarness, type AppToolPort, type ClaudeCodeHarness } from "./driver";

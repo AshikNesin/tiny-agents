@@ -1,12 +1,20 @@
 # Changelog
 
-## 0.15.1
+## 0.16.1
 
 ### Patch Changes
 
 - The Vault screen reads the server's new 1Password backend name (`onepassword`, for 1Password service
   accounts), so the 1Password card keeps its label and its **Move N local items here** button. The
   **Starting** badge is gone with the bundled Connect server it described.
+
+## 0.16.0
+
+### Minor Changes
+
+- An approval card has **Allow for every bot** next to **Always allow**, so you can let every bot use that
+  tool without asking. A skill's and a connection's screens have an **Every bot** switch, and new skills
+  reach every bot by default, bots you make later included.
 
 ## 0.15.0
 

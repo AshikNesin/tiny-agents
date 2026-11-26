@@ -42,6 +42,7 @@ function toListEntry(
     replying,
     ...waiting,
     pinnedAt: bot.pinnedAt,
+    projectId: bot.projectId,
   };
 }
 

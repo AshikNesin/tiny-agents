@@ -106,6 +106,10 @@ export function onConnectionChange(listener: (change: ConnectionChange) => void)
   return () => connectionListeners.delete(listener);
 }
 
+export function chatBots(bots: readonly BotListEntry[], owner: boolean): BotListEntry[] {
+  return owner ? bots.filter((bot) => !bot.projectId) : [...bots];
+}
+
 export const useBotsStore = create<BotsState>((set, get) => {
   const patchBots = (apply: (bot: BotListEntry) => BotListEntry) => {
     const patch = { seq: ++patchSeq, apply };

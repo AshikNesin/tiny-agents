@@ -54,9 +54,9 @@ Three columns: the thread list, the open thread, and a work pane with four
 tabs: Changes, Pull request, Files and Terminal. `Workspace.tsx` owns the
 layout.
 
-Every action has a key. `?` lists them. `:` opens the Code command menu
-(`CodeCommandMenu.tsx`): this page's commands and its threads, nothing from
-the rest of the app. The command palette (⌘K) also runs them by name. Plain letters act in the app; Shift letters post
+Every action has a key. `?` lists them. `:` opens the command palette, the
+same one as ⌘K: it runs this page's commands by name and jumps to threads,
+bots and the rest of the app. Plain letters act in the app; Shift letters post
 to GitHub. The list of keys is the `commands` array in
 `apps/web/src/client/pages/code/Workspace.tsx` (the workspace) and in
 `PullReview.tsx` (a PR review); `keys.tsx` binds them. The ones used most:
@@ -70,7 +70,7 @@ to GitHub. The list of keys is the `commands` array in
 | `1` `2` `3` `4` | Changes, Pull request, Files, Terminal                 |
 | `` ` `` `\` `[` | Show or hide the terminal, work pane, thread list      |
 | `z`             | Widen the work pane over the thread, and back          |
-| `:` `?`         | Run a command or jump to a thread; list the keys       |
+| `:` `?`         | Open the command palette; list the keys                |
 | `o`             | Open the worktree in Cursor or Zed                     |
 | `f` `a`         | Fix CI, Address comments                               |
 | `P` `M`         | Create the PR (or push to it), committing first; merge |
@@ -111,9 +111,11 @@ A harness that is not connected says so at the foot of the list, above
 `ThreadView.tsx`, `Composer.tsx`, `Transcript.tsx`. The header shows the
 project, the title, the branch and the pull request.
 
-**Start.** `n` (or `/code/new`) opens the new thread dialog: the project
-(the last one used is remembered), the agent when there are several, the
-model and the permission mode, and the task. Enter starts it. The thread
+**Start.** With no thread open, the page is the new thread box
+(`NewThread.tsx`), the way a new chat is: the task, with chips for the
+project (the last one used is remembered), the agent when there are
+several, the model and the permission mode. `n` (or `/code/new`) focuses it,
+and on a phone opens it over the list. Enter starts it. The thread
 gets its own worktree on a new branch from the freshly fetched base branch,
 and its first message starts with one line naming the branch and telling the
 agent to commit but not push.
@@ -261,20 +263,23 @@ pushes are listed under Auto-fix.
 
 A project is a GitHub repository cloned on the sandbox
 ([ADR 0021](../adr/0021-code-projects-and-worktrees.md),
-[ADR 0022](../adr/0022-github-through-gh-or-a-token.md)). **Settings** at
-the foot of the list opens `/code/settings` (`CodeSettings.tsx`):
+[ADR 0022](../adr/0022-github-through-gh-or-a-token.md)). Code's settings
+are sections of the app's Settings, in a **Code** group shown once a harness
+is set up (`CodeSettings.tsx`, `pages/settings/sections.ts`). **Settings** at
+the foot of the list opens Projects, and an old `/code/settings` link lands
+on the same section:
 
-- **GitHub** (`/code/settings/github`). Either save a fine-grained token
+- **GitHub** (`/settings/github`). Either save a fine-grained token
   for the project's repositories (kept as an `app` vault item for the
   `github` sink; API calls go from this server, and only `git push` runs on
   the sandbox, with the token on that command's stdin), or sign `gh` in with
   `gh auth login` from the Terminal page. The page says which is active and
   whom it acts as, and sets up the optional GitHub App (below).
-- **Projects** (`/code/settings/projects`). **Add a project:** `owner/name`
+- **Projects** (`/settings/projects`). **Add a project:** `owner/name`
   or a GitHub URL, or, with the GitHub App, a list of the repositories it is
   installed on. The app checks the sandbox has `git` (and `gh` without a
   token) and that the credential reaches the repository, then clones it.
-- **A project's page** (`/code/settings/projects/<id>`): its name, base
+- **A project's page** (`/settings/projects?project=<id>`): its name, base
   branch, branch prefix, default agent and model; the script overrides; the
   pull request switches; Auto-fix with its triggers, **Instructions for
   every workflow**, trusted review bots and protected paths; the Auto-fix
@@ -398,7 +403,7 @@ names are `WORKFLOW_LABEL` in `apps/web/src/shared/code-status.ts`.
 | **Fix issue**         | a new thread whose task contains a link to one of the project's issues |
 | **Review PR**         | `r` in a PR review                                                     |
 
-- **Fix issue.** Paste the issue's link into the new thread dialog. The app
+- **Fix issue.** Paste the issue's link into the new thread box. The app
   reads the issue from GitHub and adds its title and text to the first
   message (`issueFor` in `code.routes.ts`).
 - **By hand.** `POST /code/threads/:id/workflows/:name` starts one pass now.
@@ -583,7 +588,12 @@ Known limits (register row C7):
 
 Each project has one chat, a bot tied to it (`bots.project_id`), opened from
 the top of the Code sidebar and made on first open (`code.chat.ts`, ADR
-0040). On a phone the chat's menu button goes back to the thread list. It
+0040). On a phone the chat's menu button goes back to the thread list. The
+web Chat side leaves project chats out of the owner's bot list and the
+search palette's Bots, and a `/chats/<id>` link to one opens it here
+(`chatBots` in `store/bots.ts`). Its past chats keep their
+`/chats/<id>/history/<chat>` links, and a guest it is shared with still finds
+it in Chat. The Android app still lists them with the other bots. It
 coordinates instead of coding: its `project` toolkit
 (`createProjectToolkit` in `packages/agent/src/toolkits/code.ts`) starts and
 follows up threads of that project only, lists them with their state,
@@ -639,7 +649,12 @@ points to the thread for the rest.
   - `claude-code`: the worker's coding mode (`coding.*`) on its own Worker
     connection (`@tiny-agents/claude-worker/client`, shared with the bot
     engine: heartbeat, reconnect, resume, restart detection), SDK messages
-    and session history normalized.
+    and session history normalized. Shared connections reach it as one in-process
+    SDK MCP server per connection (`appServers` in
+    `packages/claude-worker/src/coding.ts`); a call comes back to the app as a
+    `tool_call` event and runs through `claudeCodeTools`
+    (`apps/web/src/server/api/code/code.tools.ts`), answered with
+    `coding.tool_result` (ADR 0042).
   - `pi`: the native harness (below). It takes the agent runtime through
     `PiPort` (`port.ts`), normalizes its chat state, and keeps its threads in
     the app's thread index.
@@ -716,8 +731,8 @@ points to the thread for the rest.
   - `lib/code/`: API, live thread hook, the status-grouped list, tool
     folding.
   - `store/code.ts`: the app-wide list stream.
-  - `pages/code/`: the workspace (`Workspace.tsx`); `CodeSettings.tsx` is
-    `/code/settings`.
+  - `pages/code/`: the workspace (`Workspace.tsx`); `CodeSettings.tsx` holds
+    the Projects, GitHub and Reviews sections of `/settings`.
 
 - **Git reads:** `@tiny-agents/git` (`packages/git`), one module for both
   panels and every harness (ADR 0025): the project workspace runs it over
@@ -746,8 +761,14 @@ chat bots use, with a working directory and five coding tools.
 - **Permission modes** are the Tool gate's per-tool permissions
   (`codingSelection`): Default asks before `write`, `edit` and `bash`;
   Accept edits asks before `bash` only; Plan takes the three away and tells
-  the agent to plan; Bypass asks for nothing. A call that asks is an
+  the agent to plan; YOLO (`bypassPermissions`) asks for nothing. A call that asks is an
   approval card, and the agent's own question is a question card.
+- **Connections:** every connection shared with every bot (`allBots`) is
+  offered, deferred behind `tool_search`, with Settings > Tools deciding
+  allow, ask or off ([ADR 0042](../adr/0042-code-threads-use-shared-connections.md)).
+  The mode's permissions cover only the coding tools.
+- **Skills:** every skill shared with every bot is listed by name and
+  description, and `load_skill` reads one; `save_skill` is off (ADR 0042).
 - **While it works:** a message steers (it joins after the running tool
   round, and waits in the queue until then) or is held with the queue
   button. A held message can be sent now, which makes it a steer, or

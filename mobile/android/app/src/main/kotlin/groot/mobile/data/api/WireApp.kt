@@ -458,6 +458,7 @@ data class Skill(
     val source: String,
     val sourceUrl: String?,
     val botIds: List<String>,
+    val allBots: Boolean = false,
 ) {
     companion object {
         fun from(json: JSONObject) = Skill(
@@ -469,6 +470,7 @@ data class Skill(
             source = json.string("source", "manual"),
             sourceUrl = json.stringOrNull("sourceUrl"),
             botIds = json.arr("botIds").strings(),
+            allBots = json.bool("allBots"),
         )
     }
 }
@@ -513,6 +515,7 @@ data class Connection(
     val error: String?,
     val tools: List<ConnectionTool>,
     val botIds: List<String>,
+    val allBots: Boolean = false,
 ) {
     companion object {
         fun from(json: JSONObject) = Connection(
@@ -526,6 +529,7 @@ data class Connection(
                 ConnectionTool(t.string("name"), t.string("serverName"), t.string("label"), t.string("description"), t.bool("readOnly"), t.bool("enabled", true))
             },
             botIds = json.arr("botIds").strings(),
+            allBots = json.bool("allBots"),
         )
     }
 }
