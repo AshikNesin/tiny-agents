@@ -7,7 +7,7 @@ and `pnpm verify:static` runs the gates CI runs. Guides start at
 
 ## Rules and their enforcers
 
-R1 to R17 are lint rules in `scripts/lint/boundaries.ts`, run by `pnpm check`.
+R1 to R18 are lint rules in `scripts/lint/boundaries.ts`, run by `pnpm check`.
 
 | Rule                                                                                                                                                                                       | Enforcer                                                                         |
 | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------- |
@@ -16,6 +16,7 @@ R1 to R17 are lint rules in `scripts/lint/boundaries.ts`, run by `pnpm check`.
 | `packages/core/src` uses Web APIs, not `node:` modules.                                                                                                                                    | R2                                                                               |
 | Read env through `appEnv()` or core `env`, never `process.env`.                                                                                                                            | R3                                                                               |
 | Import `cn` from `@groot/ui/lib/utils`.                                                                                                                                                    | R4                                                                               |
+| UI primitives (Radix, Base UI, `@shadcn/react`, cmdk) are imported only in `packages/ui`; pages use `@groot/ui`.                                                                           | R18                                                                              |
 | Render breadcrumbs with `Breadcrumbs` from `@groot/ui/breadcrumb`.                                                                                                                         | R5a, R5b, R5c                                                                    |
 | Code and every test under `tests/` typecheck.                                                                                                                                              | `pnpm typecheck`, run by the pre-push hook                                       |
 | No unused file or export.                                                                                                                                                                  | `pnpm check:dead`                                                                |
