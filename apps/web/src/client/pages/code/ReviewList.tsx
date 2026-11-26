@@ -126,7 +126,7 @@ export function ReviewList({
       <div className="flex items-center pr-1 pb-1">
         <h2 className="text-muted-foreground flex-1 px-2 text-xs font-medium">Reviews</h2>
         <Link
-          to="/code/settings/reviews"
+          to="/settings/reviews"
           aria-label="Review list filters"
           title="Choose what this list shows"
           className="text-muted-foreground hover:text-foreground hover:bg-sidebar-accent/60 flex size-5 items-center justify-center rounded outline-none focus-visible:ring-2 focus-visible:ring-ring/50"

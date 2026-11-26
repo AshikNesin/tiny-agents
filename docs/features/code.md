@@ -261,20 +261,23 @@ pushes are listed under Auto-fix.
 
 A project is a GitHub repository cloned on the sandbox
 ([ADR 0021](../adr/0021-code-projects-and-worktrees.md),
-[ADR 0022](../adr/0022-github-through-gh-or-a-token.md)). **Settings** at
-the foot of the list opens `/code/settings` (`CodeSettings.tsx`):
+[ADR 0022](../adr/0022-github-through-gh-or-a-token.md)). Code's settings
+are sections of the app's Settings, in a **Code** group shown once a harness
+is set up (`CodeSettings.tsx`, `pages/settings/sections.ts`). **Settings** at
+the foot of the list opens Projects, and an old `/code/settings` link lands
+on the same section:
 
-- **GitHub** (`/code/settings/github`). Either save a fine-grained token
+- **GitHub** (`/settings/github`). Either save a fine-grained token
   for the project's repositories (kept as an `app` vault item for the
   `github` sink; API calls go from this server, and only `git push` runs on
   the sandbox, with the token on that command's stdin), or sign `gh` in with
   `gh auth login` from the Terminal page. The page says which is active and
   whom it acts as, and sets up the optional GitHub App (below).
-- **Projects** (`/code/settings/projects`). **Add a project:** `owner/name`
+- **Projects** (`/settings/projects`). **Add a project:** `owner/name`
   or a GitHub URL, or, with the GitHub App, a list of the repositories it is
   installed on. The app checks the sandbox has `git` (and `gh` without a
   token) and that the credential reaches the repository, then clones it.
-- **A project's page** (`/code/settings/projects/<id>`): its name, base
+- **A project's page** (`/settings/projects?project=<id>`): its name, base
   branch, branch prefix, default agent and model; the script overrides; the
   pull request switches; Auto-fix with its triggers, **Instructions for
   every workflow**, trusted review bots and protected paths; the Auto-fix
@@ -724,8 +727,8 @@ points to the thread for the rest.
   - `lib/code/`: API, live thread hook, the status-grouped list, tool
     folding.
   - `store/code.ts`: the app-wide list stream.
-  - `pages/code/`: the workspace (`Workspace.tsx`); `CodeSettings.tsx` is
-    `/code/settings`.
+  - `pages/code/`: the workspace (`Workspace.tsx`); `CodeSettings.tsx` holds
+    the Projects, GitHub and Reviews sections of `/settings`.
 
 - **Git reads:** `@tiny-agents/git` (`packages/git`), one module for both
   panels and every harness (ADR 0025): the project workspace runs it over

@@ -6,6 +6,8 @@ import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { ConfirmProvider } from "@groot/ui/primitives";
 import { NO_CAPABILITIES } from "@tiny-agents/code/contracts";
 import { CodeWorkspace } from "@/pages/code/Workspace";
+import { LegacyCodeSettings } from "@/pages/code/CodeSettings";
+import { SettingsPage } from "@/pages/settings/SettingsPage";
 import { useCodeStore } from "@/store/code";
 import { usePeopleStore } from "@/store/people";
 import type { HarnessInfo } from "@/lib/code/api";
@@ -117,16 +119,15 @@ function renderAt(path: string) {
     <ConfirmProvider>
       <MemoryRouter initialEntries={[path]}>
         <Routes>
-          {[
-            "/code",
-            "/code/new",
-            "/code/settings",
-            "/code/settings/:section",
-            "/code/settings/projects/:projectId",
-            "/code/:conversationId",
-          ].map((p) => (
+          {["/code", "/code/new", "/code/:conversationId"].map((p) => (
             <Route key={p} path={p} element={<CodeWorkspace />} />
           ))}
+          {["/code/settings", "/code/settings/:section", "/code/settings/projects/:projectId"].map(
+            (p) => (
+              <Route key={p} path={p} element={<LegacyCodeSettings />} />
+            ),
+          )}
+          <Route path="/settings/*" element={<SettingsPage />} />
         </Routes>
         <Where />
       </MemoryRouter>
@@ -142,23 +143,39 @@ beforeEach(() => {
 });
 
 describe("Code settings", () => {
+  it("lives in the app's Settings, beside its other sections", async () => {
+    renderAt("/settings/projects");
+    const nav = await screen.findByRole("navigation", { name: /settings/i });
+    for (const name of ["Models", "Projects", "GitHub", "Reviews"]) {
+      expect(within(nav).getByRole("link", { name: new RegExp(name) })).toBeInTheDocument();
+    }
+  });
+
+  it("sends an old Code settings link to the same page in Settings", async () => {
+    renderAt("/code/settings/projects/p1");
+    await waitFor(() =>
+      expect(screen.getByTestId("where")).toHaveTextContent("/settings/projects?project=p1"),
+    );
+    expect(await screen.findByRole("textbox", { name: "Base branch" })).toHaveValue("main");
+  });
+
   it("lists the projects as pages, not a dialog", async () => {
-    renderAt("/code/settings/projects");
+    renderAt("/settings/projects");
     const main = await screen.findByRole("main");
     const link = await within(main).findByRole("link", { name: /tiny-agents/ });
-    expect(link).toHaveAttribute("href", "/code/settings/projects/p1");
+    expect(link).toHaveAttribute("href", "/settings/projects?project=p1");
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
   it("starts Add a project with the repository the Reviews screen asked for (#386)", async () => {
-    renderAt("/code/settings/projects?repo=other%2Flib");
+    renderAt("/settings/projects?repo=other%2Flib");
     const add = await screen.findByRole("button", { name: "Add" });
     await waitFor(() => expect(add).toBeEnabled());
     expect(await screen.findByText("other/lib")).toBeInTheDocument();
   });
 
   it("saves each project setting on its own page", async () => {
-    renderAt("/code/settings/projects/p1");
+    renderAt("/settings/projects?project=p1");
     const branch = await screen.findByRole("textbox", { name: "Base branch" });
     expect(branch).toHaveValue("main");
     await userEvent.clear(branch);
@@ -216,9 +233,7 @@ describe("Code settings", () => {
 
   it("returns from GitHub's App setup to the GitHub settings page", async () => {
     renderAt("/code?github=installed");
-    await waitFor(() =>
-      expect(screen.getByTestId("where")).toHaveTextContent("/code/settings/github"),
-    );
+    await waitFor(() => expect(screen.getByTestId("where")).toHaveTextContent("/settings/github"));
     expect(await screen.findByText("nesinio-tiny-agents")).toBeInTheDocument();
   });
 
@@ -232,7 +247,7 @@ describe("Code settings", () => {
 
 describe("Review list settings", () => {
   it("saves what the sidebar's Reviews list leaves out", async () => {
-    renderAt("/code/settings/reviews");
+    renderAt("/settings/reviews");
 
     const direct = await screen.findByRole("switch", { name: "Only requests to you" });
     expect(direct).toBeChecked();

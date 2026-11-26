@@ -4,6 +4,9 @@ import {
   Cpu,
   Download,
   FileJson,
+  FolderGit2,
+  GitBranch,
+  GitPullRequest,
   Palette,
   ShieldCheck,
   UserRound,
@@ -99,8 +102,37 @@ const OWNER_SECTIONS: SettingsSectionInfo[] = [
   },
 ];
 
+const CODE_SECTIONS: SettingsSectionInfo[] = [
+  {
+    id: "projects",
+    label: "Projects",
+    group: "Code",
+    icon: FolderGit2,
+    description:
+      "A project is a GitHub repository checked out on the sandbox. Each thread started in it gets its own worktree and branch, and can publish a pull request.",
+    keywords: ["repository", "repo", "worktree", "branch", "instructions", "scripts", "auto-fix"],
+  },
+  {
+    id: "github",
+    label: "GitHub",
+    group: "Code",
+    icon: GitBranch,
+    description: "How Code reaches GitHub: gh on the sandbox, a token, or a GitHub App.",
+    keywords: ["token", "gh", "app", "webhook", "credential"],
+  },
+  {
+    id: "reviews",
+    label: "Reviews",
+    group: "Code",
+    icon: GitPullRequest,
+    description: "What the Reviews list in the Code sidebar shows from GitHub.",
+    keywords: ["pull requests", "review requests", "drafts", "bots", "filters"],
+  },
+];
+
 const GUEST_SECTION_IDS = new Set(["appearance", "security"]);
 
-export function settingsSectionsFor(guest: boolean): SettingsSectionInfo[] {
-  return guest ? OWNER_SECTIONS.filter((s) => GUEST_SECTION_IDS.has(s.id)) : OWNER_SECTIONS;
+export function settingsSectionsFor(guest: boolean, code: boolean): SettingsSectionInfo[] {
+  if (guest) return OWNER_SECTIONS.filter((s) => GUEST_SECTION_IDS.has(s.id));
+  return code ? [...OWNER_SECTIONS, ...CODE_SECTIONS] : OWNER_SECTIONS;
 }
