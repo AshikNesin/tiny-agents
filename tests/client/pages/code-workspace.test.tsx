@@ -413,6 +413,27 @@ describe("the Code workspace", () => {
     expect(screen.queryByText(/starts it/)).toBeNull();
   });
 
+  it("keeps the project it picked for you when another project's thread updates", async () => {
+    more.projects = [
+      { ...project, id: "p2", name: "api", repo: { owner: "acme", name: "api" } },
+      { ...project, id: "p3", name: "docs", repo: { owner: "acme", name: "docs" } },
+    ];
+    useCodeStore.setState({ threads: [thread("a", { projectId: "p3" })] });
+    renderAt("/code");
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Project" })).toHaveTextContent("docs"),
+    );
+    act(() => {
+      useCodeStore.setState({
+        threads: [
+          thread("a", { projectId: "p3" }),
+          thread("b", { projectId: "p2", updatedAt: "2026-11-06T00:00:00Z" }),
+        ],
+      });
+    });
+    expect(screen.getByRole("button", { name: "Project" })).toHaveTextContent("docs");
+  });
+
   it("searches projects, with the ones you worked in lately under Recent and picked first", async () => {
     more.projects = [
       { ...project, id: "p2", name: "api", repo: { owner: "acme", name: "api" } },

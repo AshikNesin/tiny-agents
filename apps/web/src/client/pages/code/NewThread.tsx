@@ -61,7 +61,7 @@ function useProjectOptions(projects: ProjectView[] | null): {
   latest: string | undefined;
 } {
   const threads = useCodeStore((s) => s.threads);
-  return useMemo(() => {
+  const ranked = useMemo(() => {
     const lastUsed = new Map<string, string>();
     for (const thread of threads ?? []) {
       if (!thread.projectId) continue;
@@ -93,6 +93,10 @@ function useProjectOptions(projects: ProjectView[] | null): {
       latest: recent[0]?.id,
     };
   }, [projects, threads]);
+  const loaded = projects !== null && threads !== null;
+  const [latest, setLatest] = useState<string | null>(null);
+  if (loaded && latest === null) setLatest(ranked.latest ?? "");
+  return { options: ranked.options, latest: latest || undefined };
 }
 
 export function NewThread({
