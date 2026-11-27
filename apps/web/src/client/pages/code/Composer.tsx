@@ -59,6 +59,14 @@ function tokenAt(
   return undefined;
 }
 
+interface Suggestion {
+  value: string;
+  label: string;
+  detail?: string;
+  dir?: boolean;
+  skill?: boolean;
+}
+
 function quoteRef(path: string): string {
   return /[\s,:()"]/.test(path) ? `"${path.replace(/"/g, '\\"')}"` : path;
 }
@@ -115,15 +123,7 @@ export function Composer({
   const [sending, setSending] = useState(false);
   const [skillsWanted, setSkillsWanted] = useState(false);
   const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
-  const [suggestions, setSuggestions] = useState<
-    Array<{
-      value: string;
-      label: string;
-      detail?: string;
-      dir?: boolean;
-      skill?: boolean;
-    }>
-  >([]);
+  const [fileSuggestions, setFileSuggestions] = useState<Suggestion[]>([]);
   const [active, setActive] = useState(0);
   const [token, setToken] = useState<ReturnType<typeof tokenAt>>();
   const [dragging, setDragging] = useState(false);
@@ -163,37 +163,6 @@ export function Composer({
     return Array.isArray(skillsQuery.data) ? skillsQuery.data : [];
   }, [skillsQuery.isError, skillsQuery.data]);
 
-  useEffect(() => {
-    if (!token) {
-      setSuggestions([]);
-      return;
-    }
-    if (token.kind === "/") {
-      setSuggestions([
-        ...commands
-          .filter((c) => c.command.slice(1).startsWith(token.query))
-          .map((c) => ({
-            value: c.command,
-            label: c.command,
-            detail: c.hint,
-          })),
-        ...(skills ?? [])
-          .filter((s) => s.name.startsWith(token.query) && !selectedSkills.includes(s.name))
-          .map((s) => ({
-            value: s.name,
-            label: s.name,
-            detail: s.description,
-            skill: true,
-          })),
-      ]);
-      setActive(0);
-      return;
-    }
-    if (!cwd || !canFind) {
-      setSuggestions([]);
-      return;
-    }
-  }, [token, cwd, canFind, commands, skills, selectedSkills]);
   const fileQuery = token && token.kind !== "/" && cwd && canFind ? token.query : null;
   const files = useQuery({
     queryKey: ["code", "find-files", harness.id, cwd, fileQuery],
@@ -212,10 +181,27 @@ export function Composer({
     ...RESOURCE_QUERY,
   });
   useEffect(() => {
-    if (fileQuery === null || !files.data || files.isPlaceholderData) return;
-    setSuggestions(files.data);
+    if (fileQuery === null) {
+      setFileSuggestions([]);
+      return;
+    }
+    if (!files.data || files.isPlaceholderData) return;
+    setFileSuggestions(files.data);
     setActive(0);
   }, [fileQuery, files.data, files.isPlaceholderData]);
+  const slashQuery = token?.kind === "/" ? token.query : null;
+  const slashSuggestions = useMemo<Suggestion[]>(() => {
+    if (slashQuery === null) return [];
+    return [
+      ...commands
+        .filter((c) => c.command.slice(1).startsWith(slashQuery))
+        .map((c) => ({ value: c.command, label: c.command, detail: c.hint })),
+      ...(skills ?? [])
+        .filter((s) => s.name.startsWith(slashQuery) && !selectedSkills.includes(s.name))
+        .map((s) => ({ value: s.name, label: s.name, detail: s.description, skill: true })),
+    ];
+  }, [slashQuery, commands, skills, selectedSkills]);
+  const suggestions = slashQuery !== null ? slashSuggestions : token ? fileSuggestions : [];
 
   const stagedRef = useRef(attachments);
   useEffect(() => {
@@ -317,7 +303,11 @@ export function Composer({
     }
   };
 
-  const updateToken = (value: string, cursor: number) => setToken(tokenAt(value, cursor));
+  const updateToken = (value: string, cursor: number) => {
+    const found = tokenAt(value, cursor);
+    if (found?.kind !== token?.kind || found?.query !== token?.query) setActive(0);
+    setToken(found);
+  };
 
   const showStop = working && !hasContent(draft) && Boolean(onStop);
 
