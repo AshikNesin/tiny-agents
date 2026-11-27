@@ -100,6 +100,12 @@ describe("gate selection", () => {
       'Unknown gate job "nope". Jobs: typecheck, lint, gates, migrations.',
     );
   });
+
+  it("puts every gate in exactly one CI job", () => {
+    const inCi = GATE_JOBS.flatMap((job) => selectGates(["--job", job]).gates ?? []);
+    expect(inCi.map((gate) => gate.name).sort()).toEqual(gates.map((gate) => gate.name).sort());
+    expect(new Set(gates.map((gate) => gate.run)).size).toBe(gates.length);
+  });
 });
 
 describe("budgets", () => {

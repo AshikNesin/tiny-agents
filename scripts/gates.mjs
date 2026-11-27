@@ -55,7 +55,6 @@ export const gates = [
     run: "pnpm check:merge-main --base origin/${GITHUB_BASE_REF:-main}",
   },
   { name: "Checks coverage", run: "pnpm check:coverage" },
-  { name: "Lint & format check", run: "pnpm check" },
   { name: "Doc references", run: "pnpm check:doc-refs" },
   { name: "Action pinning", run: "pnpm check:action-pinning" },
   { name: "Rule table", run: "pnpm exec tsx scripts/check-rule-table.ts" },
@@ -161,7 +160,7 @@ export function selectGates(argv) {
   if (!GATE_JOBS.includes(job)) {
     return { error: `Unknown gate job "${job}". Jobs: ${GATE_JOBS.join(", ")}.` };
   }
-  return { gates: gates.filter((gate) => gate.job === job) };
+  return { gates: gates.filter((gate) => (gate.job ?? "gates") === job) };
 }
 
 async function runGates() {
