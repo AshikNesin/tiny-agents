@@ -252,7 +252,8 @@ export function createLocalBackend(): VaultBackend {
       return new SecretValue(value);
     },
     async create(draft, policy = "") {
-      return insertLocalItem(db, draft, policy);
+      const externalId = insertLocalItem(db, draft, policy);
+      return { externalId, summary: summarize(externalId, readItem(db, externalId)) };
     },
     async update(externalId, draft) {
       db.transaction((tx) => writeLocalItem(tx, externalId, draft));

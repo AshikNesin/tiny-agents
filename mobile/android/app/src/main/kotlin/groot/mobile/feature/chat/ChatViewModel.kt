@@ -69,6 +69,9 @@ class ChatViewModel(private val container: AppContainer, val botId: String) : Vi
 
     private var picked: List<PickedMention> = emptyList()
 
+    private val _fillingCredentials = MutableStateFlow(false)
+    val fillingCredentials: StateFlow<Boolean> = _fillingCredentials.asStateFlow()
+
     private val _skills = MutableStateFlow<List<Skill>>(emptyList())
     val skills: StateFlow<List<Skill>> = _skills.asStateFlow()
 
@@ -220,9 +223,16 @@ class ChatViewModel(private val container: AppContainer, val botId: String) : Vi
         container.bots.refresh()
     }
 
-    fun submitCredentials(taskId: Int, values: Map<String, String>, save: Boolean, stepUp: String?, done: () -> Unit) = act("Could not fill the sign-in.") {
-        container.api.submitCredentials(taskId, values, save, stepUp)
-        done()
+    fun submitCredentials(taskId: Int, values: Map<String, String>, save: Boolean, stepUp: String?, done: () -> Unit) {
+        if (!_fillingCredentials.compareAndSet(false, true)) return
+        act("Could not fill the sign-in.") {
+            try {
+                container.api.submitCredentials(taskId, values, save, stepUp)
+                done()
+            } finally {
+                _fillingCredentials.value = false
+            }
+        }
     }
 
     fun cancelCredentials(taskId: Int) = act("Could not cancel the request.") { container.api.cancelCredentialRequest(taskId) }

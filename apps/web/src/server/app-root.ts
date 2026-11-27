@@ -24,7 +24,7 @@ import type { SupervisorChannel } from "./api/system/updates.service";
 import type { VapidKeys } from "@groot/core/notification/webpush.crypto";
 import type { BackendItemSummary, BackendName, VaultBackend } from "./api/vault/backends/types";
 import type { OnePasswordConnector } from "./api/vault/backends/onepassword";
-import type { BackendStatus } from "../shared/api/vault";
+import type { BackendStatus, CredentialSubmitted } from "../shared/api/vault";
 
 export interface App {
   runtime: AgentRuntime | undefined;
@@ -66,7 +66,7 @@ export interface App {
       write: Map<BackendName, VaultBackend>;
     };
   };
-  submittingRequests: Set<number>;
+  submittingRequests: Map<number, Promise<CredentialSubmitted>>;
   modelRuntime?: Pick<AgentRuntime, "applyModelConfig">;
   modelListeners: Set<() => void>;
   updatesChannel?: SupervisorChannel;
@@ -95,7 +95,7 @@ function emptyApp(): App {
     liveAccess: new Set(),
     vaultStepUps: new Map(),
     vault: { backendStatus: new Map(), appValues: new Map() },
-    submittingRequests: new Set(),
+    submittingRequests: new Map(),
     modelListeners: new Set(),
     updateStatus: null,
     updatesUnlisten: () => {},

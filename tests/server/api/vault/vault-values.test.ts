@@ -64,7 +64,7 @@ const draft = (title: string) => ({
 describe("C11: no lost writes, no empty list", () => {
   it("lists every one of many items created at once (no shared index to race on)", async () => {
     const ids = await Promise.all(
-      Array.from({ length: 20 }, (_, i) => local.create!(draft(`k${i}`))),
+      Array.from({ length: 20 }, async (_, i) => (await local.create!(draft(`k${i}`))).externalId),
     );
     const listing = await local.listCandidates();
     expect(listing.items.map((item) => item.externalId).sort()).toEqual([...ids].sort());
@@ -72,11 +72,13 @@ describe("C11: no lost writes, no empty list", () => {
   });
 
   it("keeps both of two edits to one item made at once", async () => {
-    const id = await local.create!({
-      kind: "login",
-      title: "Both",
-      values: { username: "a", password: "b" },
-    });
+    const id = (
+      await local.create!({
+        kind: "login",
+        title: "Both",
+        values: { username: "a", password: "b" },
+      })
+    ).externalId;
     await Promise.all([
       local.update!(id, { values: { username: "a2" } }),
       local.update!(id, { values: { password: "b2" } }),
@@ -88,9 +90,9 @@ describe("C11: no lost writes, no empty list", () => {
   });
 
   it("lists the rest when one item can't be read, and shows that one as unreadable", async () => {
-    const good = await local.create!(draft("good"));
-    const bad = await local.create!(draft("bad"));
-    const later = await local.create!(draft("later"));
+    const good = (await local.create!(draft("good"))).externalId;
+    const bad = (await local.create!(draft("bad"))).externalId;
+    const later = (await local.create!(draft("later"))).externalId;
     await db
       .update(vaultValues)
       .set({ sealed: "v2:not:a:real:value" })
@@ -182,7 +184,7 @@ describe("S11: every read checks the authoritative policy", () => {
   });
 
   it("an unlinked item opens only under the digest it was sealed under", async () => {
-    const id = await local.create!(draft("loose"), "its-digest");
+    const id = (await local.create!(draft("loose"), "its-digest")).externalId;
     expect((await local.describe(id)).title).toBe("loose");
     await editStoredDigest(id);
     await expect(local.describe(id)).rejects.toThrow(/doesn't match/);
@@ -297,15 +299,17 @@ describe("S11: every read checks the authoritative policy", () => {
   });
 
   it("two links of one value at once: one wins, the other is refused, it still opens", async () => {
-    const id = await local.create!(
-      {
-        kind: "login",
-        title: "Shop",
-        urls: ["https://shop.example.com"],
-        values: { password: "s" },
-      },
-      "",
-    );
+    const id = (
+      await local.create!(
+        {
+          kind: "login",
+          title: "Shop",
+          urls: ["https://shop.example.com"],
+          values: { password: "s" },
+        },
+        "",
+      )
+    ).externalId;
     const results = await Promise.allSettled([
       linkItem({ backend: "local", externalId: id, policy: login("shop-a").policy }),
       linkItem({
@@ -333,15 +337,17 @@ describe("S11: every read checks the authoritative policy", () => {
   });
 
   it("links an unlinked value under the new row's policy", async () => {
-    const id = await local.create!(
-      {
-        kind: "login",
-        title: "Shop",
-        urls: ["https://shop.example.com"],
-        values: { password: "s" },
-      },
-      "",
-    );
+    const id = (
+      await local.create!(
+        {
+          kind: "login",
+          title: "Shop",
+          urls: ["https://shop.example.com"],
+          values: { password: "s" },
+        },
+        "",
+      )
+    ).externalId;
     await linkItem({ backend: "local", externalId: id, policy: login("shop").policy });
     const row = (await findItem("shop"))!;
     expect(row.originsJson).toBe('["https://shop.example.com"]');

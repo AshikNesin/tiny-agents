@@ -223,9 +223,11 @@ fun ChatPane(
     }
     credentials?.let { call ->
         val gate = rememberStepUpGate()
+        val filling by viewModel.fillingCredentials.collectAsStateWithLifecycle()
         CredentialSheet(
             call = call,
             botName = bot.name,
+            filling = filling,
             onSubmit = { values, save ->
                 call.taskId?.let { taskId ->
                     if (save) {

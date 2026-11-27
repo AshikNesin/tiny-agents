@@ -39,10 +39,15 @@ export interface VaultBackend {
   listCandidates(): Promise<CandidateListing>;
   describe(externalId: string): Promise<BackendItemSummary>;
   resolve(externalId: string, field: ValueField): Promise<SecretValue>;
-  create?(draft: ItemDraft, policy?: string): Promise<string>;
+  create?(draft: ItemDraft, policy?: string): Promise<CreatedItem>;
   update?(externalId: string, draft: Partial<ItemDraft>): Promise<void>;
   remove?(externalId: string): Promise<void>;
   rebind?<T extends PolicyColumns>(externalId: string, writeRow: (tx: DbTx) => T): Promise<T>;
+}
+
+interface CreatedItem {
+  externalId: string;
+  summary: BackendItemSummary;
 }
 
 export type DbTx = Pick<AppDatabase, "select" | "insert" | "update" | "delete">;

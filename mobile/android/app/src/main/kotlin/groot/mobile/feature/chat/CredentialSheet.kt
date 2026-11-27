@@ -26,6 +26,7 @@ import groot.mobile.ui.components.Sheet
 fun CredentialSheet(
     call: ToolCall,
     botName: String,
+    filling: Boolean,
     onSubmit: (values: Map<String, String>, save: Boolean) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -61,8 +62,9 @@ fun CredentialSheet(
         }
         val complete = request.fields.all { !it.required || !values[it.key].isNullOrEmpty() }
         PrimaryButton(
-            "Fill it in",
-            enabled = complete,
+            if (filling) "Filling\u2026" else "Fill it in",
+            enabled = complete && !filling,
+            loading = filling,
             onClick = { onSubmit(values.filterValues { it.isNotEmpty() }, save) },
             modifier = Modifier.fillMaxWidth(),
         )

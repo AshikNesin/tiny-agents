@@ -1,6 +1,6 @@
 {
   "name": "groot-mobile",
-  "version": "0.17.2",
+  "version": "0.17.3",
   "private": true,
   "description": "Minimal native Android + iOS boilerplate with groot-style sync.",
   "type": "module",
