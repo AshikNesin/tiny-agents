@@ -149,11 +149,17 @@ export function CredentialRequestForm({
               ) : (
                 <Input
                   id={id}
-                  type={field.type === "email" ? "email" : "text"}
+                  type="text"
                   value={values[field.key] ?? ""}
                   onChange={(event) => set(event.target.value)}
                   autoComplete={field.autocomplete}
-                  inputMode={field.type === "expiry" ? "numeric" : undefined}
+                  inputMode={
+                    field.type === "expiry"
+                      ? "numeric"
+                      : field.type === "email"
+                        ? "email"
+                        : undefined
+                  }
                 />
               )}
             </Field>
