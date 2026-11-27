@@ -73,7 +73,7 @@ function claudeCodeHarness(env: AppEnv, host: HarnessHost): HarnessInstance | un
     void locator
       .account()
       .then((account) => {
-        hint = claudeCodeStatus(account);
+        hint = claudeSignInHint(account);
       })
       .catch(keepTheLastHintWhileTheWorkerIsUnreachable);
   const harness = createClaudeCodeHarness({
@@ -105,7 +105,7 @@ function keepTheLastHintWhileTheWorkerIsUnreachable(): void {}
 
 type ClaudeAccount = Awaited<ReturnType<ClaudeWorkerLocator["account"]>>;
 
-function claudeCodeStatus(account: ClaudeAccount): InstanceStatus | undefined {
+function claudeSignInHint(account: ClaudeAccount): InstanceStatus | undefined {
   if (account.state === "ready" && !account.subscription) {
     return {
       state: "reconnecting",

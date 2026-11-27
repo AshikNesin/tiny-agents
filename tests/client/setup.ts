@@ -10,6 +10,7 @@ pinClockWhileLoadingAndBeforeEachTest();
 expect.extend(matchers);
 
 MotionGlobalConfig.skipAnimations = true;
+(globalThis as { BASE_UI_ANIMATIONS_DISABLED?: boolean }).BASE_UI_ANIMATIONS_DISABLED = true;
 
 if (typeof window !== "undefined") {
   if (!Element.prototype.hasPointerCapture) {

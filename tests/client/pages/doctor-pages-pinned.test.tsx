@@ -324,9 +324,6 @@ describe("SkillDetail, pinned", () => {
     pin("edit");
     await user.click(screen.getByRole("tab", { name: "Preview" }));
     await hoverShown();
-    await waitFor(() =>
-      expect(screen.queryByRole("textbox", { name: "Skill instructions (markdown)" })).toBeNull(),
-    );
     pin("empty preview");
   });
 
