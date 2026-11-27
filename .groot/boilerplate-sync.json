@@ -27,6 +27,13 @@
     "docs/features/ai-inference.md",
     "scripts/db-generate.ts",
     ".agents/skills/verify-groot/**",
-    "docs/PRD.md"
+    "docs/PRD.md",
+    "packages/code/**",
+    "packages/git/**",
+    "packages/claude-worker/**",
+    "packages/std/**",
+    "scripts/gates.mjs",
+    "scripts/lint/**",
+    "docs/refactor/**"
   ]
 }
