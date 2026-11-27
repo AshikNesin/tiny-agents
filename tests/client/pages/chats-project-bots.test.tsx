@@ -8,6 +8,7 @@ import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { ChatWorkspace } from "@/pages/chats/ChatsLayout";
 import { useBotsStore } from "@/store/bots";
 import { usePeopleStore } from "@/store/people";
+import { AppQueryProvider } from "../query-provider";
 import type { BotListEntry } from "../../../apps/web/src/shared/api/bots";
 
 function bot(id: string, name: string, projectId: string | null): BotListEntry {
@@ -45,6 +46,7 @@ function renderAt(path: string) {
       </Routes>
       <Where />
     </MemoryRouter>,
+    { wrapper: AppQueryProvider },
   );
 }
 
@@ -84,12 +86,13 @@ describe("Project chats in Chat", () => {
     expect(screen.queryByText("web-project")).toBeNull();
   });
 
-  it("send their chat link to the project's chat in Code", () => {
+  it("open at their chat link in Chat, without leaving for Code", () => {
     useBotsStore.setState({
       bots: [bot("b1", "Helper", null), bot("b2", "web-project", "p1")],
       loading: false,
     });
     renderAt("/chats/b2");
-    expect(screen.getByText("Project chat page")).toBeTruthy();
+    expect(screen.queryByText("Project chat page")).toBeNull();
+    expect(screen.getByTestId("where")).toHaveTextContent("/chats/b2");
   });
 });

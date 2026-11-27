@@ -28,8 +28,8 @@ export function ProjectsSection({
     <SidebarSection title="Projects">
       <ul className="space-y-0.5">
         {projects.map((bot) => {
-          const to = projectChatPath(bot.projectId);
-          const active = pathname === to;
+          const to = `/chats/${bot.id}`;
+          const active = pathname === to || pathname === projectChatPath(bot.projectId);
           const { waiting, unread } = attentionOf(bot);
           return (
             <li key={bot.id}>
