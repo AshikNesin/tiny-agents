@@ -26,6 +26,8 @@ const PASSWORD = "owner-password-models-occ";
 let server: Server;
 let endpoint: string;
 let listed = ["model-a", "model-b"];
+let barrier = 0;
+let waiting: Array<() => void> = [];
 
 beforeAll(async () => {
   server = createServer((req, res) => {
@@ -34,8 +36,17 @@ beforeAll(async () => {
       return;
     }
     if (req.url === "/v1/models") {
-      res.writeHead(200, { "content-type": "application/json" });
-      res.end(JSON.stringify({ data: listed.map((id) => ({ id })) }));
+      const reply = () => {
+        res.writeHead(200, { "content-type": "application/json" });
+        res.end(JSON.stringify({ data: listed.map((id) => ({ id })) }));
+      };
+      if (barrier === 0) return reply();
+      waiting.push(reply);
+      if (waiting.length < barrier) return;
+      const ready = waiting;
+      waiting = [];
+      barrier = 0;
+      for (const send of ready) send();
       return;
     }
     res.writeHead(404).end();
@@ -66,6 +77,8 @@ beforeEach(async () => {
   clearStepUpsForTests();
   forgetAppCredential();
   listed = ["model-a", "model-b"];
+  barrier = 0;
+  waiting = [];
   bindModelRuntime(await openAppRuntime());
   step = async () => {
     const response = await api<{ token: string }>(app, "/api/v1/vault/step-up", {
@@ -121,6 +134,7 @@ describe("updating a connection concurrently", () => {
     const [before] = await db.select().from(providers).where(eq(providers.id, created.id));
     expect(before!.credentialItemId).toBeDefined();
 
+    barrier = 2;
     const [a, b] = await Promise.all([
       putConnection(created.id, stepUpToken, { apiKey: SENTINEL }),
       putConnection(created.id, stepUpToken, { apiKey: SENTINEL }),

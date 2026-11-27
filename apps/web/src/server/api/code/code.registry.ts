@@ -36,7 +36,7 @@ import {
   nativeSkills,
   sharedConnectionToolkits,
 } from "./code.tools";
-import { sharedSkills } from "../skills/skills.store";
+import { reachedSkills } from "../bots/bot-reach";
 
 const SKILLS_TOOLKIT = "skills";
 
@@ -133,7 +133,7 @@ function nativeModels(runtime: AgentRuntime): ModelOption[] {
 async function nativeConfig(config: PiThreadConfig): Promise<BotAgentConfig> {
   const [shared, skills, owner] = await Promise.all([
     sharedConnectionToolkits(),
-    sharedSkills(),
+    reachedSkills("code-thread"),
     ownerToolPermissions(),
   ]);
   const coding = codingSelection(config.permissionMode);

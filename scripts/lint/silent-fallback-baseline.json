@@ -214,9 +214,6 @@
   "apps/web/src/server/api/routines/routines.arming.ts": {
     "catch {}": 1
   },
-  "apps/web/src/server/api/skills/skills.service.ts": {
-    "catch {}": 1
-  },
   "apps/web/src/server/api/traces/traces.service.ts": {
     ".catch(() => null)": 2,
     ".catch(() => { throw Boom.notFound(\"This session is no longer stored\"); })": 1
