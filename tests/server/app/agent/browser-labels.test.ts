@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
-import { chromium } from "playwright-core";
-import { afterEach, describe, expect, it } from "vite-plus/test";
+import { chromium, type Browser } from "playwright-core";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vite-plus/test";
 import { pageSession } from "../../../../packages/sandbox/src/browser-chromium";
 
 const chromiumPath = [
@@ -15,10 +15,17 @@ afterEach(async () => {
 });
 
 describe.skipIf(!chromiumPath)("labeled screenshots in real Chromium", () => {
+  let browser: Browser;
+  beforeAll(async () => {
+    browser = await chromium.launch({ executablePath: chromiumPath, args: ["--no-sandbox"] });
+  }, 90_000);
+  afterAll(async () => {
+    await browser?.close();
+  });
+
   it("labels the controls in view with their refs, then takes the labels away", async () => {
-    const browser = await chromium.launch({ executablePath: chromiumPath, args: ["--no-sandbox"] });
-    cleanups.push(() => browser.close());
     const page = await browser.newPage({ viewport: { width: 400, height: 300 } });
+    cleanups.push(() => page.close());
     await page.setContent(
       `<button>Buy</button><a href="#">Help</a><div style="height:2000px"></div><button>Far below</button>`,
     );
@@ -38,9 +45,8 @@ describe.skipIf(!chromiumPath)("labeled screenshots in real Chromium", () => {
     expect((await session.screenshot()).data).toBe(plain.data);
   }, 30_000);
   it("labels the controls in view on a page scrolled past many others", async () => {
-    const browser = await chromium.launch({ executablePath: chromiumPath, args: ["--no-sandbox"] });
-    cleanups.push(() => browser.close());
     const page = await browser.newPage({ viewport: { width: 400, height: 300 } });
+    cleanups.push(() => page.close());
     const many = Array.from({ length: 200 }, (_, i) => `<button>Item ${i}</button><br>`).join("");
     await page.setContent(`${many}<button>Last</button>`);
     await page.getByText("Last").scrollIntoViewIfNeeded();
