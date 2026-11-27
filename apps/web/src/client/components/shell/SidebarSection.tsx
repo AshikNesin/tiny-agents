@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, MoreHorizontal } from "lucide-react";
 import { cn } from "@groot/ui/lib/utils";
 import { useUiStore } from "../../store/ui";
 
@@ -37,5 +37,28 @@ export function SidebarSection({
       </div>
       {!folded && children}
     </section>
+  );
+}
+
+export function MoreRow({
+  hidden,
+  expanded,
+  onToggle,
+}: {
+  hidden: number;
+  expanded: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      className="text-muted-foreground hover:bg-sidebar-accent hover:text-foreground focus-visible:ring-sidebar-ring mt-0.5 flex h-9 w-full items-center gap-2.5 rounded-xl px-1.5 text-sm outline-none focus-visible:ring-1"
+    >
+      <span aria-hidden className="grid size-6 shrink-0 place-items-center">
+        <MoreHorizontal className="size-4" />
+      </span>
+      {expanded ? "Less" : `More (${hidden})`}
+    </button>
   );
 }

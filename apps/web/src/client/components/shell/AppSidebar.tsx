@@ -185,8 +185,8 @@ export function AppSidebar() {
           {!restricted && codeAvailable && (
             <ProjectsSection bots={allBots} onNavigate={closeDrawer} />
           )}
-          {!restricted && codeAvailable && <ThreadsSection onNavigate={closeDrawer} />}
           <BotsSection bots={bots} activeId={activeBotId} onNavigate={closeDrawer} />
+          {!restricted && codeAvailable && <ThreadsSection onNavigate={closeDrawer} />}
         </div>
         {rail && (
           <div className="hidden min-h-0 flex-1 overflow-y-auto md:block">

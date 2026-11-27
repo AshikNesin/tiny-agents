@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { cn } from "@groot/ui/lib/utils";
 import type { BotListEntry } from "../../../shared/api/bots";
@@ -6,7 +6,9 @@ import { relativeTime } from "../../lib/bot-groups";
 import { attentionOf } from "../../lib/attention";
 import { projectChatPath } from "../../lib/code/api";
 import { BotAvatar } from "../BotAvatar";
-import { SidebarSection } from "./SidebarSection";
+import { MoreRow, SidebarSection } from "./SidebarSection";
+
+const SHOWN = 3;
 
 export function ProjectsSection({
   bots,
@@ -23,11 +25,22 @@ export function ProjectsSection({
         .sort((a, b) => b.lastActivityAt.localeCompare(a.lastActivityAt)),
     [bots],
   );
+  const [expanded, setExpanded] = useState(false);
   if (projects.length === 0) return null;
+  const head = projects.slice(0, SHOWN);
+  const active = projects.find(
+    (bot) => pathname === `/chats/${bot.id}` || pathname === projectChatPath(bot.projectId),
+  );
+  const shown =
+    expanded || projects.length <= SHOWN
+      ? projects
+      : active && !head.includes(active)
+        ? [...head, active]
+        : head;
   return (
     <SidebarSection title="Projects">
       <ul className="space-y-0.5">
-        {projects.map((bot) => {
+        {shown.map((bot) => {
           const to = `/chats/${bot.id}`;
           const active = pathname === to || pathname === projectChatPath(bot.projectId);
           const { waiting, unread } = attentionOf(bot);
@@ -63,6 +76,13 @@ export function ProjectsSection({
           );
         })}
       </ul>
+      {projects.length > SHOWN && (
+        <MoreRow
+          hidden={projects.length - shown.length}
+          expanded={expanded}
+          onToggle={() => setExpanded((v) => !v)}
+        />
+      )}
     </SidebarSection>
   );
 }

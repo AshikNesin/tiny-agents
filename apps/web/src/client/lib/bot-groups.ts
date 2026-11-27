@@ -1,6 +1,6 @@
 import type { BotListEntry } from "../../shared/api/bots";
 
-export const RECENT_FOLD_LIMIT = 8;
+export const RECENT_FOLD_LIMIT = 5;
 
 export interface BotGroups {
   needsYou: BotListEntry[];

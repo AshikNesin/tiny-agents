@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { cn } from "@groot/ui/lib/utils";
 import { threadPath } from "../../lib/code/api";
@@ -6,13 +6,17 @@ import { activeThreads, groupOf, STATUS_DOT, starterOf } from "../../lib/code/li
 import { relativeTime } from "../../lib/bot-groups";
 import { useCodeStore } from "../../store/code";
 import { BotAvatar } from "../BotAvatar";
-import { SidebarSection } from "./SidebarSection";
+import { MoreRow, SidebarSection } from "./SidebarSection";
 
 const SHOWN = 5;
 
 export function ThreadsSection({ onNavigate = () => {} }: { onNavigate?: () => void }) {
   const threads = useCodeStore((s) => s.threads);
-  const { shown, more } = useMemo(() => activeThreads(threads ?? [], SHOWN), [threads]);
+  const [expanded, setExpanded] = useState(false);
+  const { shown, more } = useMemo(
+    () => activeThreads(threads ?? [], expanded ? Number.MAX_SAFE_INTEGER : SHOWN),
+    [threads, expanded],
+  );
   if (threads === null) return null;
   return (
     <SidebarSection
@@ -23,7 +27,7 @@ export function ThreadsSection({ onNavigate = () => {} }: { onNavigate?: () => v
           onClick={onNavigate}
           className="text-muted-foreground hover:text-foreground focus-visible:ring-sidebar-ring rounded-lg px-1.5 text-xs outline-none focus-visible:ring-1"
         >
-          {more > 0 ? `All threads, ${more} more` : "All threads"}
+          All threads
         </Link>
       }
     >
@@ -76,6 +80,9 @@ export function ThreadsSection({ onNavigate = () => {} }: { onNavigate?: () => v
             );
           })}
         </ul>
+      )}
+      {(more > 0 || expanded) && (
+        <MoreRow hidden={more} expanded={expanded} onToggle={() => setExpanded((v) => !v)} />
       )}
     </SidebarSection>
   );

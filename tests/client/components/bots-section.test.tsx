@@ -80,16 +80,16 @@ describe("BotsSection", () => {
     expect(names).toEqual(["Bot p", "Bot a"]);
   });
 
-  it("folds after 8 recent bots and expands on Show more", async () => {
+  it("folds after 5 recent bots and expands on More", async () => {
     const bots = Array.from({ length: 11 }, (_, i) =>
       bot(`b${i}`, { lastActivityAt: `2026-01-${String(20 - i).padStart(2, "0")}T00:00:00.000Z` }),
     );
     renderSection(bots);
-    expect(screen.getAllByRole("link")).toHaveLength(8);
-    await user.click(screen.getByRole("button", { name: /show more \(3\)/i }));
+    expect(screen.getAllByRole("link")).toHaveLength(5);
+    await user.click(screen.getByRole("button", { name: "More (6)" }));
     expect(screen.getAllByRole("link")).toHaveLength(11);
-    await user.click(screen.getByRole("button", { name: /show less/i }));
-    expect(screen.getAllByRole("link")).toHaveLength(8);
+    await user.click(screen.getByRole("button", { name: "Less" }));
+    expect(screen.getAllByRole("link")).toHaveLength(5);
   });
 
   it("marks the open bot as the current page", () => {
