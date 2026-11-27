@@ -41,6 +41,8 @@ export interface OnePasswordOptions {
 
 const GUARD_TTL_MS = 6 * 60 * 60_000;
 
+const UNSENT = /error sending request|request library/i;
+
 const sdkConnector: OnePasswordConnector = (token) =>
   createClient({ auth: token, integrationName: "tiny-agents", integrationVersion: "v1" });
 
@@ -49,6 +51,7 @@ function classify(error: unknown): BackendError["code"] {
   if (error instanceof AuthExpiredError) return "unauthorized";
   if (error instanceof RateLimitExceededError) return "failed";
   const message = error instanceof Error ? error.message : String(error);
+  if (UNSENT.test(message)) return "unreachable";
   if (/rate limit|too many requests|\b429\b/i.test(message)) return "failed";
   if (/not found|doesn'?t exist|does not exist|\b404\b/i.test(message)) return "not_found";
   if (
@@ -82,7 +85,12 @@ function toBackendError(error: unknown, step?: string): BackendError {
         `1Password refused the service account token (revoked, expired or without access): ${message}.`,
       );
     case "unreachable":
-      return new BackendError("unreachable", `1Password is unreachable: ${message}.`);
+      return UNSENT.test(message)
+        ? new BackendError(
+            "unreachable",
+            "1Password is unreachable: its SDK couldn't send the request from this server (network, DNS, firewall or TLS).",
+          )
+        : new BackendError("unreachable", `1Password is unreachable: ${message}.`);
     case "not_found":
       return step
         ? new BackendError("failed", `1Password couldn't ${step}: ${message}.`)

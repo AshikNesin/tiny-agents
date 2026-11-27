@@ -1,6 +1,6 @@
 import http from "node:http";
 import type * as net from "node:net";
-import { getRequestListener } from "@hono/node-server";
+import { nodeRequestListener } from "../../../../apps/web/src/server/node-listener";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 import { app } from "../../../../apps/web/src/server/app-root";
 import { publishBotChatEvent } from "../../../../apps/web/src/server/api/bots/bots.events";
@@ -31,7 +31,7 @@ interface Served {
 
 async function listen(a: TestApp): Promise<Served> {
   const sockets = new Set<net.Socket>();
-  const server = http.createServer(getRequestListener(a.fetch));
+  const server = http.createServer(nodeRequestListener(a.fetch));
   server.on("connection", (socket) => sockets.add(socket));
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   return { server, port: (server.address() as { port: number }).port, sockets };

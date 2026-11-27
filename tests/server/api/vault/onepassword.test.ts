@@ -76,7 +76,12 @@ describe("1Password service account backend", () => {
   it("reports a failed request as unreachable and recovers on the next check", async () => {
     const read = backend("read-token");
     op.unavailable.calls = 1;
-    expect(await read.status()).toMatchObject({ state: "error", code: "unreachable" });
+    expect(await read.status()).toEqual({
+      state: "error",
+      code: "unreachable",
+      detail:
+        "1Password is unreachable: its SDK couldn't send the request from this server (network, DNS, firewall or TLS).",
+    });
     expect(await read.status()).toMatchObject({ state: "ready" });
   });
 

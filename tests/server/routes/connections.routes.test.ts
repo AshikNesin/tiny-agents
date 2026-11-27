@@ -1,7 +1,7 @@
 import { createServer, type IncomingMessage, type RequestListener, type Server } from "node:http";
 import { fakeCatalog, useTestRuntime } from "../fixtures";
 import type { AddressInfo } from "node:net";
-import { getRequestListener } from "@hono/node-server";
+import { nodeRequestListener } from "../../../apps/web/src/server/node-listener";
 import { Hono } from "hono";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { z } from "zod";
@@ -871,7 +871,7 @@ async function startFakeOAuth() {
     }
     return c.json({ error: "unsupported_grant_type" }, 400);
   });
-  const { server: authServer, port: authPort } = await listen(getRequestListener(authApp.fetch));
+  const { server: authServer, port: authPort } = await listen(nodeRequestListener(authApp.fetch));
   expect(authPort).toBeGreaterThan(0);
 
   const resourceApp = new Hono();
@@ -892,7 +892,7 @@ async function startFakeOAuth() {
     );
   });
   const { server: resourceServer, port: resourcePort } = await listen(
-    getRequestListener(resourceApp.fetch),
+    nodeRequestListener(resourceApp.fetch),
   );
   const url = `http://127.0.0.1:${resourcePort}/mcp`;
   return {

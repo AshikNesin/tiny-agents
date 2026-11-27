@@ -65,6 +65,12 @@ ADR 0005 turned down 1Password Service Accounts because they have no REST API
 - Service account tokens carry no expiry the app can read, so the Vault card
   no longer warns about one. A token can't see the built-in Personal, Private
   or Employee vaults, so the items bots use must be in a shared vault.
+- The SDK's core checks that each `fetch` answer is an instance of the global
+  `Response`. The Node server therefore builds its listener with
+  `nodeRequestListener` (`apps/web/src/server/node-listener.ts`), which tells
+  `@hono/node-server` not to replace the global `Request` and `Response`;
+  with them replaced, every SDK call fails as "reqwest library: error sending
+  request".
 - The SDK's error messages are not a documented contract. The backend sorts
   them into the existing `BackendError` codes by their wording; an unknown
   message is `failed`, with 1Password's text.

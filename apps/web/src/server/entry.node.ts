@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import http from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { getRequestListener } from "@hono/node-server";
+import { nodeRequestListener } from "./node-listener";
 import { getConnInfo } from "@hono/node-server/conninfo";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { bootstrap } from "@groot/core/bootstrap";
@@ -359,13 +359,13 @@ async function createProductionServer(): Promise<http.Server> {
     return c.html(indexHtml, 200, { "Cache-Control": "no-cache" });
   });
 
-  return http.createServer(getRequestListener(app.fetch));
+  return http.createServer(nodeRequestListener(app.fetch));
 }
 
 async function createDevServer(): Promise<http.Server> {
   const { createServer: createViteServer } = await import("vite-plus");
   const server = http.createServer();
-  const api = getRequestListener(app.fetch);
+  const api = nodeRequestListener(app.fetch);
 
   let ws: Record<string, unknown> = { port: port + 1 };
   const tunnel = process.env.VITE_HMR_URL;
