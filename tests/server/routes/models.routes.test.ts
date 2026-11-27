@@ -341,20 +341,30 @@ describe("models routes", () => {
     expect(response.body.error?.message).toMatch(/redirect/);
   });
 
-  it("needs step-up to probe an endpoint with discover or test", async () => {
+  it("probes an endpoint with discover or test without step-up: no stored value goes out", async () => {
     const found = await call("/models/discover", {
       method: "POST",
       json: { ...connection, baseUrl: endpoint },
     });
-    expect(found.status).toBe(403);
-    expect(found.body.error?.details).toEqual({ code: "step_up_required" });
+    expect(found.status).toBe(200);
     const tested = await call("/models/test", {
       method: "POST",
       json: { ...connection, baseUrl: endpoint, upstreamId: "model-a" },
     });
-    expect(tested.status).toBe(403);
-    expect(tested.body.error?.details).toEqual({ code: "step_up_required" });
-    expect(seen).toEqual([]);
+    expect(tested.status).toBe(200);
+  });
+
+  it("replaces an account's key without step-up, but re-pointing it needs one", async () => {
+    const created = (await createAccount(await stepUp())).body.data;
+    const path = `/models/providers/${created.id}/connection`;
+    const rekeyed = await call(path, { method: "PUT", json: { apiKey: SENTINEL } });
+    expect(rekeyed.status).toBe(200);
+    const moved = await call(path, {
+      method: "PUT",
+      json: { baseUrl: "https://elsewhere.example" },
+    });
+    expect(moved.status).toBe(403);
+    expect(moved.body.error?.details).toEqual({ code: "step_up_required" });
   });
 
   it("refuses a completion redirected to a private address unless the account allows one", async () => {

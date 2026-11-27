@@ -549,11 +549,7 @@ function ActivePull({
           <DropdownMenu>
             <DropdownMenuTrigger
               render={
-                <Button
-                  size="sm"
-                  disabled={busy !== null || pr.draft || mergeBlocked !== null}
-                  title={pr.draft ? "A draft cannot be merged; switch Draft off first" : undefined}
-                />
+                <Button size="sm" disabled={busy !== null || pr.draft || mergeBlocked !== null} />
               }
             >
               {busy === "merge" ? <Spinner /> : <GitMerge />}
@@ -585,8 +581,10 @@ function ActivePull({
             YOLO Merge
           </Button>
         )}
-        {pr.state === "open" && !pr.draft && mergeBlocked && (
-          <span className="text-muted-foreground self-center text-xs">{mergeBlocked}</span>
+        {pr.state === "open" && (pr.draft || mergeBlocked) && (
+          <span className="text-muted-foreground self-center text-xs">
+            {pr.draft ? "Turn Draft off to merge" : mergeBlocked}
+          </span>
         )}
         {open.length > 0 && (
           <Button

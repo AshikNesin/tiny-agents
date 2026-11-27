@@ -19,7 +19,7 @@ export const connectionsApi = {
   get: (id: string) => apiClient.get<Connection>(`/connections/${id}`),
   create: (input: ConnectionCreateBody) => stepped<Connection>("post", "/connections", input),
   update: (id: string, input: ConnectionUpdateBody) =>
-    input.url !== undefined || input.headerName !== undefined || input.secret !== undefined
+    input.url !== undefined || input.secretRef !== undefined
       ? stepped<Connection>("patch", `/connections/${id}`, input)
       : apiClient.patch<Connection>(`/connections/${id}`, input),
   remove: (id: string) => stepped<Deleted>("delete", `/connections/${id}`),

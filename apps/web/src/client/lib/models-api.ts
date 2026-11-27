@@ -22,7 +22,7 @@ import { stepped } from "./vault-api";
 export const modelsApi = {
   accounts: () => apiClient.get<AccountList>("/models/providers"),
   discover: (connection: ModelEndpoint) =>
-    stepped<DiscoveredModels>("post", "/models/discover", connection),
+    apiClient.post<DiscoveredModels>("/models/discover", connection),
   create: (input: AccountCreateBody) => stepped<Account>("post", "/models/providers", input),
   patch: (account: Account, input: AccountPatchBody) =>
     apiClient.request<Account>("patch", `/models/providers/${account.id}`, {
@@ -30,7 +30,9 @@ export const modelsApi = {
       headers: { "If-Match": String(account.version) },
     }),
   updateConnection: (id: string, input: AccountConnectionBody) =>
-    stepped<Account>("put", `/models/providers/${id}/connection`, input),
+    Object.entries(input).some(([key, value]) => key !== "apiKey" && value !== undefined)
+      ? stepped<Account>("put", `/models/providers/${id}/connection`, input)
+      : apiClient.request<Account>("put", `/models/providers/${id}/connection`, { body: input }),
   available: (id: string) => apiClient.get<DiscoveredModels>(`/models/providers/${id}/available`),
   refresh: (id: string) => apiClient.post<AccountRefresh>(`/models/providers/${id}/refresh`),
   remove: (id: string, moveTo?: string) =>
@@ -48,7 +50,7 @@ export const modelsApi = {
       `/models/${id}${moveTo ? `?moveTo=${encodeURIComponent(moveTo)}` : ""}`,
       { emptyOk: true },
     ),
-  test: (input: ModelTestBody) => stepped<ModelTestResult>("post", "/models/test", input),
+  test: (input: ModelTestBody) => apiClient.post<ModelTestResult>("/models/test", input),
   roles: () => apiClient.get<RolesResponse>("/models/roles"),
   setRoles: (input: RolesBody) =>
     apiClient.request<RolesResponse>("put", "/models/roles", { body: input }),

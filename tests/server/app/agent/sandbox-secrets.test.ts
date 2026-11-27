@@ -170,9 +170,14 @@ describe("the confinement script", () => {
       expect(args).not.toContain("RuntimeMaxSec");
       expect(args).toContain("IPAddressDeny=any");
       expect(args).toContain("NoNewPrivileges=yes");
-      const alive = spawnSync("bash", ["-c", `pgrep -f ${JSON.stringify(marker)}`], {
-        encoding: "utf8",
-      });
+      const alive = spawnSync(
+        "bash",
+        [
+          "-c",
+          `for i in $(seq 50); do pgrep -f ${JSON.stringify(marker)} | grep -vx $$ && exit 0; sleep 0.1; done; exit 1`,
+        ],
+        { encoding: "utf8" },
+      );
       expect(alive.stdout.trim()).toMatch(/^\d+$/);
     } finally {
       spawnSync("bash", ["-c", `pkill -f ${JSON.stringify(marker)}`]);

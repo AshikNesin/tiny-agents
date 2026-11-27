@@ -173,11 +173,14 @@ minutes.
 ## Where a secret goes needs a fresh step-up
 
 `connections/connections.routes.ts`, `connections/connections.service.ts`,
-`models/models.routes.ts`, `vault/vault.stepup.ts`. Changing where a
-connection or a model account points, or the secret it sends, needs a fresh
-step-up token: a stolen session that could re-point a stored secret at its
-own host would receive it, or every prompt. Enabling models and assigning
-roles choose among accounts that already passed step-up, so they do not.
+`models/models.routes.ts`, `vault/vault.stepup.ts`. Adding a
+connection or a model account, deleting one, and changing where it points
+need a fresh step-up token: a stolen session that could re-point a stored
+secret at its own host would receive it, or every prompt. Replacing a key
+or header value on the same host, probing an unsaved endpoint (discover,
+test) and setting a GitHub token send no stored value anywhere new, so they
+do not (owner's call, issue 623). Enabling models and assigning roles choose
+among accounts that already passed step-up, so they do not either.
 The step-up token travels in a custom header, which a cross-site form cannot
 set, so it is also the routes' CSRF guard. A connection moved to a new host
 loses the old host's header value, its own item deleted and a reference

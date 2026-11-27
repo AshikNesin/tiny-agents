@@ -6131,7 +6131,7 @@ describe("one declaration per tool (3.2)", () => {
           "tasks": 0,
           "tools": [
             {
-              "description": "Save a lasting preference, fact, goal, or habit about the owner across chats. Use when the owner asks you to remember something or states a lasting fact. Write one self-contained third-person sentence. Never save secrets, quoted web/file content, peer/routine messages, or one-off task instructions. The owner approves saves unless they have allowed this tool.",
+              "description": "Save a lasting preference, fact, goal, or habit about the owner across chats. Use when the owner asks you to remember something or states a lasting fact. Write one self-contained third-person sentence. Never save secrets, quoted web/file content, peer/routine messages, or one-off task instructions.",
               "fields": [
                 "description",
                 "execute",
@@ -6218,6 +6218,7 @@ describe("one declaration per tool (3.2)", () => {
           "name": "Memory",
           "tools": [
             {
+              "allowByDefault": true,
               "askLabel": "save a memory",
               "description": "Remember a fact about the owner",
               "label": "Saved memory",
@@ -6233,7 +6234,7 @@ describe("one declaration per tool (3.2)", () => {
         },
         "keyOrder": [
           "id,kind,name,description,tools",
-          "name,label,askLabel,description",
+          "name,label,askLabel,description,allowByDefault",
           "name,label,askLabel,description",
         ],
       }
@@ -6255,7 +6256,7 @@ describe("one declaration per tool (3.2)", () => {
           "tasks": 0,
           "tools": [
             {
-              "description": "Save a lasting preference, fact, goal, or habit about the owner across chats. Use when the owner asks you to remember something or states a lasting fact. Write one self-contained third-person sentence. Never save secrets, quoted web/file content, peer/routine messages, or one-off task instructions. The owner approves saves unless they have allowed this tool.",
+              "description": "Save a lasting preference, fact, goal, or habit about the owner across chats. Use when the owner asks you to remember something or states a lasting fact. Write one self-contained third-person sentence. Never save secrets, quoted web/file content, peer/routine messages, or one-off task instructions.",
               "fields": [
                 "description",
                 "execute",
@@ -6317,6 +6318,7 @@ describe("one declaration per tool (3.2)", () => {
           "name": "Memory",
           "tools": [
             {
+              "allowByDefault": true,
               "askLabel": "save a memory",
               "description": "Remember a fact about the owner",
               "label": "Saved memory",
@@ -6326,7 +6328,7 @@ describe("one declaration per tool (3.2)", () => {
         },
         "keyOrder": [
           "id,kind,name,description,tools",
-          "name,label,askLabel,description",
+          "name,label,askLabel,description,allowByDefault",
         ],
       }
     `);

@@ -198,7 +198,7 @@ describe("MCP connections (header auth, streamable http)", () => {
     await db.delete(vaultValues);
   });
 
-  it("needs a step-up to create, re-point or delete a connection, not to rename it (S4)", async () => {
+  it("needs a step-up to create, re-point or delete a connection, not to rename it or replace its key (S4)", async () => {
     const app = buildApp();
     const body = {
       name: "Gated",
@@ -217,12 +217,9 @@ describe("MCP connections (header auth, streamable http)", () => {
     const path = `/api/v1/connections/${data.id}`;
 
     await call(app, path, 200, { method: "PATCH", json: { name: "Renamed" }, stepUp: false });
-    for (const change of [
-      { url: mcpServer.url },
-      { secret: "other" },
-      { headerName: "x-key" },
-      { secretRef: null },
-    ]) {
+    await call(app, path, 200, { method: "PATCH", json: { secret: "other" }, stepUp: false });
+    await call(app, path, 200, { method: "PATCH", json: { headerName: "x-key" }, stepUp: false });
+    for (const change of [{ url: mcpServer.url }, { secretRef: null }]) {
       await call(app, path, 403, { method: "PATCH", json: change, stepUp: false });
     }
     await call(app, path, 403, { method: "DELETE", stepUp: false });
