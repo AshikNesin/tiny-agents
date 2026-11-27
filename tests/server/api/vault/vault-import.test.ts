@@ -11,7 +11,7 @@ import {
 } from "../../../../apps/web/src/server/db";
 import { sealJson } from "../../../../apps/web/src/server/crypto/secret-box";
 import { sealHeaderSecret } from "../../../../apps/web/src/server/api/connections/connection-secrets";
-import { setReadBackendsForTests } from "../../../../apps/web/src/server/api/vault/backends";
+import { setVaultBackendsForTests } from "../../../../apps/web/src/server/api/vault/backends";
 import { createLocalBackend } from "../../../../apps/web/src/server/api/vault/backends/local";
 import {
   clearStatusCache,
@@ -100,13 +100,13 @@ const kvKeys = async () =>
   ).map((row) => row.key);
 
 beforeEach(() => {
-  setReadBackendsForTests(new Map([["local", local]]));
+  setVaultBackendsForTests(new Map([["local", local]]));
   clearStatusCache();
 });
 
 afterEach(async () => {
   process.env.SECRETS_KEY = KEY;
-  setReadBackendsForTests(undefined);
+  setVaultBackendsForTests(undefined);
   await oldKv.clear();
   await db.delete(connections);
   await db.delete(vaultAuditEvents);

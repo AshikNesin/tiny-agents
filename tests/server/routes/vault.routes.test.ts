@@ -10,13 +10,12 @@ import {
   vaultItems,
   vaultValues,
 } from "../../../apps/web/src/server/db";
-import { setReadBackendsForTests } from "../../../apps/web/src/server/api/vault/backends";
+import { setVaultBackendsForTests } from "../../../apps/web/src/server/api/vault/backends";
 import { createLocalBackend } from "../../../apps/web/src/server/api/vault/backends/local";
 import {
   createAppCredential,
   createItem,
   deleteItem,
-  setWriteBackendsForTests,
   updateItem,
 } from "../../../apps/web/src/server/api/vault/vault.admin.service";
 import {
@@ -83,8 +82,7 @@ beforeEach(async () => {
   await db.delete(vaultItems);
   await db.delete(vaultValues);
   const local = createLocalBackend();
-  setReadBackendsForTests(new Map([["local", local]]));
-  setWriteBackendsForTests(new Map([["local", local]]));
+  setVaultBackendsForTests(new Map([["local", local]]));
   clearStatusCache();
   clearStepUpsForTests();
 });

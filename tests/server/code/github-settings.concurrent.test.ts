@@ -2,9 +2,8 @@ import { beforeEach, describe, expect, it } from "vite-plus/test";
 import { createNamespaceKv } from "@groot/core/kv";
 import { db, vaultItems, vaultValues } from "../../../apps/web/src/server/db";
 import { resetAppTables } from "../fixtures";
-import { setReadBackendsForTests } from "../../../apps/web/src/server/api/vault/backends";
+import { setVaultBackendsForTests } from "../../../apps/web/src/server/api/vault/backends";
 import { createLocalBackend } from "../../../apps/web/src/server/api/vault/backends/local";
-import { setWriteBackendsForTests } from "../../../apps/web/src/server/api/vault/vault.admin.service";
 import {
   clearStatusCache,
   forgetAppCredential,
@@ -25,8 +24,7 @@ beforeEach(async () => {
   await resetAppTables();
   await createNamespaceKv("CODE_GITHUB").clear();
   const backend = createLocalBackend();
-  setReadBackendsForTests(new Map([["local", backend]]));
-  setWriteBackendsForTests(new Map([["local", backend]]));
+  setVaultBackendsForTests(new Map([["local", backend]]));
   clearStatusCache();
   forgetAppCredential();
   installAppForTests({ codeGitHubApp: undefined });

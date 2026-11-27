@@ -6,8 +6,8 @@ import { secretRedactor, type VaultApproval, type VaultKind } from "@tiny-agents
 import { KIND_DEFAULT_TOOLS } from "../../../shared/vault-kinds";
 import { connections, db, vaultAuditEvents, vaultItems } from "../../db";
 import { app } from "../../app-root";
-import { onePasswordBackend, onePasswordConfig, primaryBackend, readBackends } from "./backends";
-import { createLocalBackend, deleteLocalItem, readLocalDraft } from "./backends/local";
+import { primaryBackend, readBackends, writeBackends } from "./backends";
+import { deleteLocalItem, readLocalDraft } from "./backends/local";
 import {
   BackendError,
   type BackendItemSummary,
@@ -39,31 +39,6 @@ import {
   type VaultItemRow,
 } from "./vault.service";
 import { vaultPolicyDigest } from "./vault.policy";
-
-let adminBackends: Map<BackendName, VaultBackend> | undefined;
-
-function writeBackends(): Map<BackendName, VaultBackend> {
-  if (adminBackends) return adminBackends;
-  const map = new Map<BackendName, VaultBackend>([["local", createLocalBackend()]]);
-  const onePassword = onePasswordConfig();
-  if (onePassword) {
-    map.set(
-      "onepassword",
-      onePasswordBackend(
-        onePassword,
-        onePassword.adminToken ?? onePassword.readToken ?? "",
-        Boolean(onePassword.adminToken),
-      ),
-    );
-  }
-  adminBackends = map;
-  return map;
-}
-
-export function setWriteBackendsForTests(map: Map<BackendName, VaultBackend> | undefined): void {
-  adminBackends = map;
-  app().vault.candidates = undefined;
-}
 
 export function vaultItemsChanged(): void {
   app().vault.candidates = undefined;
@@ -370,7 +345,7 @@ export async function createItem(
     })
     .returning();
   const row = inserted!;
-  app().vault.candidates = undefined;
+  vaultItemsChanged();
   await audit({ item: row, handle: row.handle, tool: actor.via, target: name, outcome: "created" });
   return itemView(row);
 }
@@ -418,7 +393,7 @@ export async function createAppCredential(input: {
       approval: "allowed",
     })
     .returning();
-  app().vault.candidates = undefined;
+  vaultItemsChanged();
   await audit({
     item: row!,
     handle: row!.handle,
@@ -473,7 +448,7 @@ export async function linkItem(input: {
   } catch (error) {
     backendFailure(error);
   }
-  app().vault.candidates = undefined;
+  vaultItemsChanged();
   await audit({
     item: row,
     handle: row.handle,
@@ -550,7 +525,7 @@ async function updateItemRow(
     backendFailure(error);
   }
   forgetAppCredential(row.handle);
-  app().vault.candidates = undefined;
+  vaultItemsChanged();
   await audit({
     item: updated,
     handle: updated.handle,
@@ -621,7 +596,7 @@ export async function moveLocalItemsToOnePassword(): Promise<VaultMoveResult> {
       logger.warn({ handle: row.handle, error: reason }, "Vault item not moved to 1Password");
     }
   }
-  app().vault.candidates = undefined;
+  vaultItemsChanged();
   return result;
 }
 
@@ -660,7 +635,7 @@ export async function deleteItemRow(
   }
   await db.delete(vaultItems).where(eq(vaultItems.id, row.id));
   forgetAppCredential(row.handle);
-  app().vault.candidates = undefined;
+  vaultItemsChanged();
   await audit({
     handle: row.handle,
     tool: "vault_ui",

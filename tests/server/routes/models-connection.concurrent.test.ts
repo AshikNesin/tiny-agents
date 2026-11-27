@@ -5,9 +5,8 @@ import { eq } from "drizzle-orm";
 import { hashPassword } from "@groot/core/utils/password.utils";
 import { generateToken } from "@groot/core/utils/jwt.utils";
 import { db, models, providers, users, vaultItems } from "../../../apps/web/src/server/db";
-import { setReadBackendsForTests } from "../../../apps/web/src/server/api/vault/backends";
+import { setVaultBackendsForTests } from "../../../apps/web/src/server/api/vault/backends";
 import { createLocalBackend } from "../../../apps/web/src/server/api/vault/backends/local";
-import { setWriteBackendsForTests } from "../../../apps/web/src/server/api/vault/vault.admin.service";
 import {
   clearStatusCache,
   forgetAppCredential,
@@ -71,8 +70,7 @@ beforeAll(async () => {
 
 beforeEach(async () => {
   const backend = createLocalBackend();
-  setReadBackendsForTests(new Map([["local", backend]]));
-  setWriteBackendsForTests(new Map([["local", backend]]));
+  setVaultBackendsForTests(new Map([["local", backend]]));
   clearStatusCache();
   clearStepUpsForTests();
   forgetAppCredential();

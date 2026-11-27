@@ -4,7 +4,7 @@ import { createOnePasswordBackend, type OnePasswordConnector } from "./onepasswo
 import { createLocalBackend } from "./local";
 import type { BackendName, VaultBackend } from "./types";
 
-export interface OnePasswordConfig {
+interface OnePasswordConfig {
   vaultId?: string;
   readToken?: string;
   adminToken?: string;
@@ -16,7 +16,7 @@ const unquote = (value: string | undefined) =>
     .replace(/^(['"])([\s\S]*)\1$/, "$2")
     .trim() || undefined;
 
-export function onePasswordConfig(): OnePasswordConfig | undefined {
+function onePasswordConfig(): OnePasswordConfig | undefined {
   const env = appEnv();
   const readToken = unquote(env.OP_SERVICE_ACCOUNT_TOKEN);
   const adminToken = unquote(env.OP_SERVICE_ACCOUNT_ADMIN_TOKEN);
@@ -29,9 +29,7 @@ export function onePasswordConfig(): OnePasswordConfig | undefined {
   };
 }
 
-let backends: Map<BackendName, VaultBackend> | undefined;
-
-export function onePasswordBackend(
+function onePasswordBackend(
   config: OnePasswordConfig,
   token: string,
   writable: boolean,
@@ -45,26 +43,45 @@ export function onePasswordBackend(
   });
 }
 
-export function readBackends(): Map<BackendName, VaultBackend> {
-  if (backends) return backends;
-  const map = new Map<BackendName, VaultBackend>([["local", createLocalBackend()]]);
+function buildBackends() {
+  const local = createLocalBackend();
+  const read = new Map<BackendName, VaultBackend>([["local", local]]);
+  const write = new Map<BackendName, VaultBackend>([["local", local]]);
   const onePassword = onePasswordConfig();
   if (onePassword) {
-    map.set(
+    const readToken = onePassword.readToken ?? onePassword.adminToken ?? "";
+    const writeToken = onePassword.adminToken ?? onePassword.readToken ?? "";
+    read.set("onepassword", onePasswordBackend(onePassword, readToken, false));
+    write.set(
       "onepassword",
-      onePasswordBackend(onePassword, onePassword.readToken ?? onePassword.adminToken ?? "", false),
+      onePasswordBackend(onePassword, writeToken, Boolean(onePassword.adminToken)),
     );
   }
-  backends = map;
-  return map;
+  return { read, write };
+}
+
+function backends() {
+  const vault = app().vault;
+  vault.backends ??= buildBackends();
+  return vault.backends;
+}
+
+export function readBackends(): Map<BackendName, VaultBackend> {
+  return backends().read;
+}
+
+export function writeBackends(): Map<BackendName, VaultBackend> {
+  return backends().write;
 }
 
 export function primaryBackend(): BackendName {
   return onePasswordConfig()?.adminToken ? "onepassword" : "local";
 }
 
-export function setReadBackendsForTests(map: Map<BackendName, VaultBackend> | undefined): void {
-  backends = map;
+export function setVaultBackendsForTests(map: Map<BackendName, VaultBackend> | undefined): void {
+  const vault = app().vault;
+  vault.backends = map ? { read: map, write: map } : undefined;
+  vault.candidates = undefined;
 }
 
 export function setOnePasswordConnectorForTests(fake: OnePasswordConnector | undefined): void {
