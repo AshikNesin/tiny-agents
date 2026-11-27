@@ -1,10 +1,11 @@
 package groot.mobile.ui.components
 
-import android.content.Context
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -14,15 +15,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.credentials.CredentialManager
-import androidx.credentials.GetCredentialRequest
-import androidx.credentials.GetPublicKeyCredentialOption
-import androidx.credentials.PublicKeyCredential
-import androidx.credentials.exceptions.GetCredentialCancellationException
-import androidx.credentials.exceptions.NoCredentialException
 import groot.kit.theme.S
+import groot.mobile.data.FingerprintCancelled
+import groot.mobile.data.api.ApiException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
@@ -30,21 +28,17 @@ class StepUpGate internal constructor(private val request: ((String) -> Unit) ->
     fun run(action: (token: String) -> Unit) = request(action)
 }
 
-private suspend fun passkeyAssertion(context: Context, optionsJson: String): String {
-    val request = GetCredentialRequest(listOf(GetPublicKeyCredentialOption(optionsJson)))
-    val credential = CredentialManager.create(context).getCredential(context, request).credential
-    return (credential as? PublicKeyCredential)?.authenticationResponseJson
-        ?: throw IllegalStateException("That was not a passkey.")
-}
-
 @Composable
 fun rememberStepUpGate(): StepUpGate {
-    val stepUp = LocalContainer.current.stepUp
+    val container = LocalContainer.current
+    val stepUp = container.stepUp
+    val fingerprint = container.fingerprint
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var pending by remember { mutableStateOf<((String) -> Unit)?>(null) }
     var askPassword by remember { mutableStateOf(false) }
     var password by remember { mutableStateOf("") }
+    var useFingerprint by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
 
@@ -55,19 +49,24 @@ fun rememberStepUpGate(): StepUpGate {
         error = null
     }
 
-    fun confirmWith(action: (String) -> Unit, how: suspend () -> String) {
+    fun withFingerprint(action: (String) -> Unit) {
         busy = true
         scope.launch {
             try {
-                val token = how()
+                val token = stepUp.confirm(fingerprint.password(context))
                 close()
                 action(token)
             } catch (e: CancellationException) {
                 throw e
-            } catch (e: GetCredentialCancellationException) {
+            } catch (e: FingerprintCancelled) {
                 askPassword = true
-            } catch (e: NoCredentialException) {
-                error = "No passkey for this server on this phone. Add one from the server's Settings in this phone's browser."
+            } catch (e: ApiException) {
+                if (e.status == 401) {
+                    fingerprint.forget()
+                    error = "Your password changed. Enter the new one."
+                } else {
+                    error = e.message
+                }
                 askPassword = true
             } catch (e: Exception) {
                 error = e.message ?: "Could not confirm."
@@ -78,8 +77,29 @@ fun rememberStepUpGate(): StepUpGate {
         }
     }
 
-    fun usePasskey(action: (String) -> Unit) = confirmWith(action) {
-        stepUp.confirmWithPasskey { options -> passkeyAssertion(context, options) }
+    fun withPassword(action: (String) -> Unit) {
+        busy = true
+        scope.launch {
+            try {
+                val typed = password
+                val token = stepUp.confirm(typed)
+                if (useFingerprint && fingerprint.available() && !fingerprint.saved) {
+                    try {
+                        fingerprint.save(context, typed)
+                    } catch (e: FingerprintCancelled) {
+                        useFingerprint = false
+                    }
+                }
+                close()
+                action(token)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                error = e.message ?: "Could not confirm."
+            } finally {
+                busy = false
+            }
+        }
     }
 
     pending?.takeIf { askPassword }?.let { action ->
@@ -88,7 +108,7 @@ fun rememberStepUpGate(): StepUpGate {
             title = { Text("Confirm it's you") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(S.md)) {
-                    Text("Use your fingerprint, face or password to continue. It is asked again after five minutes.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("Enter your password to continue. It is asked again after five minutes.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Field(
                         value = password,
                         onValueChange = { password = it },
@@ -98,13 +118,20 @@ fun rememberStepUpGate(): StepUpGate {
                         supporting = error,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                     )
-                    TextButton(enabled = !busy, onClick = { usePasskey(action) }) { Text("Use fingerprint or face") }
+                    if (fingerprint.saved) {
+                        TextButton(enabled = !busy, onClick = { withFingerprint(action) }) { Text("Use fingerprint") }
+                    } else if (fingerprint.available()) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Checkbox(checked = useFingerprint, onCheckedChange = { useFingerprint = it })
+                            Text("Use fingerprint next time")
+                        }
+                    }
                 }
             },
             confirmButton = {
                 TextButton(
                     enabled = !busy && password.isNotEmpty(),
-                    onClick = { confirmWith(action) { stepUp.confirm(password) } },
+                    onClick = { withPassword(action) },
                 ) { Text("Confirm") }
             },
             dismissButton = { TextButton(onClick = { close() }) { Text("Cancel", color = MaterialTheme.colorScheme.onSurfaceVariant) } },
@@ -114,11 +141,17 @@ fun rememberStepUpGate(): StepUpGate {
     return remember(stepUp) {
         StepUpGate { action ->
             val held = stepUp.current()
-            if (held != null) {
-                action(held)
-            } else if (!busy) {
-                pending = action
-                usePasskey(action)
+            when {
+                held != null -> action(held)
+                busy -> Unit
+                fingerprint.saved -> {
+                    pending = action
+                    withFingerprint(action)
+                }
+                else -> {
+                    pending = action
+                    askPassword = true
+                }
             }
         }
     }

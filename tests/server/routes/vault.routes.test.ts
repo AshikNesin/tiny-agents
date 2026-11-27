@@ -51,9 +51,7 @@ import { WindowMismatchError } from "../../../packages/sandbox/src/computer-sess
 import { secretRedactor } from "../../../packages/agent/src/redact";
 import type { CredentialRequest } from "../../../packages/agent/src/credentials";
 import { useTestRuntime } from "../fixtures";
-import { api, createTestApp, setAppConfig, type TestApp } from "../helpers";
-import { createSoftPasskey } from "../fixtures/passkey";
-import { memoryRateLimitStore } from "@groot/core/rate-limit/store";
+import { api, createTestApp, type TestApp } from "../helpers";
 
 const CANARY = "canary-pw-7Hq2Zx";
 const PASSWORD = "owner-password-123";
@@ -208,34 +206,6 @@ describe("vault routes", () => {
     expect(unknown.status).toBe(401);
     expect(unknown.body.error?.code).not.toBe("SESSION_INVALID");
     expect(unknown.body.error?.message).toMatch(/Passkey not found/);
-  });
-
-  it("confirms with a passkey from the Android app once its certificate is set", async () => {
-    const print = "ab".repeat(32);
-    const androidOrigin = `android:apk-key-hash:${Buffer.from(print, "hex").toString("base64url")}`;
-    const passkey = await createSoftPasskey(ownerUserId, { origin: androidOrigin });
-    const fresh = createTestApp({ rateLimitStore: memoryRateLimitStore() });
-    const confirm = async () => {
-      const options = await api<Data>(fresh, "/api/v1/vault/step-up/options", {
-        method: "POST",
-        token,
-      });
-      return api<Data>(fresh, "/api/v1/vault/step-up", {
-        method: "POST",
-        token,
-        json: { passkey: passkey.assert(options.body.data.challenge) },
-      });
-    };
-
-    expect((await confirm()).status).toBe(401);
-
-    vi.stubEnv("ANDROID_APP_CERT_SHA256", print);
-    setAppConfig();
-    const confirmed = await confirm();
-    expect(confirmed.status).toBe(200);
-    expect((await createGithub(confirmed.body.data.token)).status).toBe(201);
-    vi.unstubAllEnvs();
-    setAppConfig();
   });
 
   it("accepts the password of an account made before groot 3.0 (bcrypt hash)", async () => {

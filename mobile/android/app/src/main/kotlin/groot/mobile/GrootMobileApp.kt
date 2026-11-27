@@ -16,6 +16,7 @@ import groot.mobile.data.Notices
 import groot.mobile.data.SessionStore
 import groot.mobile.data.ShareTarget
 import groot.mobile.data.ShareTargets
+import groot.mobile.data.FingerprintPassword
 import groot.mobile.data.StepUp
 import groot.mobile.data.api.ApiClient
 import groot.mobile.data.api.CodeApi
@@ -78,6 +79,8 @@ class AppContainer(context: Context) {
     val files = FileActions(appContext, api)
 
     val stepUp = StepUp(api)
+
+    val fingerprint = FingerprintPassword(appContext)
 
     val links = AppLinks()
 

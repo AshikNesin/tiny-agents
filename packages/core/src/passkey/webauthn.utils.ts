@@ -45,7 +45,7 @@ export async function verifyPasskeyRegistration(
   return verifyRegistrationResponse({
     response,
     expectedChallenge,
-    expectedOrigin: [config.passkey.origin, ...config.passkey.appOrigins],
+    expectedOrigin: config.passkey.origin,
     expectedRPID: config.passkey.rpId,
   });
 }
@@ -67,7 +67,7 @@ export async function verifyPasskeyAuthentication(
   return verifyAuthenticationResponse({
     response,
     expectedChallenge,
-    expectedOrigin: [config.passkey.origin, ...config.passkey.appOrigins],
+    expectedOrigin: config.passkey.origin,
     expectedRPID: config.passkey.rpId,
     credential: {
       id: passkey.credentialId,
