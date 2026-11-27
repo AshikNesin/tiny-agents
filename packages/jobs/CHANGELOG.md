@@ -1,5 +1,15 @@
 # @groot/jobs
 
+## 3.0.5
+
+### Patch Changes
+
+- [`e511da5`](https://github.com/AshikNesin/tiny-agents/commit/e511da53df9f14db7849c0cdf861c34e2689baac) Thanks [@ampagent](https://github.com/ampagent)! - Tightened five check-then-act races and added input caps on the job admin API. Two concurrent creates of the same task idempotency key or skill name now return the existing row or a clean 409 instead of a raw SqliteError 500; a passkey rename that loses a race with its delete says 404 instead of crashing; registering the same credential twice concurrently says 409; and a kv entry refreshed while a stale read was expiring it survives. Singleton jobs are now enforced by a partial unique index on (name, singleton_key) for created and active states, so two concurrent enqueues of one singleton key create one job. Job options are capped (100 bulk-rerun ids, retryLimit ≤ 100, priority and delays bounded) and job log responses are limited to 500 rows.
+- Updated dependencies [[`e511da5`](https://github.com/AshikNesin/tiny-agents/commit/e511da53df9f14db7849c0cdf861c34e2689baac), [`e874110`](https://github.com/AshikNesin/tiny-agents/commit/e8741106e6aebff234095f90e704adf4cf3314a9), [`e511da5`](https://github.com/AshikNesin/tiny-agents/commit/e511da53df9f14db7849c0cdf861c34e2689baac), [`e511da5`](https://github.com/AshikNesin/tiny-agents/commit/e511da53df9f14db7849c0cdf861c34e2689baac)]:
+  - @groot/core@2.4.2
+  - @groot/ui@2.0.0
+  - @groot/shell@3.2.2
+
 ## 3.1.0
 
 ### Minor Changes

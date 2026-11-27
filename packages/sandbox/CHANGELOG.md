@@ -1,5 +1,45 @@
 # @tiny-agents/sandbox
 
+## 0.2.0
+
+### Minor Changes
+
+- [#509](https://github.com/AshikNesin/tiny-agents/pull/509) [`7c34436`](https://github.com/AshikNesin/tiny-agents/commit/7c3443651e369eb579b5aa32c30ff7d90a7e4b45) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Code has a third agent, Native, built on the same runtime the chat bots use. It needs a sandbox and a model that runs on pi, and no other setup. A Native thread reads, writes and edits files and runs commands in its working directory on the sandbox, asks before it changes anything unless its permission mode says otherwise, takes a steer or a queued message while it works, and can be stopped, forked, compacted and continued after an error. Settings → Models has a new default, New Code threads, for the model a Native thread starts on.
+  
+  For developers: `AgentRuntime` gains `cwd` on a conversation's config, `fork`, `compact` and `continueReply`; `@tiny-agents/agent` exports `createCodingToolkit` and `codingSelection`; `@tiny-agents/code/server` exports `createPiHarness` and its `PiPort`; the model catalog has a `code_default` role; and a sandbox `exec` takes an abort `signal`.
+
+### Patch Changes
+
+- [`aa491b1`](https://github.com/AshikNesin/tiny-agents/commit/aa491b10e52ac4c00abafe8a55b5f83548ff606a) Thanks [@ampagent](https://github.com/ampagent)! - Submitting a bot's credential request with **Save to the vault** on now needs the vault step-up token, because the save path can overwrite the login that is already stored for that site (the same re-confirmation every other vault write asks for). Filling the page without saving is unchanged, and both web and Android clients ask for the password confirmation in the dialog before the request goes out.
+  
+  The Claude Code engine now enforces the same 150-tool-calls-per-reply cap as the pi engine, so a looping session is refused and stopped instead of running host-side tools forever.
+  
+  The loopback CDP forwarder that exposes the sandbox browser's DevTools port requires a per-session token header (`x-cdp-token`) generated with Web Crypto at forwarder start: a client without the token gets `403` and its socket closed, so another local process can no longer take over the browser session. The token is known only to the transport that started the forwarder and is passed to its own Playwright connection.
+
+- [`e511da5`](https://github.com/AshikNesin/tiny-agents/commit/e511da53df9f14db7849c0cdf861c34e2689baac) Thanks [@ampagent](https://github.com/ampagent)! - Memory capture no longer loses the oldest owner turns when a conversation backlog exceeds the 24,000-character window: the window now starts at the watermark and the watermark only advances past what was actually captured, so skipped messages are picked up by the next run.
+  
+  The weekly memory tidy aborts without changing anything if a memory was edited during its model call, instead of overwriting the owner's edit with text derived from the stale snapshot.
+  
+  Two concurrent `update_instructions` calls can no longer lose an append: the prompt revision and the new prompt are written in one transaction guarded by a conditional update, retried when another writer got there first.
+  
+  A resumed `update_instructions` call now reports it was interrupted instead of appending the same lines a second time (its replay policy is `unsafe`, like other side-effecting tools).
+  
+  `list_tasks` now returns only open tasks (`todo` and `in_progress`) when no status filter is passed, matching its description; pass `status: "done"` to see completed tasks.
+  
+  A detached `run_command` under the egress allowlist keeps running past the call: it is started as its own transient systemd unit (egress-restricted, no runtime cap) instead of being killed with the wrapper the moment the call returns. Detached commands never accept secrets, as before.
+  
+  tmux session geometry is validated as integers within the documented ranges before it is interpolated into the shell command, so no caller can smuggle a payload through cols or rows.
+  
+  `search_attachment` with `regex: true` refuses patterns whose alternation under a quantifier is ambiguous (for example `(a|a)*`, `(a|aa)+$`, `((a|a)*)*b`), the classic catastrophic-backtracking shapes the nested-quantifier check missed. Benign alternations like `^(a|b)c$` still work.
+
+- [`e511da5`](https://github.com/AshikNesin/tiny-agents/commit/e511da53df9f14db7849c0cdf861c34e2689baac) Thanks [@ampagent](https://github.com/ampagent)! - Vault credentials stay off plaintext http. `http_request` with a vault handle refuses an `http://` URL up front, and a redirect from `https` to `http` on the same host fails before the credential is sent, instead of leaking it to anyone listening on the wire. Plain `http_request` calls without a vault item are unchanged.
+  
+  A vault approval card now shows the whole command `run_command` can run (up to 20,000 characters, matching the tool's limit) instead of a 2,000-character prefix, so the owner approves what actually runs.
+  
+  A guest who answers a bot's `ask_owner` questions is named in the answer the model reads ("Priya (guest) answered your questions"), instead of being presented as the owner's own decision.
+  
+  A vault value filled into a page is no longer handed to frames whose origin the item does not allow: the fill used to serialize the secret into every frame before checking the allowlist, so a cross-origin iframe could read it. It now reaches only the page's own origin and the origins the item names.
+
 ## 0.1.2
 
 ### Patch Changes

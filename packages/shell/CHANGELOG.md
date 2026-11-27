@@ -1,5 +1,13 @@
 # @groot/shell
 
+## 3.2.2
+
+### Patch Changes
+
+- Updated dependencies [[`e511da5`](https://github.com/AshikNesin/tiny-agents/commit/e511da53df9f14db7849c0cdf861c34e2689baac), [`e874110`](https://github.com/AshikNesin/tiny-agents/commit/e8741106e6aebff234095f90e704adf4cf3314a9), [`e511da5`](https://github.com/AshikNesin/tiny-agents/commit/e511da53df9f14db7849c0cdf861c34e2689baac), [`e511da5`](https://github.com/AshikNesin/tiny-agents/commit/e511da53df9f14db7849c0cdf861c34e2689baac)]:
+  - @groot/core@2.4.2
+  - @groot/ui@2.0.0
+
 ## 3.2.0
 
 ### Minor Changes

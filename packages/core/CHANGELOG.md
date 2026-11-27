@@ -1,5 +1,19 @@
 # @groot/core
 
+## 2.4.2
+
+### Patch Changes
+
+- [`e511da5`](https://github.com/AshikNesin/tiny-agents/commit/e511da53df9f14db7849c0cdf861c34e2689baac) Thanks [@ampagent](https://github.com/ampagent)! - Tightened five check-then-act races and added input caps on the job admin API. Two concurrent creates of the same task idempotency key or skill name now return the existing row or a clean 409 instead of a raw SqliteError 500; a passkey rename that loses a race with its delete says 404 instead of crashing; registering the same credential twice concurrently says 409; and a kv entry refreshed while a stale read was expiring it survives. Singleton jobs are now enforced by a partial unique index on (name, singleton_key) for created and active states, so two concurrent enqueues of one singleton key create one job. Job options are capped (100 bulk-rerun ids, retryLimit ≤ 100, priority and delays bounded) and job log responses are limited to 500 rows.
+
+- [`e511da5`](https://github.com/AshikNesin/tiny-agents/commit/e511da53df9f14db7849c0cdf861c34e2689baac) Thanks [@ampagent](https://github.com/ampagent)! - Security fixes from the audit. A routine's webhook URL token is no longer written to request logs, error reports or Sentry: hook paths log as `/api/v1/routines/hooks/[redacted]` on every outcome, including 404s and oversized deliveries. A tool that throws on the Claude plan engine has its error scrubbed of registered vault secrets before the model reads it. The auto-review classifier state scrubs first and clips after, so a secret straddling the clip limit no longer reaches the classifier. The Claude worker no longer passes its own `CLAUDE_WORKER_TOKEN` or `CLAUDE_WORKER_PORT` into the Claude Code subprocess environment, or into its git subprocesses; the worker keeps its token for authenticating the app's connection.
+
+- [`e511da5`](https://github.com/AshikNesin/tiny-agents/commit/e511da53df9f14db7849c0cdf861c34e2689baac) Thanks [@ampagent](https://github.com/ampagent)! - Passwords hash with PBKDF2 at 600,000 iterations (OWASP's current floor) instead of 100,000. Existing hashes stay valid, and the next successful password login re-hashes the account at the new count, the same path bcrypt hashes already took.
+  
+  An admin-key check that fails now counts against a per-IP limit (10 failed keys per 15 minutes by default, `config.rateLimits.adminKey`), so the header can't be brute-forced online; correct keys are never counted.
+  
+  SECRETS_KEY must hold at least 32 bytes of key material (counted after base64 or hex decoding) before it seals anything; a weaker key gets a clear error naming the variable instead of silently encrypting with low entropy. Reading is unchanged: values sealed before the floor still open, so an operator can tighten the key with `pnpm secrets:rotate` without losing data.
+
 ## 2.4.0
 
 ### Minor Changes

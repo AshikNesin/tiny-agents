@@ -1,5 +1,11 @@
 # @groot/ui
 
+## 2.0.0
+
+### Major Changes
+
+- [#581](https://github.com/AshikNesin/tiny-agents/pull/581) [`e874110`](https://github.com/AshikNesin/tiny-agents/commit/e8741106e6aebff234095f90e704adf4cf3314a9) Thanks [@AshikNesin](https://github.com/AshikNesin)! - `@groot/ui` is built on Base UI instead of Radix. Components that took `asChild` now take `render` (an element or a function); run `scripts/codemods/as-child-to-render.ts` to rewrite call sites. Menus, dialogs, select, tabs, tooltips and checkboxes style off Base UI's `data-open`, `data-checked` and `data-active` attributes. New exports: `collapsible`, `item`, `search-select`, `switch`, `toggle-group`, `fluid/ask-user-questions` and `fluid/thinking-indicator`.
+
 ## 1.3.1
 
 ### Patch Changes

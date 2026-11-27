@@ -1,5 +1,27 @@
 # @tiny-agents/claude-worker
 
+## 0.5.0
+
+### Minor Changes
+
+- [#565](https://github.com/AshikNesin/tiny-agents/pull/565) [`566e80d`](https://github.com/AshikNesin/tiny-agents/commit/566e80df2f2d2ba9ad59d812d5f56170aafd6347) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Claude Code threads can now use your connections too. Every connection shared with every bot is offered to Claude Code, loaded on demand, and the calls run in the app, so connection sign-ins never reach the sandbox. Settings > Tools decides which tools run, ask or stay off, and a tool that asks shows the usual approval card.
+
+- [#566](https://github.com/AshikNesin/tiny-agents/pull/566) [`dadbaf1`](https://github.com/AshikNesin/tiny-agents/commit/dadbaf1810244339d908e356695882f03b0497f8) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Code threads can now use your skills. Every skill shared with every bot is offered in Native and Claude Code threads. Only each skill's name and description go into the prompt, and its instructions load when a thread uses it.
+
+### Patch Changes
+
+- [`54143fb`](https://github.com/AshikNesin/tiny-agents/commit/54143fbd55708fab2684c0f8041189b3e29307df) Thanks [@ampagent](https://github.com/ampagent)! - Four audit fixes in the self-update channel, the legacy database migration, Shelley transcripts and the Claude turn queue.
+  
+  The self-update channel now notices when the `pnpm local` supervisor goes away: the supervisor status is cleared, and check/apply answer the same 409 as an unsupervised server instead of a silent no-op 202 while the owner's update button appears to work.
+  
+  The one-time Prisma-to-Drizzle migration is crash-safe. A crash between the renames used to leave no `app.db` at all, so the next boot silently created an empty database. The new database is now flushed to disk before the swap, and the next boot detects a half-done swap and either completes it or restores the pre-migration database before anything opens it.
+  
+  A Shelley screenshot URL with a malformed percent escape (a file named `shot%zz.png`) no longer fails the whole transcript build for that conversation; the image degrades to its raw path. Image asset refs whose ids grow past four digits keep loading, matching what the producer mints in long conversations.
+  
+  A turn whose Claude process failed to start is failed with that error instead of staying in the session's queue and being replayed to the next process, which could re-run the turn's actions a second time.
+
+- [`e511da5`](https://github.com/AshikNesin/tiny-agents/commit/e511da53df9f14db7849c0cdf861c34e2689baac) Thanks [@ampagent](https://github.com/ampagent)! - Security fixes from the audit. A routine's webhook URL token is no longer written to request logs, error reports or Sentry: hook paths log as `/api/v1/routines/hooks/[redacted]` on every outcome, including 404s and oversized deliveries. A tool that throws on the Claude plan engine has its error scrubbed of registered vault secrets before the model reads it. The auto-review classifier state scrubs first and clips after, so a secret straddling the clip limit no longer reaches the classifier. The Claude worker no longer passes its own `CLAUDE_WORKER_TOKEN` or `CLAUDE_WORKER_PORT` into the Claude Code subprocess environment, or into its git subprocesses; the worker keeps its token for authenticating the app's connection.
+
 ## 0.4.4
 
 ### Patch Changes
