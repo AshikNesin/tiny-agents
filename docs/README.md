@@ -72,15 +72,16 @@ What ships in the box and how to use or extend it.
 
 Lookup material.
 
-| Document                                                           | What it covers                                        |
-| ------------------------------------------------------------------ | ----------------------------------------------------- |
-| [`reference/config.md`](./reference/config.md)                     | `AppConfig` defaults and `defineConfig()` overrides   |
-| [`reference/api-requests.md`](./reference/api-requests.md)         | Copy-ready `curl` recipes with expected status codes  |
-| [`reference/state-machines.md`](./reference/state-machines.md)     | Every stored lifecycle: states, moves, guarded writes |
-| [`reference/workspace-layout.md`](./reference/workspace-layout.md) | What each package and app in the workspace holds      |
-| [`adr/`](./adr/README.md)                                          | Architecture decision records (the _why_)             |
-| [`../scripts/demo/README.md`](../scripts/demo/README.md)           | tiny-agents: the demo video and how to re-record it   |
-| [`demo/README.md`](./demo/README.md)                               | tiny-agents: the demo films, with what each one shows |
+| Document                                                           | What it covers                                         |
+| ------------------------------------------------------------------ | ------------------------------------------------------ |
+| [`reference/config.md`](./reference/config.md)                     | `AppConfig` defaults and `defineConfig()` overrides    |
+| [`reference/api-requests.md`](./reference/api-requests.md)         | Copy-ready `curl` recipes with expected status codes   |
+| [`reference/state-machines.md`](./reference/state-machines.md)     | Every stored lifecycle: states, moves, guarded writes  |
+| [`reference/workspace-layout.md`](./reference/workspace-layout.md) | What each package and app in the workspace holds       |
+| [`reference/threat-model.md`](./reference/threat-model.md)         | Who can reach the app and the control at each boundary |
+| [`adr/`](./adr/README.md)                                          | Architecture decision records (the _why_)              |
+| [`../scripts/demo/README.md`](../scripts/demo/README.md)           | tiny-agents: the demo video and how to re-record it    |
+| [`demo/README.md`](./demo/README.md)                               | tiny-agents: the demo films, with what each one shows  |
 
 ## `@tiny-agents/agent` entry points
 
