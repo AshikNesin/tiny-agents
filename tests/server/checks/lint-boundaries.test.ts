@@ -547,6 +547,11 @@ const FIXTURES: Record<string, Fixture> = {
       'import React from "react";\nimport { codeApi } from "./lib/code/api";\nexport function Usage({ id }: { id: string }) {\n  React.useEffect(() => {\n    void codeApi.usage(id);\n  }, [id]);\n  return null;\n}\n',
     rules: ["R15"],
   },
+  "apps/web/src/client/r15-wrapped-loader-fail.tsx": {
+    source:
+      'import { useEffect, useState } from "react";\nimport { loadModels } from "./pages/code/controls";\nexport function Picker({ id }: { id: string }) {\n  const [models, setModels] = useState<string[]>([]);\n  useEffect(() => {\n    void loadModels(id).then(setModels);\n  }, [id]);\n  return models.length;\n}\n',
+    rules: ["R15"],
+  },
   "apps/web/src/client/r15-name-only-pass.tsx": {
     source:
       'import { useCallback, useEffect, useState } from "react";\nimport { codeApi } from "./lib/code/api";\nexport function Panel({ result }: { result: { load: number } }) {\n  const [, set] = useState({ load: 0 });\n  const load = useCallback(() => codeApi.list(), []);\n  useEffect(() => {\n    set({ load: result.load });\n  }, [result]);\n  return <button onClick={load}>Load</button>;\n}\n',

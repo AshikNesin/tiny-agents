@@ -337,6 +337,7 @@ const BOUNDARY_RULES: BoundaryRule[] = [
       "apps/web/src/client/components/PhoneNotificationSettings.tsx",
       "apps/web/src/client/components/bot-dialog/use-bot-dialog-lists.ts",
       "apps/web/src/client/components/browser/VncView.tsx",
+      "apps/web/src/client/components/ui/hooks/use-highlighted-code.ts",
       "apps/web/src/client/components/chat-pane/live-views.tsx",
       "apps/web/src/client/lib/use-tool-labels.ts",
       "apps/web/src/client/pages/terminal/Terminal.tsx",
