@@ -115,7 +115,7 @@ describe("threads in the chat sidebar", () => {
     ]);
   });
 
-  it("lists project chats in their own Projects section, above Threads, not under Bots", () => {
+  it("lists project chats in their own Projects section, then Bots, then Threads", () => {
     const bot = (id: string, name: string, projectId: string | null): BotListEntry => ({
       id,
       conversationId: `c-${id}`,
@@ -135,7 +135,7 @@ describe("threads in the chat sidebar", () => {
     useBotsStore.setState({ bots: [bot("b1", "Ada", null), bot("b2", "web", "p1")] });
     renderSidebar();
     const regions = screen.getAllByRole("region").map((r) => r.getAttribute("aria-label"));
-    expect(regions).toEqual(["Projects", "Threads", "Bots"]);
+    expect(regions).toEqual(["Projects", "Bots", "Threads"]);
     const projects = within(screen.getByRole("region", { name: "Projects" }));
     const avatar = projects.getByRole("link", { name: "web" }).querySelector("img");
     expect(avatar?.getAttribute("src")).toBe("https://api.dicebear.com/10.x/gaze/svg?seed=web");
@@ -144,6 +144,40 @@ describe("threads in the chat sidebar", () => {
     const bots = within(screen.getByRole("region", { name: "Bots" }));
     expect(bots.queryByText("web")).toBeNull();
     expect(bots.getByText("Ada")).toBeVisible();
+  });
+
+  it("shows three projects and five threads, and More shows the rest", () => {
+    const projectBot = (i: number): BotListEntry => ({
+      id: `pb${i}`,
+      conversationId: `c-pb${i}`,
+      name: `Project ${i}`,
+      description: "",
+      modelId: "m",
+      lastMessagePreview: null,
+      lastActivityAt: `2026-11-0${9 - i}T00:00:00.000Z`,
+      lastReadAt: null,
+      unread: false,
+      replying: false,
+      approvals: 0,
+      questions: 0,
+      pinnedAt: null,
+      projectId: `p${i}`,
+    });
+    useBotsStore.setState({ bots: [1, 2, 3, 4, 5].map(projectBot) });
+    useCodeStore.setState({
+      threads: Array.from({ length: 7 }, (_, i) =>
+        thread(`t${i}`, { working: true, status: { group: "working", reason: null } }),
+      ),
+    });
+    renderSidebar();
+    const projects = within(screen.getByRole("region", { name: "Projects" }));
+    expect(projects.getAllByRole("link")).toHaveLength(3);
+    fireEvent.click(projects.getByRole("button", { name: "More (2)" }));
+    expect(projects.getAllByRole("link")).toHaveLength(5);
+    const threads = within(screen.getByRole("region", { name: "Threads" }));
+    expect(threads.getAllByRole("link", { name: /Thread t/ })).toHaveLength(5);
+    fireEvent.click(threads.getByRole("button", { name: "More (2)" }));
+    expect(threads.getAllByRole("link", { name: /Thread t/ })).toHaveLength(7);
   });
 
   it("folds and unfolds from its heading", () => {

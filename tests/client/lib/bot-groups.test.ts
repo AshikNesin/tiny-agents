@@ -69,9 +69,9 @@ describe("visibleRecent", () => {
   });
 
   it("keeps the open bot visible even when it falls past the fold", () => {
-    const shown = visibleRecent(many, false, "b10");
+    const shown = visibleRecent(many, false, `b${many.length - 1}`);
     expect(shown).toHaveLength(RECENT_FOLD_LIMIT + 1);
-    expect(shown.at(-1)?.id).toBe("b10");
+    expect(shown.at(-1)?.id).toBe(`b${many.length - 1}`);
   });
 
   it("does not fold short lists", () => {

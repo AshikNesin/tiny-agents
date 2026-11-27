@@ -9,13 +9,19 @@ import {
 } from "@groot/ui/dropdown-menu";
 import { cn } from "@groot/ui/lib/utils";
 import type { BotListEntry } from "../../../shared/api/bots";
-import { groupBots, previewLine, relativeTime, visibleRecent } from "../../lib/bot-groups";
+import {
+  groupBots,
+  previewLine,
+  RECENT_FOLD_LIMIT,
+  relativeTime,
+  visibleRecent,
+} from "../../lib/bot-groups";
 import { attentionOf, railBots, stateLabel, waitingLabel } from "../../lib/attention";
 import { useBotsStore } from "../../store/bots";
 import { useViewerRole } from "../../store/people";
 import { useUiStore } from "../../store/ui";
 import { BotAvatar } from "../BotAvatar";
-import { SidebarSection } from "./SidebarSection";
+import { MoreRow, SidebarSection } from "./SidebarSection";
 
 function RowStatus({ bot, active }: { bot: BotListEntry; active: boolean }) {
   const { waiting, replying, unread } = attentionOf(bot);
@@ -150,7 +156,7 @@ export function BotsSection({ bots, activeId, onNavigate = () => {} }: BotsSecti
   const above = needsYou.length + working.length + pinned.length;
   const shown = visibleRecent(recent, expanded, activeId);
   const hidden = recent.length - shown.length;
-  const foldable = recent.length > shown.length || (expanded && recent.length > 8);
+  const foldable = recent.length > shown.length || (expanded && recent.length > RECENT_FOLD_LIMIT);
 
   return (
     <SidebarSection
@@ -216,13 +222,7 @@ export function BotsSection({ bots, activeId, onNavigate = () => {} }: BotsSecti
             ))}
           </ul>
           {foldable && (
-            <button
-              type="button"
-              onClick={() => setExpanded((v) => !v)}
-              className="text-muted-foreground hover:text-foreground mt-0.5 flex h-9 w-full items-center rounded-xl px-1.5 text-sm font-medium"
-            >
-              {expanded ? "Show less" : `Show more${hidden > 0 ? ` (${hidden})` : ""}`}
-            </button>
+            <MoreRow hidden={hidden} expanded={expanded} onToggle={() => setExpanded((v) => !v)} />
           )}
         </>
       )}
