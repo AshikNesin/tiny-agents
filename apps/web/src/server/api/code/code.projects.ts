@@ -1,3 +1,4 @@
+import { withToolPicks } from "../../../shared/tool-picks";
 import { randomBytes } from "node:crypto";
 import { and, desc, eq } from "drizzle-orm";
 import { Boom } from "@groot/core/errors";
@@ -326,6 +327,7 @@ async function freeBranch(
 
 export interface ProjectThreadInput extends CreateThreadInput {
   branch?: string;
+  tools?: string[];
 }
 
 export function projectModel(project: CodeProjectRow, instanceId: string): string | undefined {
@@ -354,13 +356,13 @@ export async function startProjectThread(
   const startCheckpoint = await ws
     .checkpoint(path, checkpointRef(branch, 0))
     .catch(() => undefined);
-  const { branch: _branch, ...create } = input;
+  const { branch: _branch, tools = [], ...create } = input;
   let created: { nativeId: string };
   try {
     created = await instance.createThread({
       ...create,
       cwd: path,
-      message: `${projectPreamble(project, branch, scripts, setupFailure)}\n\n${input.message}`,
+      message: `${projectPreamble(project, branch, scripts, setupFailure)}\n\n${withToolPicks(input.message, tools)}`,
       model: input.model ?? projectModel(project, instance.id),
     });
   } catch (error) {

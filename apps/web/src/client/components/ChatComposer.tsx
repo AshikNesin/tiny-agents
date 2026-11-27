@@ -9,9 +9,24 @@ import {
   useRef,
   useState,
 } from "react";
-import { AtSign, ChevronDown, Cpu, ListPlus, Paperclip, Plus, Sparkles, Zap } from "lucide-react";
+import {
+  AtSign,
+  ChevronDown,
+  Command,
+  Cpu,
+  ListPlus,
+  Paperclip,
+  Plug,
+  Plus,
+  Sparkles,
+  Wrench,
+  Zap,
+} from "lucide-react";
 import { useViewerRole } from "../store/people";
 import { useSkills } from "../queries/skills";
+import { useBotTools } from "../queries/bot-tools";
+import { slashEntries, toolPickLabel, type SlashEntry, type SlashKind } from "../lib/slash-menu";
+import { ComposerChip } from "./ComposerChip";
 import { Button } from "@groot/ui/button";
 import {
   DropdownMenu,
@@ -174,6 +189,14 @@ function ModelChip({
   );
 }
 
+const NEW_CHAT_COMMANDS = [{ command: "/new", hint: "Start a new chat" }];
+
+const SLASH_ICONS = { command: Command, skill: Sparkles, connection: Plug, tool: Wrench };
+
+function slashId(entry: SlashEntry): string {
+  return `${entry.kind}:${entry.value}`;
+}
+
 export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function ChatComposer(
   {
     bot,
@@ -223,8 +246,23 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
     () => (library ?? []).filter((skill) => bot.skillIds.includes(skill.id)),
     [library, bot.skillIds],
   );
+  const toolChoices = useBotTools(bot.id, { enabled: owner }).data;
+  const [tools, setTools] = useState<string[]>([]);
   const skillToken = owner ? activeSkillToken(text, caret) : null;
-  const skillOpen = skillToken !== null && !mentionClosed && botSkills.length > 0;
+  const slashQuery = skillToken?.query ?? null;
+  const slash = useMemo(
+    () =>
+      slashQuery !== null
+        ? slashEntries(slashQuery, {
+            commands: onNewChat ? NEW_CHAT_COMMANDS : [],
+            skills: botSkills,
+            tools: toolChoices ?? [],
+            picked: tools,
+          })
+        : [],
+    [slashQuery, onNewChat, botSkills, toolChoices, tools],
+  );
+  const skillOpen = skillToken !== null && !mentionClosed && slash.length > 0;
 
   const modelKnown = model !== undefined;
   const enabled = canAnswer && modelKnown;
@@ -292,16 +330,20 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
       setMentionHint(ambiguousMentionHint(mentions.ambiguous));
       return;
     }
+    const picked = tools;
     setDraft(emptyDraft());
+    setTools([]);
     setMentionClosed(false);
     for (const item of staged) if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
     const outcome = await onSend({
       body: sent.body,
       attachments: sent.attachments,
       mentions: mentions.ids,
+      ...(picked.length > 0 ? { tools: picked } : {}),
       whenBusy,
     }).catch((): OwnerSendOutcome => "restored");
     if (outcome === "restored") {
+      setTools((current) => [...new Set([...picked, ...current])]);
       setDraft((current) =>
         restoreRefused(current, sent, (attachment) => ({
           name: attachment.name,
@@ -332,11 +374,30 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
     pendingCaret.current = next.caret;
   };
 
-  const insertSkill = (chosen: MentionableBot) => {
-    const start = `/${chosen.name} `;
+  const replaceSlash = (start: string) => {
     setDraft((current) => editText(current, start + current.text.slice(caret)));
     setCaret(start.length);
     pendingCaret.current = start.length;
+  };
+
+  const pickSlash = (chosen: MentionableBot) => {
+    const entry = slash.find((candidate) => slashId(candidate) === chosen.id);
+    if (!entry) return;
+    if (entry.kind === "command") {
+      replaceSlash("");
+      if (onNewChat?.()) setTools([]);
+      return;
+    }
+    if (entry.kind === "skill") {
+      replaceSlash(`/${entry.value} `);
+      return;
+    }
+    const slug = entry.kind === "connection" ? entry.value.slice(0, -1) : undefined;
+    setTools((current) => [
+      ...current.filter((name) => !slug || !name.startsWith(slug)),
+      entry.value,
+    ]);
+    replaceSlash("");
   };
 
   const startMention = () => {
@@ -385,6 +446,22 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
             {staged.map((item) => (
               <StagedAttachment key={item.key} attachment={item} onRemove={() => unstage(item)} />
             ))}
+          </div>
+        )}
+        {tools.length > 0 && (
+          <div className="mb-2 flex flex-wrap gap-1.5 px-1" data-testid="tool-chips">
+            {tools.map((name) => {
+              const label = toolPickLabel(name, toolChoices ?? []);
+              return (
+                <ComposerChip
+                  key={name}
+                  icon={<Wrench className="size-3" />}
+                  label={label}
+                  onRemove={() => setTools((current) => current.filter((n) => n !== name))}
+                  removeLabel={`Remove tool ${label}`}
+                />
+              );
+            })}
           </div>
         )}
         {mentionHint && (
@@ -580,12 +657,20 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
         {skillOpen && skillToken && (
           <MentionAutocomplete
             ref={mentionRef}
-            bots={botSkills}
+            bots={slash.map((entry) => ({
+              id: slashId(entry),
+              name: entry.label,
+              description: entry.detail,
+            }))}
             query={skillToken.query}
-            onSelect={insertSkill}
+            onSelect={pickSlash}
             onClose={() => setMentionClosed(true)}
-            label="Use a skill"
-            icon={() => <Sparkles className="text-muted-foreground size-4" />}
+            label="Commands, skills and tools"
+            icon={(item) => {
+              const Icon = SLASH_ICONS[item.id.slice(0, item.id.indexOf(":")) as SlashKind];
+              return <Icon className="text-muted-foreground size-4" />;
+            }}
+            filtered
           />
         )}
         {mentionOpen && mention && (

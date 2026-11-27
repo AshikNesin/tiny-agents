@@ -85,6 +85,7 @@ export interface SendMessageBody {
   text: string;
   mentions?: string[];
   attachments?: string[];
+  tools?: string[];
   whenBusy?: "steer" | "followUp";
 }
 

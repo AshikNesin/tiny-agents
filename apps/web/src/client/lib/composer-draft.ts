@@ -114,6 +114,6 @@ export function restoreRefused<Ref>(
 }
 
 export function activeSkillToken(text: string, caret: number): { query: string } | null {
-  const token = /^\/([a-z0-9-]*)$/.exec(text.slice(0, caret));
+  const token = /^\/([a-z0-9_-]*)$/.exec(text.slice(0, caret));
   return token ? { query: token[1]! } : null;
 }

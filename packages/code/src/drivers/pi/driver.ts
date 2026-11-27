@@ -757,6 +757,7 @@ export function createPiHarness(options: PiHarnessOptions): HarnessInstance {
 
     commands: () => COMMANDS,
     skills: (cwd) => port.skills(cwd),
+    tools: () => port.tools(),
   };
   return instance;
 }

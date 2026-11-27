@@ -1,3 +1,4 @@
+import { TOOL_PICK, TOOL_PICKS_MAX } from "../../../shared/tool-picks";
 import { z } from "zod";
 import { MAX_ANSWER_TEXT } from "@tiny-agents/agent";
 
@@ -82,6 +83,7 @@ export const sendMessageSchema = z
       .array(z.string().regex(/^[a-f0-9]{24}$/, "Invalid upload id"))
       .max(10)
       .optional(),
+    tools: z.array(z.string().regex(TOOL_PICK).max(200)).max(TOOL_PICKS_MAX).optional(),
     whenBusy: z.enum(["steer", "followUp"]).optional(),
   })
   .refine((data) => (data.text ?? "").trim().length > 0 || (data.attachments?.length ?? 0) > 0, {

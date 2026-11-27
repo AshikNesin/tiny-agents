@@ -16,6 +16,8 @@ import {
 import { eq } from "drizzle-orm";
 import { codeThreads, db, type CodeProjectRow } from "../../db";
 import { openSse } from "../bots/bots.sse";
+import { checkToolPicks } from "../bots/tool-choices";
+import { TOOL_PICK, TOOL_PICKS_MAX, withToolPicks } from "../../../shared/tool-picks";
 import { codeHub, type CodeHub } from "./code.hub";
 import { follow, markSeen } from "./code.store";
 import {
@@ -191,6 +193,7 @@ async function issueFor(
 
 const message = z.string().trim().min(1).max(100_000);
 const refs = z.array(z.string().max(2048)).max(20).optional();
+const tools = z.array(z.string().regex(TOOL_PICK).max(200)).max(TOOL_PICKS_MAX).optional();
 const permissionMode = z.enum(["default", "acceptEdits", "plan", "bypassPermissions"]);
 
 const createSchema = z.object({
@@ -202,10 +205,17 @@ const createSchema = z.object({
   effort: z.string().trim().max(20).optional(),
   permissionMode: permissionMode.optional(),
   attachments: refs,
+  tools,
 });
 
+async function pickedTools(instance: HarnessInstance, picks: string[] = []) {
+  if (picks.length === 0) return [];
+  const choices = await run(() => need(instance, "tools", "use app tools")());
+  return checkToolPicks(choices, picks);
+}
+
 router.post("/code/threads", async (c) => {
-  const body = await parseBody(c, createSchema);
+  const { tools: picks, ...body } = await parseBody(c, createSchema);
   const project = await getProject(body.projectId);
   const instanceId = body.instanceId ?? project.defaultInstanceId ?? undefined;
   if (!instanceId) throw Boom.badRequest("Pick an agent.");
@@ -218,10 +228,12 @@ router.post("/code/threads", async (c) => {
     throw Boom.badRequest("This agent does not offer that permission mode.");
   }
   const { instanceId: _instance, projectId: _project, ...input } = body;
+  const tools = await pickedTools(instance, picks);
   const issue = await issueFor(project, input.message);
   const started = await run(() =>
     startProjectThread(project, instance, {
       ...input,
+      tools,
       message: issue
         ? withWorkflowInstructions(`${input.message}\n\n${issue.text}`, project)
         : input.message,
@@ -283,17 +295,22 @@ const sendSchema = z.object({
   attachments: refs,
   queue: z.boolean().optional(),
   skills: z.array(z.string().max(200)).max(20).optional(),
+  tools,
   withReview: z.boolean().optional(),
 });
 
 router.post("/code/threads/:id/messages", async (c) => {
   const { instance, nativeId, id } = thread(c);
-  const { withReview, ...body } = await parseBody(c, sendSchema);
+  const { withReview, tools: picks, ...body } = await parseBody(c, sendSchema);
+  const tools = await pickedTools(instance, picks);
   const submit = (review: string | null) =>
     run(() =>
       instance.send(nativeId, {
         ...body,
-        message: review ? `${review}\n\n---\n\n${body.message}` : body.message,
+        message: withToolPicks(
+          review ? `${review}\n\n---\n\n${body.message}` : body.message,
+          tools,
+        ),
       }),
     );
   const result = withReview ? (await threadReview(id).send(submit)).result : await submit(null);
@@ -451,6 +468,12 @@ router.get("/code/harnesses/:instance/skills", async (c) => {
   const threadId = query(c, "threadId", false);
   const nativeId = threadId ? hub().resolve(threadId)?.nativeId : undefined;
   return ok(c, await run(() => need(instance, "skills", "list skills")(cwd, nativeId)));
+});
+
+router.get("/code/harnesses/:instance/tools", async (c) => {
+  const instance = harness(c);
+  const list = instance.tools?.bind(instance);
+  return ok(c, list ? await run(list) : []);
 });
 
 router.get("/code/harnesses/:instance/find-files", async (c) => {

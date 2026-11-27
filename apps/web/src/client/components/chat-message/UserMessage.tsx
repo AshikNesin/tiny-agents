@@ -5,10 +5,13 @@ import { Message } from "../ui/message";
 import { useAuthStore } from "@groot/shell/store/auth";
 import { LastTurnButtons } from "./last-turn";
 import { MessageEnter, MessageMeta, isFresh } from "./message-chrome";
+import { Wrench } from "lucide-react";
+import { splitToolPicks } from "../../../shared/tool-picks";
+import { sentToolName } from "../../lib/slash-menu";
 
 export function UserMessage({
   message,
-  text,
+  text: sent,
   failed,
 }: {
   message: ChatMessage;
@@ -16,6 +19,7 @@ export function UserMessage({
   failed: boolean;
 }) {
   const me = useAuthStore((s) => s.user?.id);
+  const { tools, text } = splitToolPicks(sent);
   const other = message.author !== undefined && message.author.id !== me;
   const align = other ? "start" : "end";
   return (
@@ -35,6 +39,22 @@ export function UserMessage({
         )}
         {message.attachments && message.attachments.length > 0 && (
           <MessageAttachments attachments={message.attachments} />
+        )}
+        {tools.length > 0 && (
+          <ul
+            aria-label="Tools asked for"
+            className={`flex flex-wrap gap-1 px-1 ${other ? "justify-start" : "justify-end"}`}
+          >
+            {tools.map((name) => (
+              <li
+                key={name}
+                className="bg-muted text-muted-foreground flex items-center gap-1 rounded-full px-2 py-0.5 text-xs"
+              >
+                <Wrench className="size-3" />
+                {sentToolName(name)}
+              </li>
+            ))}
+          </ul>
         )}
         {text && (
           <div className={other ? OTHER_PILL : USER_PILL}>

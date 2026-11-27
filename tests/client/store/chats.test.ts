@@ -93,7 +93,7 @@ describe("chat sessions: owner send", () => {
     h.chats.open("b1", null);
     await expect(h.chats.send("b1", SUBMISSION)).resolves.toBe("sent");
     expect(outbox(h)).toEqual(["req-1:sending"]);
-    expect(h.send).toHaveBeenCalledWith("b1", "req-1", "ok", [], [], "steer");
+    expect(h.send).toHaveBeenCalledWith("b1", "req-1", "ok", [], [], "steer", []);
   });
 
   it("resends an offline send with the same request id once back online (no duplicate)", async () => {

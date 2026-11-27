@@ -110,6 +110,13 @@ export interface Skill {
   description?: string;
 }
 
+export interface ToolChoice {
+  name: string;
+  label: string;
+  description: string;
+  connection: { slug: string; name: string };
+}
+
 export interface SlashCommand {
   command: string;
   hint: string;

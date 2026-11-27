@@ -89,7 +89,10 @@ export async function itemBotIds(kind: ReachKind, items: Item[]): Promise<Map<st
 export type Reacher = { id: string; projectId: string | null } | "code-thread";
 
 async function reached<T extends Item>(kind: ReachKind, reacher: Reacher, items: T[]) {
-  if (reacher === "code-thread") return items.filter((item) => item.allBots);
+  if (reacher === "code-thread") {
+    const botIds = await itemBotIds(kind, items);
+    return items.filter((item) => item.allBots || (botIds.get(item.id)?.length ?? 0) > 0);
+  }
   const shared = takesShared(reacher);
   const links = new Map(
     (await linksOf(kind, { botId: reacher.id })).map((link) => [link.itemId, link]),

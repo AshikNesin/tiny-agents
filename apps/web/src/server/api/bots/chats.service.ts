@@ -22,9 +22,28 @@ import { requireApprovalAnswer, type Viewer } from "../people/access";
 import { authorOf } from "../people/people.service";
 import { getBot, updateBotRow, type BotAgentRuntime } from "./bots.service";
 import type { YoloState } from "../../../shared/api/bots";
+import { withToolPicks } from "../../../shared/tool-picks";
+import type { ToolChoice } from "@tiny-agents/code/contracts";
+import { getConnectionManager } from "../connections/connections.manager";
+import { reachedConnections } from "./bot-reach";
+import { botPermissions } from "./tool-permissions";
+import { checkToolPicks, toolChoices, usableTools } from "./tool-choices";
 
 function runtime(): BotAgentRuntime {
   return getAgentRuntime();
+}
+
+export async function botToolChoices(id: string): Promise<ToolChoice[]> {
+  const bot = await getBot(id);
+  const [rows, owner] = await Promise.all([reachedConnections(bot), ownerToolPermissions()]);
+  return toolChoices(
+    usableTools(rows, botPermissions(owner, bot.toolPermissions), getConnectionManager()),
+  );
+}
+
+async function withPickedTools(id: string, text: string, picks: string[] | undefined) {
+  if (!picks || picks.length === 0) return text;
+  return withToolPicks(text, checkToolPicks(await botToolChoices(id), picks));
 }
 
 export async function sendMessage(
@@ -34,6 +53,7 @@ export async function sendMessage(
     text: string;
     mentions?: string[];
     attachments?: string[];
+    tools?: string[];
     whenBusy?: "steer" | "followUp";
   },
   rt: BotAgentRuntime = runtime(),
@@ -42,7 +62,9 @@ export async function sendMessage(
   const chat = await openBotChat(id, rt);
   const shared = chat.row.guests?.length;
   const author = shared ? await authorOf(viewer.userId) : undefined;
-  const text = author ? authoredText(author.name, input.text) : input.text;
+  const typed = author ? authoredText(author.name, input.text) : input.text;
+  const picked = await withPickedTools(id, input.text, input.tools);
+  const text = author ? authoredText(author.name, picked) : picked;
   const { bot, attachments } = await submitToBot(
     id,
     {
@@ -56,7 +78,7 @@ export async function sendMessage(
   );
   await updateBotRow(id, {
     lastActivityAt: new Date(),
-    lastMessagePreview: previewText(text, attachments),
+    lastMessagePreview: previewText(typed, attachments),
   });
   if (input.mentions && input.mentions.length > 0) {
     const guest = viewer.kind === "guest";

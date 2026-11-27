@@ -164,6 +164,11 @@ router.post("/bots/:id/messages", async (c) => {
   return ok(c, { submitted: true });
 });
 
+router.get("/bots/:id/tools", async (c) => {
+  const id = parseStringParam(c.req.param("id"), "id");
+  return ok(c, await chatsService.botToolChoices(id));
+});
+
 router.delete("/bots/:id/messages/:requestId", async (c) => {
   const id = parseStringParam(c.req.param("id"), "id");
   const requestId = parseStringParam(c.req.param("requestId"), "requestId");

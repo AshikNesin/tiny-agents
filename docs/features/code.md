@@ -127,8 +127,12 @@ agent to commit but not push.
 - A queued message can be edited, sent now or cancelled.
 - `Esc` leaves the composer; `Esc` again stops the agent.
 - `@` completes files and folders in the working directory where the harness
-  can find files, and `/` hints the harness's commands and, where the harness
-  takes skills, its skills (a pick joins the message's skills).
+  can find files, and `/` hints the harness's commands, where the harness
+  takes skills its skills (a pick joins the message's skills), and, for
+  Native and Claude Code, the connections and tools a thread can use (a pick
+  is a chip, named at the top of the message; see
+  [Chats](./chats.md#the--menu-commands-skills-and-tools)). The new thread box
+  has no `/` menu.
 - **+** attaches files and picks skills, where the harness takes them.
 - The model, reasoning and permission chips sit in the composer.
 
@@ -764,11 +768,14 @@ chat bots use, with a working directory and five coding tools.
   Accept edits asks before `bash` only; Plan takes the three away and tells
   the agent to plan; YOLO (`bypassPermissions`) asks for nothing. A call that asks is an
   approval card, and the agent's own question is a question card.
-- **Connections:** every connection shared with every bot (`allBots`) is
-  offered, deferred behind `tool_search`, with Settings > Tools deciding
-  allow, ask or off ([ADR 0042](../adr/0042-code-threads-use-shared-connections.md)).
+- **Connections:** every connection shared with every bot (`allBots`), or
+  switched on for at least one bot, is offered, deferred behind
+  `tool_search`, with Settings > Tools deciding allow, ask or off
+  ([ADR 0042](../adr/0042-code-threads-use-shared-connections.md),
+  [ADR 0046](../adr/0046-code-threads-reach-what-any-bot-reaches.md)).
   The mode's permissions cover only the coding tools.
-- **Skills:** every skill shared with every bot is listed by name and
+- **Skills:** every skill a bot can use (shared with every bot, or on for
+  at least one, a bot's own saved skills included) is listed by name and
   description, and `load_skill` reads one; `save_skill` is off (ADR 0042).
   The composer lists those plus the repo's `.agents/skills` and
   `.claude/skills` (`nativeSkills` in `code.tools.ts`). A picked skill is sent

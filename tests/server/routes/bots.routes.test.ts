@@ -1,7 +1,8 @@
 import { eq } from "drizzle-orm";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from "vite-plus/test";
 import { api, createTestApp } from "../helpers";
-import { botGuests, bots, db, guests, users } from "../../../apps/web/src/server/db";
+import { botGuests, bots, connections, db, guests, users } from "../../../apps/web/src/server/db";
+import { setOwnerToolPermissions } from "../../../apps/web/src/server/api/bots/tool-permissions";
 import { endAllSse } from "../../../apps/web/src/server/api/bots/bots.sse";
 import {
   onBotChatEvent,
@@ -330,6 +331,61 @@ describe("Bots API routes", () => {
       json: { requestId: "bad-mode-client-id", text: "nope", whenBusy: "sideways" },
     });
     expect(badMode.status).toBe(400);
+    expect(agentRuntime.submit).not.toHaveBeenCalled();
+  });
+
+  it("lists the bot's tools and names the picked ones at the top of the message", async () => {
+    const bot = await createBot();
+    await db.insert(connections).values([
+      {
+        name: "GitHub",
+        slug: "github",
+        url: "https://mcp.github.test/mcp",
+        toolsCache: JSON.stringify([
+          { name: "list_issues", title: "List issues", description: "List issues" },
+          { name: "delete_repo", description: "Delete a repository" },
+        ]),
+      },
+      {
+        name: "Diary",
+        slug: "diary",
+        url: "https://mcp.diary.test/mcp",
+        allBots: false,
+        toolsCache: JSON.stringify([{ name: "read_diary" }]),
+      },
+    ]);
+    await setOwnerToolPermissions({ mcp__github__delete_repo: "off" });
+    onTestFinished(() => setOwnerToolPermissions({}).then(() => undefined));
+
+    const listed = await call(`/api/v1/bots/${bot.id}/tools`);
+    expect(listed.body.data).toEqual([
+      {
+        name: "mcp__github__list_issues",
+        label: "List issues",
+        description: "List issues",
+        connection: { slug: "github", name: "GitHub" },
+      },
+    ]);
+
+    const sent = await call(`/api/v1/bots/${bot.id}/messages`, {
+      method: "POST",
+      json: { requestId: "tool-pick-id", text: "What is open?", tools: ["mcp__github__*"] },
+    });
+    expect(sent.status).toBe(200);
+    expect(agentRuntime.submit).toHaveBeenLastCalledWith(conv(bot), {
+      requestId: "tool-pick-id",
+      text: "Use these tools for this request: mcp__github__*. Load any that are not loaded yet before you start.\n\nWhat is open?",
+    });
+    await expect(findBot(bot.id)).resolves.toMatchObject({ lastMessagePreview: "What is open?" });
+
+    agentRuntime.submit.mockClear();
+    for (const tools of [["mcp__github__delete_repo"], ["mcp__diary__read_diary"]]) {
+      const refused = await call(`/api/v1/bots/${bot.id}/messages`, {
+        method: "POST",
+        json: { requestId: `refused-${tools[0]}`, text: "Go", tools },
+      });
+      expect(refused.status).toBe(400);
+    }
     expect(agentRuntime.submit).not.toHaveBeenCalled();
   });
 

@@ -1,3 +1,4 @@
+import type { ToolChoice } from "@tiny-agents/code/contracts";
 import { apiClient } from "@groot/shell/lib/api";
 import type {
   AnswerQuestionsBody,
@@ -77,14 +78,17 @@ export const botsApi = {
     mentions?: string[],
     attachments?: string[],
     whenBusy?: "steer" | "followUp",
+    tools?: string[],
   ) =>
     apiClient.post(`/bots/${id}/messages`, {
       requestId,
       text,
       ...(mentions?.length ? { mentions } : {}),
       ...(attachments?.length ? { attachments } : {}),
+      ...(tools?.length ? { tools } : {}),
       ...(whenBusy ? { whenBusy } : {}),
     } satisfies SendMessageBody),
+  tools: (id: string) => apiClient.get<ToolChoice[]>(`/bots/${id}/tools`),
   withdraw: (id: string, requestId: string) =>
     apiClient.delete(`/bots/${id}/messages/${encodeURIComponent(requestId)}`),
   upload: (file: File) => {

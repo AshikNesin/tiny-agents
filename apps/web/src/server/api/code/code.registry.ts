@@ -34,6 +34,7 @@ import { threadIndex } from "./code.store";
 import {
   claudeCodeSkills,
   claudeCodeTools,
+  codeToolChoices,
   nativeSkills,
   sharedConnectionToolkits,
 } from "./code.tools";
@@ -80,6 +81,7 @@ function claudeCodeHarness(env: AppEnv, host: HarnessHost): HarnessInstance | un
     host,
     resolveWorker: () => locator.resolve(),
     tools: claudeCodeTools(),
+    toolChoices: () => codeToolChoices(),
     skills: claudeCodeSkills,
     status: () => hint ?? { state: "connected" },
     models: claudePlanModels,
@@ -194,6 +196,7 @@ export function agentRuntimePort(
   return {
     models: () => nativeModels(runtime()),
     skills: (cwd) => nativeSkills(cwd, sandbox()),
+    tools: () => codeToolChoices(),
     create: async (config) =>
       runtime()
         .createConversation(await nativeConfig(config))

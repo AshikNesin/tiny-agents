@@ -1,5 +1,15 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
-import { File, Folder, ListPlus, Paperclip, Plus, Sparkles, X } from "lucide-react";
+import {
+  Command,
+  File,
+  Folder,
+  ListPlus,
+  Paperclip,
+  Plug,
+  Plus,
+  Sparkles,
+  Wrench,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Button, monoClass } from "@groot/ui";
 import {
@@ -38,6 +48,8 @@ import {
 import { activeMentionToken } from "../../lib/mentions";
 import { canStageMore, stageUploads, unstageUpload, type Staging } from "../../lib/staged-uploads";
 import { ComposerSendIcon } from "../../components/composer-send-icon";
+import { ComposerChip } from "../../components/ComposerChip";
+import { slashEntries, toolPickLabel, type SlashKind } from "../../lib/slash-menu";
 
 function tokenAt(
   text: string,
@@ -54,8 +66,10 @@ interface Suggestion {
   label: string;
   detail?: string;
   dir?: boolean;
-  skill?: boolean;
+  kind?: SlashKind;
 }
+
+const SLASH_ICONS = { command: Command, skill: Sparkles, connection: Plug, tool: Wrench };
 
 function quoteRef(path: string): string {
   return /[\s,:()"]/.test(path) ? `"${path.replace(/"/g, '\\"')}"` : path;
@@ -77,7 +91,7 @@ export interface ComposerProps {
   lastTurn?: LastTurn | null;
   onSend(
     message: string,
-    options: { queue: boolean; skills: string[]; attachments: string[] },
+    options: { queue: boolean; skills: string[]; tools: string[]; attachments: string[] },
   ): Promise<void>;
 }
 
@@ -112,6 +126,7 @@ export function Composer({
   const [sending, setSending] = useState(false);
   const [skillsWanted, setSkillsWanted] = useState(false);
   const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
+  const [selectedTools, setSelectedTools] = useState<string[]>([]);
   const [fileSuggestions, setFileSuggestions] = useState<Suggestion[]>([]);
   const [active, setActive] = useState(0);
   const [token, setToken] = useState<ReturnType<typeof tokenAt>>();
@@ -125,6 +140,7 @@ export function Composer({
   useEffect(() => {
     setDraft(emptyDraft(readStoredDraft(codeDraftKey(draftKey))));
     setSelectedSkills([]);
+    setSelectedTools([]);
   }, [draftKey]);
   useEffect(() => writeStoredDraft(codeDraftKey(draftKey), text), [draftKey, text]);
 
@@ -151,6 +167,14 @@ export function Composer({
     if (!skillsQuery.data) return null;
     return Array.isArray(skillsQuery.data) ? skillsQuery.data : [];
   }, [skillsQuery.isError, skillsQuery.data]);
+
+  const toolsQuery = useQuery({
+    queryKey: ["code", "tools", harness.id],
+    queryFn: () => codeApi.tools(harness.id),
+    enabled: token?.kind === "/" || selectedTools.length > 0,
+    ...RESOURCE_QUERY,
+  });
+  const tools = toolsQuery.data;
 
   const fileQuery = token && token.kind !== "/" && cwd && canFind ? token.query : null;
   const files = useQuery({
@@ -181,15 +205,13 @@ export function Composer({
   const slashQuery = token?.kind === "/" ? token.query : null;
   const slashSuggestions = useMemo<Suggestion[]>(() => {
     if (slashQuery === null) return [];
-    return [
-      ...commands
-        .filter((c) => c.command.slice(1).startsWith(slashQuery))
-        .map((c) => ({ value: c.command, label: c.command, detail: c.hint })),
-      ...(skills ?? [])
-        .filter((s) => s.name.startsWith(slashQuery) && !selectedSkills.includes(s.name))
-        .map((s) => ({ value: s.name, label: s.name, detail: s.description, skill: true })),
-    ];
-  }, [slashQuery, commands, skills, selectedSkills]);
+    return slashEntries(slashQuery, {
+      commands,
+      skills: skills ?? [],
+      tools: tools ?? [],
+      picked: [...selectedSkills, ...selectedTools],
+    });
+  }, [slashQuery, commands, skills, tools, selectedSkills, selectedTools]);
   const suggestions = slashQuery !== null ? slashSuggestions : token ? fileSuggestions : [];
 
   const stagedRef = useRef(attachments);
@@ -217,10 +239,12 @@ export function Composer({
       await onSend(sent.body || "(see the attached files)", {
         queue: queue || (working && !steers && canQueue),
         skills: selectedSkills,
+        tools: selectedTools,
         attachments: sent.attachments,
       });
       setDraft(emptyDraft());
       setSelectedSkills([]);
+      setSelectedTools([]);
       writeStoredDraft(codeDraftKey(draftKey), "");
     } catch (error) {
       toast.error(errorMessage(error, "Could not send the message."));
@@ -233,8 +257,14 @@ export function Composer({
     const pick = suggestions[index];
     if (!pick || !token) return;
     const cursor = area.current?.selectionStart ?? text.length;
-    if (pick.skill) {
-      setSelectedSkills((prev) => [...prev, pick.value]);
+    if (pick.kind === "skill" || pick.kind === "tool" || pick.kind === "connection") {
+      const slug = pick.kind === "connection" ? pick.value.slice(0, -1) : undefined;
+      if (pick.kind === "skill") setSelectedSkills((prev) => [...prev, pick.value]);
+      else
+        setSelectedTools((prev) => [
+          ...prev.filter((name) => !slug || !name.startsWith(slug)),
+          pick.value,
+        ]);
       const rest = text.slice(cursor).trimStart();
       setDraft((current) => editText(current, rest));
       setToken(undefined);
@@ -342,8 +372,11 @@ export function Composer({
                 i === active ? "bg-muted text-foreground" : "text-muted-foreground",
               )}
             >
-              {s.skill ? (
-                <Sparkles className="size-4 shrink-0" />
+              {s.kind ? (
+                (() => {
+                  const Icon = SLASH_ICONS[s.kind];
+                  return <Icon className="size-4 shrink-0" />;
+                })()
               ) : token?.kind === "@" ? (
                 s.dir ? (
                   <Folder className="size-4 shrink-0" />
@@ -360,10 +393,10 @@ export function Composer({
         </div>
       )}
 
-      {(attachments.length > 0 || selectedSkills.length > 0) && (
+      {(attachments.length > 0 || selectedSkills.length > 0 || selectedTools.length > 0) && (
         <div className="mb-2 flex flex-wrap gap-1.5 px-1" data-testid="code-composer-chips">
           {selectedSkills.map((name) => (
-            <Chip
+            <ComposerChip
               key={name}
               icon={<Sparkles className="size-3" />}
               label={name}
@@ -371,8 +404,20 @@ export function Composer({
               removeLabel={`Remove skill ${name}`}
             />
           ))}
+          {selectedTools.map((name) => {
+            const label = toolPickLabel(name, tools ?? []);
+            return (
+              <ComposerChip
+                key={name}
+                icon={<Wrench className="size-3" />}
+                label={label}
+                onRemove={() => setSelectedTools((prev) => prev.filter((n) => n !== name))}
+                removeLabel={`Remove tool ${label}`}
+              />
+            );
+          })}
           {attachments.map((a) => (
-            <Chip
+            <ComposerChip
               key={a.key}
               icon={
                 a.status === "uploading" ? (
@@ -596,39 +641,5 @@ export function Composer({
         </p>
       )}
     </div>
-  );
-}
-
-function Chip({
-  icon,
-  label,
-  tone,
-  onRemove,
-  removeLabel,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  tone?: "destructive";
-  onRemove(): void;
-  removeLabel: string;
-}) {
-  return (
-    <span
-      className={cn(
-        "bg-muted flex items-center gap-1 rounded-full py-0.5 pr-0.5 pl-2 text-xs",
-        tone === "destructive" && "text-destructive",
-      )}
-    >
-      {icon}
-      <span className="max-w-40 truncate">{label}</span>
-      <button
-        type="button"
-        aria-label={removeLabel}
-        onClick={onRemove}
-        className="text-muted-foreground hover:bg-background hover:text-foreground rounded-full p-0.5"
-      >
-        <X className="size-3" />
-      </button>
-    </span>
   );
 }

@@ -49,7 +49,15 @@ import {
 } from "../../../../apps/web/src/server/api/code/code.tools";
 import { readFile, readdir } from "node:fs/promises";
 import { setOwnerToolPermissions } from "../../../../apps/web/src/server/api/bots/tool-permissions";
-import { connections, db, skills } from "../../../../apps/web/src/server/db";
+import {
+  botConnections,
+  bots,
+  botSkills,
+  connections,
+  db,
+  skills,
+} from "../../../../apps/web/src/server/db";
+import { seedBot } from "../../fixtures/db";
 import type { FakeMcpServer } from "./fake-sdk";
 
 const TOKEN = Buffer.alloc(32, 9).toString("base64");
@@ -659,6 +667,62 @@ describe("Claude Code harness", () => {
     expect(
       JSON.parse(await readFile(path.join(root, ".claude-plugin", "plugin.json"), "utf8")),
     ).toMatchObject({ name: "tiny-agents" });
+  });
+
+  it("gives Claude Code the connections and skills a bot chat has, not only shared ones", async () => {
+    const bot = await seedBot();
+    const [github] = await db
+      .insert(connections)
+      .values([
+        {
+          name: "GitHub",
+          slug: "github",
+          url: "https://mcp.github.test/mcp",
+          allBots: false,
+          toolsCache: JSON.stringify([{ name: "list_issues", inputSchema: { type: "object" } }]),
+        },
+        {
+          name: "Diary",
+          slug: "diary",
+          url: "https://mcp.diary.test/mcp",
+          allBots: false,
+          toolsCache: JSON.stringify([{ name: "read_diary", inputSchema: { type: "object" } }]),
+        },
+      ])
+      .returning();
+    const [triage] = await db
+      .insert(skills)
+      .values([
+        { name: "triage", description: "Triage issues", body: "Label it.", allBots: false },
+        { name: "journal", description: "Keep a journal", body: "Private.", allBots: false },
+      ])
+      .returning();
+    await db.insert(botConnections).values({ botId: bot.id, connectionId: github!.id });
+    await db.insert(botSkills).values({ botId: bot.id, skillId: triage!.id });
+    await setOwnerToolPermissions({ mcp__github__list_issues: "allow" });
+    cleanups.push(async () => {
+      await db.delete(botConnections);
+      await db.delete(botSkills);
+      await db.delete(connections);
+      await db.delete(skills);
+      await db.delete(bots);
+      await setOwnerToolPermissions({});
+    });
+    const tools = claudeCodeTools(() => ({
+      status: () => ({ status: "connected" as const }),
+      call: async (id: string, tool: string) => ({
+        content: [{ type: "text", text: `${id} ${tool}` }],
+      }),
+    }));
+
+    expect((await tools.list()).map((tool) => `${tool.server}.${tool.name}`)).toEqual([
+      "github.list_issues",
+    ]);
+    await expect(tools.call("github", "list_issues", {})).resolves.toEqual({
+      content: `${github!.id} list_issues`,
+    });
+    await expect(tools.call("diary", "read_diary", {})).resolves.toMatchObject({ isError: true });
+    expect((await claudeCodeSkills()).map((skill) => skill.name)).toEqual(["triage"]);
   });
 
   it("keeps a shared skill whose stored files are unreadable", async () => {

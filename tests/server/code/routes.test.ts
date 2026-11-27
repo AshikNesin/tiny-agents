@@ -346,6 +346,43 @@ describe("Code API", () => {
     expect(fake.sent.at(-1)?.message).toBe("Thanks");
   });
 
+  it("lists a harness's app tools and names the picked ones at the top of the message", async () => {
+    fake.tools = async () => [
+      {
+        name: "mcp__github__list_issues",
+        label: "List issues",
+        description: "List a repository's issues",
+        connection: { slug: "github", name: "GitHub" },
+      },
+    ];
+    expect((await get("/harnesses/fake/tools")).body.data).toEqual([
+      {
+        name: "mcp__github__list_issues",
+        label: "List issues",
+        description: "List a repository's issues",
+        connection: { slug: "github", name: "GitHub" },
+      },
+    ]);
+    expect((await get("/harnesses/shelley/tools")).body.data).toEqual([]);
+
+    const sent = await post("/threads/fake:t1/messages", {
+      message: "Triage the new ones",
+      tools: ["mcp__github__list_issues", "mcp__github__*"],
+    });
+    expect(sent.status).toBe(200);
+    expect(fake.sent.at(-1)?.message).toBe(
+      "Use these tools for this request: mcp__github__list_issues, mcp__github__*. Load any that are not loaded yet before you start.\n\nTriage the new ones",
+    );
+
+    const before = fake.sent.length;
+    const unknown = await post("/threads/fake:t1/messages", {
+      message: "Read my diary",
+      tools: ["mcp__diary__read_diary"],
+    });
+    expect(unknown.status).toBe(400);
+    expect(fake.sent).toHaveLength(before);
+  });
+
   it("serves links written before the harness layer (bare Shelley ids)", async () => {
     shelley.conversations.set("cLegacy", {
       messages: [],

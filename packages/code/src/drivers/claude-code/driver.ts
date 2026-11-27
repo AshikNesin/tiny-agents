@@ -41,6 +41,7 @@ import {
   type ThreadSettings,
   type ThreadSnapshot,
   type ThreadSummary,
+  type ToolChoice,
   type TranscriptItem,
   type TurnOutcome,
   type UsageReport,
@@ -78,6 +79,7 @@ export interface ClaudeCodeHarnessOptions {
   id?: string;
   host: HarnessHost;
   tools?: AppToolPort;
+  toolChoices?: () => Promise<ToolChoice[]>;
   skills?: () => Promise<CodingSkill[]>;
   resolveWorker: () => Promise<{ url: string; token: string }>;
   status?: () => InstanceStatus;
@@ -1043,6 +1045,8 @@ export function createClaudeCodeHarness(options: ClaudeCodeHarnessOptions): Clau
         ...(model.supportedEffortLevels?.length ? { supportsReasoning: true } : {}),
       }));
     },
+
+    ...(options.toolChoices ? { tools: options.toolChoices } : {}),
 
     commands() {
       const commands = catalog?.commands ?? [];

@@ -19,6 +19,7 @@ export interface OwnerSubmission {
   body: string;
   attachments: AttachmentRef[];
   mentions: string[];
+  tools?: string[];
   whenBusy: "steer" | "followUp";
 }
 
@@ -40,6 +41,7 @@ export interface ChatPorts {
     mentions: string[],
     attachmentIds: string[],
     whenBusy: "steer" | "followUp",
+    tools: string[],
   ): Promise<unknown>;
   withdraw(botId: string, requestId: string): Promise<unknown>;
   abort(botId: string): Promise<unknown>;
@@ -94,6 +96,7 @@ export function createChatSessions(ports: ChatPorts) {
         submission.mentions,
         submission.attachments.map((a) => a.uploadId),
         submission.whenBusy,
+        submission.tools ?? [],
       );
       return "sent";
     } catch (error) {
@@ -242,8 +245,8 @@ export const chatSessions: ChatSessions = createChatSessions({
       onOpen,
       onDrop,
     }),
-  send: (botId, requestId, body, mentions, attachmentIds, whenBusy) =>
-    botsApi.send(botId, requestId, body, mentions, attachmentIds, whenBusy),
+  send: (botId, requestId, body, mentions, attachmentIds, whenBusy, tools) =>
+    botsApi.send(botId, requestId, body, mentions, attachmentIds, whenBusy, tools),
   withdraw: (botId, requestId) => botsApi.withdraw(botId, requestId),
   abort: (botId) => botsApi.abort(botId),
   setYolo: (botId, on) => botsApi.setYolo(botId, on),
