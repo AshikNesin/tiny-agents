@@ -20,6 +20,7 @@ import type {
   PullReviewView,
   ReviewInboxSettings,
 } from "../../../apps/web/src/shared/api/code";
+import type { CatalogModel } from "../../../apps/web/src/shared/api/models";
 import { FIXED_NOW } from "../../test-clock";
 import { fakeApi } from "../fakes/api";
 import { AppQueryProvider } from "../query-provider";
@@ -74,6 +75,23 @@ const inbox: ReviewInboxSettings = {
   bots: false,
   mute: [],
   limit: 10,
+};
+
+const model: CatalogModel = {
+  id: "m1",
+  name: "Model one",
+  providerId: "acc1",
+  providerName: "Anthropic",
+  providerKind: "anthropic",
+  upstreamId: "model-one",
+  type: "chat",
+  engine: "pi",
+  contextWindow: 200_000,
+  maxOutputTokens: 32_000,
+  vision: false,
+  reasoning: false,
+  enabled: true,
+  available: true,
 };
 
 const projectChat: Bot = {
@@ -204,7 +222,7 @@ describe("Code settings", () => {
   });
 
   it("makes a new project's chat when it is added, so Chat lists it", async () => {
-    useBotsStore.setState({ models: [{ id: "m1" } as never] });
+    useBotsStore.setState({ models: [model] });
     renderAt("/settings/projects");
     const viaApp = await screen.findByRole("switch", { name: "Use the GitHub App" });
     await waitFor(() => expect(viaApp).toBeChecked());

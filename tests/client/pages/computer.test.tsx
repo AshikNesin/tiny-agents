@@ -8,13 +8,21 @@
 import React from "react";
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { MemoryRouter } from "react-router-dom";
 import { GrootUIProvider } from "@groot/ui";
 import { ComputerPage } from "@/pages/computer";
-import type { Desktop, DesktopList } from "../../../apps/web/src/shared/api/live";
-import { computerApi } from "@/lib/computer-api";
+import type {
+  Desktop,
+  DesktopApps,
+  DesktopList,
+  DriverBody,
+  LiveStarting,
+  OpenAppBody,
+  VncTicket,
+} from "../../../apps/web/src/shared/api/live";
 import { createRfb } from "@/lib/novnc";
+import { fakeApi } from "../fakes/api";
 
 interface FakeRfb extends EventTarget {
   viewOnly: boolean;
@@ -62,33 +70,44 @@ const listOf = (desktops: Desktop[], configured = true): DesktopList => ({
   desktops,
 });
 
-function mockApi(initial: DesktopList) {
+function backend(initial: DesktopList) {
   let current = initial;
+  const api = fakeApi();
+  api.get("/computer", () => current);
+  api.post("/computer/:profile/driver", ({ params, body }) => {
+    const { driver } = body as DriverBody;
+    current = {
+      ...current,
+      desktops: current.desktops.map((d) => (d.profile === params.profile ? { ...d, driver } : d)),
+    };
+    return { driver };
+  });
+  api.post("/computer/:profile/start", ({ params }): LiveStarting => {
+    current = {
+      ...current,
+      desktops: current.desktops.map((d) =>
+        d.profile === params.profile ? { ...d, starting: true, phase: "starting" } : d,
+      ),
+    };
+    return { starting: true };
+  });
+  api.post("/computer/:profile/vnc-ticket", ({ params }): VncTicket => ({
+    path: `/api/v1/computer/${params.profile}/vnc?ticket=t1`,
+    scale: 1,
+  }));
+  api.get("/computer/:profile/apps", (): DesktopApps => ({
+    apps: [{ id: "org.xfce.mousepad", name: "Mousepad" }],
+  }));
+  api.post("/computer/:profile/apps", ({ body }) => ({ opened: (body as OpenAppBody).id }));
   return {
-    list: vi.spyOn(computerApi, "list").mockImplementation(async () => current),
-    driver: vi.spyOn(computerApi, "driver").mockImplementation(async (profile, driver) => {
-      current = {
-        ...current,
-        desktops: current.desktops.map((d) => (d.profile === profile ? { ...d, driver } : d)),
-      };
-    }),
-    start: vi.spyOn(computerApi, "start").mockImplementation(async (profile) => {
-      current = {
-        ...current,
-        desktops: current.desktops.map((d) =>
-          d.profile === profile ? { ...d, starting: true, phase: "starting" } : d,
-        ),
-      };
-      return { starting: true };
-    }),
-    ticket: vi.spyOn(computerApi, "ticket").mockImplementation(async (profile) => ({
-      path: `/api/v1/computer/${profile}/vnc?ticket=t1`,
-      scale: 1,
-    })),
-    apps: vi.spyOn(computerApi, "apps").mockResolvedValue({
-      apps: [{ id: "org.xfce.mousepad", name: "Mousepad" }],
-    }),
-    openApp: vi.spyOn(computerApi, "openApp").mockResolvedValue(undefined as never),
+    tickets: (profile: string) => api.sent("POST", `/computer/${profile}/vnc-ticket`),
+    starts: (profile: string) => api.sent("POST", `/computer/${profile}/start`),
+    drivers: (profile: string) =>
+      api
+        .sent<DriverBody>("POST", `/computer/${profile}/driver`)
+        .map((request) => request.body.driver),
+    opened: (profile: string) =>
+      api.sent<OpenAppBody>("POST", `/computer/${profile}/apps`).map((request) => request.body),
   };
 }
 
@@ -115,10 +134,8 @@ describe("ComputerPage", () => {
     vi.mocked(createRfb).mockClear();
     window.localStorage.clear();
   });
-  afterEach(() => vi.restoreAllMocks());
-
   it("shows a tab per desktop and streams the selected one, view-only", async () => {
-    const api = mockApi(
+    const api = backend(
       listOf([
         desktop(),
         desktop({
@@ -134,7 +151,7 @@ describe("ComputerPage", () => {
     expect(await screen.findByTestId("computer-tab-shared")).toHaveTextContent("Shared2 bots");
     expect(screen.getByTestId("computer-tab-bot-b3")).toHaveTextContent("Scoutown desktop");
     await connected();
-    expect(api.ticket).toHaveBeenCalledWith("shared");
+    expect(api.tickets("shared")).not.toHaveLength(0);
     expect(createRfb).toHaveBeenCalledWith(
       expect.any(HTMLElement),
       expect.stringMatching(/\/api\/v1\/computer\/shared\/vnc\?ticket=t1$/),
@@ -153,19 +170,19 @@ describe("ComputerPage", () => {
 
   it("takes control, then opens apps and sends shortcuts the browser would keep", async () => {
     const user = userEvent.setup({ pointerEventsCheck: 0 });
-    const api = mockApi(listOf([desktop()]));
+    const api = backend(listOf([desktop()]));
     mount();
     await connected();
     const viewport = screen.getByTestId("computer-page-viewport");
     await user.click(await within(viewport).findByRole("button", { name: "Take control" }));
-    await waitFor(() => expect(api.driver).toHaveBeenCalledWith("shared", "human"));
+    await waitFor(() => expect(api.drivers("shared")).toEqual(["human"]));
     await waitFor(() => expect(fakes.rfbs[0]!.viewOnly).toBe(false));
     expect(within(viewport).queryByRole("button", { name: "Take control" })).toBeNull();
     expect(screen.getByTestId("computer-page-status")).toHaveTextContent("You're driving");
 
     await user.click(screen.getByTestId("computer-apps"));
     await user.click(await screen.findByRole("menuitem", { name: "Mousepad" }));
-    await waitFor(() => expect(api.openApp).toHaveBeenCalledWith("shared", "org.xfce.mousepad"));
+    await waitFor(() => expect(api.opened("shared")).toEqual([{ id: "org.xfce.mousepad" }]));
 
     await user.click(screen.getByTestId("computer-keys"));
     const menu = await screen.findByRole("menu");
@@ -178,11 +195,11 @@ describe("ComputerPage", () => {
     ]);
 
     await user.click(screen.getByRole("button", { name: "Hand back" }));
-    await waitFor(() => expect(api.driver).toHaveBeenCalledWith("shared", "agent"));
+    await waitFor(() => expect(api.drivers("shared")).toEqual(["human", "agent"]));
   });
 
   it("shows what a bot asked for while the owner drives", async () => {
-    mockApi(listOf([desktop({ driver: "human", takeover: "Sign in to Mail" })]));
+    backend(listOf([desktop({ driver: "human", takeover: "Sign in to Mail" })]));
     mount();
     expect(await screen.findByTestId("computer-page-takeover")).toHaveTextContent(
       "Sign in to Mail",
@@ -191,15 +208,15 @@ describe("ComputerPage", () => {
 
   it("starts a desktop that is off", async () => {
     const user = userEvent.setup({ pointerEventsCheck: 0 });
-    const api = mockApi(listOf([desktop({ active: false, driver: null })]));
+    const api = backend(listOf([desktop({ active: false, driver: null })]));
     mount();
     await user.click(await screen.findByTestId("computer-page-open"));
-    await waitFor(() => expect(api.start).toHaveBeenCalledWith("shared"));
+    await waitFor(() => expect(api.starts("shared")).toHaveLength(1));
     expect(await screen.findByText("Starting the desktop")).toBeInTheDocument();
   });
 
   it("says why there is no computer without a sandbox VM", async () => {
-    mockApi(listOf([desktop({ active: false, driver: null })], false));
+    backend(listOf([desktop({ active: false, driver: null })], false));
     mount();
     expect(await screen.findByTestId("computer-page-setup")).toHaveTextContent("SANDBOX_HOST");
     expect(screen.queryByTestId("computer-region")).not.toBeInTheDocument();
