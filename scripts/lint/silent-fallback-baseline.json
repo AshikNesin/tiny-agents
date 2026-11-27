@@ -183,9 +183,6 @@
     ".catch(() => null)": 1,
     ".catch(() => undefined)": 8
   },
-  "apps/web/src/server/api/code/code.registry.ts": {
-    ".catch(() => undefined)": 1
-  },
   "apps/web/src/server/api/code/code.reviews.ts": {
     ".catch(() => undefined)": 3
   },
