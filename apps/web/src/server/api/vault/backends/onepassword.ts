@@ -246,7 +246,7 @@ export function createOnePasswordBackend(options: OnePasswordOptions): VaultBack
         "save the item",
       );
       if (!item.id) throw new BackendError("failed", "1Password did not return the new item.");
-      return item.id;
+      return { externalId: item.id, summary: summarize(item) };
     };
     backend.update = async (externalId, draft) => {
       const { item } = await getItem(externalId);

@@ -176,7 +176,7 @@ export function CredentialRequestForm({
 
         <div className="flex flex-col gap-2">
           <Button type="submit" disabled={!canContinue}>
-            Continue
+            {busy ? "Filling\u2026" : "Continue"}
           </Button>
           <Button type="button" variant="ghost" disabled={busy} onClick={() => void cancel()}>
             Cancel

@@ -221,9 +221,11 @@ fun ChatPane(
         ImageViewer(ref, onSave = { viewModel.save(ref) {} }, onDismiss = { viewer = null })
     }
     credentials?.let { call ->
+        val filling by viewModel.fillingCredentials.collectAsStateWithLifecycle()
         CredentialSheet(
             call = call,
             botName = bot.name,
+            filling = filling,
             onSubmit = { values, save ->
                 call.taskId?.let { taskId ->
                     viewModel.submitCredentials(taskId, values, save) { credentials = null }

@@ -175,13 +175,11 @@ export async function submitRequest(
   runtime: RequestRuntime = getAgentRuntime(),
 ): Promise<CredentialSubmitted> {
   const submitting = app().submittingRequests;
-  if (submitting.has(taskId)) throw Boom.conflict("This request is being filled already.");
-  submitting.add(taskId);
-  try {
-    return await fillRequest(taskId, input, runtime);
-  } finally {
-    submitting.delete(taskId);
-  }
+  const inFlight = submitting.get(taskId);
+  if (inFlight) return inFlight;
+  const filling = fillRequest(taskId, input, runtime).finally(() => submitting.delete(taskId));
+  submitting.set(taskId, filling);
+  return filling;
 }
 
 async function fillRequest(

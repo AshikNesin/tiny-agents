@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.18.1
+
+### Patch Changes
+
+- **Fill it in** on a bot's sign-in request turns into **Filling…** and can't be tapped again until the page is filled, so a
+  second tap no longer fails with "This request is being filled already."
+
 ## 0.18.0
 
 ### Minor Changes

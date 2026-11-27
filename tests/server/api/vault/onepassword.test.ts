@@ -177,17 +177,19 @@ describe("1Password service account backend", () => {
 
   it("creates, updates and deletes with the read+write token", async () => {
     const admin = backend("admin-token", true);
-    const id = await admin.create!({
-      kind: "card",
-      title: "Amex",
-      urls: ["https://shop.example.com"],
-      values: {
-        card_number: "3782 822463 10005",
-        card_expiry: "12/30",
-        card_holder: "Ana",
-        notes: "work card",
-      },
-    });
+    const id = (
+      await admin.create!({
+        kind: "card",
+        title: "Amex",
+        urls: ["https://shop.example.com"],
+        values: {
+          card_number: "3782 822463 10005",
+          card_expiry: "12/30",
+          card_holder: "Ana",
+          notes: "work card",
+        },
+      })
+    ).externalId;
     const stored = op.items.get(id)!;
     expect(stored.category).toBe(ItemCategory.CreditCard);
     expect(stored.vaultId).toBe("vault-agents");
@@ -218,12 +220,14 @@ describe("1Password service account backend", () => {
 
   it("saves a new login's one-time password in its own section", async () => {
     const admin = backend("admin-token", true);
-    const id = await admin.create!({
-      kind: "login",
-      title: "Umami",
-      urls: ["https://hi.example.com"],
-      values: { username: "ana", password: "pw", totp: "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ" },
-    });
+    const id = (
+      await admin.create!({
+        kind: "login",
+        title: "Umami",
+        urls: ["https://hi.example.com"],
+        values: { username: "ana", password: "pw", totp: "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ" },
+      })
+    ).externalId;
     const stored = op.items.get(id)!;
     expect(stored.websites.map((site) => site.url)).toEqual(["https://hi.example.com"]);
     expect(stored.sections).toEqual([{ id: "tiny-agents", title: "tiny-agents" }]);

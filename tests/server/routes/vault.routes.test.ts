@@ -832,6 +832,20 @@ describe("credential request submit", () => {
     await assertNoCanary();
   });
 
+  it("answers a second submit with the first one's result while the page is still filling", async () => {
+    const runtime = fakeRuntime();
+    const input = { values: { email: "ana@example.com", password: CANARY }, save: true };
+    const [first, second] = await Promise.all([
+      submitRequest(7, input, runtime as never),
+      submitRequest(7, input, runtime as never),
+    ]);
+    const answer = { filled: ["email", "password"], savedHandle: "hi-nesin-io", saveFailed: false };
+    expect(first).toEqual(answer);
+    expect(second).toEqual(answer);
+    expect(fills).toHaveLength(1);
+    expect(await db.select().from(vaultItems)).toHaveLength(1);
+  });
+
   it("fills a sign-in frame the card named, and the saved login fills there too (#302)", async () => {
     origin = "https://www.thehindu.com";
     const runtime = fakeRuntime({

@@ -156,11 +156,13 @@ describe("secrets:rotate", () => {
 
   it("re-seals local vault items and connection secrets under the new key", async () => {
     const backend = createLocalBackend();
-    const itemId = await backend.create!({
-      kind: "api_key",
-      title: "Key",
-      values: { value: "v-1" },
-    });
+    const itemId = (
+      await backend.create!({
+        kind: "api_key",
+        title: "Key",
+        values: { value: "v-1" },
+      })
+    ).externalId;
     const [row] = await db
       .insert(connections)
       .values({ id: "conn-rotate", name: "C", slug: "c-rotate", url: "https://mcp.example.com" })
@@ -184,8 +186,10 @@ describe("secrets:rotate", () => {
 
   it("names the items it couldn't re-seal, so SECRETS_KEY_PREVIOUS stays", async () => {
     const backend = createLocalBackend();
-    const good = await backend.create!({ kind: "api_key", title: "G", values: { value: "g" } });
-    const bad = await backend.create!({ kind: "api_key", title: "B", values: { value: "b" } });
+    const good = (await backend.create!({ kind: "api_key", title: "G", values: { value: "g" } }))
+      .externalId;
+    const bad = (await backend.create!({ kind: "api_key", title: "B", values: { value: "b" } }))
+      .externalId;
     await db.update(vaultValues).set({ policy: "edited" }).where(eq(vaultValues.id, bad));
     process.env.SECRETS_KEY = ROTATION_KEY;
     process.env.SECRETS_KEY_PREVIOUS = KEY;
@@ -198,8 +202,10 @@ describe("secrets:rotate", () => {
 
   it("a local item copied under another id doesn't open", async () => {
     const backend = createLocalBackend();
-    const a = await backend.create!({ kind: "api_key", title: "A", values: { value: "a" } });
-    const b = await backend.create!({ kind: "api_key", title: "B", values: { value: "b" } });
+    const a = (await backend.create!({ kind: "api_key", title: "A", values: { value: "a" } }))
+      .externalId;
+    const b = (await backend.create!({ kind: "api_key", title: "B", values: { value: "b" } }))
+      .externalId;
     const copied = await db.query.vaultValues.findFirst({ where: eq(vaultValues.id, a) });
     await db.update(vaultValues).set({ sealed: copied!.sealed }).where(eq(vaultValues.id, b));
     await expect(backend.resolve(b, "value")).rejects.toThrow(/doesn't match/);

@@ -197,6 +197,8 @@ describe("1Password through service accounts", () => {
     expect(stored).toMatchObject({ title: "Umami", category: "Login", vaultId: "vault-agents" });
     expect(stored.fields.find((f) => f.id === "password")?.value).toBe("canary-new");
     expect(await db.select().from(vaultValues)).toEqual([]);
+    expect(row).toMatchObject({ username: "a" });
+    expect(op.calls.filter((call) => call.op === "items.get")).toEqual([]);
   });
 
   it("says which step 1Password refused, in its words", async () => {

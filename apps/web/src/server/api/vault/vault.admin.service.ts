@@ -327,8 +327,7 @@ export async function createItem(
   let externalId: string;
   let summary: BackendItemSummary;
   try {
-    externalId = await backend.create(draft, digest);
-    summary = await backend.describe(externalId);
+    ({ externalId, summary } = await backend.create(draft, digest));
   } catch (error) {
     backendFailure(error);
   }
@@ -371,10 +370,10 @@ export async function createAppCredential(input: {
   };
   let externalId: string;
   try {
-    externalId = await backend.create(
+    ({ externalId } = await backend.create(
       { kind: "api_key", title: input.label, urls: [], values: { value: input.value } },
       vaultPolicyDigest(policy),
-    );
+    ));
   } catch (error) {
     backendFailure(error);
   }
@@ -568,7 +567,7 @@ export async function moveLocalItemsToOnePassword(): Promise<VaultMoveResult> {
   for (const row of await movableLocalRows()) {
     try {
       const draft = readLocalDraft(row.externalId);
-      const externalId = await target.create(draft);
+      const { externalId } = await target.create(draft);
       db.transaction((tx) => {
         const moved = tx
           .update(vaultItems)
