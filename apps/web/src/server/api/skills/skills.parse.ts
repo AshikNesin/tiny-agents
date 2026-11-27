@@ -5,6 +5,15 @@ import type { ParsedSkill, SkillFile } from "../../../shared/api/skills";
 export const MAX_FILES = 50;
 export const MAX_FILE_BYTES = 200_000;
 const MAX_TOTAL_BYTES = 1_000_000;
+export function skillFiles(raw: string): SkillFile[] {
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    return Array.isArray(parsed) ? (parsed as SkillFile[]) : [];
+  } catch {
+    return [];
+  }
+}
+
 const SCRIPT = /\.(sh|bash|zsh|py|js|mjs|cjs|ts|rb|pl|ps1|bat|exe)$/i;
 
 function frontmatter(raw: string): { fields: Record<string, string>; body: string } {

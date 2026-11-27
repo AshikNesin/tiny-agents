@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
 import { botConnections, bots, botSkills, connections, db, skills } from "../../db";
 
 export type ReachKind = "connections" | "skills";
@@ -14,7 +14,7 @@ interface Item {
   allBots: boolean;
 }
 
-export function takesShared(bot: { projectId: string | null }): boolean {
+function takesShared(bot: { projectId: string | null }): boolean {
   return bot.projectId === null;
 }
 
@@ -86,17 +86,23 @@ export async function itemBotIds(kind: ReachKind, items: Item[]): Promise<Map<st
   );
 }
 
-export async function botItemIds(
-  kind: ReachKind,
-  bot: { id: string; projectId: string | null },
-): Promise<string[]> {
-  const shared = takesShared(bot);
+export type Reacher = { id: string; projectId: string | null } | "code-thread";
+
+async function reached<T extends Item>(kind: ReachKind, reacher: Reacher, items: T[]) {
+  if (reacher === "code-thread") return items.filter((item) => item.allBots);
+  const shared = takesShared(reacher);
   const links = new Map(
-    (await linksOf(kind, { botId: bot.id })).map((link) => [link.itemId, link]),
+    (await linksOf(kind, { botId: reacher.id })).map((link) => [link.itemId, link]),
   );
-  return (await itemsOf(kind))
-    .filter((item) => reaches(item, shared, links.get(item.id)))
-    .map((item) => item.id);
+  return items.filter((item) => reaches(item, shared, links.get(item.id)));
+}
+
+export async function reachedConnections(reacher: Reacher) {
+  return reached("connections", reacher, await db.select().from(connections));
+}
+
+export async function reachedSkills(reacher: Reacher) {
+  return reached("skills", reacher, await db.select().from(skills).orderBy(asc(skills.name)));
 }
 
 function writeLinks(kind: ReachKind, scope: { botId?: string; itemId?: string }, rows: Link[]) {

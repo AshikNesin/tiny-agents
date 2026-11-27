@@ -1,7 +1,7 @@
 import { asc, eq } from "drizzle-orm";
 import { Boom } from "@groot/core/errors";
-import { fetchSkillFromGitHub, parseSkillMarkdown } from "./skills.parse";
-import type { SkillData, SkillFile, SkillPreview } from "../../../shared/api/skills";
+import { fetchSkillFromGitHub, parseSkillMarkdown, skillFiles } from "./skills.parse";
+import type { SkillData, SkillPreview } from "../../../shared/api/skills";
 import type { CreateSkillDTO, PreviewSkillDTO, UpdateSkillDTO } from "./skills.schema";
 import { db, skills, type Skill } from "../../db";
 import { itemBotIds, setItemReach } from "../bots/bot-reach";
@@ -9,16 +9,12 @@ import { itemBotIds, setItemReach } from "../bots/bot-reach";
 type SkillRow = Skill & { botIds: string[] };
 
 function toDTO(row: SkillRow): SkillData {
-  let files: SkillFile[] = [];
-  try {
-    files = JSON.parse(row.files) as SkillFile[];
-  } catch {}
   return {
     id: row.id,
     name: row.name,
     description: row.description,
     body: row.body,
-    files,
+    files: skillFiles(row.files),
     source: row.source,
     sourceUrl: row.sourceUrl,
     allBots: row.allBots,

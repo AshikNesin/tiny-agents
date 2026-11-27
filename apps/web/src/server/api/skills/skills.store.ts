@@ -1,34 +1,16 @@
-import { asc, eq, inArray } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { botSkills, db, skills } from "../../db";
-import { botItemIds, reachBot } from "../bots/bot-reach";
+import { reachBot, reachedSkills } from "../bots/bot-reach";
 import type { SkillStore } from "@tiny-agents/agent";
 import { conversationOwner } from "../bots/bots.owner";
-import type { SkillFile } from "../../../shared/api/skills";
-
-function files(raw: string): SkillFile[] {
-  try {
-    const parsed = JSON.parse(raw) as SkillFile[];
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
-export async function sharedSkills() {
-  return db.select().from(skills).where(eq(skills.allBots, true)).orderBy(asc(skills.name));
-}
+import { skillFiles } from "./skills.parse";
 
 async function assigned(conversationId: number) {
   const owner = await conversationOwner(conversationId);
-  if (!owner) return { botId: undefined, skills: await sharedSkills() };
+  if (!owner) return { botId: undefined, skills: await reachedSkills("code-thread") };
   const bot = await reachBot(owner.bot.id);
   if (!bot) return { botId: undefined, skills: [] };
-  const ids = await botItemIds("skills", bot);
-  const rows =
-    ids.length > 0
-      ? await db.select().from(skills).where(inArray(skills.id, ids)).orderBy(asc(skills.name))
-      : [];
-  return { botId: bot.id, skills: rows };
+  return { botId: bot.id, skills: await reachedSkills(bot) };
 }
 
 export const skillStore: SkillStore = {
@@ -44,13 +26,13 @@ export const skillStore: SkillStore = {
       name: skill.name,
       description: skill.description,
       body: skill.body,
-      files: files(skill.files).map((file) => file.path),
+      files: skillFiles(skill.files).map((file) => file.path),
     };
   },
 
   async readFile(conversationId, name, path) {
     const skill = (await assigned(conversationId)).skills.find((s) => s.name === name);
-    return skill ? files(skill.files).find((file) => file.path === path)?.content : undefined;
+    return skill ? skillFiles(skill.files).find((file) => file.path === path)?.content : undefined;
   },
 
   async save(conversationId, input) {

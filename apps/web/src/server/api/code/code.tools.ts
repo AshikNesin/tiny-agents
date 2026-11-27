@@ -5,25 +5,19 @@ import {
   type ToolPermission,
 } from "@tiny-agents/agent";
 import type { AppToolPort } from "@tiny-agents/code/server";
-import { and, eq } from "drizzle-orm";
-import { connections, db } from "../../db";
 import { connectionCapabilityId, connectionTools } from "../bots/bot-toolkits";
 import { ownerToolPermissions } from "../bots/tool-permissions";
 import { getConnectionManager, type ConnectionManager } from "../connections/connections.manager";
 import { shQuote, type SandboxConnection } from "@tiny-agents/sandbox";
-import { sharedSkills } from "../skills/skills.store";
-import { skillHeading } from "../skills/skills.parse";
-import type { SkillFile } from "../../../shared/api/skills";
+import { reachedConnections, reachedSkills } from "../bots/bot-reach";
+import { skillFiles, skillHeading } from "../skills/skills.parse";
 
 type Connections = Pick<ConnectionManager, "call" | "status">;
 
 const DESCRIPTION_MAX = 2_048;
 
 export async function sharedConnectionToolkits(): Promise<string[]> {
-  const rows = await db
-    .select({ slug: connections.slug })
-    .from(connections)
-    .where(eq(connections.allBots, true));
+  const rows = await reachedConnections("code-thread");
   return rows.map((row) => connectionCapabilityId(row.slug));
 }
 
@@ -43,7 +37,7 @@ export function claudeCodeTools(live: () => Connections = getConnectionManager):
   return {
     async list() {
       const [rows, owner] = await Promise.all([
-        db.select().from(connections).where(eq(connections.allBots, true)),
+        reachedConnections("code-thread"),
         ownerToolPermissions(),
       ]);
       return rows
@@ -71,12 +65,11 @@ export function claudeCodeTools(live: () => Connections = getConnectionManager):
         );
     },
     async call(server, tool, input) {
-      const [row, owner] = await Promise.all([
-        db.query.connections.findFirst({
-          where: and(eq(connections.slug, server), eq(connections.allBots, true)),
-        }),
+      const [rows, owner] = await Promise.all([
+        reachedConnections("code-thread"),
         ownerToolPermissions(),
       ]);
+      const row = rows.find((candidate) => candidate.slug === server);
       if (
         !row ||
         !connectionTools(row).some((known) => known.name === tool) ||
@@ -96,13 +89,8 @@ export function claudeCodeTools(live: () => Connections = getConnectionManager):
   };
 }
 
-function skillFiles(raw: string): SkillFile[] {
-  const parsed = JSON.parse(raw) as unknown;
-  return Array.isArray(parsed) ? (parsed as SkillFile[]) : [];
-}
-
 export async function claudeCodeSkills() {
-  return (await sharedSkills())
+  return (await reachedSkills("code-thread"))
     .filter((skill) => SKILL_NAME.test(skill.name))
     .map((skill) => ({
       name: skill.name,
@@ -130,7 +118,7 @@ async function repoSkills(cwd: string, sandbox: SandboxConnection) {
 }
 
 export async function nativeSkills(cwd: string, sandbox: SandboxConnection | undefined) {
-  const shared = (await sharedSkills()).map(({ name, description }) => ({
+  const shared = (await reachedSkills("code-thread")).map(({ name, description }) => ({
     name,
     description,
   }));
