@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test"
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { ConfirmProvider } from "@groot/ui/primitives";
 import { NO_CAPABILITIES } from "@tiny-agents/code/contracts";
-import { CodeWorkspace } from "@/pages/code/Workspace";
+import { ProjectChat } from "@/pages/code/ProjectChat";
 import { useCodeStore } from "@/store/code";
 import { useUiStore } from "@/store/ui";
 import type { HarnessInfo, ThreadSnapshot, ThreadSummary } from "@/lib/code/api";
@@ -121,16 +121,17 @@ function Where() {
   return <output data-testid="where">{pathname + search}</output>;
 }
 
+function ProjectChatAt() {
+  return <ProjectChat projectId="p1" onOpenMenu={() => undefined} />;
+}
+
 const renderAt = (path: string) =>
   render(
     <ConfirmProvider>
       <MemoryRouter initialEntries={[path]}>
         <Where />
         <Routes>
-          <Route path="/code" element={<CodeWorkspace />} />
-          <Route path="/code/new" element={<CodeWorkspace />} />
-          <Route path="/code/t/:threadId" element={<CodeWorkspace />} />
-          <Route path="/code/p/:chatProjectId" element={<CodeWorkspace />} />
+          <Route path="/chats/:botId" element={<ProjectChatAt />} />
           <Route path="/code/reviews/:id" element={<p>Review page</p>} />
         </Routes>
       </MemoryRouter>
@@ -138,6 +139,10 @@ const renderAt = (path: string) =>
   );
 
 const where = () => screen.getByTestId("where").textContent;
+const showPanel = async () => {
+  await screen.findByPlaceholderText("Message web");
+  fireEvent.click(screen.getByRole("button", { name: /^Threads/ }));
+};
 const open = (summary: ThreadSummary) =>
   streamAt(`/api/v1/code/threads/${encodeURIComponent(summary.id)}/events`).send({
     type: "snapshot",
@@ -229,8 +234,8 @@ afterEach(() => {
 
 describe("the project chat's side panel", () => {
   it("lists the project's threads beside the chat, grouped by state", async () => {
-    renderAt("/code/p/p1");
-    expect(await screen.findByPlaceholderText("Message web")).toBeInTheDocument();
+    renderAt("/chats/lead");
+    await showPanel();
     const sections = [...panel().querySelectorAll("section[aria-label]")].map((section) => [
       section.getAttribute("aria-label"),
       [...section.querySelectorAll("[data-thread]")].map((row) => row.getAttribute("data-thread")),
@@ -259,8 +264,8 @@ describe("the project chat's side panel", () => {
         }),
       ],
     });
-    renderAt("/code/p/p1");
-    await screen.findByPlaceholderText("Message web");
+    renderAt("/chats/lead");
+    await showPanel();
     expect(panel().querySelector('[data-thread="demo:a"]')).toHaveTextContent("asks you");
     const merged = panel().querySelector('[data-thread="demo:bb"]');
     expect(merged).toHaveTextContent("PR 529 merged to main");
@@ -273,8 +278,8 @@ describe("the project chat's side panel", () => {
       status: { group: "review", reason: null },
     });
     useCodeStore.setState({ threads: [paused] });
-    renderAt("/code/p/p1");
-    await screen.findByPlaceholderText("Message web");
+    renderAt("/chats/lead");
+    await showPanel();
     fireEvent.click(panel().querySelector('[data-thread="demo:ccc"]')!);
     open(paused);
     const bar = await within(panel()).findByTestId("project-panel-pr");
@@ -283,8 +288,8 @@ describe("the project chat's side panel", () => {
   });
 
   it("search narrows the list by title", async () => {
-    renderAt("/code/p/p1");
-    await screen.findByPlaceholderText("Message web");
+    renderAt("/chats/lead");
+    await showPanel();
     fireEvent.change(within(panel()).getByRole("searchbox", { name: "Search threads" }), {
       target: { value: "thread bb" },
     });
@@ -294,10 +299,10 @@ describe("the project chat's side panel", () => {
   });
 
   it("a thread opens inside the panel with its transcript, PR bar and steer box, and back returns", async () => {
-    renderAt("/code/p/p1");
-    await screen.findByPlaceholderText("Message web");
+    renderAt("/chats/lead");
+    await showPanel();
     fireEvent.click(panel().querySelector('[data-thread="demo:ccc"]')!);
-    expect(where()).toBe("/code/p/p1?thread=demo%3Accc");
+    expect(where()).toBe("/chats/lead?thread=demo%3Accc");
     open(reviewed);
     expect(within(panel()).getByText("Fix the login callback")).toBeInTheDocument();
     expect(within(panel()).getByTestId("project-panel-pr")).toHaveTextContent("#12");
@@ -311,13 +316,13 @@ describe("the project chat's side panel", () => {
     );
     expect(screen.getByPlaceholderText("Message web")).toBeInTheDocument();
     fireEvent.click(within(panel()).getByRole("button", { name: "Back to threads" }));
-    expect(where()).toBe("/code/p/p1");
+    expect(where()).toBe("/chats/lead");
     expect(panel().querySelector('[data-thread="demo:a"]')).toBeInTheDocument();
   });
 
   it("the Context tab shows the project's repository and instructions", async () => {
-    renderAt("/code/p/p1");
-    await screen.findByPlaceholderText("Message web");
+    renderAt("/chats/lead");
+    await showPanel();
     fireEvent.click(within(panel()).getByRole("tab", { name: "Context" }));
     expect(
       await within(panel()).findByText("Merge finished work to main once CI is green."),
@@ -328,20 +333,21 @@ describe("the project chat's side panel", () => {
     );
   });
 
-  it("the Threads button hides and shows the panel", async () => {
-    renderAt("/code/p/p1");
+  it("starts closed like a bot chat, and the Threads button shows and hides the panel", async () => {
+    renderAt("/chats/lead");
     await screen.findByPlaceholderText("Message web");
     const toggle = screen.getByRole("button", { name: /^Threads/ });
-    expect(toggle).toHaveAttribute("aria-pressed", "true");
-    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute("aria-pressed", "false");
     expect(screen.queryByRole("complementary", { name: "Project panel" })).toBeNull();
     fireEvent.click(toggle);
     expect(panel()).toBeInTheDocument();
+    fireEvent.click(toggle);
+    expect(screen.queryByRole("complementary", { name: "Project panel" })).toBeNull();
   });
 
   it("on a phone the chat comes first and the panel opens over it, full screen", async () => {
     phone(true);
-    renderAt("/code/p/p1");
+    renderAt("/chats/lead");
     const chat = await screen.findByPlaceholderText("Message web");
     expect(screen.queryByRole("complementary", { name: "Project panel" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: /^Threads/ }));
@@ -353,7 +359,7 @@ describe("the project chat's side panel", () => {
 
   it("on a phone a thread link opens the panel on that thread", async () => {
     phone(true);
-    renderAt("/code/p/p1?thread=demo%3Aa");
+    renderAt("/chats/lead?thread=demo%3Aa");
     await screen.findByPlaceholderText("Message web");
     open(waiting);
     expect(within(panel()).getByText("Fix the login callback")).toBeInTheDocument();

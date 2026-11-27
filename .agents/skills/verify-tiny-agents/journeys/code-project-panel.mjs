@@ -53,6 +53,8 @@ await journey("code-project-panel", async ({ page, step, proof, cleanup, api, st
   });
 
   const panel = (p) => p.getByRole("complementary", { name: "Project panel" });
+  const threadsToggle = (p) =>
+    p.getByRole("button", { name: /^Threads/ }).and(p.locator("[aria-pressed]"));
 
   await step("desktop: the project chat opens", async () => {
     await page.setViewportSize({ width: 1440, height: 900 });
@@ -80,7 +82,15 @@ await journey("code-project-panel", async ({ page, step, proof, cleanup, api, st
     return;
   }
 
+  await step("desktop: the project chat opens on the bot chat page, panel closed", async () => {
+    await expect(page).toHaveURL(/\/chats\//);
+    await expect(page.getByRole("region", { name: "Projects" })).toBeVisible();
+    await expect(panel(page)).toBeHidden();
+  });
+  await proof("project-chat");
+
   await step("desktop: the panel lists the project's threads by state", async () => {
+    await threadsToggle(page).click();
     await expect(panel(page)).toBeVisible();
     await expect(panel(page).locator(`[data-thread="${threads[1]}"]`)).toBeVisible({
       timeout: 20_000,
@@ -147,7 +157,7 @@ await journey("code-project-panel", async ({ page, step, proof, cleanup, api, st
   await shot(phone, "phone-project-chat");
 
   await step("phone: Threads opens the panel full screen", async () => {
-    await phone.getByRole("button", { name: /^Threads/ }).tap();
+    await threadsToggle(phone).tap();
     await expect(panel(phone).locator(`[data-thread="${threads[1]}"]`)).toBeVisible({
       timeout: 20_000,
     });

@@ -104,13 +104,16 @@ await journey("code-threads", async ({ page, step, proof, cleanup, api, stamp })
   });
   await shot(phone, "phone-chat-drawer");
 
-  await step("phone: the project chat's menu button goes back to the thread list", async () => {
-    await phone.goto(`/code/p/${encodeURIComponent(projects[0].id)}`, LOADED);
-    await phone.getByRole("button", { name: "Open menu" }).tap();
-    await expect(phone).toHaveURL(/\/code$/);
-    await expect(phone.locator(`[data-thread="${threads[0]}"]`)).toBeVisible({
-      timeout: 20_000,
-    });
-  });
-  await shot(phone, "phone-home");
+  await step(
+    "phone: the project chat's menu button opens the chat drawer, like a bot chat",
+    async () => {
+      await phone.goto(`/code/p/${encodeURIComponent(projects[0].id)}`, LOADED);
+      await expect(phone).toHaveURL(/\/chats\//, { timeout: 20_000 });
+      await phone.getByRole("button", { name: "Open menu" }).tap();
+      const drawer = phone.getByRole("complementary", { name: "Sidebar" });
+      await expect.poll(async () => (await drawer.boundingBox())?.x).toBe(0);
+      await expect(drawer.getByRole("region", { name: "Projects" })).toBeVisible();
+    },
+  );
+  await shot(phone, "phone-project-drawer");
 });

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { Navigate, useLocation, useParams, useSearchParams } from "react-router-dom";
 import { MessagesSquare, PanelRight } from "lucide-react";
 import { EmptyState } from "@groot/ui";
 import { Button } from "@groot/ui/button";
@@ -68,7 +68,7 @@ export function ProjectChat({
   onOpenMenu,
 }: {
   projectId: string;
-  onOpenMenu?: () => void;
+  onOpenMenu: () => void;
 }) {
   const { data: opened, loadError } = useResource(
     ["code", "project-chat", projectId],
@@ -81,13 +81,12 @@ export function ProjectChat({
   const models = useBotsStore((s) => s.models);
   const canAnswer = useBotsStore((s) => s.canAnswer);
   const openEditBot = useUiStore((s) => s.openEditBot);
-  const navigate = useNavigate();
   const { projects } = useProjects();
   const project = projects?.find((p) => p.id === projectId);
   const phone = usePhone();
   const [params, setParams] = useSearchParams();
   const threadId = params.get("thread");
-  const [open, setOpen] = useState(() => !phoneNow());
+  const [open, setOpen] = useState(false);
   const shown = open || Boolean(threadId);
   const showThread = useCallback(
     (id: string | null) => setParams(id ? { thread: id } : {}),
@@ -129,7 +128,7 @@ export function ProjectChat({
           models={models}
           canAnswer={canAnswer}
           onEditBot={() => void openEditBot(bot.id)}
-          onOpenMenu={onOpenMenu ?? (() => navigate("/code"))}
+          onOpenMenu={onOpenMenu}
           headerActions={<ThreadsToggle projectId={projectId} pressed={shown} onToggle={toggle} />}
         />
       </div>
@@ -146,4 +145,36 @@ export function ProjectChat({
       )}
     </div>
   );
+}
+
+export function OpenProjectChat() {
+  const { projectId = "" } = useParams();
+  const { search } = useLocation();
+  const { data: opened, loadError } = useResource(
+    ["code", "project-chat", projectId],
+    () => projectsApi.openChat(projectId),
+    "Could not open the project chat.",
+  );
+  const adoptBot = useBotsStore((s) => s.adoptBot);
+  useEffect(() => {
+    if (opened) adoptBot(opened);
+  }, [opened, adoptBot]);
+
+  if (loadError) {
+    return (
+      <EmptyState
+        icon={MessagesSquare}
+        title="The project chat is not open"
+        description={loadError}
+      />
+    );
+  }
+  if (!opened) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <Spinner />
+      </div>
+    );
+  }
+  return <Navigate to={`/chats/${encodeURIComponent(opened.id)}${search}`} replace />;
 }

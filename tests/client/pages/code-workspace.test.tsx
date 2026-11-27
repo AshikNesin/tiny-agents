@@ -13,6 +13,7 @@ import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { ConfirmProvider } from "@groot/ui/primitives";
 import { NO_CAPABILITIES } from "@tiny-agents/code/contracts";
 import { CodeWorkspace } from "@/pages/code/Workspace";
+import { OpenProjectChat } from "@/pages/code/ProjectChat";
 import { useCodeStore } from "@/store/code";
 import { useUiStore } from "@/store/ui";
 import { useCommandPaletteStore } from "@groot/shell/store/command-palette";
@@ -141,7 +142,8 @@ const renderAt = (path: string) =>
           <Route path="/code" element={<CodeWorkspace />} />
           <Route path="/code/new" element={<CodeWorkspace />} />
           <Route path="/code/t/:threadId" element={<CodeWorkspace />} />
-          <Route path="/code/p/:chatProjectId" element={<CodeWorkspace />} />
+          <Route path="/code/p/:projectId" element={<OpenProjectChat />} />
+          <Route path="/chats/:botId" element={<p>Bot chat page</p>} />
           <Route path="/code/reviews/:id" element={<p>Review page</p>} />
         </Routes>
       </MemoryRouter>
@@ -263,18 +265,11 @@ describe("the Code workspace", () => {
     ]);
   });
 
-  it("opens the project's chat inside Code from the sidebar", async () => {
+  it("opens the project's chat on the bot chat page from the sidebar", async () => {
     renderAt("/code");
     fireEvent.click(await screen.findByRole("link", { name: "Project chat" }));
-    expect(where()).toBe("/code/p/p1");
-    await waitFor(() => expect(posts.map((p) => p.path)).toContain("/code/projects/p1/chat"));
-    expect(await screen.findByPlaceholderText("Message web")).toBeInTheDocument();
-  });
-
-  it("the project chat's menu button goes back to the thread list", async () => {
-    renderAt("/code/p/p1");
-    fireEvent.click(await screen.findByRole("button", { name: "Open menu" }));
-    expect(where()).toBe("/code");
+    expect(await screen.findByText("Bot chat page")).toBeInTheDocument();
+    expect(where()).toBe("/chats/lead");
   });
 
   it("j and k walk the list in the order it is shown", () => {
