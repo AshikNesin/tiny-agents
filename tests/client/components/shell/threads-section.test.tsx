@@ -9,6 +9,7 @@ import { useCodeStore } from "@/store/code";
 import { useBotsStore } from "@/store/bots";
 import { usePeopleStore } from "@/store/people";
 import { useUiStore } from "@/store/ui";
+import type { BotListEntry } from "../../../../apps/web/src/shared/api/bots";
 import type { HarnessInfo, ThreadSummary } from "@/lib/code/api";
 import { AppQueryProvider } from "../../query-provider";
 
@@ -112,6 +113,35 @@ describe("threads in the chat sidebar", () => {
       "Thread fix, started by AdaYesterday",
       "Thread lead, started by web chatYesterday",
     ]);
+  });
+
+  it("lists project chats in their own Projects section, above Threads, not under Bots", () => {
+    const bot = (id: string, name: string, projectId: string | null): BotListEntry => ({
+      id,
+      conversationId: `c-${id}`,
+      name,
+      description: "",
+      modelId: "m",
+      lastMessagePreview: null,
+      lastActivityAt: "2026-11-05T00:00:00.000Z",
+      lastReadAt: null,
+      unread: false,
+      replying: false,
+      approvals: 0,
+      questions: 0,
+      pinnedAt: null,
+      projectId,
+    });
+    useBotsStore.setState({ bots: [bot("b1", "Ada", null), bot("b2", "web", "p1")] });
+    renderSidebar();
+    const regions = screen.getAllByRole("region").map((r) => r.getAttribute("aria-label"));
+    expect(regions).toEqual(["Projects", "Threads", "Bots"]);
+    const projects = within(screen.getByRole("region", { name: "Projects" }));
+    fireEvent.click(projects.getByRole("link", { name: "web" }));
+    expect(screen.getByTestId("where")).toHaveTextContent("/code/p/p1");
+    const bots = within(screen.getByRole("region", { name: "Bots" }));
+    expect(bots.queryByText("web")).toBeNull();
+    expect(bots.getByText("Ada")).toBeVisible();
   });
 
   it("folds and unfolds from its heading", () => {
