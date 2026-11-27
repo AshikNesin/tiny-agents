@@ -37,16 +37,7 @@ import { pullStage } from "../../lib/code/pull-stage";
 import type { MergeMethod, PullView, ThreadPullsView } from "../../../shared/api/code";
 import { PullChecks } from "./PullChecks";
 import { PullComments } from "./PullComments";
-
-const LOOP_LABEL: Record<PullView["loop"]["status"], string> = {
-  watching: "Watching",
-  fixing: "Fixing",
-  needs_input: "Needs you",
-  green: "Green",
-  paused: "Paused",
-  merged: "Merged",
-  off: "Off",
-};
+import { AUTOFIX_STATUS } from "./controls";
 
 const OUTCOME_LABEL: Record<string, string> = {
   pushed: "Pushed",
@@ -641,13 +632,8 @@ function ActivePull({
           >
             <span className="min-w-0 flex-1 font-medium">Auto-fix</span>
             {pr.autofix && (
-              <span
-                className={cn(
-                  "text-xs",
-                  pr.loop.status === "needs_input" ? "text-destructive" : "text-muted-foreground",
-                )}
-              >
-                {LOOP_LABEL[pr.loop.status]}
+              <span className={cn("text-xs", AUTOFIX_STATUS[pr.loop.status].tone)}>
+                {AUTOFIX_STATUS[pr.loop.status].label}
               </span>
             )}
             <Switch

@@ -10,6 +10,7 @@ import {
 } from "@groot/ui/search-select";
 import { errorMessage } from "../../lib/errors";
 import { useResource } from "../../queries/resource";
+import { autofixMachine, type AutofixStatus } from "../../../shared/machines/autofix";
 import {
   codeApi,
   threadPath,
@@ -301,26 +302,20 @@ export function useArchive() {
   );
 }
 
-export function pullState(loop: string): string | null {
-  switch (loop) {
-    case "needs_input":
-      return "needs you";
-    case "fixing":
-      return "fixing";
-    case "merged":
-      return "merged";
-    case "green":
-      return "checks pass";
-    default:
-      return null;
-  }
-}
-
-const PULL_TONE: Record<string, string> = {
-  needs_input: "text-warning",
-  fixing: "text-foreground",
-  green: "text-success",
+export const AUTOFIX_STATUS: Record<AutofixStatus, { label: string; tone: string }> = {
+  watching: { label: "Watching", tone: "text-muted-foreground" },
+  fixing: { label: "Fixing", tone: "text-foreground" },
+  needs_input: { label: "Needs you", tone: "text-warning" },
+  green: { label: "Checks pass", tone: "text-success" },
+  paused: { label: "Paused", tone: "text-muted-foreground" },
+  merged: { label: "Merged", tone: "text-muted-foreground" },
+  off: { label: "Off", tone: "text-muted-foreground" },
 };
+
+export function pullState(loop: string): { label: string; tone: string } | null {
+  if (!autofixMachine.is(loop) || loop === "watching" || loop === "off") return null;
+  return AUTOFIX_STATUS[loop];
+}
 
 export function PullChip({
   pr,
@@ -329,7 +324,7 @@ export function PullChip({
   pr: { number: number; loop: string };
   className?: string;
 }) {
-  const state = pullState(pr.loop);
+  const state = pullState(pr.loop)?.label;
   const Icon = pr.loop === "merged" ? GitMerge : GitPullRequest;
   return (
     <span
@@ -337,7 +332,7 @@ export function PullChip({
       title={`Pull request #${pr.number}${state ? ` (${state})` : ""}`}
       className={cn(
         "bg-muted inline-flex h-5 shrink-0 items-center gap-0.5 rounded-md px-1 text-[11px] font-medium tabular-nums",
-        PULL_TONE[pr.loop] ?? "text-muted-foreground",
+        pullState(pr.loop)?.tone ?? "text-muted-foreground",
         className,
       )}
     >
