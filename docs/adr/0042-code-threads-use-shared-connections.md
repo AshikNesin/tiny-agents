@@ -1,6 +1,7 @@
 # ADR 0042: Code threads use the owner's shared connections and skills
 
-- Status: **accepted** (extends [0041](0041-bots-share-what-the-owner-sets-up.md))
+- Status: **accepted** (extends [0041](0041-bots-share-what-the-owner-sets-up.md); amended by
+  [0046](0046-code-threads-reach-what-any-bot-reaches.md): Code also reaches what any bot reaches)
 - Date: 2026-11-26
 
 ## Context

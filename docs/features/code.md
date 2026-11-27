@@ -764,11 +764,14 @@ chat bots use, with a working directory and five coding tools.
   Accept edits asks before `bash` only; Plan takes the three away and tells
   the agent to plan; YOLO (`bypassPermissions`) asks for nothing. A call that asks is an
   approval card, and the agent's own question is a question card.
-- **Connections:** every connection shared with every bot (`allBots`) is
-  offered, deferred behind `tool_search`, with Settings > Tools deciding
-  allow, ask or off ([ADR 0042](../adr/0042-code-threads-use-shared-connections.md)).
+- **Connections:** every connection shared with every bot (`allBots`), or
+  switched on for at least one bot, is offered, deferred behind
+  `tool_search`, with Settings > Tools deciding allow, ask or off
+  ([ADR 0042](../adr/0042-code-threads-use-shared-connections.md),
+  [ADR 0046](../adr/0046-code-threads-reach-what-any-bot-reaches.md)).
   The mode's permissions cover only the coding tools.
-- **Skills:** every skill shared with every bot is listed by name and
+- **Skills:** every skill a bot can use (shared with every bot, or on for
+  at least one, a bot's own saved skills included) is listed by name and
   description, and `load_skill` reads one; `save_skill` is off (ADR 0042).
   The composer lists those plus the repo's `.agents/skills` and
   `.claude/skills` (`nativeSkills` in `code.tools.ts`). A picked skill is sent

@@ -57,10 +57,11 @@ that the code alone cannot show.
 | 0039 | [Code threads own their id, belong to a project, and record runs](0039-code-threads-and-runs.md)                     | accepted                                                       |
 | 0040 | [A project chat is a bot tied to one Code project](0040-project-chat-is-a-bot.md)                                    | accepted                                                       |
 | 0041 | [Bots share what the owner sets up, guests included](0041-bots-share-what-the-owner-sets-up.md)                      | accepted (extends 0004)                                        |
-| 0042 | [Code threads use the owner's shared connections and skills](0042-code-threads-use-shared-connections.md)            | accepted (extends 0041)                                        |
+| 0042 | [Code threads use the owner's shared connections and skills](0042-code-threads-use-shared-connections.md)            | accepted (extends 0041; amended by 0046)                       |
 | 0043 | [Bot avatars load from DiceBear](0043-bot-avatars-from-dicebear.md)                                                  | accepted                                                       |
 | 0044 | [Base UI replaces Radix as the one primitive layer](0044-base-ui-replaces-radix.md)                                  | accepted (amends 0001, 0003)                                   |
 | 0045 | [1Password through service accounts; Connect is removed](0045-1password-through-service-accounts.md)                 | accepted (supersedes 0027's Connect parts, amends 0005)        |
+| 0046 | [Code threads reach every connection and skill a bot chat reaches](0046-code-threads-reach-what-any-bot-reaches.md)  | accepted (amends 0042)                                         |
 | G4   | [Hono + Drizzle on SQLite, for Node and Cloudflare Workers](0004-hono-drizzle-sqlite-workers.md)                     | accepted (groot)                                               |
 
 `G4` is groot's ADR 0004, synced from the boilerplate; tiny-agents' own 0004
