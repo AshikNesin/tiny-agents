@@ -331,6 +331,13 @@ function AddProject({ harnesses, onChange }: { harnesses: HarnessInfo[]; onChang
       toast.error(errorMessage(appRepoQuery.error, "Could not list the App's repositories."));
     }
   }, [appRepoQuery.error]);
+  const openChat = async (projectId: string) => {
+    try {
+      useBotsStore.getState().adoptBot(await projectsApi.openChat(projectId));
+    } catch (e) {
+      toast.error(errorMessage(e, "Could not make the project's chat."));
+    }
+  };
   const create = async () => {
     setBusy(true);
     try {
@@ -341,9 +348,9 @@ function AddProject({ harnesses, onChange }: { harnesses: HarnessInfo[]; onChang
       });
       setRepo("");
       onChange();
-      void useBotsStore.getState().loadBots();
       toast.success("Project ready: the repository is cloned on the sandbox.");
       navigate(projectSettingsPath(created.id));
+      if (useBotsStore.getState().models.length > 0) void openChat(created.id);
     } catch (e) {
       toast.error(errorMessage(e, "Could not create the project."));
     } finally {

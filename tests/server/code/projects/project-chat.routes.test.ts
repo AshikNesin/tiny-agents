@@ -48,18 +48,6 @@ describe("a project's chat", () => {
     expect(listed.body.data![0]!.chatBotId).toBe(first.body.data!.id);
   });
 
-  it("is made when the project is added, so Chat lists it straight away", async () => {
-    await db.delete(codeProjects).where(eq(codeProjects.id, fixture.project.id));
-    const added = await api<ProjectView>(app, "/api/v1/code/projects", {
-      method: "POST",
-      token,
-      json: { repo: "acme/web", name: "shop", defaultInstanceId: "shelley" },
-    });
-    expect(added.status).toBe(201);
-    const [chat] = await db.select().from(bots).where(eq(bots.projectId, added.body.data!.id));
-    expect(chat?.name).toBe("shop");
-  });
-
   it("keeps the bot as a plain one when its project is removed", async () => {
     const chat = await open();
     await db.delete(codeProjects).where(eq(codeProjects.id, fixture.project.id));

@@ -24,18 +24,12 @@ async function freeName(base: string): Promise<string> {
 }
 
 export async function openProjectChat(projectId: string): Promise<Bot> {
-  const chat = await makeProjectChat(projectId);
-  if (!chat) throw Boom.badRequest("Set up a model first, in Settings, Models.");
-  return chat;
-}
-
-export async function makeProjectChat(projectId: string): Promise<Bot | undefined> {
   const project = await getProject(projectId);
   const existing = await chatOf(project.id);
   if (existing) return existing;
   const rt = getAgentRuntime();
   const modelId = rt.catalog.forRole("bot_default")?.id;
-  if (!modelId) return undefined;
+  if (!modelId) throw Boom.badRequest("Set up a model first, in Settings, Models.");
   const repo = repoOf(project);
   try {
     return await createBot(
