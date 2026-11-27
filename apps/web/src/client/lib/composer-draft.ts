@@ -19,7 +19,11 @@ export function emptyDraft<Ref>(text = ""): ComposerDraft<Ref> {
 
 export function editText<Ref>(draft: ComposerDraft<Ref>, next: string): ComposerDraft<Ref> {
   if (next === draft.text) return draft;
-  return { ...draft, text: next, picked: trackPickedMentions(draft.text, next, draft.picked) };
+  return {
+    ...draft,
+    text: next,
+    picked: trackPickedMentions(draft.text, next, draft.picked),
+  };
 }
 
 export function withStaged<Ref>(
@@ -43,7 +47,10 @@ export function insertMention<Ref>(
     ),
     { start: token.start, botId: chosen.id, name: chosen.name },
   ];
-  return { draft: { ...draft, text, picked }, caret: token.start + insertion.length };
+  return {
+    draft: { ...draft, text, picked },
+    caret: token.start + insertion.length,
+  };
 }
 
 export function startMention<Ref>(
@@ -72,7 +79,10 @@ export function outgoing<Ref>(draft: ComposerDraft<Ref>): OutgoingDraft<Ref> {
   const indent = draft.text.length - draft.text.trimStart().length;
   return {
     body: draft.text.trim(),
-    picked: draft.picked.map((pick) => ({ ...pick, start: pick.start - indent })),
+    picked: draft.picked.map((pick) => ({
+      ...pick,
+      start: pick.start - indent,
+    })),
     attachments: readyRefs(draft.staged),
   };
 }
@@ -101,4 +111,9 @@ export function restoreRefused<Ref>(
       ...current.staged,
     ],
   };
+}
+
+export function activeSkillToken(text: string, caret: number): { query: string } | null {
+  const token = /^\/([a-z0-9-]*)$/.exec(text.slice(0, caret));
+  return token ? { query: token[1]! } : null;
 }

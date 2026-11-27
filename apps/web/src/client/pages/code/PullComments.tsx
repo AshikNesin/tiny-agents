@@ -1,10 +1,9 @@
 import { useMemo, useState } from "react";
 import { MessageSquarePlus } from "lucide-react";
-import { Streamdown } from "streamdown";
 import { Badge, Button, metaLabelClass, monoClass } from "@groot/ui";
 import { cn } from "@groot/ui/lib/utils";
 import { relativeTime } from "../../lib/bot-groups";
-import { markdownComponents } from "../../lib/markdown";
+import { Markdown } from "../../lib/markdown";
 import {
   audienceCounts,
   byAudience,
@@ -53,7 +52,7 @@ export function CommentBody({ text }: { text: string }) {
             "max-h-40 overflow-hidden [mask-image:linear-gradient(to_bottom,black_60%,transparent)]",
         )}
       >
-        <Streamdown components={markdownComponents}>{shown}</Streamdown>
+        <Markdown>{shown}</Markdown>
       </div>
       {long && (
         <button

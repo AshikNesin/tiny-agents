@@ -90,8 +90,7 @@
     ".catch(() => null)": 1
   },
   "apps/web/src/client/pages/code/Composer.tsx": {
-    ".catch(() => [])": 1,
-    ".catch(() => setSkills([]))": 1
+    ".catch(() => [])": 1
   },
   "apps/web/src/client/pages/code/DiffWorkspace.tsx": {
     "catch {}": 1

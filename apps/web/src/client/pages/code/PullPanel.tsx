@@ -19,7 +19,6 @@ import {
   Zap,
 } from "lucide-react";
 import { toast } from "sonner";
-import { Streamdown } from "streamdown";
 import { Button, EmptyState, Input, Textarea, metaLabelClass, monoClass } from "@groot/ui";
 import {
   DropdownMenu,
@@ -31,7 +30,7 @@ import { cn } from "@groot/ui/lib/utils";
 import { Spinner } from "../../components/ui/spinner";
 import { Switch } from "@groot/ui/switch";
 import { errorMessage } from "../../lib/errors";
-import { markdownComponents } from "../../lib/markdown";
+import { Markdown } from "../../lib/markdown";
 import { projectsApi } from "../../lib/code/projects";
 import { useThreadPulls } from "../../lib/code/use-thread-pulls";
 import { pullStage } from "../../lib/code/pull-stage";
@@ -808,7 +807,7 @@ function Description({
         </div>
       ) : shown ? (
         <div className="chat-md code-md min-w-0 text-sm [overflow-wrap:anywhere] [&_h1]:text-base [&_h2]:text-sm [&_h3]:text-sm">
-          <Streamdown components={markdownComponents}>{shown}</Streamdown>
+          <Markdown>{shown}</Markdown>
         </div>
       ) : (
         <p className="text-muted-foreground text-sm">No description.</p>

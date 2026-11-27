@@ -1,7 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@groot/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@groot/ui/tabs";
 import { Textarea } from "@groot/ui/textarea";
-import { Streamdown } from "streamdown";
+import { Markdown } from "../../../lib/markdown";
 
 export function SkillInstructions({
   form,
@@ -35,7 +35,7 @@ export function SkillInstructions({
           <TabsContent value="preview" className="mt-4">
             <div className="min-h-72 rounded-lg border p-4 text-sm">
               {form.body.trim() ? (
-                <Streamdown>{form.body}</Streamdown>
+                <Markdown>{form.body}</Markdown>
               ) : (
                 <p className="text-muted-foreground text-sm">Nothing to preview yet.</p>
               )}

@@ -17,9 +17,12 @@ import {
   ListPlus,
   Paperclip,
   Plus,
+  Sparkles,
   Square,
   Zap,
 } from "lucide-react";
+import { useViewerRole } from "../store/people";
+import { useSkills } from "../queries/skills";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { Button } from "@groot/ui/button";
 import {
@@ -39,6 +42,7 @@ import {
   editText,
   emptyDraft,
   insertMention as draftInsertMention,
+  activeSkillToken,
   isNewChatCommand,
   outgoing,
   restoreRefused,
@@ -226,6 +230,14 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
   }, [text, mentionTipSeen]);
   const mention = activeMentionToken(text, caret);
   const mentionOpen = mention !== null && !mentionClosed;
+  const owner = useViewerRole() === "owner";
+  const library = useSkills({ enabled: owner }).data;
+  const botSkills = useMemo(
+    () => (library ?? []).filter((skill) => bot.skillIds.includes(skill.id)),
+    [library, bot.skillIds],
+  );
+  const skillToken = owner ? activeSkillToken(text, caret) : null;
+  const skillOpen = skillToken !== null && !mentionClosed && botSkills.length > 0;
 
   const modelKnown = model !== undefined;
   const enabled = canAnswer && modelKnown;
@@ -331,6 +343,13 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
     setMentionHint(null);
     setCaret(next.caret);
     pendingCaret.current = next.caret;
+  };
+
+  const insertSkill = (chosen: MentionableBot) => {
+    const start = `/${chosen.name} `;
+    setDraft((current) => editText(current, start + current.text.slice(caret)));
+    setCaret(start.length);
+    pendingCaret.current = start.length;
   };
 
   const startMention = () => {
@@ -563,7 +582,11 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
                     exit={
                       reduceMotion
                         ? { opacity: 0 }
-                        : { opacity: 0, scale: 0.6, transition: { duration: 0.06 } }
+                        : {
+                            opacity: 0,
+                            scale: 0.6,
+                            transition: { duration: 0.06 },
+                          }
                     }
                     transition={{ type: "spring", duration: 0.08, bounce: 0 }}
                     className="flex items-center justify-center leading-none"
@@ -593,6 +616,17 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
           >
             {busy ? "Enter steers · Alt+Enter queues · Esc stops" : "Type @ to tag another bot"}
           </p>
+        )}
+        {skillOpen && skillToken && (
+          <MentionAutocomplete
+            ref={mentionRef}
+            bots={botSkills}
+            query={skillToken.query}
+            onSelect={insertSkill}
+            onClose={() => setMentionClosed(true)}
+            label="Use a skill"
+            icon={() => <Sparkles className="text-muted-foreground size-4" />}
+          />
         )}
         {mentionOpen && mention && (
           <MentionAutocomplete

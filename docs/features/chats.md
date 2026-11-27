@@ -29,6 +29,14 @@ The chat page uses the same single-letter keys as the Code workspace, from
 command palette runs the same commands under **Chat actions**. Letters typed
 in the composer are text; Escape outside it stops a reply.
 
+## Skills
+
+Typing `/` at the start of a message lists the bot's skills (the owner only;
+`activeSkillToken` in `lib/composer-draft.ts`, `SlashSkills.kt` on Android).
+A pick writes `/skill-name `, and the skills prompt section in
+`packages/agent/src/skills.ts` tells the model that such a message asks for
+that skill. Typing the name by hand works the same.
+
 ## Long replies
 
 Runs of finished tool calls fold into one row (`toolSteps`). When a reply has

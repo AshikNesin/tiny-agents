@@ -26,6 +26,7 @@ import type { CatalogModel } from "../../../apps/web/src/shared/api/models";
 import type { ChatMessage, QueuedMessage } from "@/lib/chat-types";
 import { botStream } from "../fakes/sse";
 import { markup, outline } from "../dom-outline";
+import { AppQueryProvider } from "../query-provider";
 
 const api = vi.hoisted(() => ({
   computerStatus: vi.fn(),
@@ -137,7 +138,10 @@ const using = (name: string, status: "running" | "awaiting_takeover" = "running"
       args: {},
       status,
       ...(status === "awaiting_takeover"
-        ? { taskId: 3, takeover: { status: "pending" as const, reason: "Captcha." } }
+        ? {
+            taskId: 3,
+            takeover: { status: "pending" as const, reason: "Captcha." },
+          }
         : {}),
     },
   ],
@@ -159,14 +163,19 @@ function mount(
   { canAnswer = true, path = "/chats/host" }: { canAnswer?: boolean; path?: string } = {},
 ) {
   return render(
-    <MemoryRouter initialEntries={[path]}>
-      <ChatPane bot={bot} models={[model]} canAnswer={canAnswer} onEditBot={() => {}} />
-    </MemoryRouter>,
+    <AppQueryProvider>
+      <MemoryRouter initialEntries={[path]}>
+        <ChatPane bot={bot} models={[model]} canAnswer={canAnswer} onEditBot={() => {}} />
+      </MemoryRouter>
+    </AppQueryProvider>,
   );
 }
 
 function open(messages: ChatMessage[], busy = false, queued: QueuedMessage[] = []) {
-  botStream("host").send({ type: "snapshot", state: { messages, busy, queued } });
+  botStream("host").send({
+    type: "snapshot",
+    state: { messages, busy, queued },
+  });
 }
 
 const settle = () => act(async () => new Promise((resolve) => setTimeout(resolve, 20)));
@@ -272,7 +281,13 @@ describe("ChatPane, pinned", () => {
         mode: "followUp",
         text: "and later",
         attachments: [
-          { uploadId: "u1", kind: "file", name: "a.txt", mimeType: "text/plain", size: 3 },
+          {
+            uploadId: "u1",
+            kind: "file",
+            name: "a.txt",
+            mimeType: "text/plain",
+            size: 3,
+          },
         ],
       },
     ]);
@@ -286,9 +301,13 @@ describe("ChatPane, pinned", () => {
     open([]);
     await settle();
     const pane = screen.getByRole("banner").parentElement!;
-    fireEvent.dragEnter(pane, { dataTransfer: { types: ["Files"], files: [] } });
+    fireEvent.dragEnter(pane, {
+      dataTransfer: { types: ["Files"], files: [] },
+    });
     pin("dragging");
-    fireEvent.dragLeave(pane, { dataTransfer: { types: ["Files"], files: [] } });
+    fireEvent.dragLeave(pane, {
+      dataTransfer: { types: ["Files"], files: [] },
+    });
     pin("left");
   });
 

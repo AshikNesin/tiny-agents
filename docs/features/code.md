@@ -127,7 +127,8 @@ agent to commit but not push.
 - A queued message can be edited, sent now or cancelled.
 - `Esc` leaves the composer; `Esc` again stops the agent.
 - `@` completes files and folders in the working directory where the harness
-  can find files, and `/` hints the harness's commands.
+  can find files, and `/` hints the harness's commands and, where the harness
+  takes skills, its skills (a pick joins the message's skills).
 - **+** attaches files and picks skills, where the harness takes them.
 - The model, reasoning and permission chips sit in the composer.
 
@@ -769,6 +770,10 @@ chat bots use, with a working directory and five coding tools.
   The mode's permissions cover only the coding tools.
 - **Skills:** every skill shared with every bot is listed by name and
   description, and `load_skill` reads one; `save_skill` is off (ADR 0042).
+  The composer lists those plus the repo's `.agents/skills` and
+  `.claude/skills` (`nativeSkills` in `code.tools.ts`). A picked skill is sent
+  as `/skill-name` at the start of the message, and the coding prompt tells the
+  agent to read a repo skill's `SKILL.md` for a name it does not have.
 - **While it works:** a message steers (it joins after the running tool
   round, and waits in the queue until then) or is held with the queue
   button. A held message can be sent now, which makes it a steer, or

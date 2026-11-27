@@ -283,6 +283,7 @@ export function createCodingToolkit(options: CodingToolkitOptions = {}): Capabil
     return [
       `You are a coding agent working in ${cwd} on the owner's sandbox. Paths you give read, write, edit and find resolve against it, and bash starts there.`,
       "Read a file before you change it, make the smallest change that does the job, and say what you changed and how you checked it.",
+      "A message that starts with /<name> asks for that skill. If it is not one of your skills, read .agents/skills/<name>/SKILL.md or .claude/skills/<name>/SKILL.md here and follow it.",
       ...(CHANGING_TOOLS.some((name) => offered.has(name))
         ? []
         : [
