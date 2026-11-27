@@ -415,6 +415,23 @@ const BOUNDARY_RULES: BoundaryRule[] = [
     enabled: true,
   },
   {
+    id: "R20",
+    kind: "import",
+    scope: "apps/web/src/server/api/**",
+    except: ["apps/web/src/server/api/routes.ts"],
+    enabled: true,
+    restrict: {
+      paths: [
+        {
+          name: "hono",
+          importNames: ["Hono"],
+          message:
+            "R20: declare routes with routes() from apps/web/src/server/api/routes.ts. Its post, put, patch and delete take the route's access tier, so a write route cannot be mounted without one.",
+        },
+      ],
+    },
+  },
+  {
     id: "R13",
     kind: "plugin",
     scope: "apps/web/src/client/lib/*-api.ts",

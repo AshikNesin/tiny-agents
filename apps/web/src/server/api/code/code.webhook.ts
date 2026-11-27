@@ -1,10 +1,9 @@
-import { Hono } from "hono";
+import { routes } from "../routes";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { z } from "zod";
 import { env } from "@groot/core/env";
 import { logger } from "@groot/core/logger";
 import { and, eq } from "drizzle-orm";
-import type { AppEnv } from "@groot/core/types";
 import { Boom } from "@groot/core/errors";
 import { ok } from "@groot/core/utils/api-response.utils";
 import { routeBodyLimit } from "@groot/core/middlewares/body-limit.middleware";
@@ -52,7 +51,7 @@ async function pullsOf(payload: Payload): Promise<CodePullRow[]> {
   return open.filter((p) => numbers.has(p.number) || (p.headSha !== null && shas.has(p.headSha)));
 }
 
-const router = new Hono<AppEnv>();
+const router = routes();
 
 const COOKIE_PATH = "/api/v1/code/github";
 
@@ -97,6 +96,7 @@ for (const kind of ["callback", "installed"] as const) {
 
 router.post(
   "/code/github/webhook",
+  "public",
   routeBodyLimit(10 * 1024 * 1024, {
     onError: () => {
       throw Boom.entityTooLarge("Webhook payloads are limited to 10 MB");
@@ -131,4 +131,4 @@ router.post(
   },
 );
 
-export default router;
+export default router.hono;

@@ -1,6 +1,5 @@
 import { onModelsChanged } from "../models/models.config";
-import { Hono } from "hono";
-import type { AppEnv } from "@groot/core/types";
+import { routes } from "../routes";
 import { ok } from "@groot/core/utils/api-response.utils";
 import { parseBody, parseQuery, parseStringParam } from "@groot/core/utils/controller.utils";
 import { z } from "zod";
@@ -40,7 +39,7 @@ import {
 } from "./bots.schema";
 import { ownerToolPermissions, setOwnerToolPermissions } from "./tool-permissions";
 
-const router = new Hono<AppEnv>();
+const router = routes();
 
 function parseTaskId(value: string | undefined): number {
   const taskId = Number(parseStringParam(value, "taskId"));
@@ -74,7 +73,7 @@ router.get("/tool-permissions", async (c) => {
   return ok<ToolPermissionsData>(c, { permissions: await ownerToolPermissions() });
 });
 
-router.put("/tool-permissions", async (c) => {
+router.put("/tool-permissions", "signedIn", async (c) => {
   const { permissions } = await parseBody(c, toolPermissionsSchema);
   const saved = await setOwnerToolPermissions(permissions);
   await botsService.reconcileAllBots();
@@ -124,7 +123,7 @@ router.get("/bots/:id/stream", async (c) => {
   );
 });
 
-router.post("/bots", async (c) => {
+router.post("/bots", "signedIn", async (c) => {
   const payload = await parseBody(c, createBotSchema);
   return ok(c, await botsService.createBot(payload), 201);
 });
@@ -138,13 +137,13 @@ router.get("/bots/:id", async (c) => {
   return ok(c, await botsService.getBot(id));
 });
 
-router.patch("/bots/:id", async (c) => {
+router.patch("/bots/:id", "signedIn", async (c) => {
   const id = parseStringParam(c.req.param("id"), "id");
   const payload = await parseBody(c, updateBotSchema);
   return ok(c, await botsService.updateBot(id, payload));
 });
 
-router.delete("/bots/:id", async (c) => {
+router.delete("/bots/:id", "signedIn", async (c) => {
   const id = parseStringParam(c.req.param("id"), "id");
   return ok(c, await botsService.deleteBot(id));
 });
@@ -155,7 +154,7 @@ router.get("/bots/:id/messages", async (c) => {
   return ok(c, await chatsService.chatHistory(id, query));
 });
 
-router.post("/bots/:id/messages", async (c) => {
+router.post("/bots/:id/messages", "signedIn", async (c) => {
   const id = parseStringParam(c.req.param("id"), "id");
   const payload = await parseBody(c, sendMessageSchema);
   const viewer = c.get("viewer");
@@ -169,24 +168,24 @@ router.get("/bots/:id/tools", async (c) => {
   return ok(c, await chatsService.botToolChoices(id));
 });
 
-router.delete("/bots/:id/messages/:requestId", async (c) => {
+router.delete("/bots/:id/messages/:requestId", "signedIn", async (c) => {
   const id = parseStringParam(c.req.param("id"), "id");
   const requestId = parseStringParam(c.req.param("requestId"), "requestId");
   return ok(c, await chatsService.withdrawMessage(id, { requestId }, c.get("viewer")));
 });
 
-router.post("/bots/:id/abort", async (c) => {
+router.post("/bots/:id/abort", "signedIn", async (c) => {
   const id = parseStringParam(c.req.param("id"), "id");
   await chatsService.abortReply(id);
   return ok(c, { aborted: true });
 });
 
-router.post("/bots/:id/reset", async (c) => {
+router.post("/bots/:id/reset", "signedIn", async (c) => {
   const id = parseStringParam(c.req.param("id"), "id");
   return ok(c, await chatsService.resetConversation(id));
 });
 
-router.post("/bots/:id/rewind", async (c) => {
+router.post("/bots/:id/rewind", "signedIn", async (c) => {
   const id = parseStringParam(c.req.param("id"), "id");
   const { at } = await parseBody(c, z.object({ at: z.string().trim().min(1).max(64) }));
   return ok(c, await chatsService.rewindChat(id, at));
@@ -211,19 +210,19 @@ router.get("/bots/:id/chats/:chatId/messages", async (c) => {
   return ok(c, await pastChats.pastChatPage(id, chatId, query, getAgentRuntime()));
 });
 
-router.post("/bots/:id/chats/:chatId/continue", async (c) => {
+router.post("/bots/:id/chats/:chatId/continue", "signedIn", async (c) => {
   const id = parseStringParam(c.req.param("id"), "id");
   const chatId = parseStringParam(c.req.param("chatId"), "chatId");
   return ok(c, await chatsService.continuePastChat(id, chatId));
 });
 
-router.delete("/bots/:id/chats/:chatId", async (c) => {
+router.delete("/bots/:id/chats/:chatId", "signedIn", async (c) => {
   const id = parseStringParam(c.req.param("id"), "id");
   const chatId = parseStringParam(c.req.param("chatId"), "chatId");
   return ok(c, await pastChats.deletePastChat(id, chatId));
 });
 
-router.post("/bots/:id/approvals/:taskId", async (c) => {
+router.post("/bots/:id/approvals/:taskId", "signedIn", async (c) => {
   const id = parseStringParam(c.req.param("id"), "id");
   const taskId = parseTaskId(c.req.param("taskId"));
   const payload = await parseBody(c, approvalSchema);
@@ -231,7 +230,7 @@ router.post("/bots/:id/approvals/:taskId", async (c) => {
   return ok(c, { decided: payload.decision });
 });
 
-router.post("/bots/:id/questions/:taskId", async (c) => {
+router.post("/bots/:id/questions/:taskId", "signedIn", async (c) => {
   const id = parseStringParam(c.req.param("id"), "id");
   const taskId = parseTaskId(c.req.param("taskId"));
   const payload = await parseBody(c, answerQuestionsSchema);
@@ -244,21 +243,21 @@ router.post("/bots/:id/questions/:taskId", async (c) => {
   return ok(c, payload.answers ? { answered: true } : { dismissed: true });
 });
 
-router.post("/bots/:id/pin", async (c) => {
+router.post("/bots/:id/pin", "signedIn", async (c) => {
   const id = parseStringParam(c.req.param("id"), "id");
   const payload = await parseBody(c, pinBotSchema);
   return ok(c, await botsService.setPinned(id, payload.pinned));
 });
 
-router.put("/bots/:id/yolo", async (c) => {
+router.put("/bots/:id/yolo", "signedIn", async (c) => {
   const id = parseStringParam(c.req.param("id"), "id");
   const payload = await parseBody(c, yoloSchema);
   return ok(c, await chatsService.setYolo(id, payload.on, c.get("viewer").userId));
 });
 
-router.post("/bots/:id/read", async (c) => {
+router.post("/bots/:id/read", "signedIn", async (c) => {
   const id = parseStringParam(c.req.param("id"), "id");
   return ok(c, await botsService.markRead(id, c.get("viewer")));
 });
 
-export default router;
+export default router.hono;

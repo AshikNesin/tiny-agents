@@ -1,9 +1,9 @@
-import { Hono } from "hono";
+import { routes } from "../routes";
 import { Boom } from "@groot/core/errors";
 import { routeBodyLimit } from "@groot/core/middlewares/body-limit.middleware";
 import { uploadRateLimiter } from "@groot/core/middlewares/rate-limit.middleware";
 import { sanitizeFileName } from "@groot/core/storage/storage.utils";
-import type { AppContext, AppEnv } from "@groot/core/types";
+import type { AppContext } from "@groot/core/types";
 import { ok } from "@groot/core/utils/api-response.utils";
 import type { Deleted } from "../../../shared/api/common";
 import { parseQuery, parseStringParam } from "@groot/core/utils/controller.utils";
@@ -13,7 +13,7 @@ import { sniffImage } from "./uploads.prepare";
 import * as uploadsService from "./uploads.service";
 import type { UploadText } from "../../../shared/api/uploads";
 
-const router = new Hono<AppEnv>();
+const router = routes();
 
 function parseUploadId(c: AppContext): string {
   const id = parseStringParam(c.req.param("id"), "id");
@@ -52,7 +52,7 @@ async function singleFile(c: AppContext): Promise<File | undefined> {
   return file;
 }
 
-router.post("/uploads", uploadRateLimiter, uploadBodyLimit, async (c) => {
+router.post("/uploads", "signedIn", uploadRateLimiter, uploadBodyLimit, async (c) => {
   const file = await singleFile(c);
   if (!file) throw Boom.badRequest("No file uploaded");
   const stored = await uploadsService.createUpload({
@@ -129,10 +129,10 @@ router.get("/uploads/:id/content", async (c) => {
   });
 });
 
-router.delete("/uploads/:id", async (c) => {
+router.delete("/uploads/:id", "signedIn", async (c) => {
   const id = parseUploadId(c);
   await uploadsService.deleteUpload(id);
   return ok<Deleted>(c, { deleted: true });
 });
 
-export default router;
+export default router.hono;

@@ -1,5 +1,4 @@
-import { Hono } from "hono";
-import type { AppEnv } from "@groot/core/types";
+import { routes } from "../routes";
 import { ok } from "@groot/core/utils/api-response.utils";
 import { parseQuery, parseStringParam } from "@groot/core/utils/controller.utils";
 import * as traces from "./traces.service";
@@ -11,7 +10,7 @@ import type {
   TraceSummary,
 } from "../../../shared/api/traces";
 
-const router = new Hono<AppEnv>();
+const router = routes();
 
 router.get("/traces/summary", async (c) => ok<TraceSummary>(c, await traces.summary()));
 
@@ -35,4 +34,4 @@ router.get("/traces/side-calls", async (c) => {
   return ok<SideCallList>(c, await traces.listSideCalls(before !== undefined ? { before } : {}));
 });
 
-export default router;
+export default router.hono;

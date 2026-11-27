@@ -1,4 +1,5 @@
-import { Hono, type Context } from "hono";
+import type { Context } from "hono";
+import { routes } from "../routes";
 import { z } from "zod";
 import type { AppEnv } from "@groot/core/types";
 import { ok } from "@groot/core/utils/api-response.utils";
@@ -21,7 +22,7 @@ import {
   reportOutcome,
 } from "./push.store";
 
-const router = new Hono<AppEnv>();
+const router = routes();
 
 const base64urlBytes = (length: number, first?: number) =>
   z
@@ -51,7 +52,7 @@ router.get("/notifications/vapid-key", async (c) => {
   return ok(c, { publicKey: keys.publicKey } satisfies VapidKey);
 });
 
-router.post("/notifications/devices", async (c) => {
+router.post("/notifications/devices", "signedIn", async (c) => {
   const body = await parseBody(c, deviceSchema);
   const id = await registerDevice(userIdOf(c), body);
   return ok(c, { id } satisfies PushDeviceRegistered);
@@ -61,12 +62,12 @@ router.get("/notifications/devices", async (c) =>
   ok(c, { devices: await listDevices(userIdOf(c)) } satisfies PushDeviceListData),
 );
 
-router.delete("/notifications/devices/:id", async (c) => {
+router.delete("/notifications/devices/:id", "signedIn", async (c) => {
   await removeDevice(userIdOf(c), parseStringParam(c.req.param("id"), "id"));
   return ok(c, { removed: true } satisfies PushDeviceRemoved);
 });
 
-router.post("/notifications/devices/:id/test", async (c) => {
+router.post("/notifications/devices/:id/test", "signedIn", async (c) => {
   const target = await deviceTarget(userIdOf(c), parseStringParam(c.req.param("id"), "id"));
   const outcome = await pushTo(
     target,
@@ -93,4 +94,4 @@ router.post("/notifications/devices/:id/test", async (c) => {
   return ok(c, result);
 });
 
-export default router;
+export default router.hono;

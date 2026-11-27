@@ -1,5 +1,5 @@
-import { Hono } from "hono";
-import type { AppContext, AppEnv } from "@groot/core/types";
+import { routes } from "../routes";
+import type { AppContext } from "@groot/core/types";
 import { ok } from "@groot/core/utils/api-response.utils";
 import type { Deleted } from "../../../shared/api/common";
 import { parseBody, parseStringParam } from "@groot/core/utils/controller.utils";
@@ -19,7 +19,7 @@ import {
   updateToolSchema,
 } from "./connections.schema";
 
-export const publicConnectionsRouter = new Hono<AppEnv>();
+export const publicConnectionsRouter = routes();
 
 publicConnectionsRouter.get("/connections/oauth/client-metadata.json", (c) =>
   c.json({ ...clientMetadata(), client_id: clientMetadataUrl() }),
@@ -68,15 +68,15 @@ publicConnectionsRouter.get("/connections/oauth/callback", authRateLimiter, asyn
   );
 });
 
-const router = new Hono<AppEnv>();
+const router = routes();
 
 router.get("/connections", async (c) => ok(c, await connectionsService.list()));
 
-router.post("/connections/test", async (c) => {
+router.post("/connections/test", "signedIn", async (c) => {
   return ok(c, await connectionsService.test(await parseBody(c, testConnectionSchema)));
 });
 
-router.post("/connections", async (c) => {
+router.post("/connections", "stepUp", async (c) => {
   const payload = await parseBody(c, createConnectionSchema);
   return ok(c, await connectionsService.create(payload), 201);
 });
@@ -85,23 +85,23 @@ router.get("/connections/:id", async (c) => {
   return ok(c, await connectionsService.get(parseStringParam(c.req.param("id"), "id")));
 });
 
-router.patch("/connections/:id", async (c) => {
+router.patch("/connections/:id", "stepUpForSome", async (c) => {
   const id = parseStringParam(c.req.param("id"), "id");
   const payload = await parseBody(c, updateConnectionSchema);
   if (payload.url !== undefined || payload.secretRef !== undefined) assertStepUp(c);
   return ok(c, await connectionsService.update(id, payload));
 });
 
-router.delete("/connections/:id", async (c) => {
+router.delete("/connections/:id", "stepUp", async (c) => {
   await connectionsService.remove(parseStringParam(c.req.param("id"), "id"));
   return ok<Deleted>(c, { deleted: true });
 });
 
-router.post("/connections/:id/reconnect", async (c) => {
+router.post("/connections/:id/reconnect", "signedIn", async (c) => {
   return ok(c, await connectionsService.reconnect(parseStringParam(c.req.param("id"), "id")));
 });
 
-router.post("/connections/:id/authorize", async (c) => {
+router.post("/connections/:id/authorize", "signedIn", async (c) => {
   const userId = c.get("user")!.userId;
   return ok(
     c,
@@ -119,16 +119,16 @@ router.get("/connections/:id/tools/:tool", async (c) => {
   );
 });
 
-router.patch("/connections/:id/tools/:tool", async (c) => {
+router.patch("/connections/:id/tools/:tool", "signedIn", async (c) => {
   const id = parseStringParam(c.req.param("id"), "id");
   const tool = parseStringParam(c.req.param("tool"), "tool");
   return ok(c, await connectionsService.updateTool(id, tool, await parseBody(c, updateToolSchema)));
 });
 
-router.post("/connections/:id/tools/:tool/call", async (c) => {
+router.post("/connections/:id/tools/:tool/call", "signedIn", async (c) => {
   const id = parseStringParam(c.req.param("id"), "id");
   const tool = parseStringParam(c.req.param("tool"), "tool");
   return ok(c, await connectionsService.callTool(id, tool, await parseBody(c, callToolSchema)));
 });
 
-export default router;
+export default router.hono;

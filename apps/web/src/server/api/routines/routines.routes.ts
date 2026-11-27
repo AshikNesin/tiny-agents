@@ -1,5 +1,4 @@
-import { Hono } from "hono";
-import type { AppEnv } from "@groot/core/types";
+import { routes } from "../routes";
 import { ok } from "@groot/core/utils/api-response.utils";
 import type { Deleted } from "../../../shared/api/common";
 import { parseBody, parseQuery, parseStringParam } from "@groot/core/utils/controller.utils";
@@ -9,11 +8,11 @@ import { createRoutineSchema, listRunsSchema, updateRoutineSchema } from "./rout
 import { formatIst, safeParseSchedule } from "./routines.schedule";
 import type { RoutineWithPreviewData } from "../../../shared/api/routines";
 
-const router = new Hono<AppEnv>();
+const router = routes();
 
 router.get("/routines", async (c) => ok(c, await routinesService.list()));
 
-router.post("/routines", async (c) => {
+router.post("/routines", "signedIn", async (c) => {
   const payload = await parseBody(c, createRoutineSchema);
   const routine = await routinesService.create(payload);
   return ok<RoutineWithPreviewData>(
@@ -32,7 +31,7 @@ router.get("/routines/:id", async (c) =>
   ok(c, await routinesService.get(parseStringParam(c.req.param("id"), "id"))),
 );
 
-router.patch("/routines/:id", async (c) => {
+router.patch("/routines/:id", "signedIn", async (c) => {
   const id = parseStringParam(c.req.param("id"), "id");
   const payload = await parseBody(c, updateRoutineSchema);
   const routine = await routinesService.update(id, payload);
@@ -42,24 +41,24 @@ router.patch("/routines/:id", async (c) => {
   });
 });
 
-router.delete("/routines/:id", async (c) => {
+router.delete("/routines/:id", "signedIn", async (c) => {
   await routinesService.remove(parseStringParam(c.req.param("id"), "id"));
   return ok<Deleted>(c, { deleted: true });
 });
 
-router.post("/routines/:id/pause", async (c) =>
+router.post("/routines/:id/pause", "signedIn", async (c) =>
   ok(c, await routinesService.pause(parseStringParam(c.req.param("id"), "id"))),
 );
 
-router.post("/routines/:id/resume", async (c) =>
+router.post("/routines/:id/resume", "signedIn", async (c) =>
   ok(c, await routinesService.resume(parseStringParam(c.req.param("id"), "id"))),
 );
 
-router.post("/routines/:id/run", async (c) =>
+router.post("/routines/:id/run", "signedIn", async (c) =>
   ok(c, await routinesService.runNow(parseStringParam(c.req.param("id"), "id"))),
 );
 
-router.post("/routines/:id/hook", async (c) =>
+router.post("/routines/:id/hook", "signedIn", async (c) =>
   ok(c, await rotateHook(parseStringParam(c.req.param("id"), "id"))),
 );
 
@@ -75,4 +74,4 @@ function fireTimesOf(schedule: unknown): string[] {
   return routinesService.previewFireTimes(parsed, new Date()).map((time) => formatIst(time));
 }
 
-export default router;
+export default router.hono;

@@ -1,6 +1,7 @@
 import { decideFinding, startAgentReview } from "./code.findings";
 import { createHash } from "node:crypto";
-import { Hono, type Context } from "hono";
+import type { Context } from "hono";
+import { routes } from "../routes";
 import { z } from "zod";
 import type { AppEnv } from "@groot/core/types";
 import { env } from "@groot/core/env";
@@ -89,7 +90,7 @@ import {
   unlinkPull,
 } from "./code.pulls";
 
-const router = new Hono<AppEnv>();
+const router = routes();
 
 const MAX_EDIT_BYTES = 1_000_000;
 
@@ -119,7 +120,7 @@ const threadParam = (raw: string | undefined) => {
 
 router.get("/code/github", async (c) => ok<GitHubStatus>(c, await githubStatus()));
 
-router.put("/code/github", async (c) => {
+router.put("/code/github", "signedIn", async (c) => {
   const { token } = await parseBody(
     c,
     z.object({ token: z.string().trim().min(10).max(400).nullable() }),
@@ -128,7 +129,7 @@ router.put("/code/github", async (c) => {
   return ok<GitHubStatus>(c, await githubStatus());
 });
 
-router.post("/code/github/app/manifest", async (c) => {
+router.post("/code/github/app/manifest", "signedIn", async (c) => {
   const { organization } = await parseBody(
     c,
     z.object({
@@ -144,7 +145,7 @@ router.post("/code/github/app/manifest", async (c) => {
   return ok(c, { url: flow.url, manifest: flow.manifest, webhooks: flow.webhooks });
 });
 
-router.post("/code/github/app/install", async (c) => {
+router.post("/code/github/app/install", "signedIn", async (c) => {
   const flow = await startInstall();
   setFlowCookie(c, flow.binding);
   return ok(c, { url: flow.url });
@@ -154,7 +155,7 @@ router.get("/code/github/app/repositories", async (c) =>
   ok(c, await codeGitHub().appRepositories()),
 );
 
-router.delete("/code/github/app", async (c) => {
+router.delete("/code/github/app", "stepUp", async (c) => {
   await disconnectGitHubApp();
   return ok<GitHubStatus>(c, await githubStatus());
 });
@@ -172,7 +173,7 @@ const createSchema = z.object({
   defaultModel: z.string().trim().max(200).optional(),
 });
 
-router.post("/code/projects", async (c) => {
+router.post("/code/projects", "signedIn", async (c) => {
   const body = await parseBody(c, createSchema);
   return ok<ProjectView>(c, projectView(await createProject(body)), 201);
 });
@@ -226,16 +227,16 @@ const updateSchema = z.strictObject({
     .optional(),
 });
 
-router.patch("/code/projects/:project", async (c) => {
+router.patch("/code/projects/:project", "signedIn", async (c) => {
   const change = await parseBody(c, updateSchema);
   return ok<ProjectView>(c, projectView(await updateProject(c.req.param("project"), change)));
 });
 
-router.post("/code/projects/:project/chat", async (c) =>
+router.post("/code/projects/:project/chat", "signedIn", async (c) =>
   ok(c, await openProjectChat(c.req.param("project"))),
 );
 
-router.delete("/code/projects/:project", async (c) => {
+router.delete("/code/projects/:project", "signedIn", async (c) => {
   await deleteProject(c.req.param("project"));
   return ok(c, { deleted: true });
 });
@@ -251,7 +252,7 @@ router.get("/code/threads/:id/pr/checks/:job/log", async (c) => {
   return ok<CheckLogView>(c, await checkLog(threadParam(c.req.param("id")), job));
 });
 
-router.post("/code/threads/:id/publish", async (c) => {
+router.post("/code/threads/:id/publish", "signedIn", async (c) => {
   const id = threadParam(c.req.param("id"));
   const body = await parseBody(
     c,
@@ -265,26 +266,26 @@ router.post("/code/threads/:id/publish", async (c) => {
   return ok<ThreadPullsView>(c, await threadPulls(id, false), 201);
 });
 
-router.post("/code/threads/:id/push-base", async (c) => {
+router.post("/code/threads/:id/push-base", "signedIn", async (c) => {
   const id = threadParam(c.req.param("id"));
   await pushBase(id);
   return ok<ThreadPullsView>(c, await threadPulls(id, false));
 });
 
-router.post("/code/threads/:id/pr/link", async (c) => {
+router.post("/code/threads/:id/pr/link", "signedIn", async (c) => {
   const id = threadParam(c.req.param("id"));
   const { number } = await parseBody(c, z.object({ number: z.number().int().min(1) }));
   await linkPull(id, number);
   return ok<ThreadPullsView>(c, await threadPulls(id), 201);
 });
 
-router.post("/code/threads/:id/pr/unlink", async (c) => {
+router.post("/code/threads/:id/pr/unlink", "signedIn", async (c) => {
   const id = threadParam(c.req.param("id"));
   await unlinkPull(id);
   return ok<ThreadPullsView>(c, await threadPulls(id, false));
 });
 
-router.post("/code/threads/:id/pr/autofix", async (c) => {
+router.post("/code/threads/:id/pr/autofix", "signedIn", async (c) => {
   const id = threadParam(c.req.param("id"));
   const { enabled } = await parseBody(c, z.object({ enabled: z.boolean() }));
   await setAutofix(id, enabled);
@@ -293,7 +294,7 @@ router.post("/code/threads/:id/pr/autofix", async (c) => {
 
 const workflowName = z.enum(["fix_ci", "address_comments", "resolve_conflicts"]);
 
-router.post("/code/threads/:id/workflows/:name", async (c) => {
+router.post("/code/threads/:id/workflows/:name", "signedIn", async (c) => {
   const id = threadParam(c.req.param("id"));
   const name = workflowName.safeParse(c.req.param("name"));
   if (!name.success) throw Boom.notFound("No such workflow");
@@ -314,13 +315,13 @@ router.get("/code/threads/:id/checkpoints", async (c) => {
   return ok<CheckpointView[]>(c, (await checkpointsOf(id)).map(checkpointView));
 });
 
-router.post("/code/threads/:id/checkpoints/:cp/revert", async (c) => {
+router.post("/code/threads/:id/checkpoints/:cp/revert", "signedIn", async (c) => {
   const id = threadParam(c.req.param("id"));
   const before = await revertTo(id, c.req.param("cp"));
   return ok(c, { reverted: true, undo: before ? checkpointView(before) : null });
 });
 
-router.patch("/code/threads/:id/pr", async (c) => {
+router.patch("/code/threads/:id/pr", "signedIn", async (c) => {
   const id = threadParam(c.req.param("id"));
   const change = await parseBody(
     c,
@@ -335,7 +336,7 @@ router.patch("/code/threads/:id/pr", async (c) => {
   return ok<ThreadPullsView>(c, await threadPulls(id, false));
 });
 
-router.post("/code/threads/:id/pr/merge", async (c) => {
+router.post("/code/threads/:id/pr/merge", "signedIn", async (c) => {
   const id = threadParam(c.req.param("id"));
   const { method } = await parseBody(
     c,
@@ -345,7 +346,7 @@ router.post("/code/threads/:id/pr/merge", async (c) => {
   return ok<ThreadPullsView>(c, await threadPulls(id, false));
 });
 
-router.post("/code/threads/:id/pr/yolo", async (c) => {
+router.post("/code/threads/:id/pr/yolo", "signedIn", async (c) => {
   const id = threadParam(c.req.param("id"));
   const { method } = await parseBody(
     c,
@@ -355,13 +356,13 @@ router.post("/code/threads/:id/pr/yolo", async (c) => {
   return ok<ThreadPullsView>(c, await threadPulls(id, false));
 });
 
-router.delete("/code/threads/:id/pr/yolo", async (c) => {
+router.delete("/code/threads/:id/pr/yolo", "signedIn", async (c) => {
   const id = threadParam(c.req.param("id"));
   await cancelYoloMerge(id);
   return ok<ThreadPullsView>(c, await threadPulls(id, false));
 });
 
-router.post("/code/threads/:id/pr/draft", async (c) => {
+router.post("/code/threads/:id/pr/draft", "signedIn", async (c) => {
   const id = threadParam(c.req.param("id"));
   const { draft } = await parseBody(c, z.object({ draft: z.boolean() }));
   await setPullDraft(id, draft);
@@ -414,7 +415,7 @@ router.get("/code/threads/:id/review/file", async (c) => {
   });
 });
 
-router.put("/code/threads/:id/review/file", async (c) => {
+router.put("/code/threads/:id/review/file", "signedIn", async (c) => {
   const id = threadParam(c.req.param("id"));
   const body = await parseBody(
     c,
@@ -463,12 +464,12 @@ router.get("/code/threads/:id/files/search", async (c) => {
   return ok<FileHit[]>(c, await ws.search(worktree, query).catch(saying));
 });
 
-router.post("/code/threads/:id/terminal", async (c) => {
+router.post("/code/threads/:id/terminal", "signedIn", async (c) => {
   const { worktree } = await threadWorktree(threadParam(c.req.param("id")));
   return ok<ReviewTerminal>(c, await terminalIn(worktree));
 });
 
-router.post("/code/threads/:id/review/viewed", async (c) => {
+router.post("/code/threads/:id/review/viewed", "signedIn", async (c) => {
   const id = threadParam(c.req.param("id"));
   const body = await parseBody(
     c,
@@ -505,17 +506,17 @@ const draftSchema = z.object({
   body: z.string().trim().min(1).max(20_000),
 });
 
-router.post("/code/threads/:id/review/drafts", async (c) => {
+router.post("/code/threads/:id/review/drafts", "signedIn", async (c) => {
   const [body, drafts] = await Promise.all([parseBody(c, draftSchema), draftsOf(c)]);
   return ok<ReviewDraft>(c, await drafts.addDraft(body), 201);
 });
 
-router.delete("/code/threads/:id/review/drafts/:draft", async (c) => {
+router.delete("/code/threads/:id/review/drafts/:draft", "signedIn", async (c) => {
   await (await draftsOf(c)).removeDraft(c.req.param("draft"));
   return ok(c, { deleted: true });
 });
 
-router.post("/code/threads/:id/review/send", async (c) => {
+router.post("/code/threads/:id/review/send", "signedIn", async (c) => {
   const id = threadParam(c.req.param("id"));
   const { result, sent } = await threadReview(id).send(async (review) => {
     if (review === null) throw Boom.badRequest("No comments to send.");
@@ -528,7 +529,7 @@ router.post("/code/threads/:id/review/send", async (c) => {
 
 router.get("/code/reviews", async (c) => ok<PullReviewView[]>(c, await listReviews()));
 
-router.post("/code/reviews", async (c) => {
+router.post("/code/reviews", "signedIn", async (c) => {
   const { pr } = await parseBody(c, z.object({ pr: z.string().trim().min(1).max(500) }));
   return ok<PullReviewView>(c, await openReview(pr), 201);
 });
@@ -549,7 +550,7 @@ router.get("/code/reviews/settings", async (c) =>
   ok<ReviewInboxSettings>(c, await inboxSettings()),
 );
 
-router.put("/code/reviews/settings", async (c) => {
+router.put("/code/reviews/settings", "signedIn", async (c) => {
   const change = await parseBody(c, inboxSettingsChange);
   return ok<ReviewInboxSettings>(c, await saveInboxSettings(change));
 });
@@ -558,7 +559,7 @@ router.get("/code/reviews/:review", async (c) =>
   ok<PullReviewView>(c, await getReview(c.req.param("review"))),
 );
 
-router.post("/code/reviews/:review/ask", async (c) => {
+router.post("/code/reviews/:review/ask", "signedIn", async (c) => {
   const { message, model } = await parseBody(
     c,
     z.object({
@@ -569,11 +570,11 @@ router.post("/code/reviews/:review/ask", async (c) => {
   return ok(c, await askReview(c.req.param("review"), message, model));
 });
 
-router.post("/code/reviews/:review/agent-review", async (c) =>
+router.post("/code/reviews/:review/agent-review", "signedIn", async (c) =>
   ok(c, await startAgentReview(c.req.param("review"))),
 );
 
-router.post("/code/reviews/:review/findings/:finding", async (c) => {
+router.post("/code/reviews/:review/findings/:finding", "signedIn", async (c) => {
   const decision = await parseBody(
     c,
     z.union([
@@ -587,11 +588,11 @@ router.post("/code/reviews/:review/findings/:finding", async (c) => {
   );
 });
 
-router.post("/code/reviews/:review/comments/to-thread", async (c) =>
+router.post("/code/reviews/:review/comments/to-thread", "signedIn", async (c) =>
   ok(c, await sendCommentsToThread(c.req.param("review"))),
 );
 
-router.post("/code/reviews/:review/submit", async (c) => {
+router.post("/code/reviews/:review/submit", "signedIn", async (c) => {
   const body = await parseBody(
     c,
     z.object({
@@ -606,18 +607,18 @@ router.get("/code/reviews/:review/threads", async (c) =>
   ok<PullThreadsView>(c, await reviewThreads(c.req.param("review"))),
 );
 
-router.post("/code/reviews/:review/threads/:thread/reply", async (c) => {
+router.post("/code/reviews/:review/threads/:thread/reply", "signedIn", async (c) => {
   const { body } = await parseBody(c, z.object({ body: z.string().trim().min(1).max(65_000) }));
   await replyToReviewThread(c.req.param("review"), c.req.param("thread"), body);
   return ok(c, { replied: true });
 });
 
-router.post("/code/reviews/:review/threads/:thread/resolve", async (c) => {
+router.post("/code/reviews/:review/threads/:thread/resolve", "signedIn", async (c) => {
   await resolveReviewThread(c.req.param("review"), c.req.param("thread"));
   return ok(c, { resolved: true });
 });
 
-router.post("/code/reviews/:review/push", async (c) => {
+router.post("/code/reviews/:review/push", "signedIn", async (c) => {
   const { message } = await parseBody(
     c,
     z.object({ message: z.string().trim().min(1).max(10_000) }),
@@ -625,22 +626,22 @@ router.post("/code/reviews/:review/push", async (c) => {
   return ok<PushedReview>(c, await pushReview(c.req.param("review"), message));
 });
 
-router.post("/code/reviews/:review/discard", async (c) => {
+router.post("/code/reviews/:review/discard", "signedIn", async (c) => {
   await discardReviewChanges(c.req.param("review"));
   return ok(c, { discarded: true });
 });
 
-router.post("/code/reviews/:review/suggestions", async (c) =>
+router.post("/code/reviews/:review/suggestions", "signedIn", async (c) =>
   ok<SuggestedChanges>(c, await suggestReviewChanges(c.req.param("review"))),
 );
 
-router.post("/code/reviews/:review/terminal", async (c) =>
+router.post("/code/reviews/:review/terminal", "signedIn", async (c) =>
   ok<ReviewTerminal>(c, await reviewTerminal(c.req.param("review")), 201),
 );
 
-router.post("/code/reviews/:review/archive", async (c) => {
+router.post("/code/reviews/:review/archive", "signedIn", async (c) => {
   await archiveReview(c.req.param("review"));
   return ok(c, { archived: true });
 });
 
-export default router;
+export default router.hono;

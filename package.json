@@ -13,6 +13,7 @@
     "start": "NODE_ENV=production node dist/server/bundle.js",
     "local": "tsx scripts/local.ts",
     "lint": "vp lint",
+    "routes": "tsx scripts/routes.ts",
     "format": "vp fmt",
     "check": "vp check",
     "check:tokens": "tsx scripts/check-design-tokens.ts",
