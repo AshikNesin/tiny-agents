@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import {
   ArrowUp,
   File,
@@ -113,10 +113,16 @@ export function Composer({
   );
   const { text, staged: attachments } = draft;
   const [sending, setSending] = useState(false);
-  const [skills, setSkills] = useState<Skill[] | null>(null);
+  const [skillsWanted, setSkillsWanted] = useState(false);
   const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
   const [suggestions, setSuggestions] = useState<
-    Array<{ value: string; label: string; detail?: string; dir?: boolean }>
+    Array<{
+      value: string;
+      label: string;
+      detail?: string;
+      dir?: boolean;
+      skill?: boolean;
+    }>
   >([]);
   const [active, setActive] = useState(0);
   const [token, setToken] = useState<ReturnType<typeof tokenAt>>();
@@ -145,21 +151,41 @@ export function Composer({
     });
   }, [insert]);
 
+  const skillsQuery = useQuery({
+    queryKey: ["code", "skills", harness.id, cwd, threadId],
+    queryFn: () => codeApi.skills(harness.id, cwd!, threadId),
+    enabled: Boolean(cwd) && canSkills && (skillsWanted || token?.kind === "/"),
+    ...RESOURCE_QUERY,
+  });
+  const skills = useMemo<Skill[] | null>(() => {
+    if (skillsQuery.isError) return [];
+    if (!skillsQuery.data) return null;
+    return Array.isArray(skillsQuery.data) ? skillsQuery.data : [];
+  }, [skillsQuery.isError, skillsQuery.data]);
+
   useEffect(() => {
     if (!token) {
       setSuggestions([]);
       return;
     }
     if (token.kind === "/") {
-      setSuggestions(
-        commands
+      setSuggestions([
+        ...commands
           .filter((c) => c.command.slice(1).startsWith(token.query))
           .map((c) => ({
             value: c.command,
             label: c.command,
             detail: c.hint,
           })),
-      );
+        ...(skills ?? [])
+          .filter((s) => s.name.startsWith(token.query) && !selectedSkills.includes(s.name))
+          .map((s) => ({
+            value: s.name,
+            label: s.name,
+            detail: s.description,
+            skill: true,
+          })),
+      ]);
       setActive(0);
       return;
     }
@@ -167,7 +193,7 @@ export function Composer({
       setSuggestions([]);
       return;
     }
-  }, [token, cwd, canFind, commands]);
+  }, [token, cwd, canFind, commands, skills, selectedSkills]);
   const fileQuery = token && token.kind !== "/" && cwd && canFind ? token.query : null;
   const files = useQuery({
     queryKey: ["code", "find-files", harness.id, cwd, fileQuery],
@@ -190,14 +216,6 @@ export function Composer({
     setSuggestions(files.data);
     setActive(0);
   }, [fileQuery, files.data, files.isPlaceholderData]);
-
-  const loadSkills = useCallback(() => {
-    if (skills || !cwd || !canSkills) return;
-    codeApi
-      .skills(harness.id, cwd, threadId)
-      .then((r) => setSkills(Array.isArray(r) ? r : []))
-      .catch(() => setSkills([]));
-  }, [skills, cwd, canSkills, harness.id, threadId]);
 
   const stagedRef = useRef(attachments);
   useEffect(() => {
@@ -240,6 +258,16 @@ export function Composer({
     const pick = suggestions[index];
     if (!pick || !token) return;
     const cursor = area.current?.selectionStart ?? text.length;
+    if (pick.skill) {
+      setSelectedSkills((prev) => [...prev, pick.value]);
+      setDraft((current) => editText(current, text.slice(cursor).trimStart()));
+      setToken(undefined);
+      requestAnimationFrame(() => {
+        area.current?.setSelectionRange(0, 0);
+        area.current?.focus();
+      });
+      return;
+    }
     const replacement =
       token.kind === "/" ? `${pick.value} ` : `@${quoteRef(pick.value)}${pick.dir ? "" : " "}`;
     const next = text.slice(0, token.start) + replacement + text.slice(cursor);
@@ -332,7 +360,9 @@ export function Composer({
                 i === active ? "bg-muted text-foreground" : "text-muted-foreground",
               )}
             >
-              {token?.kind === "@" ? (
+              {s.skill ? (
+                <Sparkles className="size-4 shrink-0" />
+              ) : token?.kind === "@" ? (
                 s.dir ? (
                   <Folder className="size-4 shrink-0" />
                 ) : (
@@ -457,7 +487,7 @@ export function Composer({
         />
         <div className="flex min-w-0 items-center gap-1">
           {(canUpload || canSkills) && (
-            <DropdownMenu onOpenChange={(open) => open && loadSkills()}>
+            <DropdownMenu onOpenChange={(open) => open && setSkillsWanted(true)}>
               <DropdownMenuTrigger
                 render={
                   <Button

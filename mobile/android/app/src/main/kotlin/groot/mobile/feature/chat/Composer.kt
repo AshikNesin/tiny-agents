@@ -39,6 +39,9 @@ import groot.mobile.data.chat.MentionToken
 import groot.mobile.data.chat.OutboxEntry
 import groot.mobile.data.chat.activeMentionToken
 import groot.mobile.data.chat.mentionMatches
+import groot.mobile.data.api.Skill
+import groot.mobile.data.chat.activeSkillQuery
+import groot.mobile.data.chat.insertSkill
 import groot.mobile.ui.components.BotAvatar
 import groot.mobile.ui.brand.AppIcons
 import groot.mobile.ui.brand.Dims
@@ -63,12 +66,15 @@ fun Composer(
     modifier: Modifier = Modifier,
     mentionCandidates: List<MentionCandidate> = emptyList(),
     onInsertMention: ((MentionToken, Int, MentionCandidate) -> MentionInsert)? = null,
+    skills: List<Skill> = emptyList(),
 ) {
     var field by remember { mutableStateOf(TextFieldValue(draft, TextRange(draft.length))) }
     val value = if (field.text == draft) field else TextFieldValue(draft, TextRange(draft.length))
     var dismissedAt by remember { mutableStateOf<Int?>(null) }
     val token = if (onInsertMention != null && value.selection.collapsed) activeMentionToken(value.text, value.selection.start) else null
     val matches = token?.takeIf { it.start != dismissedAt }?.let { mentionMatches(mentionCandidates, it.query).take(MAX_MENTIONS) }.orEmpty()
+    val skillQuery = if (skills.isNotEmpty() && value.selection.collapsed) activeSkillQuery(value.text, value.selection.start) else null
+    val skillMatches = skillQuery?.takeIf { dismissedAt != SKILL_DISMISSED }?.let { q -> skills.filter { it.name.startsWith(q) }.take(MAX_MENTIONS) }.orEmpty()
     val canSend = enabled && (draft.isNotBlank() || staged.any { it.ref != null }) && staged.none { it.uploading }
     val showStop = busy && draft.isBlank() && staged.isEmpty()
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(S.sm)) {
@@ -78,6 +84,13 @@ fun Composer(
                 val result = onInsertMention(token, value.selection.start, chosen)
                 field = TextFieldValue(result.text, TextRange(result.caret))
             }, onDismiss = { dismissedAt = token.start })
+        }
+        if (skillMatches.isNotEmpty()) {
+            SkillList(skillMatches, onPick = { chosen ->
+                val result = insertSkill(value.text, value.selection.start, chosen.name)
+                field = TextFieldValue(result.text, TextRange(result.caret))
+                onDraftChange(result.text)
+            }, onDismiss = { dismissedAt = SKILL_DISMISSED })
         }
         Column(
             Modifier
@@ -159,6 +172,38 @@ private fun MentionList(matches: List<MentionCandidate>, onPick: (MentionCandida
             ) {
                 BotAvatar(bot.name)
                 Text(bot.name, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        }
+    }
+}
+
+private const val SKILL_DISMISSED = -1
+
+@Composable
+private fun SkillList(matches: List<Skill>, onPick: (Skill) -> Unit, onDismiss: () -> Unit) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(Dims.cardRadius))
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+    ) {
+        Row(Modifier.fillMaxWidth().padding(start = S.md), verticalAlignment = Alignment.CenterVertically) {
+            Text("Use a skill", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
+            IconBtn(AppIcons.Close, "Close suggestions", onDismiss, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        for (skill in matches) {
+            Row(
+                Modifier.fillMaxWidth().clickable(role = Role.Button) { onPick(skill) }.padding(horizontal = S.md, vertical = S.sm),
+                horizontalArrangement = Arrangement.spacedBy(S.md),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                AppIcon(AppIcons.Sparkle, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, size = Dims.iconSmall)
+                Column(Modifier.weight(1f)) {
+                    Text(skill.name, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    if (skill.description.isNotBlank()) {
+                        Text(skill.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
             }
         }
     }

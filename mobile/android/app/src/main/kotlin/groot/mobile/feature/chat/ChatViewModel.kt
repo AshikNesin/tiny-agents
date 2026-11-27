@@ -7,7 +7,10 @@ import groot.mobile.data.chat.PickedMention
 import groot.mobile.data.chat.insertMention as insertMentionInto
 import groot.mobile.data.chat.resolveMentions
 import groot.mobile.data.chat.trackPickedMentions
+import groot.mobile.data.api.Skill
+import groot.mobile.data.chat.botSkills
 import android.net.Uri
+import groot.kit.log.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import groot.mobile.AppContainer
@@ -65,6 +68,26 @@ class ChatViewModel(private val container: AppContainer, val botId: String) : Vi
     val staged: StateFlow<List<StagedUpload>> = _staged.asStateFlow()
 
     private var picked: List<PickedMention> = emptyList()
+
+    private val _skills = MutableStateFlow<List<Skill>>(emptyList())
+    val skills: StateFlow<List<Skill>> = _skills.asStateFlow()
+
+    fun loadSkills() {
+        if (container.bots.state.value.role != ViewerRole.Owner || _skills.value.isNotEmpty()) return
+        viewModelScope.launch {
+            try {
+                _skills.value = botSkills(container.api.skills(), container.api.bot(botId).skillIds, "")
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                skipSlashSkills(e)
+            }
+        }
+    }
+
+    private fun skipSlashSkills(e: Exception) {
+        Log.w("ChatViewModel", e) { "Slash skills not loaded" }
+    }
 
     val mentionCandidates: List<MentionCandidate>
         get() = container.bots.state.value.bots.filter { it.id != botId }.map { MentionCandidate(it.id, it.name) }

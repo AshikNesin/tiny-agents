@@ -102,7 +102,7 @@ export function createSkillsCapability(store: SkillStore): Capability {
     const skills = await store.list(Number(input.conversationId));
     if (skills.length === 0) return undefined;
     const lines = skills.map((skill) => `- ${skill.name}: ${skill.description}`);
-    return `You have these skills (reusable instructions). When a task matches one, call load_skill with its name first and follow it.\n${lines.join("\n")}`;
+    return `You have these skills (reusable instructions). When a task matches one, call load_skill with its name first and follow it. When a message starts with /<skill-name>, the owner is asking for that skill: load it before anything else.\n${lines.join("\n")}`;
   });
 
   return defineToolkit({

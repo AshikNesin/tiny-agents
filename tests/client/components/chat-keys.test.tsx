@@ -16,6 +16,7 @@ import { usePeopleStore } from "@/store/people";
 import type { Bot } from "../../../apps/web/src/shared/api/bots";
 import type { CatalogModel } from "../../../apps/web/src/shared/api/models";
 import { botStream } from "../fakes/sse";
+import { AppQueryProvider } from "../query-provider";
 
 const sendMock = vi.fn().mockResolvedValue(undefined);
 const readMock = vi.fn().mockResolvedValue(undefined);
@@ -105,7 +106,10 @@ function seedStore() {
       entry("host", { lastActivityAt: "2026-11-03T00:00:00.000Z" }),
       entry("asks", { questions: 1 }),
       entry("older", { lastActivityAt: "2026-10-01T00:00:00.000Z" }),
-      entry("approves", { approvals: 1, lastActivityAt: "2026-10-15T00:00:00.000Z" }),
+      entry("approves", {
+        approvals: 1,
+        lastActivityAt: "2026-10-15T00:00:00.000Z",
+      }),
     ],
     canAnswer: true,
     fullBots: {},
@@ -120,15 +124,17 @@ function Where() {
 
 function renderPane() {
   render(
-    <MemoryRouter initialEntries={["/chats/host"]}>
-      <Where />
-      <Routes>
-        <Route
-          path="/chats/:botId"
-          element={<ChatPane bot={HOST} models={[model]} canAnswer onEditBot={() => {}} />}
-        />
-      </Routes>
-    </MemoryRouter>,
+    <AppQueryProvider>
+      <MemoryRouter initialEntries={["/chats/host"]}>
+        <Where />
+        <Routes>
+          <Route
+            path="/chats/:botId"
+            element={<ChatPane bot={HOST} models={[model]} canAnswer onEditBot={() => {}} />}
+          />
+        </Routes>
+      </MemoryRouter>
+    </AppQueryProvider>,
   );
   return screen.getByRole("textbox") as HTMLTextAreaElement;
 }
@@ -190,7 +196,10 @@ describe("chat keys", () => {
   it("Escape outside the composer stops a reply", async () => {
     const composer = renderPane();
     act(() => {
-      botStream("host").send({ type: "snapshot", state: { messages: [], busy: true, queued: [] } });
+      botStream("host").send({
+        type: "snapshot",
+        state: { messages: [], busy: true, queued: [] },
+      });
     });
     composer.blur();
     press("Escape");
@@ -213,7 +222,13 @@ describe("the last turn", () => {
         type: "snapshot",
         state: {
           messages: [
-            { id: "e1", role: "user", text: "Find flights", status: "done", createdAt: 1 },
+            {
+              id: "e1",
+              role: "user",
+              text: "Find flights",
+              status: "done",
+              createdAt: 1,
+            },
             {
               id: "e2",
               role: "assistant",
@@ -247,7 +262,9 @@ describe("the last turn", () => {
 
     expect(composer.value).toBe("Find flights");
     expect(screen.getByText(/Editing your last message/)).toBeInTheDocument();
-    fireEvent.change(composer, { target: { value: "Find flights in December" } });
+    fireEvent.change(composer, {
+      target: { value: "Find flights in December" },
+    });
     fireEvent.keyDown(composer, { key: "Enter" });
 
     await waitFor(() => expect(sendMock).toHaveBeenCalled());

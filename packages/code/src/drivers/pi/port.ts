@@ -1,4 +1,4 @@
-import type { ModelOption, PermissionMode } from "../../contracts";
+import type { ModelOption, PermissionMode, Skill } from "../../contracts";
 
 type PiToolStatus =
   | "pending"
@@ -88,6 +88,7 @@ interface PiActivity {
 
 export interface PiPort {
   models(): ModelOption[];
+  skills(cwd: string): Promise<Skill[]>;
   create(config: PiThreadConfig): Promise<number>;
   configure(ref: number, config: PiThreadConfig): Promise<void>;
   submit(
@@ -132,7 +133,10 @@ export function applyChatEvents(
         break;
       }
       case "remove":
-        next = { ...next, messages: next.messages.filter((message) => message.id !== event.id) };
+        next = {
+          ...next,
+          messages: next.messages.filter((message) => message.id !== event.id),
+        };
         break;
       case "delta":
         next = {

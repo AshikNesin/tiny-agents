@@ -103,6 +103,7 @@ describe("skills capability", () => {
       return !state?.busy && state?.messages.find((m) => m.text.startsWith("RESULT:"))?.text;
     }, "reply");
     expect(prompts[0]).toContain("- weekly-report: Write the weekly report");
+    expect(prompts[0]).toContain("starts with /<skill-name>");
     expect(reply).toContain("STEP 1");
     expect(reply).toContain("reference.md");
     expect(reduce(events)?.messages.flatMap((m) => m.toolCalls ?? [])[0]).toMatchObject({
