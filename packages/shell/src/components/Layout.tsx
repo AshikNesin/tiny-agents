@@ -85,43 +85,42 @@ export function Layout({
 
   const userMenuFooter = (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <button
-          type="button"
-          title={collapsed ? (user?.name ?? user?.email ?? "Account") : undefined}
-          className={cn(
-            "flex h-10 w-full items-center gap-2 rounded-xl px-1.5 text-left text-sm outline-none hover:bg-sidebar-accent focus-visible:ring-1 focus-visible:ring-sidebar-ring",
-            collapsed && "lg:size-10 lg:justify-center lg:px-0",
-          )}
-        >
-          <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold text-muted-foreground">
-            {user?.name?.[0]?.toUpperCase() ?? user?.email?.[0]?.toUpperCase() ?? "?"}
-          </span>
-          <span
+      <DropdownMenuTrigger
+        render={(triggerProps) => (
+          <button
+            {...triggerProps}
+            type="button"
+            title={collapsed ? (user?.name ?? user?.email ?? "Account") : undefined}
             className={cn(
-              "flex min-w-0 flex-1 items-center leading-tight",
-              collapsed && "lg:hidden",
+              "flex h-10 w-full items-center gap-2 rounded-xl px-1.5 text-left text-sm outline-none hover:bg-sidebar-accent focus-visible:ring-1 focus-visible:ring-sidebar-ring",
+              collapsed && "lg:size-10 lg:justify-center lg:px-0",
             )}
-          >
-            <span className="truncate">
-              {user?.name?.trim() || user?.email?.toLowerCase() || "Account"}
-            </span>
-          </span>
-          <MoreHorizontal
-            className={cn("size-4 shrink-0 text-muted-foreground", collapsed && "lg:hidden")}
           />
-        </button>
+        )}
+      >
+        <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold text-muted-foreground">
+          {user?.name?.[0]?.toUpperCase() ?? user?.email?.[0]?.toUpperCase() ?? "?"}
+        </span>
+        <span
+          className={cn("flex min-w-0 flex-1 items-center leading-tight", collapsed && "lg:hidden")}
+        >
+          <span className="truncate">
+            {user?.name?.trim() || user?.email?.toLowerCase() || "Account"}
+          </span>
+        </span>
+        <MoreHorizontal
+          className={cn("size-4 shrink-0 text-muted-foreground", collapsed && "lg:hidden")}
+        />
       </DropdownMenuTrigger>
       <DropdownMenuContent
         align="start"
         side="top"
         sideOffset={8}
         className="w-64"
-        onCloseAutoFocus={(event) => {
-          if (openingPalette.current) {
-            openingPalette.current = false;
-            event.preventDefault();
-          }
+        finalFocus={() => {
+          if (!openingPalette.current) return true;
+          openingPalette.current = false;
+          return false;
         }}
       >
         <DropdownMenuItem onSelect={signOut} className={MENU_ROW}>

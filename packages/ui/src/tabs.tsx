@@ -1,6 +1,6 @@
 import * as React from "react";
 import { cva, type VariantProps } from "class-variance-authority";
-import { Tabs as TabsPrimitive } from "radix-ui";
+import { Tabs as TabsPrimitive } from "@base-ui/react/tabs";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 
 import { cn } from "./lib/utils";
@@ -9,13 +9,17 @@ import { spring } from "./motion";
 function Tabs({
   className,
   orientation = "horizontal",
+  onValueChange,
   ...props
-}: React.ComponentProps<typeof TabsPrimitive.Root>) {
+}: Omit<React.ComponentProps<typeof TabsPrimitive.Root>, "className" | "onValueChange"> & {
+  className?: string;
+  onValueChange?: (value: string) => void;
+}) {
   return (
     <TabsPrimitive.Root
       data-slot="tabs"
-      data-orientation={orientation}
       orientation={orientation}
+      onValueChange={onValueChange ? (value) => onValueChange(String(value)) : undefined}
       className={cn("group/tabs flex gap-2 data-horizontal:flex-col", className)}
       {...props}
     />
@@ -70,9 +74,7 @@ function useActiveRect(listRef: React.RefObject<HTMLDivElement | null>) {
     const list = listRef.current;
     if (!list) return;
     const measure = () => {
-      const active = list.querySelector<HTMLElement>(
-        '[data-slot="tabs-trigger"][data-state="active"]',
-      );
+      const active = list.querySelector<HTMLElement>('[data-slot="tabs-trigger"][data-active]');
       const next = active && active.offsetWidth > 0 ? rectWithin(active, list) : null;
       setRect((prev) => (sameRect(prev, next) ? prev : next));
     };
@@ -81,7 +83,7 @@ function useActiveRect(listRef: React.RefObject<HTMLDivElement | null>) {
     mutations.observe(list, {
       subtree: true,
       attributes: true,
-      attributeFilter: ["data-state"],
+      attributeFilter: ["data-active"],
       childList: true,
     });
     const resize = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
@@ -102,7 +104,9 @@ function TabsList({
   onPointerMove,
   onPointerLeave,
   ...props
-}: React.ComponentProps<typeof TabsPrimitive.List> & VariantProps<typeof tabsListVariants>) {
+}: Omit<React.ComponentProps<typeof TabsPrimitive.List>, "className"> & {
+  className?: string;
+} & VariantProps<typeof tabsListVariants>) {
   const listRef = React.useRef<HTMLDivElement>(null);
   const active = useActiveRect(listRef);
   const [hover, setHover] = React.useState<Rect | null>(null);
@@ -113,6 +117,7 @@ function TabsList({
   return (
     <TabsPrimitive.List
       ref={listRef}
+      activateOnFocus
       data-slot="tabs-list"
       data-variant={variant}
       className={cn(tabsListVariants({ variant }), "relative isolate", className)}
@@ -123,7 +128,7 @@ function TabsList({
           '[data-slot="tabs-trigger"]',
         );
         const next =
-          trigger && trigger.dataset.state !== "active" && !trigger.hasAttribute("disabled")
+          trigger && !trigger.hasAttribute("data-active") && !trigger.hasAttribute("disabled")
             ? rectWithin(trigger, listRef.current)
             : null;
         setHover((prev) => (sameRect(prev, next) ? prev : next));
@@ -177,13 +182,16 @@ function TabsList({
   );
 }
 
-function TabsTrigger({ className, ...props }: React.ComponentProps<typeof TabsPrimitive.Trigger>) {
+function TabsTrigger({
+  className,
+  ...props
+}: Omit<React.ComponentProps<typeof TabsPrimitive.Tab>, "className"> & { className?: string }) {
   return (
-    <TabsPrimitive.Trigger
+    <TabsPrimitive.Tab
       data-slot="tabs-trigger"
       className={cn(
         "relative inline-flex h-[calc(100%-1px)] flex-1 items-center justify-center gap-1.5 rounded-lg border border-transparent px-1.5 py-0.5 text-sm font-medium whitespace-nowrap text-foreground/60 group-data-vertical/tabs:w-full group-data-vertical/tabs:justify-start hover:text-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-1 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-50 has-data-[icon=inline-end]:pr-1 has-data-[icon=inline-start]:pl-1 dark:text-muted-foreground dark:hover:text-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
-        "data-[state=active]:text-foreground dark:data-[state=active]:text-foreground",
+        "data-active:text-foreground dark:data-active:text-foreground",
         className,
       )}
       {...props}
@@ -191,9 +199,12 @@ function TabsTrigger({ className, ...props }: React.ComponentProps<typeof TabsPr
   );
 }
 
-function TabsContent({ className, ...props }: React.ComponentProps<typeof TabsPrimitive.Content>) {
+function TabsContent({
+  className,
+  ...props
+}: Omit<React.ComponentProps<typeof TabsPrimitive.Panel>, "className"> & { className?: string }) {
   return (
-    <TabsPrimitive.Content
+    <TabsPrimitive.Panel
       data-slot="tabs-content"
       className={cn("flex-1 text-sm outline-none", className)}
       {...props}

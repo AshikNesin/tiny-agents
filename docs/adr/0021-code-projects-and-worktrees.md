@@ -38,8 +38,8 @@ a thread to a repository and a branch of its own.
   runs before a worktree is removed.
 - **Lifecycle.** Archive runs `archive` and removes the worktree; the
   branch and the transcript stay. Unarchive recreates it from the branch and
-  runs `setup`. Delete removes the worktree. A merged PR archives its thread
-  when the project's "Archive on merge" is on (the default).
+  runs `setup`. Delete removes the worktree. A merged or closed PR archives its
+  thread when the project's "Archive on merge" is on (the default).
 - **Review** for a project thread compares with the merge base of the base
   branch, served by the app's workspace module over the Sandbox connection,
   for every harness. Viewed marks are per thread, path and content hash

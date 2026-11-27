@@ -28,7 +28,7 @@ import {
 } from "@groot/ui/dropdown-menu";
 import { Spinner } from "../../components/ui/spinner";
 import { errorMessage } from "../../lib/errors";
-import { type HarnessInfo, type ModelOption, type ThreadSummary } from "../../lib/code/api";
+import { type HarnessInfo, type ThreadSummary } from "../../lib/code/api";
 import { reviewsApi } from "../../lib/code/projects";
 import { useResource } from "../../queries/resource";
 import {
@@ -40,7 +40,7 @@ import {
 import { harnessOf } from "../../store/code";
 import type { PullReviewView } from "../../../shared/api/code";
 import { ThreadView } from "./ThreadView";
-import { DEFAULT, ModelPicker, loadModels } from "./controls";
+import { DEFAULT, ModelPicker, useHarnessModels } from "./controls";
 import { PendingComments } from "./PendingComments";
 import { AssistantPane } from "./ResizablePane";
 import { PullDiffs } from "./PullDiffs";
@@ -239,8 +239,8 @@ export function PullReview({
       <div className="mx-auto max-w-xl p-6">
         <EmptyState icon={FileDiff} title="This review is not available" description={error} />
         <div className="flex justify-center">
-          <Button asChild variant="outline">
-            <Link to="/code">Back to Code</Link>
+          <Button variant="outline" render={<Link to="/code" />}>
+            Back to Code
           </Button>
         </div>
       </div>
@@ -260,10 +260,15 @@ export function PullReview({
     <div className="flex h-dvh min-h-0 flex-col" data-testid="code-pull-review">
       <PageKeys commands={commands} />
       <header className="border-border flex h-12 shrink-0 items-center gap-1 border-b px-2 sm:px-3">
-        <Button asChild variant="ghost" size="icon-sm" className="shrink-0">
-          <Link to="/code" aria-label="Back to the thread list" title="Back to the thread list">
-            <ArrowLeft />
-          </Link>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          className="shrink-0"
+          render={
+            <Link to="/code" aria-label="Back to the thread list" title="Back to the thread list" />
+          }
+        >
+          <ArrowLeft />
         </Button>
         {side === "files" && <FilesButton view={view} />}
         <span className="text-muted-foreground shrink-0 px-1 text-sm tabular-nums">
@@ -316,16 +321,21 @@ export function PullReview({
           >
             {updating ? <Spinner /> : <RefreshCw />}
           </Button>
-          <Button asChild variant="ghost" size="icon-sm" className="text-muted-foreground">
-            <a
-              href={review.url}
-              target="_blank"
-              rel="noreferrer"
-              aria-label="Open on GitHub"
-              title="Open on GitHub"
-            >
-              <ExternalLink />
-            </a>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className="text-muted-foreground"
+            render={
+              <a
+                href={review.url}
+                target="_blank"
+                rel="noreferrer"
+                aria-label="Open on GitHub"
+                title="Open on GitHub"
+              />
+            }
+          >
+            <ExternalLink />
           </Button>
         </div>
         <MoreActions review={review} updating={updating} onUpdate={() => void update()} />
@@ -458,15 +468,17 @@ function MoreActions({
   const terminal = useOpenInTerminal(review);
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          aria-label="More actions"
-          className="text-muted-foreground sm:hidden"
-        >
-          {updating || terminal.opening ? <Spinner /> : <Ellipsis />}
-        </Button>
+      <DropdownMenuTrigger
+        render={
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label="More actions"
+            className="text-muted-foreground sm:hidden"
+          />
+        }
+      >
+        {updating || terminal.opening ? <Spinner /> : <Ellipsis />}
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56">
         <DropdownMenuItem disabled={terminal.opening} onSelect={() => void terminal.open()}>
@@ -477,11 +489,15 @@ function MoreActions({
           <RefreshCw />
           Update to the latest commit
         </DropdownMenuItem>
-        <DropdownMenuItem asChild>
-          <a href={review.url} target="_blank" rel="noreferrer">
-            <ExternalLink />
-            Open on GitHub
-          </a>
+        <DropdownMenuItem
+          render={(linkProps) => (
+            <a {...linkProps} href={review.url} target="_blank" rel="noreferrer">
+              {linkProps.children}
+            </a>
+          )}
+        >
+          <ExternalLink />
+          Open on GitHub
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
@@ -533,18 +549,7 @@ function AskFirst({
   const [text, setText] = useState("");
   const [asking, setAsking] = useState(false);
   const [model, setModel] = useState(review.assistant?.model ?? DEFAULT);
-  const [models, setModels] = useState<ModelOption[]>([]);
-  const instanceId = review.assistant?.instanceId;
-  useEffect(() => {
-    if (!instanceId) return;
-    let cancelled = false;
-    loadModels(instanceId)
-      .then((list) => !cancelled && setModels(list))
-      .catch(() => !cancelled && setModels([]));
-    return () => {
-      cancelled = true;
-    };
-  }, [instanceId]);
+  const models = useHarnessModels(review.assistant?.instanceId);
   const comments = useThreadComments(review.key);
   const sent = useCommentStore((s) => s.sent);
   const count = comments.length;

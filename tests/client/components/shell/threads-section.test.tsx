@@ -8,6 +8,8 @@ import { AppSidebar } from "@/components/shell/AppSidebar";
 import { useCodeStore } from "@/store/code";
 import { useBotsStore } from "@/store/bots";
 import { usePeopleStore } from "@/store/people";
+import { useUiStore } from "@/store/ui";
+import type { BotListEntry } from "../../../../apps/web/src/shared/api/bots";
 import type { HarnessInfo, ThreadSummary } from "@/lib/code/api";
 import { AppQueryProvider } from "../../query-provider";
 
@@ -97,6 +99,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   usePeopleStore.setState(usePeopleStore.getInitialState());
+  useUiStore.setState({ foldedSections: [] });
   window.localStorage.clear();
 });
 
@@ -107,9 +110,51 @@ describe("threads in the chat sidebar", () => {
     expect(section.getAllByRole("link").map((link) => link.textContent)).toEqual([
       "All threads",
       "Thread asksasks you",
-      "Thread fixAda",
-      "Thread leadweb chat",
+      "Thread fix, started by AdaYesterday",
+      "Thread lead, started by web chatYesterday",
     ]);
+  });
+
+  it("lists project chats in their own Projects section, above Threads, not under Bots", () => {
+    const bot = (id: string, name: string, projectId: string | null): BotListEntry => ({
+      id,
+      conversationId: `c-${id}`,
+      name,
+      description: "",
+      modelId: "m",
+      lastMessagePreview: null,
+      lastActivityAt: "2026-11-05T00:00:00.000Z",
+      lastReadAt: null,
+      unread: false,
+      replying: false,
+      approvals: 0,
+      questions: 0,
+      pinnedAt: null,
+      projectId,
+    });
+    useBotsStore.setState({ bots: [bot("b1", "Ada", null), bot("b2", "web", "p1")] });
+    renderSidebar();
+    const regions = screen.getAllByRole("region").map((r) => r.getAttribute("aria-label"));
+    expect(regions).toEqual(["Projects", "Threads", "Bots"]);
+    const projects = within(screen.getByRole("region", { name: "Projects" }));
+    const avatar = projects.getByRole("link", { name: "web" }).querySelector("img");
+    expect(avatar?.getAttribute("src")).toBe("https://api.dicebear.com/10.x/gaze/svg?seed=web");
+    fireEvent.click(projects.getByRole("link", { name: "web" }));
+    expect(screen.getByTestId("where")).toHaveTextContent("/chats/b2");
+    const bots = within(screen.getByRole("region", { name: "Bots" }));
+    expect(bots.queryByText("web")).toBeNull();
+    expect(bots.getByText("Ada")).toBeVisible();
+  });
+
+  it("folds and unfolds from its heading", () => {
+    renderSidebar();
+    const section = within(screen.getByRole("region", { name: "Threads" }));
+    const heading = section.getByRole("button", { name: "Threads" });
+    fireEvent.click(heading);
+    expect(heading).toHaveAttribute("aria-expanded", "false");
+    expect(section.queryByRole("link", { name: /Thread fix/ })).toBeNull();
+    fireEvent.click(heading);
+    expect(section.getByRole("link", { name: /Thread fix/ })).toBeVisible();
   });
 
   it("opens a thread in Code, and All threads opens the Code list", () => {

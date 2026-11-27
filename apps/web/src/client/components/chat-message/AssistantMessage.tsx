@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Streamdown } from "streamdown";
-import { markdownComponents } from "../../lib/markdown";
+import { Markdown } from "../../lib/markdown";
 import type { ChatMessage } from "../../lib/chat-types";
 import { isActive } from "../../lib/tool-call-view";
 import {
@@ -113,7 +112,7 @@ export function assistantView(
               data-variant="plain"
               className="chat-md min-w-0 max-w-full px-0.5 py-1 md:max-w-[88%]"
             >
-              <Streamdown components={markdownComponents}>{message.text}</Streamdown>
+              <Markdown streaming={streaming}>{message.text}</Markdown>
               {message.status === "error" && (
                 <p className="text-destructive mt-1 text-xs">
                   {message.error ?? "The model returned an error."}

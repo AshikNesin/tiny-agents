@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vite-plus/test";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render as renderPlain, screen, waitFor } from "@testing-library/react";
+import { AppQueryProvider } from "../query-provider";
 import userEvent from "@testing-library/user-event";
 import React from "react";
 import { ApiError } from "@groot/shell/lib/api";
@@ -8,6 +9,8 @@ import { BrowserRouter } from "react-router-dom";
 import { BotDialog } from "@/components/BotDialog";
 import type { Bot } from "../../../apps/web/src/shared/api/bots";
 import type { CatalogModel } from "../../../apps/web/src/shared/api/models";
+
+const render = (ui: React.ReactElement) => renderPlain(ui, { wrapper: AppQueryProvider });
 
 const removeMock = vi.fn().mockResolvedValue(undefined);
 const createMock = vi.fn();

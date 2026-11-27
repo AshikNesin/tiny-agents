@@ -76,17 +76,19 @@ export function ChatHistoryMenu({ botId, conversationId, activeChatId }: ChatHis
 
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          className="bg-accent text-foreground"
-          aria-label="Chat history"
-          title="Chat history"
-          data-testid="chat-history-toggle"
-        >
-          <History className="size-4" />
-        </Button>
+      <DropdownMenuTrigger
+        render={
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className="bg-accent text-foreground"
+            aria-label="Chat history"
+            title="Chat history"
+            data-testid="chat-history-toggle"
+          />
+        }
+      >
+        <History className="size-4" />
       </DropdownMenuTrigger>
       <DropdownMenuContent
         align="end"

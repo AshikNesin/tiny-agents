@@ -4,15 +4,25 @@ import {
   Cpu,
   Download,
   FileJson,
+  FolderGit2,
+  GitBranch,
+  GitPullRequest,
   Palette,
   ShieldCheck,
   UserRound,
   Users,
+  Wrench,
 } from "lucide-react";
 
 export type SettingsSectionInfo = Omit<SettingsSection, "element" | "items">;
 
-const OWNER_SECTIONS: SettingsSectionInfo[] = [
+function defineSections<const Id extends string>(
+  sections: Array<SettingsSectionInfo & { id: Id }>,
+) {
+  return sections;
+}
+
+const OWNER_SECTIONS = defineSections([
   {
     id: "account",
     label: "Account",
@@ -56,6 +66,14 @@ const OWNER_SECTIONS: SettingsSectionInfo[] = [
     wide: true,
   },
   {
+    id: "tools",
+    label: "Tools",
+    group: "App",
+    icon: Wrench,
+    description: "Allow, Ask or Off for each tool, once for every bot.",
+    keywords: ["permissions", "allow", "ask", "approval", "bots", "always allow"],
+  },
+  {
     id: "notifications",
     label: "Notifications",
     group: "App",
@@ -88,10 +106,45 @@ const OWNER_SECTIONS: SettingsSectionInfo[] = [
     description: "Update a local install from git and restart it.",
     keywords: ["update", "upgrade", "version", "restart", "release", "git", "pnpm local"],
   },
-];
+]);
 
-const GUEST_SECTION_IDS = new Set(["appearance", "security"]);
+const CODE_SECTIONS = defineSections([
+  {
+    id: "projects",
+    label: "Projects",
+    group: "Code",
+    icon: FolderGit2,
+    description:
+      "A project is a GitHub repository checked out on the sandbox. Each thread started in it gets its own worktree and branch, and can publish a pull request.",
+    keywords: ["repository", "repo", "worktree", "branch", "instructions", "scripts", "auto-fix"],
+  },
+  {
+    id: "github",
+    label: "GitHub",
+    group: "Code",
+    icon: GitBranch,
+    description: "How Code reaches GitHub: gh on the sandbox, a token, or a GitHub App.",
+    keywords: ["token", "gh", "app", "webhook", "credential"],
+  },
+  {
+    id: "reviews",
+    label: "Reviews",
+    group: "Code",
+    icon: GitPullRequest,
+    description: "What the Reviews list in the Code sidebar shows from GitHub.",
+    keywords: ["pull requests", "review requests", "drafts", "bots", "filters"],
+  },
+]);
 
-export function settingsSectionsFor(guest: boolean): SettingsSectionInfo[] {
-  return guest ? OWNER_SECTIONS.filter((s) => GUEST_SECTION_IDS.has(s.id)) : OWNER_SECTIONS;
+export type CodeSettingsSectionId = (typeof CODE_SECTIONS)[number]["id"];
+export type SettingsSectionId = (typeof OWNER_SECTIONS)[number]["id"] | CodeSettingsSectionId;
+
+const GUEST_SECTION_IDS = new Set<SettingsSectionId>(["appearance", "security"]);
+
+export function settingsSectionsFor(
+  guest: boolean,
+  code: boolean,
+): Array<SettingsSectionInfo & { id: SettingsSectionId }> {
+  if (guest) return OWNER_SECTIONS.filter((s) => GUEST_SECTION_IDS.has(s.id));
+  return code ? [...OWNER_SECTIONS, ...CODE_SECTIONS] : OWNER_SECTIONS;
 }

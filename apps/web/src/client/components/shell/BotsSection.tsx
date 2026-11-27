@@ -15,6 +15,7 @@ import { useBotsStore } from "../../store/bots";
 import { useViewerRole } from "../../store/people";
 import { useUiStore } from "../../store/ui";
 import { BotAvatar } from "../BotAvatar";
+import { SidebarSection } from "./SidebarSection";
 
 function RowStatus({ bot, active }: { bot: BotListEntry; active: boolean }) {
   const { waiting, replying, unread } = attentionOf(bot);
@@ -72,42 +73,41 @@ function BotRow({
         aria-current={active ? "page" : undefined}
         aria-label={stateLabel(bot)}
         aria-describedby={preview ? previewId : undefined}
+        title={preview || undefined}
         className={cn(
-          "flex min-h-9 items-center gap-2 rounded-xl py-1.5 pr-2 pl-1.5 text-sm outline-none",
+          "flex h-9 items-center gap-2.5 rounded-xl pr-2 pl-1.5 text-sm outline-none",
           "focus-visible:ring-sidebar-ring focus-visible:ring-1",
           active ? "bg-sidebar-accent" : "hover:bg-sidebar-accent",
         )}
       >
         <BotAvatar name={bot.name} className="size-6" />
-        <span className="min-w-0 flex-1">
-          <span className="flex items-baseline gap-2">
-            <span className="min-w-0 flex-1 truncate">{bot.name}</span>
-            {preview && (
-              <span className="text-muted-foreground shrink-0 text-[11px] group-focus-within/row:invisible group-hover/row:invisible group-has-[[data-state=open]]/row:invisible">
-                {relativeTime(bot.lastActivityAt)}
-              </span>
-            )}
+        <span className="min-w-0 flex-1 truncate">{bot.name}</span>
+        {preview && (
+          <span id={previewId} className="sr-only">
+            {preview}
           </span>
-          {preview && (
-            <span id={previewId} className="text-muted-foreground block truncate text-xs">
-              {preview}
-            </span>
-          )}
-        </span>
-        <span className="group-focus-within/row:hidden group-hover/row:hidden group-has-[[data-state=open]]/row:hidden">
+        )}
+        {preview && (
+          <span className="text-muted-foreground shrink-0 text-xs group-focus-within/row:invisible group-hover/row:invisible group-has-[[data-popup-open]]/row:invisible">
+            {relativeTime(bot.lastActivityAt)}
+          </span>
+        )}
+        <span className="group-focus-within/row:hidden group-hover/row:hidden group-has-[[data-popup-open]]/row:hidden">
           <RowStatus bot={bot} active={active} />
         </span>
       </Link>
       {owner && (
         <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button
-              type="button"
-              aria-label={`${bot.name} actions`}
-              className="text-muted-foreground hover:bg-sidebar-accent focus-visible:ring-sidebar-ring absolute top-1.5 right-1.5 flex size-6 items-center justify-center rounded-lg opacity-0 outline-none group-focus-within/row:opacity-100 group-hover/row:opacity-100 focus-visible:ring-1 data-[state=open]:opacity-100"
-            >
-              <MoreHorizontal className="size-4" />
-            </button>
+          <DropdownMenuTrigger
+            render={
+              <button
+                type="button"
+                aria-label={`${bot.name} actions`}
+                className="text-muted-foreground hover:bg-sidebar-accent focus-visible:ring-sidebar-ring absolute top-1.5 right-1.5 flex size-6 items-center justify-center rounded-lg opacity-0 outline-none group-focus-within/row:opacity-100 group-hover/row:opacity-100 focus-visible:ring-1 data-popup-open:opacity-100"
+              />
+            }
+          >
+            <MoreHorizontal className="size-4" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" side="right">
             <DropdownMenuItem onSelect={() => void togglePin(bot.id)}>
@@ -133,7 +133,7 @@ function BotRow({
 }
 
 function GroupLabel({ children }: { children: string }) {
-  return <p className="text-fg-tertiary px-1.5 pt-2 pb-1 text-xs select-none">{children}</p>;
+  return <p className="text-fg-tertiary px-1.5 pt-1.5 pb-1 text-[11px] select-none">{children}</p>;
 }
 
 interface BotsSectionProps {
@@ -153,10 +153,10 @@ export function BotsSection({ bots, activeId, onNavigate = () => {} }: BotsSecti
   const foldable = recent.length > shown.length || (expanded && recent.length > 8);
 
   return (
-    <section aria-label="Bots" className="px-2.5">
-      <div className="flex h-8 items-center justify-between px-1.5">
-        <h2 className="text-fg-tertiary text-sm font-medium select-none">Bots</h2>
-        {role === "owner" && (
+    <SidebarSection
+      title="Bots"
+      action={
+        role === "owner" && (
           <button
             type="button"
             onClick={openCreateBot}
@@ -165,9 +165,9 @@ export function BotsSection({ bots, activeId, onNavigate = () => {} }: BotsSecti
           >
             <Plus className="size-4" />
           </button>
-        )}
-      </div>
-
+        )
+      }
+    >
       {bots.length === 0 && (
         <p className="text-fg-tertiary px-1.5 py-2 text-sm">
           {role === "guest" ? "Nothing shared with you yet." : "No bots yet."}
@@ -226,7 +226,7 @@ export function BotsSection({ bots, activeId, onNavigate = () => {} }: BotsSecti
           )}
         </>
       )}
-    </section>
+    </SidebarSection>
   );
 }
 

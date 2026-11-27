@@ -181,6 +181,14 @@ describe("approval cards act through the owner actions", () => {
     ]);
   });
 
+  it("allows a tool for every bot from the card", async () => {
+    card("delete_task");
+    await user.click(screen.getByRole("button", { name: "Allow for every bot" }));
+    expect(decideApproval.mock.calls).toEqual([
+      [7, "approved", { alwaysAllow: "delete_task", everyBot: true }],
+    ]);
+  });
+
   it("grants a vault item for the rest of the chat", async () => {
     card(
       "browser_fill_secret",

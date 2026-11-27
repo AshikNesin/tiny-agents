@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { api, createTestApp } from "../helpers";
-import { db, bots } from "../../../apps/web/src/server/db";
+import { botGuests, bots, db, guests, users } from "../../../apps/web/src/server/db";
 import { endAllSse } from "../../../apps/web/src/server/api/bots/bots.sse";
 import {
   onBotChatEvent,
@@ -34,7 +34,7 @@ let enabled: string[] = [];
 
 const app = createTestApp();
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- response data varies per route
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Data = any;
 
 function call(path: string, init: { method?: string; json?: unknown } = {}) {
@@ -580,6 +580,66 @@ describe("Bots API routes", () => {
     expect(stale.status).toBe(409);
     expect(JSON.parse((await findBot(bot.id))!.toolPermissions)).toEqual({});
     expect(agentRuntime.decideApproval).toHaveBeenCalledTimes(1);
+  });
+
+  describe("tool permissions set once for every bot", () => {
+    afterEach(async () => {
+      await call("/api/v1/tool-permissions", { method: "PUT", json: { permissions: {} } });
+    });
+
+    const lastPermissions = (bot: { conversationId: string }) =>
+      agentRuntime.configure.mock.calls.findLast(([ref]) => ref === conv(bot))?.[1]?.capabilities
+        ?.permissions;
+
+    it("applies them to every bot, and a bot's own choice wins", async () => {
+      const saved = await call("/api/v1/tool-permissions", {
+        method: "PUT",
+        json: { permissions: { send_email: "allow", run_command: "off" } },
+      });
+      expect(saved.status).toBe(200);
+      expect(saved.body.data).toEqual({ permissions: { send_email: "allow", run_command: "off" } });
+      expect((await call("/api/v1/tool-permissions")).body.data).toEqual({
+        permissions: { send_email: "allow", run_command: "off" },
+      });
+
+      const plain = await createBot();
+      expect(lastPermissions(plain)).toEqual({ send_email: "allow", run_command: "off" });
+      const careful = await createBot({ name: "Careful", toolPermissions: { send_email: "ask" } });
+      expect(lastPermissions(careful)).toEqual({ send_email: "ask", run_command: "off" });
+    });
+
+    it("applies them to a bot shared with guests too", async () => {
+      await call("/api/v1/tool-permissions", {
+        method: "PUT",
+        json: { permissions: { send_email: "allow", run_command: "off" } },
+      });
+      const bot = await createBot();
+      await db
+        .insert(users)
+        .values({ id: 990_960, email: "perm-guest@example.com", password: "!" })
+        .onConflictDoNothing();
+      await db.insert(guests).values({ userId: 990_960 });
+      await db.insert(botGuests).values({ botId: bot.id, userId: 990_960 });
+      await call(`/api/v1/bots/${bot.id}`, { method: "PATCH", json: { description: "Shared" } });
+      expect(lastPermissions(bot)).toEqual({ send_email: "allow", run_command: "off" });
+      await db.delete(users).where(eq(users.id, 990_960));
+    });
+
+    it("'always allow for every bot' allows the tool everywhere and drops this bot's own choice", async () => {
+      const bot = await createBot({ toolPermissions: { send_email: "ask" } });
+      waitingCard("send_email");
+      agentRuntime.decideApproval.mockResolvedValueOnce(undefined);
+      const approved = await call(`/api/v1/bots/${bot.id}/approvals/7`, {
+        method: "POST",
+        json: { decision: "approved", alwaysAllow: "send_email", everyBot: true },
+      });
+      expect(approved.status).toBe(200);
+      expect((await call("/api/v1/tool-permissions")).body.data).toEqual({
+        permissions: { send_email: "allow" },
+      });
+      expect(JSON.parse((await findBot(bot.id))!.toolPermissions)).toEqual({});
+      expect(lastPermissions(bot)).toEqual({ send_email: "allow" });
+    });
   });
 
   it("answers or dismisses a bot's questions", async () => {

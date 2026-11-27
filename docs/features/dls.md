@@ -1,7 +1,7 @@
 # The Groot DLS (Design Language System)
 
 This document is the source of truth for how groot UI looks and behaves. The
-stack is **Tailwind v4 (CSS-first) + shadcn-style primitives (Radix) + cva**
+stack is **Tailwind v4 (CSS-first) + shadcn-style primitives (Base UI) + cva**
 in [`@groot/ui`](../../packages/ui), with rules adapted from
 [Cloudflare Kumo](https://kumo-ui.com)'s design skill (MIT). We build our own
 system; Kumo is the reference, not a dependency. Why, and the alternatives
@@ -187,7 +187,7 @@ hand-rolled copies), not preemptively. Charts, date pickers, comboboxes, tag
 inputs, meters and toolbars are deliberately absent; build them against our
 tokens when a feature needs one.
 
-## Rules (adapted from Kumo, re-derived for Radix)
+## Rules (adapted from Kumo, re-derived for Base UI)
 
 | #   | Rule                                                                                   | Enforced                     |
 | --- | -------------------------------------------------------------------------------------- | ---------------------------- |

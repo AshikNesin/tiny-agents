@@ -91,6 +91,7 @@ export interface SendMessageBody {
 export interface ApprovalBody {
   decision: "approved" | "denied";
   alwaysAllow?: string;
+  everyBot?: boolean;
   grant?: boolean;
 }
 
@@ -135,3 +136,7 @@ export interface PastChatViewData {
 }
 
 export type PastChatView = Jsonified<PastChatViewData>;
+
+export interface ToolPermissionsData {
+  permissions: Record<string, ToolPermission>;
+}

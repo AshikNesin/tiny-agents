@@ -206,10 +206,15 @@ export function FilePreviewDialog({
               <PreviewBody uploadId={file.uploadId} />
             </DialogBody>
             <DialogFooter>
-              <Button variant="outline" asChild>
-                <a href={botsApi.uploadUrl(file.uploadId)} download={file.name}>
-                  <Download className="size-4" /> Download
-                </a>
+              <Button
+                variant="outline"
+                render={(linkProps) => (
+                  <a {...linkProps} href={botsApi.uploadUrl(file.uploadId)} download={file.name}>
+                    {linkProps.children}
+                  </a>
+                )}
+              >
+                <Download className="size-4" /> Download
               </Button>
             </DialogFooter>
           </>

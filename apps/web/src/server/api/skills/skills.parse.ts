@@ -5,6 +5,15 @@ import type { ParsedSkill, SkillFile } from "../../../shared/api/skills";
 export const MAX_FILES = 50;
 export const MAX_FILE_BYTES = 200_000;
 const MAX_TOTAL_BYTES = 1_000_000;
+export function skillFiles(raw: string): SkillFile[] {
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    return Array.isArray(parsed) ? (parsed as SkillFile[]) : [];
+  } catch {
+    return [];
+  }
+}
+
 const SCRIPT = /\.(sh|bash|zsh|py|js|mjs|cjs|ts|rb|pl|ps1|bat|exe)$/i;
 
 function frontmatter(raw: string): { fields: Record<string, string>; body: string } {
@@ -25,6 +34,13 @@ function frontmatter(raw: string): { fields: Record<string, string>; body: strin
     fields[k] = v.replace(/^(['"])([\s\S]*)\1$/, "$2");
   }
   return { fields, body: match[2] };
+}
+
+export function skillHeading(raw: string): { name: string; description: string } | undefined {
+  const { fields } = frontmatter(raw);
+  const name = fields.name?.trim() ?? "";
+  const description = fields.description?.trim() ?? "";
+  return SKILL_NAME.test(name) && description ? { name, description } : undefined;
 }
 
 export function parseSkillMarkdown(raw: string, files: SkillFile[] = []): ParsedSkill {

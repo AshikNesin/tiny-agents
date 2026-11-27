@@ -1,4 +1,6 @@
 import { randomBytes, randomUUID } from "node:crypto";
+import { homedir } from "node:os";
+import path from "node:path";
 import { assertSessionMayStart, type ClaudeAuthStatus } from "./auth";
 import {
   DEFAULT_CODING_PERMISSION_MODE,
@@ -15,6 +17,7 @@ import {
   type CodingSettingsChange,
   type CodingSettingsResult,
   type CodingState,
+  type CodingToolSpec,
 } from "./coding-protocol";
 import {
   buildCodingSdkOptions,
@@ -25,7 +28,10 @@ import {
   type CodingSdkMessage,
   type CodingSdkUserMessage,
 } from "./coding-sdk";
+import type { JsonSchema } from "./protocol";
+import { zodShape, type SdkToolResult } from "./sdk";
 import { SessionLog } from "./session-log";
+import { writeSkillsPlugin } from "./coding-skills";
 import { asRateLimitInfo, usagePauseReason } from "./usage";
 
 export class CodingError extends Error {
@@ -40,6 +46,7 @@ export class CodingError extends Error {
 
 export interface CodingDeps {
   sdk: CodingSdk;
+  home?: string;
   env: Record<string, string | undefined>;
   limits: CodingLimits;
   authStatus: () => Promise<ClaudeAuthStatus>;
@@ -99,7 +106,7 @@ class InputQueue {
 
   async *iterate(): AsyncGenerator<CodingSdkUserMessage> {
     while (!this.closed) {
-      // eslint-disable-next-line react-doctor/async-await-in-loop -- sequential input stream
+      // eslint-disable-next-line react-doctor/async-await-in-loop
       const item = await this.next();
       if (!item) return;
       item.taken = true;
@@ -124,6 +131,22 @@ interface PendingApproval {
 }
 
 type ApprovalStatus = "allowed" | "denied" | "answered" | "expired";
+
+interface AppToolOutcome {
+  content: string;
+  isError?: boolean;
+}
+
+interface PendingCall {
+  resolve: (outcome: AppToolOutcome) => void;
+  cancel: () => void;
+}
+
+const APP_TOOL_TIMEOUT_MS = 10 * 60_000;
+
+function appToolName(spec: Pick<CodingToolSpec, "server" | "name">): string {
+  return `mcp__${spec.server}__${spec.name}`;
+}
 
 interface UsageTotals {
   [model: string]: Record<string, number>;
@@ -155,6 +178,7 @@ export class CodingSession {
   private readonly queue: HeldMessage[] = [];
   private readonly approvals = new Map<string, PendingApproval>();
   private readonly closedApprovals = new Map<string, ApprovalStatus>();
+  private readonly calls = new Map<string, PendingCall>();
   private readonly sent = new Map<string, CodingSendResult>();
   private costBase = 0;
   private usageBase: UsageTotals = {};
@@ -395,6 +419,7 @@ export class CodingSession {
       const input = new InputQueue();
       const canUseTool: CodingCanUseTool = (name, toolInput, options) =>
         this.canUseTool(generation, name, toolInput, options);
+      const skillsPlugin = await this.skillsPlugin();
       const options = buildCodingSdkOptions({
         cwd: this.config.cwd,
         resume: this.claudeSessionId ?? this.config.resume,
@@ -406,6 +431,8 @@ export class CodingSession {
         stderr: (data) => {
           this.stderrTail = (this.stderrTail + data).slice(-2_000);
         },
+        ...this.appServers(generation),
+        ...(skillsPlugin ? { skillsPlugin } : {}),
       });
       const query = this.deps.sdk.query({ prompt: input.iterate(), options });
       this.query = query;
@@ -794,6 +821,88 @@ export class CodingSession {
     });
   }
 
+  settleCall(callId: string, outcome: AppToolOutcome): boolean {
+    const pending = this.calls.get(callId);
+    if (!pending) return false;
+    this.calls.delete(callId);
+    pending.cancel();
+    pending.resolve(outcome);
+    this.publish({ type: "tool_call_closed", callId });
+    return true;
+  }
+
+  private async skillsPlugin(): Promise<string | undefined> {
+    const root = path.join(
+      this.deps.home ?? homedir(),
+      ".tiny-agents",
+      "code-skills",
+      this.id.replace(/[^\w-]/g, "_"),
+    );
+    const skills = this.config.skills ?? [];
+    if (skills.length === 0) return undefined;
+    await writeSkillsPlugin(root, skills);
+    return root;
+  }
+
+  private appServers(generation: number): {
+    mcpServers?: Record<string, unknown>;
+    allowedTools?: string[];
+  } {
+    const specs = this.config.tools ?? [];
+    const { tool, createSdkMcpServer } = this.deps.sdk;
+    if (specs.length === 0 || !tool || !createSdkMcpServer) return {};
+    const byServer = new Map<string, CodingToolSpec[]>();
+    for (const spec of specs)
+      byServer.set(spec.server, [...(byServer.get(spec.server) ?? []), spec]);
+    const mcpServers: Record<string, unknown> = {};
+    for (const [server, list] of byServer) {
+      mcpServers[server] = createSdkMcpServer({
+        name: server,
+        version: "1.0.0",
+        tools: list.map((spec) =>
+          tool(spec.name, spec.description, zodShape(spec.inputSchema as JsonSchema), (args) =>
+            this.callAppTool(generation, spec, args),
+          ),
+        ),
+      });
+    }
+    return { mcpServers, allowedTools: specs.map(appToolName) };
+  }
+
+  private async callAppTool(
+    generation: number,
+    spec: CodingToolSpec,
+    input: Record<string, unknown>,
+  ): Promise<SdkToolResult> {
+    if (spec.ask) {
+      const decision = await this.canUseTool(generation, appToolName(spec), input, {
+        signal: new AbortController().signal,
+        toolUseID: "",
+      });
+      if (decision.behavior === "deny") {
+        return { content: [{ type: "text", text: decision.message }], isError: true };
+      }
+    }
+    const callId = `tc_${randomBytes(8).toString("hex")}`;
+    const schedule = this.deps.schedule ?? defaultSchedule;
+    const outcome = await new Promise<AppToolOutcome>((resolve) => {
+      const cancel = schedule(
+        () =>
+          this.settleCall(callId, {
+            content: "The app did not answer this tool call in time.",
+            isError: true,
+          }),
+        APP_TOOL_TIMEOUT_MS,
+      );
+      this.calls.set(callId, { resolve, cancel });
+      this.publish({ type: "tool_call", callId, server: spec.server, tool: spec.name, input });
+    });
+    return {
+      content: [{ type: "text", text: outcome.content }],
+      ...(outcome.isError ? { isError: true } : {}),
+    };
+  }
+
   private closeApproval(id: string, result: CodingPermissionResult, status: ApprovalStatus): void {
     const pending = this.approvals.get(id);
     if (!pending) return;
@@ -810,6 +919,9 @@ export class CodingSession {
   private expireApprovals(): void {
     for (const id of this.approvals.keys()) {
       this.closeApproval(id, { behavior: "deny", message: "The session stopped." }, "expired");
+    }
+    for (const id of this.calls.keys()) {
+      this.settleCall(id, { content: "The session stopped.", isError: true });
     }
   }
 

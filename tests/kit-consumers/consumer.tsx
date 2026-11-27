@@ -12,6 +12,7 @@ import { Breadcrumb as UiBreadcrumb, Breadcrumbs } from "@groot/ui/breadcrumb";
 import { Button, type ButtonProps } from "@groot/ui/button";
 import { Card, CardContent } from "@groot/ui/card";
 import { Checkbox } from "@groot/ui/checkbox";
+import { Collapsible, CollapsibleContent } from "@groot/ui/collapsible";
 import { Command, CommandInput } from "@groot/ui/command";
 import { CommandMenu, CommandMenuDialog, type CommandMenuItemData } from "@groot/ui/command-menu";
 import { Dialog, DialogContent } from "@groot/ui/dialog";
@@ -19,10 +20,13 @@ import { DataField, DataFields } from "@groot/ui/display";
 import { ContextMenu, ContextMenuTrigger } from "@groot/ui/context-menu";
 import { DropdownMenu, DropdownMenuTrigger } from "@groot/ui/dropdown-menu";
 import { EmptyState, ErrorState } from "@groot/ui/empty-state";
+import { AskUserQuestions, type AskUserQuestion } from "@groot/ui/fluid/ask-user-questions";
+import { ThinkingIndicator } from "@groot/ui/fluid/thinking-indicator";
 import { Form, Field } from "@groot/ui/form";
 import { formatShortcut, isEditable, useHotkey, type HotkeyOptions } from "@groot/ui/hotkeys";
 import { Input } from "@groot/ui/input";
 import { InputGroup } from "@groot/ui/input-group";
+import { Item, ItemContent } from "@groot/ui/item";
 import { Label } from "@groot/ui/label";
 import { cn } from "@groot/ui/lib/utils";
 import { listRowClass, listRowGridClass } from "@groot/ui/list-row";
@@ -33,12 +37,15 @@ import { AlertDialog, AlertDialogAction } from "@groot/ui/primitives/alert-dialo
 import { type ConfirmOptions } from "@groot/ui/primitives/confirm";
 import { GrootUIProvider } from "@groot/ui/provider";
 import { Toaster } from "@groot/ui/sonner";
+import { SearchSelect, type SearchSelectOption } from "@groot/ui/search-select";
 import { StatTile } from "@groot/ui/stat-tile";
 import { StatusBadge, type StatusVariant } from "@groot/ui/status-badge";
+import { Switch } from "@groot/ui/switch";
 import { Table, TableBody } from "@groot/ui/table";
 import { Tabs, TabsList } from "@groot/ui/tabs";
 import { FluidHighlight, spring, useModalPresence } from "@groot/ui/motion";
 import { Textarea } from "@groot/ui/textarea";
+import { ToggleGroup, ToggleGroupItem } from "@groot/ui/toggle-group";
 import { Text } from "@groot/ui/typography";
 
 import { Button as ButtonFromBarrel, Toaster as ToasterFromBarrel } from "@groot/ui";
@@ -145,6 +152,8 @@ const checks = {
     Button,
     Card,
     Checkbox,
+    Collapsible,
+    CollapsibleContent,
     Command,
     CommandInput,
     ContextMenu,
@@ -160,6 +169,14 @@ const checks = {
     ErrorState,
     Input,
     InputGroup,
+    Item,
+    ItemContent,
+    AskUserQuestions,
+    ThinkingIndicator,
+    SearchSelect,
+    Switch,
+    ToggleGroup,
+    ToggleGroupItem,
     Label,
     cn,
     listRowClass,
@@ -332,6 +349,9 @@ const wireLogLevels: WireJobLog["level"][] = ["info"];
 const wireScheduleCrons: WireJobSchedule["cron"][] = ["* * * * *"];
 void [wireJobIds, wireLogLevels, wireScheduleCrons];
 const status: StatusVariant = "info";
+const question: AskUserQuestion | null = null;
+const option: SearchSelectOption | null = null;
+void [question, option];
 const shellConfig: ShellConfig = {
   brand: { label: "Kit", to: "/" },
   nav: [{ label: "Kit", to: "/kit", primary: true }],

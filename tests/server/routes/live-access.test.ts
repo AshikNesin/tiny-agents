@@ -33,7 +33,7 @@ import {
 const app = createTestApp();
 const ownerToken = await authToken("live-access-owner@example.com", 990_101);
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- response data varies per route
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Data = any;
 
 const asOwner = (path: string, init: { method?: string; json?: unknown } = {}) =>

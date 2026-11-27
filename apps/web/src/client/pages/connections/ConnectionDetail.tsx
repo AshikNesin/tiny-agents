@@ -93,6 +93,17 @@ export function ConnectionDetail({ id }: { id: string }) {
     }
   };
 
+  const setAllBots = async (allBots: boolean) => {
+    if (!connection) return;
+    setConnection({ ...connection, allBots });
+    try {
+      setConnection(await mutations.update.mutateAsync({ id, input: { allBots } }));
+    } catch (error) {
+      toast.error(errorMessage(error, "Failed to update bots"));
+      await refresh();
+    }
+  };
+
   const toggleTool = async (serverName: string, enabled: boolean) => {
     if (!connection) return;
     const tools = connection.tools.map((tool) =>
@@ -137,11 +148,9 @@ export function ConnectionDetail({ id }: { id: string }) {
           variant="destructive"
           action={
             <>
-              <Button variant="outline" asChild>
-                <Link to="/connections">
-                  <ArrowLeft className="size-4" />
-                  Back to connections
-                </Link>
+              <Button variant="outline" render={<Link to="/connections" />}>
+                <ArrowLeft className="size-4" />
+                Back to connections
               </Button>
               <Button onClick={() => void refresh()}>Retry</Button>
             </>
@@ -193,6 +202,7 @@ export function ConnectionDetail({ id }: { id: string }) {
         connection={connection}
         bots={bots}
         onToggleBot={(botId, enable) => void toggleBot(botId, enable)}
+        onSetAllBots={(allBots) => void setAllBots(allBots)}
       />
 
       <ConnectionDangerZone connection={connection} onRemove={() => setConfirmRemove(true)} />

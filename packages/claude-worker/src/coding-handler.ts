@@ -70,6 +70,13 @@ export function createCodingHandler(deps: {
         });
       case "coding.interrupt":
         return sessions.get(message.sessionId)?.interrupt() ?? { stopped: false };
+      case "coding.tool_result":
+        return {
+          settled: existing(message.sessionId).settleCall(message.callId, {
+            content: message.content,
+            ...(message.isError ? { isError: true } : {}),
+          }),
+        };
       case "coding.respond":
         existing(message.sessionId).respond(message.approvalId, message.answer);
         return undefined;

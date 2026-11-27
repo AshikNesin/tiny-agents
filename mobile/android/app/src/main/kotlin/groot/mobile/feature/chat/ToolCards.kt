@@ -71,6 +71,7 @@ class ChatActions(
     val onCancelCredentials: (taskId: Int) -> Unit,
     val onOpenComputer: () -> Unit,
     val onOpenLink: (String) -> Unit,
+    val onAllowEveryBot: ((taskId: Int, tool: String) -> Unit)? = null,
 )
 
 @Composable
@@ -247,6 +248,9 @@ private fun ApprovalCard(call: ToolCall, actions: ChatActions) {
             SecondaryButton("Deny", onClick = { actions.onDecide(taskId, false, null, false) })
             if (call.name !in actions.askOnlyTools) {
                 SecondaryButton("Always allow", onClick = { actions.onDecide(taskId, true, call.name, false) })
+                actions.onAllowEveryBot?.let { allow ->
+                    SecondaryButton("Allow for every bot", onClick = { allow(taskId, call.name) })
+                }
             }
         }
     }

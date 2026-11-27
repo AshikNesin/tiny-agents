@@ -67,6 +67,7 @@
         "files": [],
         "source": "manual",
         "sourceUrl": null,
+        "allBots": false,
         "botIds": ["<id1>"],
         "createdAt": "2026-11-06T06:30:00.000Z",
         "updatedAt": "2026-11-06T06:30:00.000Z"
@@ -102,6 +103,7 @@
           "files": [],
           "source": "manual",
           "sourceUrl": null,
+          "allBots": false,
           "botIds": ["<id1>"],
           "createdAt": "2026-11-06T06:30:00.000Z",
           "updatedAt": "2026-11-06T06:30:00.000Z"
@@ -124,6 +126,7 @@
         "files": [],
         "source": "manual",
         "sourceUrl": null,
+        "allBots": false,
         "botIds": ["<id1>"],
         "createdAt": "2026-11-06T06:30:00.000Z",
         "updatedAt": "2026-11-06T06:30:00.000Z"
@@ -145,6 +148,7 @@
         "files": [],
         "source": "manual",
         "sourceUrl": null,
+        "allBots": false,
         "botIds": [],
         "createdAt": "2026-11-06T06:30:00.000Z",
         "updatedAt": "2026-11-06T06:30:00.000Z"
@@ -199,6 +203,7 @@
           "files": "[]",
           "source": "manual",
           "sourceUrl": null,
+          "allBots": false,
           "createdAt": "2026-11-06T06:30:00.000Z",
           "updatedAt": "2026-11-06T06:30:00.000Z"
         }

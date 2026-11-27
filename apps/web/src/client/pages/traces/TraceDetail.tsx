@@ -12,7 +12,6 @@ import {
   UserIcon,
   WrenchIcon,
 } from "lucide-react";
-import { Streamdown } from "streamdown";
 import { Breadcrumbs } from "@groot/ui/breadcrumb";
 import { Button } from "@groot/ui/button";
 import { Checkbox } from "@groot/ui/checkbox";
@@ -27,7 +26,7 @@ import type {
   TraceSessionDetail,
   TraceTurn,
 } from "../../../shared/api/traces";
-import { markdownComponents } from "../../lib/markdown";
+import { Markdown } from "../../lib/markdown";
 import { stepTitle, type ToolLabelCatalog } from "../../lib/tool-call-text";
 import { useToolLabels } from "../../lib/use-tool-labels";
 import {
@@ -254,7 +253,7 @@ function EventRow({ event, labels }: { event: TraceEvent; labels: ToolLabelCatal
     case "response":
       return (
         <div className="chat-md min-w-0 py-1 text-sm" data-testid="trace-response">
-          <Streamdown components={markdownComponents}>{event.text}</Streamdown>
+          <Markdown>{event.text}</Markdown>
         </div>
       );
     case "thinking":
@@ -420,8 +419,8 @@ export function TraceDetailPage() {
       }
       actions={
         link ? (
-          <Button variant="outline" size="sm" asChild>
-            <Link to={link}>Open chat</Link>
+          <Button variant="outline" size="sm" render={<Link to={link} />}>
+            Open chat
           </Button>
         ) : undefined
       }

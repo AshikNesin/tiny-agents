@@ -46,4 +46,28 @@ describe("Button", () => {
     rerender(<Button size="lg">Large</Button>);
     expect(screen.getByRole("button", { name: /large/i })).toHaveClass("h-10");
   });
+
+  it("renders as the element passed to render, keeping its own children", () => {
+    render(
+      <>
+        <Button
+          variant="outline"
+          render={(linkProps) => (
+            <a {...linkProps} href="/docs">
+              {linkProps.children}
+            </a>
+          )}
+        >
+          Docs
+        </Button>
+        <Button size="sm" render={<a href="/help">Help</a>} />
+      </>,
+    );
+    const docs = screen.getByRole("link", { name: "Docs" });
+    expect(docs).toHaveAttribute("href", "/docs");
+    expect(docs).toHaveClass("border-border");
+    const help = screen.getByRole("link", { name: "Help" });
+    expect(help).toHaveClass("h-7");
+    expect(screen.queryByRole("button")).toBeNull();
+  });
 });

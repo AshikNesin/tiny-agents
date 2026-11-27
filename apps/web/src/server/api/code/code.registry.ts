@@ -22,11 +22,24 @@ import {
   type PiThreadConfig,
 } from "@tiny-agents/code/server";
 import type { ModelOption } from "@tiny-agents/code/contracts";
+import type { ClaudeWorkerLocator } from "@tiny-agents/agent/claude-worker";
 import { appEnv, type AppEnv } from "../../env";
+import { TOOL_SEARCH_TOOLKIT } from "../bots/bot-toolkits";
+import { ownerToolPermissions } from "../bots/tool-permissions";
 import { sharedClaudeWorkerLocator } from "../bots/claude-worker";
 import { agentRuntimeReady, getAgentRuntime } from "../bots/bots.runtime";
 import { sandboxConnection } from "../bots/sandbox-host";
+import type { SandboxConnection } from "@tiny-agents/sandbox";
 import { threadIndex } from "./code.store";
+import {
+  claudeCodeSkills,
+  claudeCodeTools,
+  nativeSkills,
+  sharedConnectionToolkits,
+} from "./code.tools";
+import { reachedSkills } from "../bots/bot-reach";
+
+const SKILLS_TOOLKIT = "skills";
 
 function harnessHost(): HarnessHost {
   return {
@@ -55,31 +68,55 @@ function claudeCodeHarness(env: AppEnv, host: HarnessHost): HarnessInstance | un
   const locator = sharedClaudeWorkerLocator(env);
   if (!locator) return undefined;
   let hint: InstanceStatus | undefined;
+  let poll: ReturnType<typeof setInterval> | undefined;
   const readLogin = () =>
     void locator
       .account()
       .then((account) => {
-        hint =
-          account.state === "ready" && !account.subscription
-            ? {
-                state: "reconnecting",
-                detail: "Sign Claude Code in: Settings → Models → Claude plan → Sign in.",
-              }
-            : account.state === "installing"
-              ? { state: "connecting", detail: "Setting up Claude Code on the sandbox…" }
-              : account.state === "error"
-                ? { state: "reconnecting", detail: account.detail }
-                : undefined;
+        hint = claudeSignInHint(account);
       })
-      .catch(() => undefined);
-  readLogin();
-  setInterval(readLogin, 5 * 60_000).unref?.();
-  return createClaudeCodeHarness({
+      .catch(keepTheLastHintWhileTheWorkerIsUnreachable);
+  const harness = createClaudeCodeHarness({
     host,
     resolveWorker: () => locator.resolve(),
+    tools: claudeCodeTools(),
+    skills: claudeCodeSkills,
     status: () => hint ?? { state: "connected" },
     models: claudePlanModels,
   });
+  return {
+    ...harness,
+    start() {
+      harness.start();
+      if (poll) return;
+      readLogin();
+      poll = setInterval(readLogin, 5 * 60_000);
+      poll.unref?.();
+    },
+    stop() {
+      clearInterval(poll);
+      poll = undefined;
+      harness.stop();
+    },
+  };
+}
+
+function keepTheLastHintWhileTheWorkerIsUnreachable(): void {}
+
+type ClaudeAccount = Awaited<ReturnType<ClaudeWorkerLocator["account"]>>;
+
+function claudeSignInHint(account: ClaudeAccount): InstanceStatus | undefined {
+  if (account.state === "ready" && !account.subscription) {
+    return {
+      state: "reconnecting",
+      detail: "Sign Claude Code in: Settings → Models → Claude plan → Sign in.",
+    };
+  }
+  if (account.state === "installing") {
+    return { state: "connecting", detail: "Setting up Claude Code on the sandbox…" };
+  }
+  if (account.state === "error") return { state: "reconnecting", detail: account.detail };
+  return undefined;
 }
 
 function claudePlanModels(): ModelOption[] {
@@ -113,12 +150,26 @@ function nativeModels(runtime: AgentRuntime): ModelOption[] {
     .sort((a, b) => Number(b.isDefault ?? false) - Number(a.isDefault ?? false));
 }
 
-function nativeConfig(config: PiThreadConfig): BotAgentConfig {
+async function nativeConfig(config: PiThreadConfig): Promise<BotAgentConfig> {
+  const [shared, skills, owner] = await Promise.all([
+    sharedConnectionToolkits(),
+    reachedSkills("code-thread"),
+    ownerToolPermissions(),
+  ]);
+  const coding = codingSelection(config.permissionMode);
   return {
     systemPrompt: "",
     modelId: config.modelId,
     cwd: config.cwd,
-    capabilities: codingSelection(config.permissionMode),
+    capabilities: {
+      enabled: [
+        ...coding.enabled,
+        ...(skills.length > 0 ? [SKILLS_TOOLKIT] : []),
+        ...shared,
+        ...(shared.length > 0 ? [TOOL_SEARCH_TOOLKIT] : []),
+      ],
+      permissions: { ...owner, ...coding.permissions, save_skill: "off" },
+    },
   };
 }
 
@@ -136,12 +187,21 @@ function asHarnessError(error: unknown): never {
   throw error;
 }
 
-export function agentRuntimePort(runtime: () => AgentRuntime): PiPort {
+export function agentRuntimePort(
+  runtime: () => AgentRuntime,
+  sandbox: () => SandboxConnection | undefined,
+): PiPort {
   return {
     models: () => nativeModels(runtime()),
-    create: (config) => runtime().createConversation(nativeConfig(config)).catch(asHarnessError),
-    configure: (ref, config) =>
-      runtime().configure(ref, nativeConfig(config)).catch(asHarnessError),
+    skills: (cwd) => nativeSkills(cwd, sandbox()),
+    create: async (config) =>
+      runtime()
+        .createConversation(await nativeConfig(config))
+        .catch(asHarnessError),
+    configure: async (ref, config) =>
+      runtime()
+        .configure(ref, await nativeConfig(config))
+        .catch(asHarnessError),
     submit: (ref, input) => runtime().submit(ref, input),
     abort: (ref) => runtime().abort(ref),
     withdraw: (ref, requestId) => runtime().withdraw(ref, requestId),
@@ -162,7 +222,10 @@ export function agentRuntimePort(runtime: () => AgentRuntime): PiPort {
 
 function nativeHarness(env: AppEnv, host: HarnessHost): HarnessInstance | undefined {
   if (!agentRuntimeReady() || !sandboxConnection(env)) return undefined;
-  return createPiHarness({ host, port: agentRuntimePort(getAgentRuntime) });
+  return createPiHarness({
+    host,
+    port: agentRuntimePort(getAgentRuntime, () => sandboxConnection(env)),
+  });
 }
 
 export function buildHarnesses(options: RegistryOptions = {}): HarnessInstance[] {

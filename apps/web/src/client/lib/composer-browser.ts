@@ -1,35 +1,24 @@
+import { readStored, writeStored } from "./browser-storage";
+
 export const chatDraftKey = (botId: string) => `tiny-agents:draft:${botId}`;
 export const codeDraftKey = (key: string) => `tiny-agents:code-draft:${key}`;
 
 const MENTION_TIP_KEY = "tiny-agents:mention-tip-seen";
 
 export function readStoredDraft(storageKey: string): string {
-  try {
-    return localStorage.getItem(storageKey) ?? "";
-  } catch {
-    return "";
-  }
+  return readStored(storageKey) ?? "";
 }
 
 export function writeStoredDraft(storageKey: string, text: string): void {
-  try {
-    if (text) localStorage.setItem(storageKey, text);
-    else localStorage.removeItem(storageKey);
-  } catch {}
+  writeStored(storageKey, text || null);
 }
 
 export function mentionTipSeen(): boolean {
-  try {
-    return localStorage.getItem(MENTION_TIP_KEY) === "1";
-  } catch {
-    return true;
-  }
+  return readStored(MENTION_TIP_KEY) === "1";
 }
 
 export function markMentionTipSeen(): void {
-  try {
-    localStorage.setItem(MENTION_TIP_KEY, "1");
-  } catch {}
+  writeStored(MENTION_TIP_KEY, "1");
 }
 
 export function prefersCoarsePointer(): boolean {

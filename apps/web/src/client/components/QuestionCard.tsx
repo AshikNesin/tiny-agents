@@ -10,7 +10,7 @@ import {
   AskUserQuestions,
   type AskUserAnswer,
   type AskUserQuestion,
-} from "./fluid/ask-user-questions";
+} from "@groot/ui/fluid/ask-user-questions";
 import {
   Trace,
   TraceCollapsible,

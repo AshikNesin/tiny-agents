@@ -12,7 +12,7 @@ import { type OwnerActions, showComputerPanel, useOwnerDecision } from "../../li
 import { useCredentialRequest } from "../../queries/vault";
 import { CredentialRequestForm } from "../vault/CredentialRequestForm";
 import { StepUpProvider } from "../vault/StepUp";
-import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "../ui/item";
+import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "@groot/ui/item";
 
 export function ApprovalCard({
   call,
@@ -27,8 +27,13 @@ export function ApprovalCard({
 }) {
   const { busy, run } = useOwnerDecision("Failed to answer");
   const [showFull, setShowFull] = useState(false);
-  const decide = (decision: "approved" | "denied", alwaysAllow?: string) =>
-    run(() => actions.decideApproval(call.taskId, decision, { alwaysAllow }));
+  const decide = (decision: "approved" | "denied", alwaysAllow?: string, everyBot?: boolean) =>
+    run(() =>
+      actions.decideApproval(call.taskId, decision, {
+        alwaysAllow,
+        ...(everyBot ? { everyBot } : {}),
+      }),
+    );
   const text = approvalText(call, botName, labels);
   return (
     <Item className="border-primary/40 bg-primary/5 my-1 max-w-lg">
@@ -78,6 +83,15 @@ export function ApprovalCard({
           title={text.alwaysAllowHint}
         >
           Always allow
+        </Button>
+        <Button
+          size="xs"
+          variant="ghost"
+          disabled={busy}
+          onClick={() => decide("approved", call.name, true)}
+          title={text.allowEveryBotHint}
+        >
+          Allow for every bot
         </Button>
       </ItemActions>
     </Item>

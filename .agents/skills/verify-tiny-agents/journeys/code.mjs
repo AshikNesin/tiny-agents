@@ -236,7 +236,7 @@ await journey(
     await proof("pane-and-keys");
 
     await step(
-      "n opens the new thread dialog; Enter starts a thread on its own branch",
+      "n focuses the new thread box; Enter starts a thread on its own branch",
       async () => {
         await page.keyboard.press("Escape");
         await page.keyboard.press("n");

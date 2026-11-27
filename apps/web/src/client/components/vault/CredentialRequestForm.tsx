@@ -10,7 +10,7 @@ import type { CredentialRequestView } from "../../../shared/api/vault";
 import { apiError } from "../../lib/vault-api";
 import { useVaultMutations } from "../../queries/vault";
 import { useStepUp } from "./StepUp";
-import { Switch } from "../ui/switch";
+import { Switch } from "@groot/ui/switch";
 import { SecretInput } from "./SecretInput";
 
 const MASKED = new Set(["password", "otp", "card_number", "cvc"]);
@@ -149,11 +149,17 @@ export function CredentialRequestForm({
               ) : (
                 <Input
                   id={id}
-                  type={field.type === "email" ? "email" : "text"}
+                  type="text"
                   value={values[field.key] ?? ""}
                   onChange={(event) => set(event.target.value)}
                   autoComplete={field.autocomplete}
-                  inputMode={field.type === "expiry" ? "numeric" : undefined}
+                  inputMode={
+                    field.type === "expiry"
+                      ? "numeric"
+                      : field.type === "email"
+                        ? "email"
+                        : undefined
+                  }
                 />
               )}
             </Field>

@@ -1,29 +1,16 @@
-import { asc, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { botSkills, db, skills } from "../../db";
+import { reachBot, reachedSkills } from "../bots/bot-reach";
 import type { SkillStore } from "@tiny-agents/agent";
 import { conversationOwner } from "../bots/bots.owner";
-import type { SkillFile } from "../../../shared/api/skills";
-
-function files(raw: string): SkillFile[] {
-  try {
-    const parsed = JSON.parse(raw) as SkillFile[];
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
+import { skillFiles } from "./skills.parse";
 
 async function assigned(conversationId: number) {
   const owner = await conversationOwner(conversationId);
-  if (!owner) return { botId: undefined, skills: [] };
-  const bot = owner.bot;
-  const links = await db
-    .select({ skill: skills })
-    .from(botSkills)
-    .innerJoin(skills, eq(botSkills.skillId, skills.id))
-    .where(eq(botSkills.botId, bot.id))
-    .orderBy(asc(skills.name));
-  return { botId: bot.id, skills: links.map((link) => link.skill) };
+  if (!owner) return { botId: undefined, skills: await reachedSkills("code-thread") };
+  const bot = await reachBot(owner.bot.id);
+  if (!bot) return { botId: undefined, skills: [] };
+  return { botId: bot.id, skills: await reachedSkills(bot) };
 }
 
 export const skillStore: SkillStore = {
@@ -39,17 +26,18 @@ export const skillStore: SkillStore = {
       name: skill.name,
       description: skill.description,
       body: skill.body,
-      files: files(skill.files).map((file) => file.path),
+      files: skillFiles(skill.files).map((file) => file.path),
     };
   },
 
   async readFile(conversationId, name, path) {
     const skill = (await assigned(conversationId)).skills.find((s) => s.name === name);
-    return skill ? files(skill.files).find((file) => file.path === path)?.content : undefined;
+    return skill ? skillFiles(skill.files).find((file) => file.path === path)?.content : undefined;
   },
 
   async save(conversationId, input) {
     const { botId, skills: own } = await assigned(conversationId);
+    if (!botId) throw new Error("Only a bot can save skills.");
     const mine = own.find((skill) => skill.name === input.name);
     if (mine) {
       await db
@@ -60,7 +48,13 @@ export const skillStore: SkillStore = {
     }
     const [skill] = await db
       .insert(skills)
-      .values({ name: input.name, description: input.description, body: input.body, source: "bot" })
+      .values({
+        name: input.name,
+        description: input.description,
+        body: input.body,
+        source: "bot",
+        allBots: false,
+      })
       .onConflictDoNothing({ target: skills.name })
       .returning({ id: skills.id });
     if (!skill) {
@@ -68,12 +62,10 @@ export const skillStore: SkillStore = {
         `A skill named "${input.name}" already exists and is not assigned to you. Pick another name, or ask the owner to assign it.`,
       );
     }
-    if (botId) {
-      await db
-        .insert(botSkills)
-        .values({ botId, skillId: skill!.id })
-        .onConflictDoNothing({ target: [botSkills.botId, botSkills.skillId] });
-    }
+    await db
+      .insert(botSkills)
+      .values({ botId, skillId: skill!.id })
+      .onConflictDoNothing({ target: [botSkills.botId, botSkills.skillId] });
     return { created: true };
   },
 };

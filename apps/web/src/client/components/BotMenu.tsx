@@ -1,8 +1,7 @@
 import { useEffect, useRef } from "react";
-import { ChevronDown, ChevronLeft, ChevronRight, History, Settings2, Zap } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, History, Settings2 } from "lucide-react";
 import {
   DropdownMenu,
-  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
@@ -19,11 +18,9 @@ interface BotMenuProps {
   view: BotMenuView;
   onViewChange: (view: BotMenuView) => void;
   onEditBot: () => void;
-  yolo: boolean;
-  onYoloChange: (on: boolean) => void;
 }
 
-export function BotMenu({ bot, view, onViewChange, onEditBot, yolo, onYoloChange }: BotMenuProps) {
+export function BotMenu({ bot, view, onViewChange, onEditBot }: BotMenuProps) {
   const chats = usePastChats(bot.id, bot.conversationId, view);
   const contentRef = useRef<HTMLDivElement>(null);
 
@@ -35,24 +32,26 @@ export function BotMenu({ bot, view, onViewChange, onEditBot, yolo, onYoloChange
     return () => cancelAnimationFrame(frame);
   }, [view]);
 
-  const goTo = (next: BotMenuView) => (event: Event) => {
+  const goTo = (next: BotMenuView) => (event: { preventDefault(): void }) => {
     event.preventDefault();
     onViewChange(next);
   };
 
   return (
     <DropdownMenu open={view !== null} onOpenChange={(open) => onViewChange(open ? "main" : null)}>
-      <DropdownMenuTrigger asChild>
-        <button
-          type="button"
-          className="text-foreground hover:bg-muted data-[state=open]:bg-muted focus-visible:ring-ring/50 flex h-8 min-w-0 items-center gap-2 rounded-lg px-2 text-left font-medium outline-none focus-visible:ring-3"
-          aria-label={`${bot.name} menu`}
-          title={bot.description || undefined}
-        >
-          <BotAvatar name={bot.name} className="size-5" />
-          <span className="truncate">{bot.name}</span>
-          <ChevronDown className="text-muted-foreground size-3.5 shrink-0" />
-        </button>
+      <DropdownMenuTrigger
+        render={
+          <button
+            type="button"
+            className="text-foreground hover:bg-muted data-popup-open:bg-muted focus-visible:ring-ring/50 flex h-8 min-w-0 items-center gap-2 rounded-lg px-2 text-left font-medium outline-none focus-visible:ring-3"
+            aria-label={`${bot.name} menu`}
+            title={bot.description || undefined}
+          />
+        }
+      >
+        <BotAvatar name={bot.name} className="size-5" />
+        <span className="truncate">{bot.name}</span>
+        <ChevronDown className="text-muted-foreground size-3.5 shrink-0" />
       </DropdownMenuTrigger>
       <DropdownMenuContent
         ref={contentRef}
@@ -92,21 +91,6 @@ export function BotMenu({ bot, view, onViewChange, onEditBot, yolo, onYoloChange
               Chat history
               <ChevronRight className="text-muted-foreground ml-auto" />
             </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuCheckboxItem
-              checked={yolo}
-              onCheckedChange={(on) => onYoloChange(on === true)}
-              className="items-start"
-              data-testid="yolo-toggle"
-            >
-              <Zap className={`mt-0.5 ${yolo ? "text-warning" : ""}`} />
-              <span className="flex flex-col">
-                YOLO mode
-                <span className="text-muted-foreground text-xs">
-                  Run tools without asking (vault still asks)
-                </span>
-              </span>
-            </DropdownMenuCheckboxItem>
           </>
         )}
       </DropdownMenuContent>

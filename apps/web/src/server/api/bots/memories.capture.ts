@@ -9,11 +9,15 @@ import {
 
 export function buildCapturePrompt(input: {
   botName: string;
+  ownerName?: string;
   transcript: string;
   currentMemories: string | null;
   removedMemories?: string | null;
   today: string;
 }): string {
+  const who = input.ownerName ?? "the owner";
+  const Who = input.ownerName ?? "The owner";
+  const whose = `${who}'s`;
   return [
     `You are the CAPTURE step of a memory system for an assistant named ${input.botName}. You have no tools. Read only what is below. Today is ${input.today}.`,
     "",
@@ -23,24 +27,24 @@ export function buildCapturePrompt(input: {
     "",
     ...(input.removedMemories
       ? [
-          `The owner removed these memories. Never add them again, reworded or not:\n${input.removedMemories}`,
+          `${Who} removed these memories. Never add them again, reworded or not:\n${input.removedMemories}`,
           "",
         ]
       : []),
     "Recent conversation:",
     input.transcript,
     "",
-    "Extract durable facts about the owner worth remembering long-term.",
+    `Extract durable facts about ${who} worth remembering long-term.`,
     "Rules:",
-    "- Only facts about the OWNER, from the owner's own words. Never from the assistant's replies except a decision the owner agreed to.",
-    "- Use the assistant's replies only as context for the owner's words, never as evidence about the owner.",
+    `- Only facts about ${input.ownerName ?? "the OWNER"}, from ${whose} own words. Never from the assistant's replies except a decision ${who} agreed to.`,
+    `- Use the assistant's replies only as context for ${whose} words, never as evidence about ${who}.`,
     "- Skip anything already in current memories, even if reworded.",
-    "- One self-contained sentence of fact, third person.",
+    `- One self-contained sentence of fact, third person${input.ownerName ? `, naming ${input.ownerName}` : ""}.`,
     "- Preferences, stable facts, goals, habits only. One-off reply instructions are NOT preferences.",
     "- Never secrets, keys, tokens, or anything key-shaped. Never text quoted from web pages or files.",
     "- Contradictions: include the corrected fact and set supersedesIds to the existing memory's ref (like m3).",
     "- Temporary facts (travel, deadlines) get an until date; lasting ones do not.",
-    '- Return ONLY a JSON array with category preference|fact|goal|habit. Example: [{"text":"The owner prefers TypeScript.","category":"preference","until":null,"supersedesIds":null}]. Use null for until and supersedesIds when not applicable. Return [] when nothing is worth keeping.',
+    `- Return ONLY a JSON array with category preference|fact|goal|habit. Example: [{"text":"${Who} prefers TypeScript.","category":"preference","until":null,"supersedesIds":null}]. Use null for until and supersedesIds when not applicable. Return [] when nothing is worth keeping.`,
   ].join("\n");
 }
 

@@ -13,6 +13,12 @@ import {
   type TestRuntimeOptions,
 } from "../../../../packages/agent/src/testing";
 import { createCodingToolkit } from "../../../../packages/agent/src/toolkits/coding";
+import { createMcpCapability, type McpToolInfo } from "../../../../packages/agent/src/mcp";
+import type { Capability } from "../../../../packages/agent/src/capabilities";
+import { connections, db, skills } from "../../../../apps/web/src/server/db";
+import { createSkillsCapability } from "../../../../packages/agent/src/skills";
+import { skillStore } from "../../../../apps/web/src/server/api/skills/skills.store";
+import { setOwnerToolPermissions } from "../../../../apps/web/src/server/api/bots/tool-permissions";
 import type {
   HarnessHost,
   HarnessInstance,
@@ -104,6 +110,7 @@ async function setup(
     exec?: NonNullable<Parameters<typeof fakeSandboxConnection>[0]>["exec"];
     tokensPerSecond?: number;
     settings?: TestRuntimeOptions["settings"];
+    capabilities?: Capability[];
   } = {},
 ): Promise<Setup> {
   const connection = fakeSandboxConnection({
@@ -111,13 +118,19 @@ async function setup(
   });
   const runtime = await openTestRuntime({
     storePath: ":memory:",
-    capabilities: [createCodingToolkit({ connection })],
+    capabilities: [createCodingToolkit({ connection }), ...(options.capabilities ?? [])],
     respondWith: brain,
     ...(options.tokensPerSecond ? { tokensPerSecond: options.tokensPerSecond } : {}),
     ...(options.settings ? { settings: options.settings } : {}),
   });
   const host = testHost();
-  const harness = createPiHarness({ host, port: agentRuntimePort(() => runtime) });
+  const harness = createPiHarness({
+    host,
+    port: agentRuntimePort(
+      () => runtime,
+      () => connection,
+    ),
+  });
   const events: InstanceEvent[] = [];
   harness.subscribe((event) => events.push(event));
   harness.start();
@@ -179,7 +192,11 @@ describe("Native harness", () => {
     const { harness } = await setup(echo);
 
     expect(capabilityProblems(harness)).toEqual([]);
-    expect({ id: harness.id, kind: harness.kind, label: harness.label }).toEqual({
+    expect({
+      id: harness.id,
+      kind: harness.kind,
+      label: harness.label,
+    }).toEqual({
       id: "pi",
       kind: "pi",
       label: "Native",
@@ -193,7 +210,12 @@ describe("Native harness", () => {
       recovery: ["continue"],
       compact: true,
     });
-    expect(caps.threads).toMatchObject({ fork: true, archive: true, rename: true, delete: false });
+    expect(caps.threads).toMatchObject({
+      fork: true,
+      archive: true,
+      rename: true,
+      delete: false,
+    });
     expect(caps.settings.permissionModes).toEqual([
       "default",
       "acceptEdits",
@@ -221,12 +243,20 @@ describe("Native harness", () => {
   it("runs a simple turn in the thread's cwd and keeps the thread in the index", async () => {
     const { harness, host, events } = await setup(echo);
 
-    const { nativeId } = await harness.createThread({ message: "  hello there\nmore", cwd: CWD });
+    const { nativeId } = await harness.createThread({
+      message: "  hello there\nmore",
+      cwd: CWD,
+    });
 
     const [ended] = await waitTurnEnds(events, 1);
     expect(ended).toMatchObject({
       nativeId,
-      outcome: { working: false, failed: false, text: "Echo:   hello there\nmore", cursor: 1 },
+      outcome: {
+        working: false,
+        failed: false,
+        text: "Echo:   hello there\nmore",
+        cursor: 1,
+      },
     });
     const snapshot = await harness.getThread(nativeId);
     expect(snapshot.thread).toMatchObject({
@@ -255,12 +285,18 @@ describe("Native harness", () => {
     expect((await harness.listThreads("active")).map((thread) => thread.nativeId)).toEqual([
       nativeId,
     ]);
-    expect(await host.index.get("pi", nativeId)).toMatchObject({ cwd: CWD, title: "hello there" });
+    expect(await host.index.get("pi", nativeId)).toMatchObject({
+      cwd: CWD,
+      title: "hello there",
+    });
   });
 
   it("needs an absolute working directory and a model it can run, and knows its own threads only", async () => {
     const { harness, runtime } = await setup(echo);
-    const foreign = await runtime.createConversation({ modelId: TEST_MODEL, systemPrompt: "" });
+    const foreign = await runtime.createConversation({
+      modelId: TEST_MODEL,
+      systemPrompt: "",
+    });
 
     await expect(harness.createThread({ message: "hi" })).rejects.toMatchObject({ status: 400 });
     await expect(harness.createThread({ message: "hi", cwd: "work" })).rejects.toMatchObject({
@@ -269,7 +305,9 @@ describe("Native harness", () => {
     await expect(
       harness.createThread({ message: "hi", cwd: CWD, model: "no-such-model" }),
     ).rejects.toMatchObject({ status: 400 });
-    await expect(harness.getThread(String(foreign))).rejects.toMatchObject({ status: 404 });
+    await expect(harness.getThread(String(foreign))).rejects.toMatchObject({
+      status: 404,
+    });
     await expect(harness.send("999", { message: "hi" })).rejects.toBeInstanceOf(HarnessError);
     expect(await harness.listThreads("active")).toEqual([]);
   });
@@ -286,7 +324,10 @@ describe("Native harness", () => {
       },
       { tokensPerSecond: 40 },
     );
-    const { nativeId } = await harness.createThread({ message: "explain", cwd: CWD });
+    const { nativeId } = await harness.createThread({
+      message: "explain",
+      cwd: CWD,
+    });
     const watch = collect();
     cleanups.push(harness.watchThread(nativeId, watch.listener));
 
@@ -311,10 +352,15 @@ describe("Native harness", () => {
 
   it("runs several turns in one thread", async () => {
     const { harness, events } = await setup(echo);
-    const { nativeId } = await harness.createThread({ message: "one", cwd: CWD });
+    const { nativeId } = await harness.createThread({
+      message: "one",
+      cwd: CWD,
+    });
     await waitTurnEnds(events, 1);
 
-    expect(await harness.send(nativeId, { message: "two" })).toEqual({ status: "accepted" });
+    expect(await harness.send(nativeId, { message: "two" })).toEqual({
+      status: "accepted",
+    });
     const ends = await waitTurnEnds(events, 2);
 
     const snapshot = await harness.getThread(nativeId);
@@ -328,7 +374,10 @@ describe("Native harness", () => {
     ]);
     expect(snapshot.thread.cursor).toBe(2);
     expect(ends[1]!.outcome).toMatchObject({ text: "Echo: two", cursor: 2 });
-    expect((await harness.listThreads("active"))[0]).toMatchObject({ cursor: 2, working: false });
+    expect((await harness.listThreads("active"))[0]).toMatchObject({
+      cursor: 2,
+      working: false,
+    });
   });
 
   it("holds a queued message until the turn ends, and can cancel one", async () => {
@@ -337,7 +386,10 @@ describe("Native harness", () => {
       if (lastUser(context) === "one") await stoppedOr(request, first.opened);
       return echo(context);
     });
-    const { nativeId } = await harness.createThread({ message: "one", cwd: CWD });
+    const { nativeId } = await harness.createThread({
+      message: "one",
+      cwd: CWD,
+    });
 
     expect(await harness.send(nativeId, { message: "two", queue: true })).toEqual({
       status: "queued",
@@ -384,7 +436,10 @@ describe("Native harness", () => {
         return { stdout: "12 passed" };
       },
     });
-    const { nativeId } = await harness.createThread({ message: "run the tests", cwd: CWD });
+    const { nativeId } = await harness.createThread({
+      message: "run the tests",
+      cwd: CWD,
+    });
     await until(
       async () => kinds((await harness.getThread(nativeId)).items).includes("tool:bash:running"),
       "the command to start",
@@ -430,7 +485,10 @@ describe("Native harness", () => {
           : echo(context),
       { exec: hangUntilStopped },
     );
-    const { nativeId } = await harness.createThread({ message: "run the tests", cwd: CWD });
+    const { nativeId } = await harness.createThread({
+      message: "run the tests",
+      cwd: CWD,
+    });
     await until(
       async () => kinds((await harness.getThread(nativeId)).items).includes("tool:bash:running"),
       "the command to start",
@@ -439,7 +497,11 @@ describe("Native harness", () => {
     await harness.interrupt(nativeId);
 
     const [ended] = await waitTurnEnds(events, 1);
-    expect(ended!.outcome).toMatchObject({ working: false, failed: false, text: "" });
+    expect(ended!.outcome).toMatchObject({
+      working: false,
+      failed: false,
+      text: "",
+    });
     const snapshot = await harness.getThread(nativeId);
     expect(kinds(snapshot.items)).toEqual([
       "user:run the tests",
@@ -482,7 +544,12 @@ describe("Native harness", () => {
     expect(kinds(waiting.items)).toEqual(["user:clean up", "tool:bash:running", "request:open"]);
     expect(waiting.items[2]).toMatchObject({
       id: ask.key,
-      request: { kind: "tool", tool: "bash", name: "bash", summary: "rm -rf build" },
+      request: {
+        kind: "tool",
+        tool: "bash",
+        name: "bash",
+        summary: "rm -rf build",
+      },
     });
     expect(connection.execs).toEqual([]);
     await harness.respond!(nativeId, ask.key, { decision: "allow" });
@@ -516,7 +583,10 @@ describe("Native harness", () => {
     );
     await connection.writeFile("/work/a.txt", "one\n");
 
-    const { nativeId } = await harness.createThread({ message: "fix it", cwd: CWD });
+    const { nativeId } = await harness.createThread({
+      message: "fix it",
+      cwd: CWD,
+    });
     await waitTurnEnds(events, 1);
 
     const tool = (await harness.getThread(nativeId)).items[1];
@@ -525,7 +595,10 @@ describe("Native harness", () => {
       tool: "edit",
       summary: "a.txt",
       status: "done",
-      diff: { path: "a.txt", diff: "--- a/a.txt\n+++ b/a.txt\n@@ -1 +1 @@\n-one\n+two\n" },
+      diff: {
+        path: "a.txt",
+        diff: "--- a/a.txt\n+++ b/a.txt\n@@ -1 +1 @@\n-one\n+two\n",
+      },
     });
   });
 
@@ -535,11 +608,17 @@ describe("Native harness", () => {
       if (last?.role === "toolResult") return fauxAssistantMessage(fauxText(textOf(last)));
       return callTool("ask_owner", {
         questions: [
-          { question: "Which stack?", options: [{ label: "React" }, { label: "Svelte" }] },
+          {
+            question: "Which stack?",
+            options: [{ label: "React" }, { label: "Svelte" }],
+          },
         ],
       });
     });
-    const { nativeId } = await harness.createThread({ message: "start a project", cwd: CWD });
+    const { nativeId } = await harness.createThread({
+      message: "start a project",
+      cwd: CWD,
+    });
 
     const ask = await attention(events);
     expect(ask.text).toBe("Native asks: Which stack?");
@@ -551,11 +630,16 @@ describe("Native harness", () => {
       request: {
         kind: "question",
         questions: [
-          { question: "Which stack?", options: [{ label: "React" }, { label: "Svelte" }] },
+          {
+            question: "Which stack?",
+            options: [{ label: "React" }, { label: "Svelte" }],
+          },
         ],
       },
     });
-    await harness.respond!(nativeId, ask.key, { answers: { "Which stack?": "Svelte" } });
+    await harness.respond!(nativeId, ask.key, {
+      answers: { "Which stack?": "Svelte" },
+    });
     await waitTurnEnds(events, 1);
 
     const snapshot = await harness.getThread(nativeId);
@@ -565,7 +649,10 @@ describe("Native harness", () => {
 
   it("forks at a message, that message included, and continues the fork", async () => {
     const { harness, events } = await setup(echo);
-    const { nativeId } = await harness.createThread({ message: "one", cwd: CWD });
+    const { nativeId } = await harness.createThread({
+      message: "one",
+      cwd: CWD,
+    });
     await waitTurnEnds(events, 1);
     await harness.send(nativeId, { message: "two" });
     await waitTurnEnds(events, 2);
@@ -590,19 +677,30 @@ describe("Native harness", () => {
     ]);
     await harness.recover!(fork.nativeId, "continue");
     const ends = await waitTurnEnds(events, 3);
-    expect(ends[2]).toMatchObject({ nativeId: fork.nativeId, outcome: { text: "Echo: two" } });
+    expect(ends[2]).toMatchObject({
+      nativeId: fork.nativeId,
+      outcome: { text: "Echo: two" },
+    });
     expect(kinds((await harness.getThread(nativeId)).items)).toHaveLength(6);
-    await expect(harness.fork!(nativeId, "e999999")).rejects.toMatchObject({ status: 400 });
+    await expect(harness.fork!(nativeId, "e999999")).rejects.toMatchObject({
+      status: 400,
+    });
   });
 
   it("shows a model error as a notice that can be continued", async () => {
     let failing = true;
     const { harness, events } = await setup((context) =>
       failing
-        ? fauxAssistantMessage(fauxText(""), { stopReason: "error", errorMessage: "overloaded" })
+        ? fauxAssistantMessage(fauxText(""), {
+            stopReason: "error",
+            errorMessage: "overloaded",
+          })
         : echo(context),
     );
-    const { nativeId } = await harness.createThread({ message: "go", cwd: CWD });
+    const { nativeId } = await harness.createThread({
+      message: "go",
+      cwd: CWD,
+    });
     const [ended] = await waitTurnEnds(events, 1);
     expect(ended!.outcome).toMatchObject({ failed: true, text: "overloaded" });
     expect((await harness.getThread(nativeId)).items[1]).toMatchObject({
@@ -617,6 +715,209 @@ describe("Native harness", () => {
 
     const ends = await waitTurnEnds(events, 2);
     expect(ends[1]!.outcome).toMatchObject({ failed: false, text: "Echo: go" });
+  });
+
+  it("offers the owner's shared connections on demand, under Settings > Tools", async () => {
+    const issues: McpToolInfo[] = [
+      {
+        name: "search_issues",
+        description: "Search issues",
+        inputSchema: { type: "object" },
+      },
+      {
+        name: "delete_issue",
+        description: "Delete an issue",
+        inputSchema: { type: "object" },
+      },
+    ];
+    const searched: string[] = [];
+    const linear = createMcpCapability({
+      slug: "linear",
+      name: "Linear",
+      url: "https://mcp.linear.test/mcp",
+      tools: issues,
+      shared: true,
+      call: async (tool) => {
+        searched.push(tool);
+        return { content: [{ type: "text", text: "LIN-7 Fix SSE" }] };
+      },
+    });
+    const diary = createMcpCapability({
+      slug: "diary",
+      name: "Diary",
+      url: "https://mcp.diary.test/mcp",
+      tools: [
+        {
+          name: "read_diary",
+          description: "Read the diary",
+          inputSchema: { type: "object" },
+        },
+      ],
+      call: async () => ({ content: [{ type: "text", text: "secret" }] }),
+    });
+    await db.insert(connections).values([
+      {
+        name: "Linear",
+        slug: "linear",
+        url: "https://mcp.linear.test/mcp",
+        allBots: true,
+      },
+      {
+        name: "Diary",
+        slug: "diary",
+        url: "https://mcp.diary.test/mcp",
+        allBots: false,
+      },
+    ]);
+    await setOwnerToolPermissions({
+      mcp__linear__search_issues: "allow",
+      mcp__linear__delete_issue: "off",
+    });
+    cleanups.push(async () => {
+      await db.delete(connections);
+      await setOwnerToolPermissions({});
+    });
+    const plan = [
+      fauxToolCall("tool_search", { query: "mcp:linear", limit: 2 }),
+      fauxToolCall("mcp__linear__search_issues", { query: "sse" }),
+    ];
+    const prompts: string[] = [];
+    const { harness, events } = await setup(
+      (context) => {
+        prompts.push(JSON.stringify(context.messages));
+        const next = plan[context.messages.filter((m) => m.role === "toolResult").length];
+        return next
+          ? { ...fauxAssistantMessage([next]), stopReason: "toolUse" as const }
+          : fauxAssistantMessage(fauxText("Found LIN-7"));
+      },
+      { capabilities: [linear, diary] },
+    );
+
+    const { nativeId } = await harness.createThread({
+      message: "find the SSE issue",
+      cwd: CWD,
+      permissionMode: "bypassPermissions",
+    });
+    const [ended] = await waitTurnEnds(events, 1);
+
+    expect(prompts[0]).toContain("- mcp:linear (1 tool): Linear, a connection.");
+    expect(prompts[0]).not.toContain("delete_issue");
+    expect(prompts[0]).not.toContain("diary");
+    expect(searched).toEqual(["search_issues"]);
+    expect(ended!.outcome).toMatchObject({
+      failed: false,
+      text: "Found LIN-7",
+    });
+    expect(kinds((await harness.getThread(nativeId)).items)).toContain(
+      "tool:mcp__linear__search_issues:done",
+    );
+  });
+
+  it("lists the owner's shared skills and loads one on demand", async () => {
+    await db.insert(skills).values([
+      {
+        name: "release-notes",
+        description: "Write release notes",
+        body: "Group changes by area.",
+        allBots: true,
+      },
+      {
+        name: "diary",
+        description: "Keep the diary",
+        body: "Private.",
+        allBots: false,
+      },
+    ]);
+    cleanups.push(async () => {
+      await db.delete(skills);
+    });
+    const plan = [fauxToolCall("load_skill", { name: "release-notes" })];
+    const prompts: string[] = [];
+    const offered: string[][] = [];
+    const { harness, events } = await setup(
+      (context) => {
+        prompts.push(JSON.stringify(context.messages));
+        const system = context.messages.find((message) => message.role === "system") as
+          | { toolsAdded?: { name: string }[] }
+          | undefined;
+        offered.push((system?.toolsAdded ?? []).map((tool) => tool.name));
+        const last = context.messages.at(-1);
+        if (last?.role === "toolResult") return fauxAssistantMessage(fauxText(textOf(last)));
+        const next = plan[context.messages.filter((m) => m.role === "toolResult").length];
+        return next
+          ? { ...fauxAssistantMessage([next]), stopReason: "toolUse" as const }
+          : fauxAssistantMessage(fauxText("done"));
+      },
+      { capabilities: [createSkillsCapability(skillStore)] },
+    );
+
+    await harness.createThread({ message: "write the notes", cwd: CWD });
+    const [ended] = await waitTurnEnds(events, 1);
+
+    expect(prompts[0]).toContain("- release-notes: Write release notes");
+    expect(prompts[0]).not.toContain("diary");
+    expect(offered[0]).toEqual(expect.arrayContaining(["load_skill", "read_skill_file"]));
+    expect(offered[0]).not.toContain("save_skill");
+    expect(ended!.outcome.text).toContain("Group changes by area.");
+  });
+
+  it("lists shared and repo skills for the composer", async () => {
+    await db.insert(skills).values([
+      {
+        name: "release-notes",
+        description: "Write release notes",
+        body: "x",
+        allBots: true,
+      },
+      {
+        name: "diary",
+        description: "Keep the diary",
+        body: "Private.",
+        allBots: false,
+      },
+    ]);
+    cleanups.push(async () => {
+      await db.delete(skills);
+    });
+    const { harness } = await setup(echo, {
+      exec: (command) =>
+        command.includes("SKILL.md")
+          ? {
+              stdout:
+                "\0.agents/skills/show-me/SKILL.md\n---\nname: show-me\ndescription: Explain it visually\ndisable-model-invocation: true\n---\nBody\n" +
+                "\0.claude/skills/release-notes/SKILL.md\n---\nname: release-notes\ndescription: Repo copy\n---\n" +
+                "\0.claude/skills/broken/SKILL.md\nno frontmatter\n",
+            }
+          : { stdout: "" },
+    });
+
+    expect(harness.capabilities().workspace.skills).toBe(true);
+    expect(await harness.skills!(CWD)).toEqual([
+      { name: "release-notes", description: "Write release notes" },
+      { name: "show-me", description: "Explain it visually" },
+    ]);
+  });
+
+  it("sends picked skills as /<name> at the start of the message", async () => {
+    const prompts: string[] = [];
+    const { harness, events } = await setup((context) => {
+      prompts.push(JSON.stringify(context.messages));
+      return echo(context);
+    });
+    const { nativeId } = await harness.createThread({
+      message: "one",
+      cwd: CWD,
+    });
+    await waitTurnEnds(events, 1);
+
+    await harness.send(nativeId, {
+      message: "draw the repo",
+      skills: ["show-me"],
+    });
+    const [, second] = await waitTurnEnds(events, 2);
+
+    expect(second!.outcome.text).toBe("Echo: /show-me draw the repo");
+    expect(prompts[0]).toContain(".agents/skills/<name>/SKILL.md");
   });
 
   it("changes the model and the permission mode of a thread", async () => {
@@ -642,7 +943,11 @@ describe("Native harness", () => {
     await harness.send(nativeId, { message: "two" });
     await waitTurnEnds(events, 2);
 
-    expect(settings).toEqual({ model: TEST_MODEL_2, effort: null, permissionMode: "acceptEdits" });
+    expect(settings).toEqual({
+      model: TEST_MODEL_2,
+      effort: null,
+      permissionMode: "acceptEdits",
+    });
     expect(offered[0]).toEqual(["read", "find", "ask_owner"]);
     expect(offered[1]).toEqual(expect.arrayContaining(["write", "edit", "bash"]));
     expect((await harness.getThread(nativeId)).thread).toMatchObject({
@@ -665,7 +970,10 @@ describe("Native harness", () => {
           : echo(context),
       { settings: { compaction: { keepRecentTokens: 0 } } },
     );
-    const { nativeId } = await harness.createThread({ message: "one", cwd: CWD });
+    const { nativeId } = await harness.createThread({
+      message: "one",
+      cwd: CWD,
+    });
     await waitTurnEnds(events, 1);
     await harness.send(nativeId, { message: "two" });
     await waitTurnEnds(events, 2);
@@ -683,7 +991,10 @@ describe("Native harness", () => {
 
   it("renames and archives a thread, and a new driver reads the same transcript", async () => {
     const { harness, host, events, runtime } = await setup(echo);
-    const { nativeId } = await harness.createThread({ message: "base", cwd: CWD });
+    const { nativeId } = await harness.createThread({
+      message: "base",
+      cwd: CWD,
+    });
     await waitTurnEnds(events, 1);
 
     await harness.rename!(nativeId, "  Renamed  ");
@@ -695,7 +1006,13 @@ describe("Native harness", () => {
       title: "Renamed",
       archived: true,
     });
-    const restarted = createPiHarness({ host, port: agentRuntimePort(() => runtime) });
+    const restarted = createPiHarness({
+      host,
+      port: agentRuntimePort(
+        () => runtime,
+        () => undefined,
+      ),
+    });
     restarted.start();
     cleanups.push(() => restarted.stop());
     expect(kinds((await restarted.getThread(nativeId)).items)).toEqual([
@@ -714,7 +1031,10 @@ describeTurnOutcomeRule("Native", async (turn: TurnCase) => {
       const last = context.messages.at(-1);
       if (turn === "answered") return fauxAssistantMessage(fauxText("Done: 3 files."));
       if (turn === "failed") {
-        return fauxAssistantMessage(fauxText(""), { stopReason: "error", errorMessage: "boom" });
+        return fauxAssistantMessage(fauxText(""), {
+          stopReason: "error",
+          errorMessage: "boom",
+        });
       }
       if (turn === "steered" && last?.role === "user" && said === "task") {
         return callTool("bash", { command: "sleep 1" }, "Halfway.");

@@ -16,11 +16,11 @@ import { Textarea } from "@groot/ui/textarea";
 import { Label } from "@groot/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@groot/ui/tabs";
 import { DataField, DataFields } from "@groot/ui/display";
-import { Streamdown } from "streamdown";
 import type { Skill, SkillPreview } from "../../../shared/api/skills";
 import { useSkillMutations } from "../../queries/skills";
 import { SkillFileList } from "./SkillFileList";
 import { errorMessage } from "../../lib/errors";
+import { Markdown } from "../../lib/markdown";
 
 type Mode = "paste" | "github";
 
@@ -121,7 +121,7 @@ export function ImportSkillDialog({
               <div className="max-h-64 space-y-2 overflow-y-auto">
                 <div className="rounded-lg border p-4 text-sm">
                   {preview.body.trim() ? (
-                    <Streamdown>{preview.body}</Streamdown>
+                    <Markdown>{preview.body}</Markdown>
                   ) : (
                     <p className="text-muted-foreground text-sm">No instructions body.</p>
                   )}

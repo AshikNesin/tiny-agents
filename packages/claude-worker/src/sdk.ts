@@ -9,7 +9,7 @@ import {
   type JsonSchema,
 } from "./protocol";
 
-interface SdkToolResult {
+export interface SdkToolResult {
   content: { type: "text"; text: string }[];
   isError?: boolean;
 }
@@ -100,7 +100,7 @@ export function buildSdkOptions(input: {
   };
 }
 
-function zodShape(schema: JsonSchema): Record<string, z.ZodType> {
+export function zodShape(schema: JsonSchema): Record<string, z.ZodType> {
   const properties = schema.properties ?? {};
   const required = new Set(schema.required ?? []);
   const shape: Record<string, z.ZodType> = {};

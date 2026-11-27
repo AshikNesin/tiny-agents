@@ -202,7 +202,7 @@ const dialogShown = () =>
   waitFor(() => {
     const dialog = screen.getByRole("alertdialog");
     expect(dialog.style.opacity).toBe("1");
-    const overlays = document.querySelectorAll<HTMLElement>('[style*="pointer-events: auto"]');
+    const overlays = document.querySelectorAll<HTMLElement>('[data-slot="alert-dialog-overlay"]');
     expect(overlays.length).toBeGreaterThan(0);
     for (const el of overlays) expect(el.style.opacity).toBe("1");
   });

@@ -27,6 +27,7 @@ export interface CapabilityInfo {
   tools: ToolInfo[];
   setupHint?: string;
   auto?: boolean;
+  shared?: boolean;
 }
 
 export interface Capability extends CapabilityInfo {
@@ -63,18 +64,17 @@ export function effectivePermission(
   return chosen === "allow" && tool.askOnly ? "ask" : chosen;
 }
 
-function toolNames(names: string[]): string {
+function toolNames(names: string[], max: number): string {
   const prefix = /^mcp__.+?__/.exec(names[0] ?? "")?.[0];
   const shared = prefix !== undefined && names.every((name) => name.startsWith(prefix));
-  const shown = names
-    .slice(0, LISTED_TOOLS_MAX)
-    .map((name) => (shared ? name.slice(prefix.length) : name));
-  const more =
-    names.length > LISTED_TOOLS_MAX ? `, and ${names.length - LISTED_TOOLS_MAX} more` : "";
+  const shown = names.slice(0, max).map((name) => (shared ? name.slice(prefix.length) : name));
+  const more = names.length > max ? `, and ${names.length - max} more` : "";
   return `${shared ? `Tools (each named ${prefix}<name>)` : "Tools"}: ${shown.join(", ")}${more}`;
 }
 
 const LISTED_TOOLS_MAX = 40;
+
+const LISTED_SHARED_TOOLS_MAX = 8;
 
 export const TOOL_SEARCH_CAPABILITY = "tool-search";
 
@@ -100,7 +100,7 @@ export function createToolSearchCapability(
       const about = !info
         ? ""
         : info.kind === "connection"
-          ? `: ${info.name}, a connection. ${toolNames(names)}`
+          ? `: ${info.name}, a connection. ${toolNames(names, info.shared ? LISTED_SHARED_TOOLS_MAX : LISTED_TOOLS_MAX)}`
           : `: ${info.name}. ${info.description}`;
       lines.push(`- ${group.name} (${count} tool${count === 1 ? "" : "s"})${about}`);
     }

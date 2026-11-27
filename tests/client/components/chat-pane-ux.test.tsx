@@ -22,6 +22,7 @@ import type { Bot } from "../../../apps/web/src/shared/api/bots";
 import type { CatalogModel } from "../../../apps/web/src/shared/api/models";
 import type { ChatMessage } from "@/lib/chat-types";
 import { botStream, openedPaths } from "../fakes/sse";
+import { AppQueryProvider } from "../query-provider";
 
 const sendMock = vi.fn().mockResolvedValue(undefined);
 const readMock = vi.fn().mockResolvedValue(undefined);
@@ -113,14 +114,19 @@ const done = (id: string, role: ChatMessage["role"], text: string, createdAt: nu
   ({ id, role, text, status: "done", createdAt }) satisfies ChatMessage;
 
 function snapshot(messages: ChatMessage[], busy = false) {
-  botStream("host").send({ type: "snapshot", state: { messages, busy, queued: [] } });
+  botStream("host").send({
+    type: "snapshot",
+    state: { messages, busy, queued: [] },
+  });
 }
 
 function renderPane(bot: Bot = HOST) {
   render(
-    <BrowserRouter>
-      <ChatPane bot={bot} models={[model]} canAnswer onEditBot={() => {}} />
-    </BrowserRouter>,
+    <AppQueryProvider>
+      <BrowserRouter>
+        <ChatPane bot={bot} models={[model]} canAnswer onEditBot={() => {}} />
+      </BrowserRouter>
+    </AppQueryProvider>,
   );
   return screen.getByRole("textbox") as HTMLTextAreaElement;
 }
@@ -211,7 +217,13 @@ describe("ChatPane transcript", () => {
     expect(screen.getByTestId("typing-indicator")).toBeInTheDocument();
     botStream("host").send({
       type: "upsert",
-      message: { id: "a1", role: "assistant", text: "Hel", status: "streaming", createdAt: 2_000 },
+      message: {
+        id: "a1",
+        role: "assistant",
+        text: "Hel",
+        status: "streaming",
+        createdAt: 2_000,
+      },
     });
     expect(screen.queryByTestId("typing-indicator")).toBeNull();
   });
@@ -279,7 +291,12 @@ describe("ChatPane composer — one action button", () => {
     await user.type(composer, "half-written thought");
     cleanup();
 
-    const other = { ...HOST, id: "other", conversationId: "c2", name: "Other Bot" };
+    const other = {
+      ...HOST,
+      id: "other",
+      conversationId: "c2",
+      name: "Other Bot",
+    };
     const otherComposer = renderPane(other);
     expect(otherComposer.value).toBe("");
     await user.type(otherComposer, "a different thought");
@@ -312,23 +329,34 @@ describe("ChatPane header", () => {
     expect(within(header).queryByText("Plans trips")).toBeNull();
   });
 
-  it("opens Bot settings and the YOLO confirm from the bot menu", async () => {
+  it("opens Bot settings from the bot menu, which has no YOLO row", async () => {
     seedStore();
     const onEditBot = vi.fn();
     render(
-      <BrowserRouter>
-        <ChatPane bot={HOST} models={[model]} canAnswer onEditBot={onEditBot} />
-      </BrowserRouter>,
+      <AppQueryProvider>
+        <BrowserRouter>
+          <ChatPane bot={HOST} models={[model]} canAnswer onEditBot={onEditBot} />
+        </BrowserRouter>
+      </AppQueryProvider>,
     );
     await user.click(screen.getByRole("button", { name: "Host Bot menu" }));
+    expect(screen.queryByTestId("yolo-toggle")).toBeNull();
     await user.click(await screen.findByRole("menuitem", { name: "Bot settings" }));
     expect(onEditBot).toHaveBeenCalledOnce();
+  });
 
-    await user.click(screen.getByRole("button", { name: "Host Bot menu" }));
-    const yolo = await screen.findByTestId("yolo-toggle");
-    expect(yolo).toHaveAttribute("aria-checked", "false");
-    await user.click(yolo);
+  it("shows YOLO as a chip in the composer, as Code's composer does", async () => {
+    seedStore();
+    renderPane();
+    snapshot([]);
+    const chip = screen.getByRole("button", { name: "YOLO" });
+    expect(chip).toHaveAttribute("aria-pressed", "false");
+    await user.click(chip);
     expect(await screen.findByRole("dialog", { name: "Turn on YOLO mode?" })).toBeInTheDocument();
+    await user.keyboard("{Escape}");
+    botStream("host").send({ type: "yolo", on: true });
+    await waitFor(() => expect(chip).toHaveAttribute("aria-pressed", "true"));
+    expect(screen.queryByTestId("yolo-banner")).toBeNull();
   });
 
   it("disables new chat on an empty conversation and confirms it otherwise", async () => {
@@ -338,7 +366,10 @@ describe("ChatPane header", () => {
     const newChat = screen.getByRole("button", { name: "Start a new chat" });
     expect(newChat).toBeDisabled();
 
-    botStream("host").send({ type: "upsert", message: done("u1", "user", "hi", 1_000) });
+    botStream("host").send({
+      type: "upsert",
+      message: done("u1", "user", "hi", 1_000),
+    });
     expect(newChat).toBeEnabled();
     await user.keyboard("{Control>}{Shift>}o{/Shift}{/Control}");
     expect(await screen.findByRole("dialog", { name: "Start a new chat?" })).toBeInTheDocument();
@@ -354,9 +385,11 @@ describe("ChatPane header", () => {
       return <ChatPane bot={bot} models={[model]} canAnswer onEditBot={() => {}} />;
     }
     render(
-      <BrowserRouter>
-        <Live />
-      </BrowserRouter>,
+      <AppQueryProvider>
+        <BrowserRouter>
+          <Live />
+        </BrowserRouter>
+      </AppQueryProvider>,
     );
     snapshot([done("u1", "user", "the old conversation", 1_000)]);
     const opens = openedPaths.length;

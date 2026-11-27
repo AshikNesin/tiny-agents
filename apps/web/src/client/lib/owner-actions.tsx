@@ -8,7 +8,7 @@ export interface OwnerActions {
   decideApproval(
     taskId: number,
     decision: "approved" | "denied",
-    options?: { alwaysAllow?: string; grant?: boolean },
+    options?: { alwaysAllow?: string; grant?: boolean; everyBot?: boolean },
   ): Promise<unknown>;
   answerQuestions(taskId: number, answers: OwnerAnswer[] | null): Promise<unknown>;
   handBackComputer?(): Promise<unknown>;
@@ -23,7 +23,14 @@ export function showComputerPanel(): void {
 function httpOwnerActions(botId: string): OwnerActions {
   return {
     decideApproval: (taskId, decision, options = {}) =>
-      botsApi.decideApproval(botId, taskId, decision, options.alwaysAllow, options.grant),
+      botsApi.decideApproval(
+        botId,
+        taskId,
+        decision,
+        options.alwaysAllow,
+        options.grant,
+        options.everyBot,
+      ),
     answerQuestions: (taskId, answers) => botsApi.answerQuestions(botId, taskId, answers),
     handBackComputer: () => botsApi.computerDriver(botId, "agent"),
   };

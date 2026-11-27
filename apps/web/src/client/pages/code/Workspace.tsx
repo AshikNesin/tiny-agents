@@ -13,18 +13,18 @@ import { codeApi, threadPath } from "../../lib/code/api";
 import { useThreadCommenting } from "../../lib/code/comments";
 import { listOrder, statusSections } from "../../lib/code/list";
 import { projectsApi, reviewPath, reviewsApi, useProjects } from "../../lib/code/projects";
+import { usePullActions } from "../../lib/code/use-thread-pulls";
 import { errorMessage } from "../../lib/errors";
 import type { WorkflowName } from "../../../shared/code-status";
 import { useLiveChanges } from "../../lib/code/use-live-changes";
 import { useResource } from "../../queries/resource";
 import { harnessOf, useCodeStore } from "../../store/code";
 import { useUiStore, type CodePane } from "../../store/ui";
-import { CodeSettings } from "./CodeSettings";
 import { PageKeys, Kbd, useKeyCommands, type KeyCommand } from "../../components/keys";
 import { FilesPane, type FilesFocus } from "./FilesPane";
-import { NewThreadDialog } from "./NewThreadDialog";
+import { NewThread } from "./NewThread";
 import { TerminalPane } from "./TerminalPane";
-import { CodeCommandMenu } from "./CodeCommandMenu";
+import { useCommandPaletteStore } from "@groot/shell/store/command-palette";
 import { PullPanel } from "./PullPanel";
 import { useArchive } from "./controls";
 import { NextSteps } from "./NextSteps";
@@ -56,7 +56,7 @@ function useGitHubSetupResult(reloadProjects: () => void) {
       toast.error("GitHub could not finish the App setup. Start it again from Projects.");
     }
     reloadProjects();
-    navigate("/code/settings/github", { replace: true });
+    navigate("/settings/github", { replace: true });
   }, [result, reloadProjects, navigate]);
 }
 
@@ -133,13 +133,7 @@ function PaneHeader({
 }
 
 export function CodeWorkspace() {
-  const {
-    threadId: rawId,
-    section,
-    projectId: settingsProjectId,
-    reviewId,
-    chatProjectId,
-  } = useParams();
+  const { threadId: rawId, reviewId, chatProjectId } = useParams();
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const { brand } = useShellConfig();
@@ -153,7 +147,6 @@ export function CodeWorkspace() {
   const paneWide = useUiStore((s) => s.codePaneWide);
   const toggleWide = useUiStore((s) => s.toggleCodePaneWide);
   const setHelp = useKeyCommands((s) => s.setHelp);
-  const [menuOpen, setMenuOpen] = useState(false);
   const { projects, reload: reloadProjects } = useProjects();
   const [insert, setInsert] = useState<{ text: string; nonce: number } | null>(null);
   const [epoch, setEpoch] = useState(0);
@@ -161,7 +154,6 @@ export function CodeWorkspace() {
   useGitHubSetupResult(reloadProjects);
 
   const threadId = rawId ? decodeURIComponent(rawId) : undefined;
-  const inSettings = pathname === "/code/settings" || pathname.startsWith("/code/settings/");
   const composing = pathname === "/code/new";
 
   const harnesses = useMemo(
@@ -202,7 +194,6 @@ export function CodeWorkspace() {
     },
     [threadId, setPane],
   );
-  const openThread = useCallback((id: string) => navigate(threadPath(id)), [navigate]);
   const [filesFocus, setFilesFocus] = useState<FilesFocus | null>(null);
   const clearFilesFocus = useCallback(() => setFilesFocus(null), []);
   const focusFiles = useCallback(
@@ -229,22 +220,21 @@ export function CodeWorkspace() {
     },
     [threadId],
   );
+  const { act } = usePullActions(threadId ?? "");
   const publish = useCallback(() => {
     if (!threadId) return;
     setPane("pr");
-    void projectsApi
-      .publish(threadId, { commit: true })
-      .then(() => toast.success("Pushed to GitHub"))
-      .catch((error: unknown) => toast.error(errorMessage(error, "Could not publish.")));
-  }, [threadId, setPane]);
+    void act("publish", () => projectsApi.publish(threadId, { commit: true })).then(
+      (done) => done && toast.success("Pushed to GitHub"),
+    );
+  }, [threadId, setPane, act]);
   const pushBase = useCallback(() => {
     if (!threadId) return;
     setPane("pr");
-    void projectsApi
-      .pushBase(threadId)
-      .then(() => toast.success("Pushed to GitHub"))
-      .catch((error: unknown) => toast.error(errorMessage(error, "Could not push.")));
-  }, [threadId, setPane]);
+    void act("push", () => projectsApi.pushBase(threadId)).then(
+      (done) => done && toast.success("Pushed to GitHub"),
+    );
+  }, [threadId, setPane, act]);
   const archiveThread = useArchive();
   const archive = useCallback(() => {
     if (!threadId) return;
@@ -259,12 +249,11 @@ export function CodeWorkspace() {
       confirmLabel: "Merge",
     }).then((yes) => {
       if (!yes) return;
-      void projectsApi
-        .merge(threadId, "squash")
-        .then(() => toast.success(`Merged #${prNumber}`))
-        .catch((error: unknown) => toast.error(errorMessage(error, "Could not merge.")));
+      void act("merge", () => projectsApi.merge(threadId)).then(
+        (done) => done && toast.success(`Merged #${prNumber}`),
+      );
     });
-  }, [threadId, prNumber, setPane, confirm]);
+  }, [threadId, prNumber, setPane, confirm, act]);
   const commenting = useThreadCommenting(threadId, (text) => {
     setInsert({ text, nonce: Date.now() });
     if (window.matchMedia("(max-width: 1023px)").matches) setPane(null);
@@ -440,8 +429,8 @@ export function CodeWorkspace() {
         id: "commands",
         group: "Go to",
         keys: ":",
-        label: "Run a command",
-        run: () => setMenuOpen(true),
+        label: "Open the command palette",
+        run: () => useCommandPaletteStore.getState().setOpen(true),
       },
     ],
     [
@@ -484,30 +473,17 @@ export function CodeWorkspace() {
   if (harnessList.length === 0) return <NotConfigured brand={brand} />;
   if (reviewId) return <PullReview reviewId={reviewId} harnesses={harnesses} rows={rows} />;
 
-  const full = Boolean(threadId) || inSettings || Boolean(chatProjectId);
+  const full = Boolean(threadId) || Boolean(chatProjectId) || composing;
   return (
     <div className="flex h-dvh min-h-0">
       <PageKeys commands={commands} />
-      <CodeCommandMenu
-        open={menuOpen}
-        onOpenChange={setMenuOpen}
-        commands={commands}
-        threads={listed ?? []}
-        onThread={openThread}
-      />
-      <NewThreadDialog
-        open={composing}
-        onOpenChange={(open) => !open && navigate(threadId ? threadPath(threadId) : "/code")}
-        projects={projects}
-        harnesses={harnesses}
-      />
       <aside
         id="code-sidebar"
         aria-label="Threads"
         hidden={wide || undefined}
         data-state={listOpen ? "open" : "closed"}
         className={cn(
-          "bg-sidebar text-sidebar-foreground border-sidebar-border w-full shrink-0 flex-col lg:w-68 lg:border-r-[0.5px]",
+          "sidebar-surface text-sidebar-foreground border-sidebar-border w-full shrink-0 flex-col lg:w-68 lg:border-r-[0.5px]",
           full ? "hidden" : "flex",
           listOpen ? "lg:flex" : "lg:hidden",
         )}
@@ -534,14 +510,6 @@ export function CodeWorkspace() {
       >
         {chatProjectId ? (
           <ProjectChat projectId={chatProjectId} />
-        ) : inSettings ? (
-          <CodeSettings
-            section={settingsProjectId ? "projects" : section}
-            projectId={settingsProjectId}
-            harnesses={harnesses}
-            projects={projects}
-            onChange={reloadProjects}
-          />
         ) : threadId && harness && row ? (
           <ThreadView
             key={`${threadId}:${epoch}`}
@@ -583,16 +551,7 @@ export function CodeWorkspace() {
             <Spinner />
           </div>
         ) : (
-          <EmptyState
-            icon={Code2}
-            title="No thread open"
-            description={
-              <span className="inline-flex flex-wrap items-center justify-center gap-1.5">
-                <Kbd keys="n" /> starts one, <Kbd keys="j" /> and <Kbd keys="k" /> move through the
-                list, <Kbd keys=":" /> runs a command, <Kbd keys="?" /> shows every key.
-              </span>
-            }
-          />
+          <NewThread focused={composing} projects={projects} harnesses={harnesses} />
         )}
       </main>
 

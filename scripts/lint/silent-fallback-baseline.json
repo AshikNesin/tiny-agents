@@ -1,131 +1,419 @@
 {
-  "apps/web/src/client/components/ChatComposer.tsx": 1,
-  "apps/web/src/client/components/ChatHistoryMenu.tsx": 1,
-  "apps/web/src/client/components/FilePreview.tsx": 2,
-  "apps/web/src/client/components/Transcript.tsx": 1,
-  "apps/web/src/client/components/bot-dialog/use-bot-dialog-lists.ts": 4,
-  "apps/web/src/client/components/browser/VncView.tsx": 3,
-  "apps/web/src/client/components/chat-pane/live-views.tsx": 1,
-  "apps/web/src/client/components/live/use-selected-profile.ts": 1,
-  "apps/web/src/client/components/shell/settings-commands.ts": 1,
-  "apps/web/src/client/components/ui/hooks/use-highlighted-code.ts": 1,
-  "apps/web/src/client/lib/browser-panel.ts": 1,
-  "apps/web/src/client/lib/clipboard.ts": 1,
-  "apps/web/src/client/lib/code/api.ts": 1,
-  "apps/web/src/client/lib/code/comments.ts": 1,
-  "apps/web/src/client/lib/code/projects.ts": 1,
-  "apps/web/src/client/lib/composer-browser.ts": 2,
-  "apps/web/src/client/lib/feedback.ts": 1,
-  "apps/web/src/client/lib/last-bot.ts": 1,
-  "apps/web/src/client/lib/live-view.ts": 7,
-  "apps/web/src/client/lib/sse.ts": 2,
-  "apps/web/src/client/lib/staged-uploads.ts": 2,
-  "apps/web/src/client/lib/terminal-ws.ts": 1,
-  "apps/web/src/client/lib/tool-call-text.ts": 1,
-  "apps/web/src/client/lib/use-tool-labels.ts": 1,
-  "apps/web/src/client/lib/xterm.ts": 3,
-  "apps/web/src/client/main.tsx": 1,
-  "apps/web/src/client/pages/chats/ChatsLayout.tsx": 1,
-  "apps/web/src/client/pages/code/CodeSettings.tsx": 2,
-  "apps/web/src/client/pages/code/Composer.tsx": 2,
-  "apps/web/src/client/pages/code/DiffWorkspace.tsx": 1,
-  "apps/web/src/client/pages/code/PullReview.tsx": 1,
-  "apps/web/src/client/pages/code/PullThreads.tsx": 1,
-  "apps/web/src/client/pages/code/ResizablePane.tsx": 1,
-  "apps/web/src/client/pages/code/ReviewPanel.tsx": 1,
-  "apps/web/src/client/pages/code/Transcript.tsx": 1,
-  "apps/web/src/client/pages/code/YourChanges.tsx": 1,
-  "apps/web/src/client/pages/settings/models/AddModel.tsx": 1,
-  "apps/web/src/client/pages/tasks/Tasks.tsx": 1,
-  "apps/web/src/client/pages/terminal/Terminal.tsx": 4,
-  "apps/web/src/client/pages/vault/VaultItemDetail.tsx": 1,
-  "apps/web/src/client/queries/bot-choices.ts": 1,
-  "apps/web/src/client/queries/memory.ts": 1,
-  "apps/web/src/client/store/bots.ts": 3,
-  "apps/web/src/client/store/code.ts": 1,
-  "apps/web/src/client/store/ui.ts": 2,
-  "apps/web/src/server/api/bots/bots.list.ts": 1,
-  "apps/web/src/server/api/bots/bots.owner.ts": 1,
-  "apps/web/src/server/api/bots/bots.sse.ts": 2,
-  "apps/web/src/server/api/bots/bots.stream.ts": 1,
-  "apps/web/src/server/api/bots/side-call.ts": 1,
-  "apps/web/src/server/api/code/code.bots.ts": 1,
-  "apps/web/src/server/api/code/code.checkpoints.ts": 1,
-  "apps/web/src/server/api/code/code.checks.ts": 1,
-  "apps/web/src/server/api/code/code.hub.ts": 1,
-  "apps/web/src/server/api/code/code.passes.ts": 5,
-  "apps/web/src/server/api/code/code.projects.ts": 4,
-  "apps/web/src/server/api/code/code.pulls.ts": 10,
-  "apps/web/src/server/api/code/code.registry.ts": 1,
-  "apps/web/src/server/api/code/code.reviews.ts": 3,
-  "apps/web/src/server/api/code/code.watcher.ts": 1,
-  "apps/web/src/server/api/code/code.webhook.ts": 1,
-  "apps/web/src/server/api/connections/connections.manager.ts": 4,
-  "apps/web/src/server/api/connections/oauth.ts": 1,
-  "apps/web/src/server/api/live/live.router.ts": 2,
-  "apps/web/src/server/api/models/models.config.ts": 1,
-  "apps/web/src/server/api/notifications/push.store.ts": 1,
-  "apps/web/src/server/api/routines/routines.arming.ts": 1,
-  "apps/web/src/server/api/skills/skills.service.ts": 1,
-  "apps/web/src/server/api/traces/traces.service.ts": 3,
-  "apps/web/src/server/api/uploads/uploads.extract.ts": 3,
-  "apps/web/src/server/api/uploads/uploads.extraction.ts": 2,
-  "apps/web/src/server/api/uploads/uploads.sniff.ts": 1,
-  "apps/web/src/server/api/vault/connect/bundled-connect.ts": 1,
-  "apps/web/src/server/api/vault/connect/connect-image.ts": 2,
-  "apps/web/src/server/api/vault/vault.import.ts": 1,
-  "apps/web/src/server/api/vault/vault.service.ts": 1,
-  "apps/web/src/server/lifecycle.ts": 1,
-  "packages/agent/src/conversation-store.ts": 1,
-  "packages/agent/src/credentials.ts": 1,
-  "packages/agent/src/engines/claude-code/engine.ts": 2,
-  "packages/agent/src/engines/claude-code/sandbox-worker.ts": 1,
-  "packages/agent/src/gate.ts": 2,
-  "packages/agent/src/lock.ts": 1,
-  "packages/agent/src/runtime.ts": 3,
-  "packages/agent/src/toolkits/browser-vault.ts": 3,
-  "packages/agent/src/toolkits/code.ts": 1,
-  "packages/agent/src/toolkits/computer.ts": 1,
-  "packages/agent/src/toolkits/web.ts": 5,
-  "packages/agent/src/waiting.ts": 3,
-  "packages/claude-worker/src/coding-ops.ts": 11,
-  "packages/claude-worker/src/coding.ts": 4,
-  "packages/claude-worker/src/session-patches.ts": 3,
-  "packages/code/src/drivers/claude-code/driver.ts": 3,
-  "packages/code/src/drivers/shelley/client.ts": 2,
-  "packages/code/src/drivers/shelley/driver.ts": 7,
-  "packages/core/src/context.ts": 1,
-  "packages/core/src/errors/index.ts": 1,
-  "packages/core/src/notification/notification.service.ts": 1,
-  "packages/core/src/notification/webpush.ts": 1,
-  "packages/github/src/app-auth.ts": 2,
-  "packages/github/src/gh-transport.ts": 1,
-  "packages/github/src/https-transport.ts": 1,
-  "packages/models/src/discovery.ts": 1,
-  "packages/sandbox/src/browser-chromium.ts": 23,
-  "packages/sandbox/src/browser-fill.ts": 3,
-  "packages/sandbox/src/browser-remote-cdp.ts": 8,
-  "packages/sandbox/src/browser-sessions.ts": 5,
-  "packages/sandbox/src/computer-x11.ts": 1,
-  "packages/sandbox/src/egress-proxy.ts": 3,
-  "packages/sandbox/src/live-sessions.ts": 7,
-  "packages/sandbox/src/navigation-guard.ts": 7,
-  "packages/sandbox/src/ssh/pty-stream.ts": 1,
-  "packages/sandbox/src/ssh/sandbox-connection.ts": 2,
-  "packages/sandbox/src/vm-stack.ts": 1,
-  "packages/shell/src/hooks/useSetupStatus.ts": 1,
-  "packages/shell/src/lib/theme.ts": 1,
-  "packages/shell/src/store/auth.ts": 1,
-  "scripts/demo/faux-director.mjs": 1,
-  "scripts/demo/launch/lib/film.js": 1,
-  "scripts/demo/launch/tools/snaplib.mjs": 3,
-  "scripts/demo/launch/tools/stage-code-server/registry.ts": 1,
-  "scripts/demo/launch/tools/stage-code.mjs": 8,
-  "scripts/demo/launch/tools/stage-inbox.mjs": 3,
-  "scripts/demo/launch/tools/stage-montage.mjs": 3,
-  "scripts/demo/launch/tools/stage-travel.mjs": 9,
-  "scripts/demo/record.mjs": 1,
-  "scripts/demo/teaser/render.mjs": 1,
-  "scripts/lib/local-releases.ts": 1,
-  "scripts/local.ts": 2
+  "apps/web/src/client/components/ChatComposer.tsx": {
+    ".catch((): OwnerSendOutcome => \"restored\")": 1
+  },
+  "apps/web/src/client/components/ChatHistoryMenu.tsx": {
+    ".catch(() => undefined)": 1
+  },
+  "apps/web/src/client/components/FilePreview.tsx": {
+    ".catch(() => !cancelled && setError(\"The preview could not be loaded.\"))": 1,
+    "catch {}": 1
+  },
+  "apps/web/src/client/components/Transcript.tsx": {
+    ".catch(() => undefined)": 1
+  },
+  "apps/web/src/client/components/bot-dialog/use-bot-dialog-lists.ts": {
+    ".catch(() => undefined)": 4
+  },
+  "apps/web/src/client/components/browser/VncView.tsx": {
+    ".catch(() => {})": 2,
+    ".then(() => false)": 1
+  },
+  "apps/web/src/client/components/chat-pane/live-views.tsx": {
+    ".catch(() => undefined)": 1
+  },
+  "apps/web/src/client/components/shell/settings-commands.ts": {
+    ".catch(() => undefined)": 1
+  },
+  "apps/web/src/client/components/ui/hooks/use-highlighted-code.ts": {
+    ".catch(() => {})": 1
+  },
+  "apps/web/src/client/lib/clipboard.ts": {
+    "catch {}": 1
+  },
+  "apps/web/src/client/lib/code/api.ts": {
+    ".catch(() => ({}))": 1
+  },
+  "apps/web/src/client/lib/code/comments.ts": {
+    ".catch(() => undefined)": 1
+  },
+  "apps/web/src/client/lib/code/projects.ts": {
+    ".catch(() => null)": 1
+  },
+  "apps/web/src/client/lib/feedback.ts": {
+    ".catch(() => toast.error(\"Feedback isn't available right now\"))": 1
+  },
+  "apps/web/src/client/lib/live-view.ts": {
+    ".catch(() => toast.error(\"Could not enter full screen.\"))": 1,
+    ".catch(() => undefined)": 2,
+    ".catch(() => { toast.error(\"Could not read the clipboard. Allow clipboard access and try again.\"); })": 1
+  },
+  "apps/web/src/client/lib/sse.ts": {
+    "catch {}": 2
+  },
+  "apps/web/src/client/lib/staged-uploads.ts": {
+    ".catch(() => undefined)": 2
+  },
+  "apps/web/src/client/lib/terminal-ws.ts": {
+    "catch {}": 1
+  },
+  "apps/web/src/client/lib/tool-call-text.ts": {
+    "catch {}": 1
+  },
+  "apps/web/src/client/lib/use-tool-labels.ts": {
+    ".catch(() => undefined)": 1
+  },
+  "apps/web/src/client/lib/xterm.ts": {
+    "catch {}": 3
+  },
+  "apps/web/src/client/main.tsx": {
+    "catch {}": 1
+  },
+  "apps/web/src/client/pages/chats/ChatsLayout.tsx": {
+    ".catch(() => undefined)": 1
+  },
+  "apps/web/src/client/pages/code/CodeSettings.tsx": {
+    ".catch(() => null)": 1
+  },
+  "apps/web/src/client/pages/code/Composer.tsx": {
+    ".catch(() => [])": 1
+  },
+  "apps/web/src/client/pages/code/PullThreads.tsx": {
+    ".catch((): PullThreadsView | null => null)": 1
+  },
+  "apps/web/src/client/pages/code/ReviewPanel.tsx": {
+    ".catch((): CheckpointView[] => [])": 1
+  },
+  "apps/web/src/client/pages/code/Transcript.tsx": {
+    ".catch(() => toast.error(\"Could not copy\"))": 1
+  },
+  "apps/web/src/client/pages/code/YourChanges.tsx": {
+    ".catch(() => undefined)": 1
+  },
+  "apps/web/src/client/pages/settings/models/AddModel.tsx": {
+    ".catch(() => { if (!cancelled) setFailed(true); })": 1
+  },
+  "apps/web/src/client/pages/tasks/Tasks.tsx": {
+    ".catch(() => toast.error(\"Couldn't undo\"))": 1
+  },
+  "apps/web/src/client/pages/vault/VaultItemDetail.tsx": {
+    ".catch(() => {})": 1
+  },
+  "apps/web/src/client/queries/bot-choices.ts": {
+    ".catch(() => [])": 1
+  },
+  "apps/web/src/client/queries/memory.ts": {
+    ".catch(() => true)": 1
+  },
+  "apps/web/src/client/store/bots.ts": {
+    ".catch(() => undefined)": 2,
+    "catch {}": 1
+  },
+  "apps/web/src/client/store/code.ts": {
+    ".catch(() => set({ harnesses: [] }))": 1
+  },
+  "apps/web/src/server/api/bots/bots.list.ts": {
+    "catch {}": 1
+  },
+  "apps/web/src/server/api/bots/bots.owner.ts": {
+    ".catch(() => undefined)": 1
+  },
+  "apps/web/src/server/api/bots/bots.sse.ts": {
+    "catch {}": 2
+  },
+  "apps/web/src/server/api/bots/bots.stream.ts": {
+    "catch {}": 1
+  },
+  "apps/web/src/server/api/bots/side-call.ts": {
+    ".catch(() => undefined)": 1
+  },
+  "apps/web/src/server/api/code/code.bots.ts": {
+    ".catch(() => undefined)": 1
+  },
+  "apps/web/src/server/api/code/code.checkpoints.ts": {
+    ".catch(() => undefined)": 1
+  },
+  "apps/web/src/server/api/code/code.checks.ts": {
+    ".catch(() => { throw Boom.badGateway(\"GitHub did not say how the check is going.\"); })": 1
+  },
+  "apps/web/src/server/api/code/code.hub.ts": {
+    ".then(() => undefined)": 1
+  },
+  "apps/web/src/server/api/code/code.passes.ts": {
+    ".catch(() => [])": 1,
+    ".catch(() => undefined)": 3,
+    "catch {}": 1
+  },
+  "apps/web/src/server/api/code/code.projects.ts": {
+    ".catch(() => ({}))": 1,
+    ".catch(() => undefined)": 2,
+    "catch {}": 1
+  },
+  "apps/web/src/server/api/code/code.pulls.ts": {
+    ".catch(() => \"tiny-agents\")": 1,
+    ".catch(() => null)": 1,
+    ".catch(() => undefined)": 8
+  },
+  "apps/web/src/server/api/code/code.reviews.ts": {
+    ".catch(() => undefined)": 3
+  },
+  "apps/web/src/server/api/code/code.watcher.ts": {
+    ".catch(() => [])": 1
+  },
+  "apps/web/src/server/api/code/code.webhook.ts": {
+    ".catch(() => undefined)": 1
+  },
+  "apps/web/src/server/api/connections/connections.manager.ts": {
+    ".catch(() => undefined)": 3,
+    "catch {}": 1
+  },
+  "apps/web/src/server/api/connections/oauth.ts": {
+    "catch {}": 1
+  },
+  "apps/web/src/server/api/live/live.router.ts": {
+    ".catch(() => {})": 2
+  },
+  "apps/web/src/server/api/models/models.config.ts": {
+    "catch {}": 1
+  },
+  "apps/web/src/server/api/notifications/push.store.ts": {
+    ".catch(() => [])": 1
+  },
+  "apps/web/src/server/api/routines/routines.arming.ts": {
+    "catch {}": 1
+  },
+  "apps/web/src/server/api/traces/traces.service.ts": {
+    ".catch(() => null)": 2,
+    ".catch(() => { throw Boom.notFound(\"This session is no longer stored\"); })": 1
+  },
+  "apps/web/src/server/api/uploads/uploads.extract.ts": {
+    ".catch(() => undefined)": 1,
+    "catch {}": 2
+  },
+  "apps/web/src/server/api/uploads/uploads.extraction.ts": {
+    ".catch(() => [])": 1,
+    ".catch(() => undefined)": 1
+  },
+  "apps/web/src/server/api/uploads/uploads.sniff.ts": {
+    "catch {}": 1
+  },
+  "apps/web/src/server/api/vault/connect/bundled-connect.ts": {
+    "catch {}": 1
+  },
+  "apps/web/src/server/api/vault/connect/connect-image.ts": {
+    ".catch(() => [] as string[])": 1,
+    ".then(() => false)": 1
+  },
+  "apps/web/src/server/api/vault/vault.import.ts": {
+    "catch {}": 1
+  },
+  "apps/web/src/server/api/vault/vault.service.ts": {
+    ".catch(() => undefined)": 1
+  },
+  "apps/web/src/server/lifecycle.ts": {
+    ".then(() => exit(1))": 1
+  },
+  "packages/agent/src/conversation-store.ts": {
+    ".catch(() => undefined)": 1
+  },
+  "packages/agent/src/credentials.ts": {
+    "catch {}": 1
+  },
+  "packages/agent/src/engines/claude-code/engine.ts": {
+    ".catch(() => undefined)": 2
+  },
+  "packages/agent/src/engines/claude-code/sandbox-worker.ts": {
+    ".catch(() => {})": 1
+  },
+  "packages/agent/src/gate.ts": {
+    ".catch(() => undefined)": 1,
+    "catch {}": 1
+  },
+  "packages/agent/src/lock.ts": {
+    "catch {}": 1
+  },
+  "packages/agent/src/runtime.ts": {
+    ".catch(() => undefined)": 2,
+    "catch {}": 1
+  },
+  "packages/agent/src/toolkits/browser-vault.ts": {
+    ".catch(() => \"null\")": 1,
+    ".catch(() => ({ savedHandle: undefined }))": 1,
+    ".catch(() => request.origin)": 1
+  },
+  "packages/agent/src/toolkits/code.ts": {
+    ".catch(() => [])": 1
+  },
+  "packages/agent/src/toolkits/computer.ts": {
+    ".catch(() => undefined)": 1
+  },
+  "packages/agent/src/toolkits/web.ts": {
+    ".catch(() => [])": 1,
+    ".catch(() => undefined)": 4
+  },
+  "packages/agent/src/waiting.ts": {
+    "catch {}": 3
+  },
+  "packages/claude-worker/src/coding-ops.ts": {
+    ".catch(() => \"\")": 1,
+    ".catch(() => null)": 1,
+    ".catch(() => undefined)": 6,
+    ".then(() => null)": 1,
+    ".then(() => undefined)": 2
+  },
+  "packages/claude-worker/src/coding.ts": {
+    ".catch(() => [])": 2,
+    ".catch(() => undefined)": 1,
+    "catch {}": 1
+  },
+  "packages/claude-worker/src/session-patches.ts": {
+    ".catch(() => [])": 1,
+    ".catch(() => new Map())": 1,
+    ".catch(() => undefined)": 1
+  },
+  "packages/code/src/drivers/claude-code/driver.ts": {
+    ".catch(() => undefined)": 3
+  },
+  "packages/code/src/drivers/shelley/client.ts": {
+    ".catch(() => \"\")": 1,
+    "catch {}": 1
+  },
+  "packages/code/src/drivers/shelley/driver.ts": {
+    ".catch(() => [] as ShelleyModel[])": 1,
+    ".catch(() => [])": 2,
+    ".catch(() => null)": 3,
+    ".catch(() => undefined)": 1
+  },
+  "packages/core/src/context.ts": {
+    ".catch(() => undefined)": 1
+  },
+  "packages/core/src/errors/index.ts": {
+    "catch {}": 1
+  },
+  "packages/core/src/notification/notification.service.ts": {
+    ".catch(() => undefined)": 1
+  },
+  "packages/core/src/notification/webpush.ts": {
+    ".catch(() => undefined)": 1
+  },
+  "packages/github/src/app-auth.ts": {
+    ".catch(() => ({}))": 2
+  },
+  "packages/github/src/gh-transport.ts": {
+    "catch {}": 1
+  },
+  "packages/github/src/https-transport.ts": {
+    "catch {}": 1
+  },
+  "packages/models/src/discovery.ts": {
+    "catch {}": 1
+  },
+  "packages/sandbox/src/browser-chromium.ts": {
+    ".catch(() => \"\")": 1,
+    ".catch(() => null)": 3,
+    ".catch(() => undefined)": 10,
+    ".catch(() => {})": 5,
+    ".then(() => false)": 2,
+    ".then(() => settle())": 1,
+    "catch {}": 1
+  },
+  "packages/sandbox/src/browser-fill.ts": {
+    ".catch(() => \"missing\" as const)": 2,
+    ".catch(() => undefined)": 1
+  },
+  "packages/sandbox/src/browser-remote-cdp.ts": {
+    ".catch(() => socket.destroy())": 1,
+    ".catch(() => {})": 7
+  },
+  "packages/sandbox/src/browser-sessions.ts": {
+    ".catch(() => undefined)": 3,
+    ".catch(() => {})": 2
+  },
+  "packages/sandbox/src/computer-x11.ts": {
+    ".catch(() => {})": 1
+  },
+  "packages/sandbox/src/egress-proxy.ts": {
+    ".catch(() => res.destroy())": 1,
+    ".catch(() => socket.destroy())": 1,
+    ".then((): Verdict => ({ failed: `${name} did not resolve` }))": 1
+  },
+  "packages/sandbox/src/live-sessions.ts": {
+    ".catch(() => undefined)": 2,
+    ".catch(() => {})": 5
+  },
+  "packages/sandbox/src/navigation-guard.ts": {
+    ".catch(() => guards.delete(browser))": 1,
+    ".catch(() => null)": 1,
+    ".catch(() => true)": 1,
+    ".catch(() => undefined)": 2,
+    ".catch(() => { if (watched.get(page) === frameId) watched.delete(page); })": 1,
+    ".then(() => undefined)": 1
+  },
+  "packages/sandbox/src/ssh/pty-stream.ts": {
+    "catch {}": 1
+  },
+  "packages/sandbox/src/ssh/sandbox-connection.ts": {
+    ".catch(() => { if (current === source) current = undefined; })": 1,
+    "catch {}": 1
+  },
+  "packages/sandbox/src/vm-stack.ts": {
+    ".catch(() => {})": 1
+  },
+  "packages/shell/src/hooks/useSetupStatus.ts": {
+    ".then(() => live && setNeedsSetup(false))": 1
+  },
+  "packages/shell/src/lib/theme.ts": {
+    "catch {}": 1
+  },
+  "packages/shell/src/store/auth.ts": {
+    "catch {}": 1
+  },
+  "scripts/demo/faux-director.mjs": {
+    "catch {}": 1
+  },
+  "scripts/demo/launch/lib/film.js": {
+    ".catch(() => {})": 1
+  },
+  "scripts/demo/launch/tools/snaplib.mjs": {
+    ".catch(() => ({}))": 1,
+    ".catch(() => {})": 1,
+    "catch {}": 1
+  },
+  "scripts/demo/launch/tools/stage-code-server/registry.ts": {
+    "catch {}": 1
+  },
+  "scripts/demo/launch/tools/stage-code.mjs": {
+    ".catch(() => undefined)": 2,
+    ".catch(() => {})": 4,
+    "catch {}": 2
+  },
+  "scripts/demo/launch/tools/stage-inbox.mjs": {
+    ".catch(() => ({}))": 1,
+    ".catch(() => undefined)": 1,
+    ".catch(() => {})": 1
+  },
+  "scripts/demo/launch/tools/stage-montage.mjs": {
+    ".catch(() => {})": 2,
+    "catch {}": 1
+  },
+  "scripts/demo/launch/tools/stage-travel.mjs": {
+    ".catch(() => ({}))": 1,
+    ".catch(() => false)": 2,
+    ".catch(() => undefined)": 2,
+    ".catch(() => {})": 1,
+    "catch {}": 3
+  },
+  "scripts/demo/record.mjs": {
+    ".catch(() => undefined)": 1
+  },
+  "scripts/demo/teaser/render.mjs": {
+    ".catch(() => require(\"playwright\"))": 1
+  },
+  "scripts/lib/local-releases.ts": {
+    "catch {}": 1
+  },
+  "scripts/local.ts": {
+    ".catch(() => undefined)": 1,
+    ".then(() => false)": 1
+  }
 }

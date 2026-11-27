@@ -30,6 +30,7 @@ import { useResource } from "../../queries/resource";
 import { harnessOf, useCodeStore } from "../../store/code";
 import { PullChip, pullState } from "./controls";
 import { ThreadView } from "./ThreadView";
+import { projectSettingsPath } from "./CodeSettings";
 
 type Tab = "threads" | "context";
 
@@ -330,7 +331,7 @@ function PullBar({ row }: { row: ThreadSummary }) {
       <PullChip pr={row.pr} className="bg-transparent px-0" />
       {branch}
       <span className="text-muted-foreground ml-auto shrink-0">
-        {pullState(row.pr.loop) ?? "open"}
+        {pullState(row.pr.loop)?.label ?? "Open"}
       </span>
       <ExternalLink className="text-muted-foreground size-3 shrink-0" aria-hidden />
     </a>
@@ -369,7 +370,7 @@ function ContextTab({ project }: { project: ProjectView | undefined }) {
         title="Instructions"
         action={
           <Link
-            to={`/code/settings/projects/${encodeURIComponent(project.id)}`}
+            to={projectSettingsPath(project.id)}
             className="text-muted-foreground hover:text-foreground text-xs"
           >
             Edit

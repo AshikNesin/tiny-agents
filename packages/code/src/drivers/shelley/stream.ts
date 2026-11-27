@@ -91,7 +91,7 @@ export function createShelleyStream(options: StreamOptions): ShelleyStream {
       try {
         do {
           refreshAgain = false;
-          // eslint-disable-next-line react-doctor/async-await-in-loop -- one read at a time
+          // eslint-disable-next-line react-doctor/async-await-in-loop
           await readSnapshot();
           // oxlint-disable-next-line no-unmodified-loop-condition
         } while (refreshAgain && !stopped);
@@ -147,7 +147,7 @@ export function createShelleyStream(options: StreamOptions): ShelleyStream {
       let reason = "the stream ended";
       try {
         setStatus({ state: state.state === "connected" ? "reconnecting" : "connecting" });
-        // eslint-disable-next-line react-doctor/async-await-in-loop -- reconnect loop
+        // eslint-disable-next-line react-doctor/async-await-in-loop
         const response = await shelleyFetch(
           "/stream2",
           { signal: attempt.signal, headers: { Accept: "text/event-stream" } },
@@ -159,7 +159,7 @@ export function createShelleyStream(options: StreamOptions): ShelleyStream {
         armIdle();
         void refreshList();
         emit(connectedListeners, undefined);
-        // eslint-disable-next-line react-doctor/async-await-in-loop -- reconnect loop
+        // eslint-disable-next-line react-doctor/async-await-in-loop
         await readSseFrames(response.body, (frame) => {
           armIdle();
           handle(frame as ShelleyFrame);
@@ -176,7 +176,7 @@ export function createShelleyStream(options: StreamOptions): ShelleyStream {
       clearTimeout(idleTimer);
       if (stopped) return;
       setStatus({ state: "reconnecting", detail: reason });
-      // eslint-disable-next-line react-doctor/async-await-in-loop -- backoff
+      // eslint-disable-next-line react-doctor/async-await-in-loop
       await new Promise<void>((resolve) => {
         const timer = setTimeout(resolve, delay);
         timer.unref?.();

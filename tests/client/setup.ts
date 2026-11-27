@@ -10,6 +10,7 @@ pinClockWhileLoadingAndBeforeEachTest();
 expect.extend(matchers);
 
 MotionGlobalConfig.skipAnimations = true;
+(globalThis as { BASE_UI_ANIMATIONS_DISABLED?: boolean }).BASE_UI_ANIMATIONS_DISABLED = true;
 
 if (typeof window !== "undefined") {
   if (!Element.prototype.hasPointerCapture) {
@@ -21,8 +22,14 @@ if (typeof window !== "undefined") {
   if (!Element.prototype.releasePointerCapture) {
     Element.prototype.releasePointerCapture = () => {};
   }
+  if (!Element.prototype.getAnimations) {
+    Element.prototype.getAnimations = () => [];
+  }
   if (!Element.prototype.scrollIntoView) {
     Element.prototype.scrollIntoView = () => {};
+  }
+  if (!Element.prototype.scrollTo) {
+    Element.prototype.scrollTo = () => {};
   }
   if (!window.matchMedia) {
     window.matchMedia = (query: string) =>

@@ -23,7 +23,7 @@ type Msg = { id: string; role: string; text: string };
 
 const app = createTestApp();
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- response data varies per route
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Data = any;
 
 function call(path: string, init: { method?: string; json?: unknown } = {}) {

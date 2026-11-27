@@ -95,6 +95,7 @@ describe("approval cards", () => {
     expect(text).toEqual({
       title: "Engineer wants to open a page: “https://example.com”",
       alwaysAllowHint: "Approve, and let Engineer open a page without asking",
+      allowEveryBotHint: "Approve, and let every bot open a page without asking",
     });
   });
 

@@ -470,6 +470,21 @@ describe("Terminal full screen", () => {
     expect(exit).not.toHaveBeenCalled();
   });
 
+  it("selects the first tab in the same render that shows it", async () => {
+    listMock.mockResolvedValue(ready([session(1)]));
+    const unselected: string[] = [];
+    const observer = new MutationObserver(() => {
+      const tab = document.querySelector('[data-testid="terminal-tab-ta-term-1"]');
+      if (tab && tab.getAttribute("aria-selected") !== "true") unselected.push("seen");
+    });
+    observer.observe(document.body, { subtree: true, childList: true, attributes: true });
+    mount();
+    await findTab(1);
+    await waitFor(() => expect(screen.getByTestId("terminal-fullscreen")).toBeTruthy());
+    observer.disconnect();
+    expect(unselected).toEqual([]);
+  });
+
   it("falls back to CSS full screen without the Fullscreen API", async () => {
     listMock.mockResolvedValue(ready([session(1)]));
     mount();

@@ -270,15 +270,17 @@ function JobRow({
       </div>
       <div role="cell" className="flex items-center justify-end gap-2 md:col-span-1">
         <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label={`Actions for job ${label}`}
-              className="relative z-10 transition-opacity md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100 md:data-[state=open]:opacity-100"
-            >
-              <MoreVertical className="size-3.5" />
-            </Button>
+          <DropdownMenuTrigger
+            render={
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label={`Actions for job ${label}`}
+                className="relative z-10 transition-opacity md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100 md:data-popup-open:opacity-100"
+              />
+            }
+          >
+            <MoreVertical className="size-3.5" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             {allowedJobActions(job.state).map((action) => {

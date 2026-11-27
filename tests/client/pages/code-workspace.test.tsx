@@ -1,4 +1,5 @@
 import React from "react";
+import userEvent from "@testing-library/user-event";
 import {
   act,
   fireEvent,
@@ -14,6 +15,7 @@ import { NO_CAPABILITIES } from "@tiny-agents/code/contracts";
 import { CodeWorkspace } from "@/pages/code/Workspace";
 import { useCodeStore } from "@/store/code";
 import { useUiStore } from "@/store/ui";
+import { useCommandPaletteStore } from "@groot/shell/store/command-palette";
 import type { HarnessInfo, ThreadSnapshot, ThreadSummary } from "@/lib/code/api";
 import { AppQueryProvider } from "../query-provider";
 import { streamAt } from "../fakes/sse";
@@ -37,6 +39,10 @@ const deletes = vi.hoisted(() => [] as string[]);
 const asked = vi.hoisted(() => [] as unknown[]);
 const openReviews = vi.hoisted(() => [] as unknown[]);
 const inboxLimit = vi.hoisted(() => ({ value: 10 }));
+const more = vi.hoisted(() => ({
+  projects: [] as unknown[],
+  creating: null as Promise<unknown> | null,
+}));
 vi.mock("@groot/shell/lib/api", async (importOriginal) => {
   const original = await importOriginal<typeof import("@groot/shell/lib/api")>();
   return {
@@ -44,7 +50,7 @@ vi.mock("@groot/shell/lib/api", async (importOriginal) => {
     apiClient: Object.assign(Object.create(original.apiClient) as typeof original.apiClient, {
       get: async (path: string) =>
         path === "/code/projects"
-          ? [project]
+          ? [project, ...more.projects]
           : path === "/code/reviews/inbox"
             ? asked
             : path === "/code/reviews"
@@ -71,6 +77,7 @@ vi.mock("@groot/shell/lib/api", async (importOriginal) => {
           const typed = (body as { typed?: string }).typed;
           return { suggestion: typed ? `${typed} the tests first` : "Get it merged to main" };
         }
+        if (path === "/code/threads" && more.creating) return more.creating;
         return path === "/code/threads" ? { threadId: "new1" } : { status: "accepted" };
       },
     }),
@@ -224,7 +231,14 @@ beforeEach(() => {
   asked.length = 0;
   openReviews.length = 0;
   inboxLimit.value = 10;
-  useUiStore.setState({ codeSidebarOpen: true, codePane: null, lastCodePane: "changes" });
+  useUiStore.setState({
+    codeSidebarOpen: true,
+    codePane: null,
+    lastCodePane: "changes",
+    newThreadDraft: { text: "", projectId: "" },
+  });
+  more.projects = [];
+  more.creating = null;
   useCodeStore.setState({
     harnesses: [agent],
     statuses: {},
@@ -356,11 +370,112 @@ describe("the Code workspace", () => {
     );
   });
 
-  it("n opens the new thread dialog; Enter starts the thread in the remembered project", async () => {
+  it("with no thread open, the page is the new thread box, as a new chat is", async () => {
+    renderAt("/code");
+    expect(
+      await screen.findByRole("textbox", { name: "What should the agent do?" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("No thread open")).toBeNull();
+  });
+
+  it("keeps an unsent task while you look at another thread", async () => {
+    renderAt("/code");
+    const box = await screen.findByRole("textbox", { name: "What should the agent do?" });
+    fireEvent.change(box, { target: { value: "Fix the login callback" } });
+    fireEvent.click(document.querySelector('[data-thread="demo:a"]')!);
+    await waitFor(() => expect(where()).toBe("/code/t/demo%3Aa"));
+    press("n");
+    expect(await screen.findByRole("textbox", { name: "What should the agent do?" })).toHaveValue(
+      "Fix the login callback",
+    );
+  });
+
+  it("keeps the project picked for an unsent task too", async () => {
+    more.projects = [{ ...project, id: "p2", name: "api", repo: { owner: "acme", name: "api" } }];
+    renderAt("/code");
+    const box = await screen.findByRole("textbox", { name: "What should the agent do?" });
+    await userEvent.click(await screen.findByRole("button", { name: "Project" }));
+    await userEvent.click(await screen.findByRole("option", { name: /api/ }));
+    fireEvent.change(box, { target: { value: "Fix the login callback" } });
+    fireEvent.click(document.querySelector('[data-thread="demo:a"]')!);
+    await waitFor(() => expect(where()).toBe("/code/t/demo%3Aa"));
+    press("n");
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Project" })).toHaveTextContent("api"),
+    );
+  });
+
+  it("is just the box and its chips, with no heading, explainer or key hints", async () => {
+    renderAt("/code");
+    await screen.findByRole("textbox", { name: "What should the agent do?" });
+    expect(screen.queryByRole("heading", { name: "New thread" })).toBeNull();
+    expect(screen.queryByText(/own worktree/)).toBeNull();
+    expect(screen.queryByText(/starts it/)).toBeNull();
+  });
+
+  it("keeps the project it picked for you when another project's thread updates", async () => {
+    more.projects = [
+      { ...project, id: "p2", name: "api", repo: { owner: "acme", name: "api" } },
+      { ...project, id: "p3", name: "docs", repo: { owner: "acme", name: "docs" } },
+    ];
+    useCodeStore.setState({ threads: [thread("a", { projectId: "p3" })] });
+    renderAt("/code");
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Project" })).toHaveTextContent("docs"),
+    );
+    act(() => {
+      useCodeStore.setState({
+        threads: [
+          thread("a", { projectId: "p3" }),
+          thread("b", { projectId: "p2", updatedAt: "2026-11-06T00:00:00Z" }),
+        ],
+      });
+    });
+    expect(screen.getByRole("button", { name: "Project" })).toHaveTextContent("docs");
+  });
+
+  it("searches projects, with the ones you worked in lately under Recent and picked first", async () => {
+    more.projects = [
+      { ...project, id: "p2", name: "api", repo: { owner: "acme", name: "api" } },
+      { ...project, id: "p3", name: "docs", repo: { owner: "acme", name: "docs" } },
+    ];
+    useCodeStore.setState({ threads: [thread("a", { projectId: "p3" })] });
+    renderAt("/code");
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Project" })).toHaveTextContent("docs"),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Project" }));
+    const search = await screen.findByPlaceholderText("Choose a project…");
+    expect(
+      within(screen.getByRole("group", { name: "Recent" })).getByRole("option"),
+    ).toHaveTextContent("docs");
+    expect(
+      within(screen.getByRole("group", { name: "Projects" }))
+        .getAllByRole("option")
+        .map((o) => o.textContent),
+    ).toEqual(["webacme/web", "apiacme/api"]);
+    await userEvent.type(search, "api");
+    expect(screen.getAllByRole("option").map((o) => o.textContent)).toEqual(["apiacme/api"]);
+  });
+
+  it("clears a task as it starts, so leaving and coming back cannot send it twice", async () => {
+    more.creating = new Promise(() => {});
+    renderAt("/code");
+    const box = await screen.findByRole("textbox", { name: "What should the agent do?" });
+    await screen.findByText("web");
+    fireEvent.change(box, { target: { value: "Fix the login callback" } });
+    fireEvent.keyDown(box, { key: "Enter" });
+    await waitFor(() => expect(box).toHaveValue(""));
+    expect(posts.filter((post) => post.path === "/code/threads")).toHaveLength(1);
+  });
+
+  it("n focuses the new thread box, not a dialog; Enter starts the thread in the remembered project", async () => {
     renderAt("/code");
     press("n");
     expect(where()).toBe("/code/new");
     const box = await screen.findByRole("textbox", { name: "What should the agent do?" });
+    await waitFor(() => expect(box).toHaveFocus());
+    expect(screen.queryByRole("dialog")).toBeNull();
     await screen.findByText("web");
     fireEvent.change(box, { target: { value: "Fix the login callback" } });
     fireEvent.keyDown(box, { key: "Enter" });
@@ -440,27 +555,14 @@ describe("the Code workspace", () => {
     expect(thread).not.toHaveAttribute("hidden");
   });
 
-  it(": opens a menu of the page's commands; picking one runs it", async () => {
+  it(": opens the app's command palette, the one menu for every command", async () => {
+    useCommandPaletteStore.setState({ open: false });
     renderAt("/code/t/demo%3Adddd");
     open(done);
     await screen.findByText("web /");
     press(":", { shiftKey: true });
-    const menu = await screen.findByRole("dialog", { name: "Commands" });
-    expect(menu).toHaveTextContent("Pull request");
-    fireEvent.click(within(menu).getByText("Files"));
-    await waitFor(() =>
-      expect(screen.getByRole("tab", { name: /Files/ })).toHaveAttribute("aria-selected", "true"),
-    );
-  });
-
-  it(": jumps to a thread by its title", async () => {
-    renderAt("/code/t/demo%3Adddd");
-    open(done);
-    await screen.findByText("web /");
-    press(":", { shiftKey: true });
-    const menu = await screen.findByRole("dialog", { name: "Commands" });
-    fireEvent.click(within(menu).getByText("Thread a"));
-    await waitFor(() => expect(where()).toBe("/code/t/demo%3Aa"));
+    expect(useCommandPaletteStore.getState().open).toBe(true);
+    expect(screen.queryByRole("dialog", { name: "Commands" })).toBeNull();
   });
 
   it("right-clicking a thread offers Open PR, Archive and Delete", async () => {
@@ -596,7 +698,7 @@ describe("reviews in the thread list", () => {
     expect(rows()).toBe(2);
     expect(screen.getByRole("link", { name: "Review list filters" })).toHaveAttribute(
       "href",
-      "/code/settings/reviews",
+      "/settings/reviews",
     );
 
     fireEvent.click(more);

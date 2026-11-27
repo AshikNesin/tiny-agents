@@ -2,13 +2,15 @@ import { useEffect, useMemo, useSyncExternalStore } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Bot, Menu } from "lucide-react";
 import { Button } from "@groot/ui/button";
-import { useBotsStore } from "../../store/bots";
+import { chatBots, useBotsStore } from "../../store/bots";
 import { useUiStore } from "../../store/ui";
+import { useViewerRole } from "../../store/people";
 import { landingBotId, rememberLastBot } from "../../lib/last-bot";
 import { useFocusParam } from "../../lib/focus-param";
 import { ChatPane } from "../../components/ChatPane";
 import { PastChatPane } from "../../components/PastChatPane";
 import { BotsSection } from "../../components/shell/BotsSection";
+import { ProjectChat } from "../code/ProjectChat";
 
 const DESKTOP_QUERY = "(min-width: 768px)";
 function subscribeDesktop(onChange: () => void) {
@@ -25,7 +27,9 @@ export function ChatWorkspace() {
   const { botId, chatId } = useParams();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const bots = useBotsStore((s) => s.bots);
+  const allBots = useBotsStore((s) => s.bots);
+  const owner = useViewerRole() === "owner";
+  const bots = useMemo(() => chatBots(allBots, owner), [allBots, owner]);
   const loading = useBotsStore((s) => s.loading);
   const models = useBotsStore((s) => s.models);
   const canAnswer = useBotsStore((s) => s.canAnswer);
@@ -43,7 +47,11 @@ export function ChatWorkspace() {
     setSearchParams(next, { replace: true });
   }, [searchParams, setSearchParams, openCreateBot]);
 
-  const currentListBot = useMemo(() => bots.find((b) => b.id === botId) ?? null, [bots, botId]);
+  const projectId = owner && !chatId ? allBots.find((b) => b.id === botId)?.projectId : null;
+  const currentListBot = useMemo(
+    () => allBots.find((b) => b.id === botId && (chatId || !owner || !b.projectId)) ?? null,
+    [allBots, botId, chatId, owner],
+  );
   const currentId = currentListBot?.id;
   const currentConversation = currentListBot?.conversationId;
 
@@ -62,11 +70,19 @@ export function ChatWorkspace() {
   }, [currentId]);
 
   useEffect(() => {
-    if (!loaded || currentId) return;
+    if (!loaded || currentId || projectId) return;
     if (!desktop && !botId) return;
     const target = desktop ? landingBotId(bots) : null;
     navigate(target ? `/chats/${target}` : "/chats", { replace: true });
-  }, [loaded, currentId, desktop, botId, bots, navigate]);
+  }, [loaded, currentId, projectId, desktop, botId, bots, navigate]);
+
+  if (projectId) {
+    return (
+      <div className="h-full min-h-0">
+        <ProjectChat projectId={projectId} onOpenMenu={() => setMobileOpen(true)} />
+      </div>
+    );
+  }
 
   return (
     <div className="h-full min-h-0">

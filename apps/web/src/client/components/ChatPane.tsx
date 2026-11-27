@@ -19,7 +19,7 @@ import { isEcho } from "../lib/chat-session";
 import { useMessageScroller } from "./ui/message-scroller";
 import { errorMessage } from "../lib/errors";
 import { ChatPaneHeader } from "./chat-pane/ChatPaneHeader";
-import { ModelWarning, YoloBanner } from "./chat-pane/ChatPaneNotices";
+import { ModelWarning } from "./chat-pane/ChatPaneNotices";
 import { NewChatConfirmDialog, YoloConfirmDialog } from "./chat-pane/ChatPaneConfirmations";
 import { DropOverlay, useFileDrop } from "./chat-pane/file-drop";
 import { useLiveViews } from "./chat-pane/live-views";
@@ -123,7 +123,7 @@ function ChatPaneBody({
   };
   const lastTurnActions = useMemo(
     () => (turn ? { at: turn.at, edit: editLast, retry: retryLast } : null),
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- the actions read the latest turn when run
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [turn?.at, turn?.text],
   );
 
@@ -277,8 +277,6 @@ function ChatPaneBody({
           menuView={menuView}
           onMenuViewChange={setMenuView}
           onEditBot={onEditBot}
-          yolo={yolo}
-          onYoloChange={(on) => (on ? setConfirmYolo(true) : void setYolo(false))}
           live={live}
           canReset={canReset}
           onOpenMenu={onOpenMenu ?? (() => setMobileOpen(true))}
@@ -298,8 +296,6 @@ function ChatPaneBody({
           <QueuedMessages held={held} onWithdraw={(requestId) => void chat.withdraw(requestId)} />
         )}
 
-        {yolo && <YoloBanner guest={!owner} onTurnOff={() => void setYolo(false)} />}
-
         {editing && <EditingBanner onCancel={cancelEdit} />}
 
         <ChatComposer
@@ -314,6 +310,10 @@ function ChatPaneBody({
           onStop={chat.stop}
           onEditBot={onEditBot}
           onNewChat={role === "guest" ? undefined : newChatFromComposer}
+          yolo={yolo}
+          onYoloChange={
+            owner ? (on) => (on ? setConfirmYolo(true) : void setYolo(false)) : undefined
+          }
         />
       </div>
       {live.showBrowser && (

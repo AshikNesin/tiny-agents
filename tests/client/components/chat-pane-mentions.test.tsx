@@ -15,6 +15,7 @@ import { ChatPane } from "@/components/ChatPane";
 import { useBotsStore } from "@/store/bots";
 import type { Bot } from "../../../apps/web/src/shared/api/bots";
 import type { CatalogModel } from "../../../apps/web/src/shared/api/models";
+import { AppQueryProvider } from "../query-provider";
 
 const sendMock = vi.fn().mockResolvedValue(undefined);
 
@@ -91,6 +92,7 @@ function seedStore(bots: Array<{ id: string; name: string; description: string }
       approvals: 0,
       questions: 0,
       pinnedAt: null,
+      projectId: null,
     })),
     canAnswer: true,
   });
@@ -98,9 +100,11 @@ function seedStore(bots: Array<{ id: string; name: string; description: string }
 
 function renderPane() {
   render(
-    <BrowserRouter>
-      <ChatPane bot={HOST} models={[model]} canAnswer onEditBot={() => {}} />
-    </BrowserRouter>,
+    <AppQueryProvider>
+      <BrowserRouter>
+        <ChatPane bot={HOST} models={[model]} canAnswer onEditBot={() => {}} />
+      </BrowserRouter>
+    </AppQueryProvider>,
   );
   return screen.getByRole("textbox") as HTMLTextAreaElement;
 }

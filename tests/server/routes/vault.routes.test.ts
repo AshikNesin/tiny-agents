@@ -93,7 +93,7 @@ afterEach(() => {
   secretRedactor.clear();
 });
 
-// oxlint-disable-next-line typescript/no-explicit-any -- response data varies per route
+// oxlint-disable-next-line typescript/no-explicit-any
 type Data = any;
 
 function vault(path: string, init: { method?: string; json?: unknown; stepUp?: string } = {}) {
@@ -888,7 +888,10 @@ describe("credential request submit", () => {
       where: eq(vaultItems.handle, "hi-nesin-io"),
     });
     expect(saved).toMatchObject({ kind: "login", username: "8124227227" });
-    expect(JSON.stringify(saved)).not.toContain("4821");
+    const withoutRandomIds = JSON.stringify(saved, (key, value) =>
+      key === "id" || key === "externalId" ? undefined : value,
+    );
+    expect(withoutRandomIds).not.toContain("4821");
   });
 
   it("cancels", async () => {

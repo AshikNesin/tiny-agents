@@ -10,6 +10,8 @@ import {
   type ToolPermission,
 } from "@tiny-agents/agent";
 import { db, bots } from "../../db";
+import { reachedConnections, reachedSkills } from "./bot-reach";
+import { botPermissions, ownerToolPermissions } from "./tool-permissions";
 import type { BotData } from "../../../shared/api/bots";
 import type { BrowserProfile } from "../../../shared/api/live";
 import { resolveAttachments } from "../uploads/uploads.attach";
@@ -58,13 +60,6 @@ export type BotWithLinks = BotRow & {
 };
 
 const withLinks = {
-  skills: { columns: { skillId: true } },
-  connections: {
-    columns: { connectionId: true },
-    with: {
-      connection: { columns: { slug: true, toolsCache: true, disabledTools: true } },
-    },
-  },
   guests: { columns: { userId: true } },
 } as const;
 
@@ -92,7 +87,15 @@ export function toBot(row: BotWithLinks): Bot {
 export async function findBotRow(id: string): Promise<BotWithLinks> {
   const bot = await db.query.bots.findFirst({ where: eq(bots.id, id), with: withLinks });
   if (!bot) throw Boom.notFound("Bot not found");
-  return bot;
+  const [connections, skills] = await Promise.all([reachedConnections(bot), reachedSkills(bot)]);
+  return {
+    ...bot,
+    connections: connections.map(({ id: connectionId, slug, toolsCache, disabledTools }) => ({
+      connectionId,
+      connection: { slug, toolsCache, disabledTools },
+    })),
+    skills: skills.map((skill) => ({ skillId: skill.id })),
+  };
 }
 
 export type BotConversationRuntime = Pick<
@@ -184,7 +187,14 @@ async function rowConfig(
 ): Promise<BotAgentConfig> {
   const participants =
     !unattended && (row.guests?.length ?? 0) > 0 ? await participantNames(row.id) : [];
-  return agentConfig({ ...toBot(row), connections: row.connections }, rt, unattended, participants);
+  const bot = toBot(row);
+  const toolPermissions = botPermissions(await ownerToolPermissions(), bot.toolPermissions);
+  return agentConfig(
+    { ...bot, toolPermissions, connections: row.connections },
+    rt,
+    unattended,
+    participants,
+  );
 }
 
 export async function startBotConversation(

@@ -8,7 +8,7 @@
 These decisions came out of the comment sweep of `apps/web/src/client/components/`
 under [ADR 0028](./0028-code-carries-no-comments.md). Each was a comment next to
 the code it governs; none could be recovered from the code or its tests alone.
-The vendored Fluid Functionalism copy in `apps/web/src/client/components/fluid/`
+The vendored Fluid Functionalism copy (now in `packages/ui/vendor/fluid/`)
 was not swept.
 
 ## Transcript rows use content-visibility

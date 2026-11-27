@@ -215,6 +215,43 @@ describe("deferred toolkits", () => {
     expect(prompt).not.toContain("tool_40");
   }, 20_000);
 
+  it("defers a connection every bot shares even when it is small, and names only its first 8 tools", async () => {
+    const requests: PiContext[] = [];
+    const shared = createMcpCapability({
+      slug: "mail",
+      name: "Mail",
+      url: "https://mail.example.test/mcp",
+      shared: true,
+      tools: Array.from({ length: 10 }, (_, i) => ({
+        name: `mail_${i}`,
+        description: "Mail.",
+        inputSchema: { type: "object" },
+      })),
+      call: async () => ({ content: [] }),
+    });
+    const runtime: AgentRuntime = await openTestRuntime({
+      storePath: ":memory:",
+      capabilities: [shared, notesToolkit()],
+      respondWith: (context: PiContext) => {
+        requests.push(structuredClone(context));
+        return fauxAssistantMessage([fauxText("done")]);
+      },
+    });
+    cleanup.push(() => runtime.close());
+    const ref = await runtime.createConversation({
+      modelId: TEST_MODEL,
+      systemPrompt: "",
+      capabilities: { enabled: ["mcp:mail", "notes", "tool-search"], permissions: {} },
+    });
+    await runtime.submit(ref, { requestId: "r1", text: "hi" });
+    await until(() => requests.length >= 1, "reply");
+    expect(offered(requests[0]!)).toEqual(["note_add", "tool_search"]);
+    const prompt = JSON.stringify(requests[0]!.messages);
+    expect(prompt).toContain(
+      "- mcp:mail (10 tools): Mail, a connection. Tools (each named mcp__mail__<name>): mail_0, mail_1, mail_2, mail_3, mail_4, mail_5, mail_6, mail_7, and 2 more",
+    );
+  }, 20_000);
+
   it("offers no tool_search where nothing is deferred", async () => {
     const requests: PiContext[] = [];
     const runtime: AgentRuntime = await openTestRuntime({

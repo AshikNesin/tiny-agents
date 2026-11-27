@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.17.0
+
+### Minor Changes
+
+- Typing `/` at the start of a chat message lists the bot's skills. Pick one and the message goes as
+  `/skill-name ...`, which tells the bot to use that skill.
+
+## 0.16.0
+
+### Minor Changes
+
+- An approval card has **Allow for every bot** next to **Always allow**, so you can let every bot use that
+  tool without asking. A skill's and a connection's screens have an **Every bot** switch, and new skills
+  reach every bot by default, bots you make later included.
+
 ## 0.15.0
 
 ### Minor Changes

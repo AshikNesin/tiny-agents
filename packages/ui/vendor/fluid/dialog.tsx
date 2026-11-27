@@ -9,8 +9,9 @@ import {
   type ComponentPropsWithoutRef,
   type HTMLAttributes,
   type ReactElement,
+  type ReactNode,
 } from "react";
-import { Dialog as DialogPrimitive } from "radix-ui";
+import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
 import { fontWeights } from "./lib/font-weight";
 import { motion } from "motion/react";
 import { cn } from "../../src/lib/utils";
@@ -32,7 +33,13 @@ function Dialog({
   defaultOpen,
   onOpenChange,
   ...props
-}: DialogPrimitive.DialogProps) {
+}: {
+  children?: ReactNode;
+  open?: boolean;
+  defaultOpen?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  modal?: boolean;
+}) {
   // Internal state always tracks changes, and the consumer's onOpenChange is
   // notified alongside it — a listener must not replace state handling, or an
   // uncontrolled dialog with an onOpenChange prop could never open. The Root
@@ -54,12 +61,11 @@ function Dialog({
   );
 }
 
-// Trigger and Close compose either way — `render={<Button/>}` (the
-// library's composition API, shared with DropdownTrigger) or Radix-style
-// `asChild` with a single child element — so one snippet works everywhere.
+// Trigger and Close compose either way: `render={<Button/>}`, or `asChild`
+// with a single child element, so one snippet works everywhere.
 interface DialogSlotProps extends Omit<
   ComponentPropsWithoutRef<typeof DialogPrimitive.Trigger>,
-  "asChild"
+  "render"
 > {
   /** Element to render as the control, e.g. a Button. */
   render?: ReactElement;
@@ -69,12 +75,10 @@ interface DialogSlotProps extends Omit<
 
 const DialogTrigger = forwardRef<HTMLButtonElement, DialogSlotProps>(
   ({ render, asChild, children, ...props }, ref) =>
-    render ? (
-      <DialogPrimitive.Trigger ref={ref} asChild {...props}>
-        {render}
-      </DialogPrimitive.Trigger>
+    asChild ? (
+      <DialogPrimitive.Trigger ref={ref} render={children as ReactElement} {...props} />
     ) : (
-      <DialogPrimitive.Trigger ref={ref} asChild={asChild} {...props}>
+      <DialogPrimitive.Trigger ref={ref} render={render} {...props}>
         {children}
       </DialogPrimitive.Trigger>
     ),
@@ -83,19 +87,29 @@ DialogTrigger.displayName = "DialogTrigger";
 
 const DialogClose = forwardRef<HTMLButtonElement, DialogSlotProps>(
   ({ render, asChild, children, ...props }, ref) =>
-    render ? (
-      <DialogPrimitive.Close ref={ref} asChild {...props}>
-        {render}
-      </DialogPrimitive.Close>
+    asChild ? (
+      <DialogPrimitive.Close
+        ref={ref}
+        render={children as ReactElement}
+        {...(props as ComponentPropsWithoutRef<typeof DialogPrimitive.Close>)}
+      />
     ) : (
-      <DialogPrimitive.Close ref={ref} asChild={asChild} {...props}>
+      <DialogPrimitive.Close
+        ref={ref}
+        render={render}
+        {...(props as ComponentPropsWithoutRef<typeof DialogPrimitive.Close>)}
+      >
         {children}
       </DialogPrimitive.Close>
     ),
 );
 DialogClose.displayName = "DialogClose";
 
-interface DialogContentProps extends ComponentPropsWithoutRef<typeof DialogPrimitive.Content> {
+interface DialogContentProps extends Omit<
+  ComponentPropsWithoutRef<typeof DialogPrimitive.Popup>,
+  "className" | "render"
+> {
+  className?: string;
   /** Width: sm 400, lg 540, xl 880 (each one notch narrower in compact
    *  regions). `xl` is the canvas for composed layouts — a sidebar beside
    *  a panel — which usually pair it with `className="p-0"` and a fixed
@@ -148,7 +162,7 @@ const DialogContent = forwardRef<HTMLDivElement, DialogContentProps>(
     // Fallback release for the deferred unmount: onAnimationComplete on the
     // panel is the primary signal, but rAF-driven animation callbacks can
     // stall in throttled/background tabs — leaving an invisible full-screen
-    // overlay (and Radix's scroll lock) in place. Both exit tweens run at
+    // overlay (and the scroll lock) in place. Both exit tweens run at
     // spring.slow.exit, so the fallback tracks that tier.
     useEffect(() => {
       if (open) return;
@@ -163,55 +177,63 @@ const DialogContent = forwardRef<HTMLDivElement, DialogContentProps>(
     if (!mounted) return null;
 
     return (
-      <DialogPrimitive.Portal forceMount container={container ?? undefined}>
-        <DialogPrimitive.Overlay asChild forceMount>
-          <motion.div
-            className={cn(
-              container ? "absolute" : "fixed",
-              "inset-0 z-50 bg-black/40 dark:bg-black/80",
-            )}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: open ? 1 : 0 }}
-            transition={open ? spring.slow : spring.slow.exit}
-          />
-        </DialogPrimitive.Overlay>
-        <DialogPrimitive.Content ref={ref} asChild forceMount {...props}>
-          <motion.div
-            className={cn(
-              container ? "absolute" : "fixed",
-              "left-1/2 z-50 w-[calc(100%-2rem)]",
-              position === "top" ? "top-[12dvh]" : "top-1/2",
-              surfaceClasses(dialogLevel),
-              "p-6 focus:outline-none",
-              size === "sm" && (compact ? "max-w-[360px]" : "max-w-[400px]"),
-              size === "lg" && (compact ? "max-w-[480px]" : "max-w-[540px]"),
-              size === "xl" && (compact ? "max-w-[800px]" : "max-w-[880px]"),
-              shape.container,
-              className,
-            )}
-            initial={{ opacity: 0, scale: 0.97, x: "-50%", y: position === "top" ? 0 : "-50%" }}
-            animate={{
-              opacity: open ? 1 : 0,
-              scale: open ? 1 : 0.97,
-              x: "-50%",
-              y: position === "top" ? 0 : "-50%",
-            }}
-            transition={open ? spring.slow : spring.slow.exit}
-            onAnimationComplete={handleExitComplete}
-          >
-            <SurfaceProvider value={dialogLevel}>
-              {children}
-              {showCloseButton && (
-                <DialogPrimitive.Close asChild>
-                  <Button variant="ghost" size="icon-sm" className="absolute right-3 top-3">
-                    <XIcon />
-                    <span className="sr-only">Close</span>
-                  </Button>
-                </DialogPrimitive.Close>
+      <DialogPrimitive.Portal keepMounted container={container ?? undefined}>
+        <DialogPrimitive.Backdrop
+          render={
+            <motion.div
+              className={cn(
+                container ? "absolute" : "fixed",
+                "inset-0 z-50 bg-black/40 dark:bg-black/80",
               )}
-            </SurfaceProvider>
-          </motion.div>
-        </DialogPrimitive.Content>
+              initial={{ opacity: 0 }}
+              animate={{ opacity: open ? 1 : 0 }}
+              transition={open ? spring.slow : spring.slow.exit}
+            />
+          }
+        />
+        <DialogPrimitive.Popup
+          ref={ref}
+          {...props}
+          render={
+            <motion.div
+              className={cn(
+                container ? "absolute" : "fixed",
+                "left-1/2 z-50 w-[calc(100%-2rem)]",
+                position === "top" ? "top-[12dvh]" : "top-1/2",
+                surfaceClasses(dialogLevel),
+                "p-6 focus:outline-none",
+                size === "sm" && (compact ? "max-w-[360px]" : "max-w-[400px]"),
+                size === "lg" && (compact ? "max-w-[480px]" : "max-w-[540px]"),
+                size === "xl" && (compact ? "max-w-[800px]" : "max-w-[880px]"),
+                shape.container,
+                className,
+              )}
+              initial={{ opacity: 0, scale: 0.97, x: "-50%", y: position === "top" ? 0 : "-50%" }}
+              animate={{
+                opacity: open ? 1 : 0,
+                scale: open ? 1 : 0.97,
+                x: "-50%",
+                y: position === "top" ? 0 : "-50%",
+              }}
+              transition={open ? spring.slow : spring.slow.exit}
+              onAnimationComplete={handleExitComplete}
+            />
+          }
+        >
+          <SurfaceProvider value={dialogLevel}>
+            {children}
+            {showCloseButton && (
+              <DialogPrimitive.Close
+                render={
+                  <Button variant="ghost" size="icon-sm" className="absolute right-3 top-3" />
+                }
+              >
+                <XIcon />
+                <span className="sr-only">Close</span>
+              </DialogPrimitive.Close>
+            )}
+          </SurfaceProvider>
+        </DialogPrimitive.Popup>
       </DialogPrimitive.Portal>
     );
   },
@@ -228,7 +250,7 @@ function DialogFooter({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
 
 const DialogTitle = forwardRef<
   HTMLHeadingElement,
-  ComponentPropsWithoutRef<typeof DialogPrimitive.Title>
+  Omit<ComponentPropsWithoutRef<typeof DialogPrimitive.Title>, "className"> & { className?: string }
 >(({ className, ...props }, ref) => {
   // The title role of the type scale — see /docs/sizes.
   const compact = useSizeVariant() === "compact";
@@ -249,7 +271,9 @@ DialogTitle.displayName = "DialogTitle";
 
 const DialogDescription = forwardRef<
   HTMLParagraphElement,
-  ComponentPropsWithoutRef<typeof DialogPrimitive.Description>
+  Omit<ComponentPropsWithoutRef<typeof DialogPrimitive.Description>, "className"> & {
+    className?: string;
+  }
 >(({ className, ...props }, ref) => {
   const compact = useSizeVariant() === "compact";
   return (

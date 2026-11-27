@@ -229,19 +229,21 @@ export function TerminalView({
       />
 
       <DropdownMenu open={menu !== null} onOpenChange={(open) => !open && closeMenu()}>
-        <DropdownMenuTrigger asChild>
-          <span
-            aria-hidden
-            className="pointer-events-none fixed size-0"
-            style={{ left: menu?.x ?? 0, top: menu?.y ?? 0 }}
-          />
-        </DropdownMenuTrigger>
+        <DropdownMenuTrigger
+          render={
+            <span
+              aria-hidden
+              className="pointer-events-none fixed size-0"
+              style={{ left: menu?.x ?? 0, top: menu?.y ?? 0 }}
+            />
+          }
+        />
         <DropdownMenuContent
           align="start"
           className="w-56"
-          onCloseAutoFocus={(event) => {
-            event.preventDefault();
+          finalFocus={() => {
             terminalRef.current?.focus();
+            return false;
           }}
           data-testid={`terminal-menu-${name}`}
         >

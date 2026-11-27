@@ -1,6 +1,6 @@
-import type { WorkflowName } from "../../../shared/code-status";
+import { preferredMergeMethod, type WorkflowName } from "../../../shared/code-status";
 import { Kbd } from "../../components/keys";
-import { useCallback, useState } from "react";
+import { useState } from "react";
 import {
   Archive,
   ExternalLink,
@@ -19,7 +19,6 @@ import {
   Zap,
 } from "lucide-react";
 import { toast } from "sonner";
-import { Streamdown } from "streamdown";
 import { Button, EmptyState, Input, Textarea, metaLabelClass, monoClass } from "@groot/ui";
 import {
   DropdownMenu,
@@ -29,25 +28,16 @@ import {
 } from "@groot/ui/dropdown-menu";
 import { cn } from "@groot/ui/lib/utils";
 import { Spinner } from "../../components/ui/spinner";
-import { Switch } from "../../components/ui/switch";
+import { Switch } from "@groot/ui/switch";
 import { errorMessage } from "../../lib/errors";
-import { markdownComponents } from "../../lib/markdown";
+import { Markdown } from "../../lib/markdown";
 import { projectsApi } from "../../lib/code/projects";
-import { useThreadPulls } from "../../lib/code/use-thread-pulls";
+import { usePullActions, useThreadPulls } from "../../lib/code/use-thread-pulls";
 import { pullStage } from "../../lib/code/pull-stage";
 import type { MergeMethod, PullView, ThreadPullsView } from "../../../shared/api/code";
 import { PullChecks } from "./PullChecks";
 import { PullComments } from "./PullComments";
-
-const LOOP_LABEL: Record<PullView["loop"]["status"], string> = {
-  watching: "Watching",
-  fixing: "Fixing",
-  needs_input: "Needs you",
-  green: "Green",
-  paused: "Paused",
-  merged: "Merged",
-  off: "Off",
-};
+import { AUTOFIX_STATUS } from "./controls";
 
 const OUTCOME_LABEL: Record<string, string> = {
   pushed: "Pushed",
@@ -90,25 +80,11 @@ export function PullPanel({
     refreshKey,
     live: true,
   });
-  const [busy, setBusy] = useState<string | null>(null);
   const [linkNumber, setLinkNumber] = useState("");
   const [linking, setLinking] = useState(false);
   const [title, setTitle] = useState("");
 
-  const act = useCallback(
-    async (what: string, work: () => Promise<ThreadPullsView | void>) => {
-      setBusy(what);
-      try {
-        const next = await work();
-        if (next) setView(next);
-      } catch (e) {
-        toast.error(errorMessage(e, `Could not ${what}.`));
-      } finally {
-        setBusy(null);
-      }
-    },
-    [setView],
-  );
+  const { busy, act } = usePullActions(threadId);
 
   const pr = view?.active ?? null;
   const snap = pr?.snapshot ?? null;
@@ -145,10 +121,17 @@ export function PullPanel({
   );
   const moreMenu = (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon-xs" aria-label="More" className="text-muted-foreground">
-          <MoreHorizontal />
-        </Button>
+      <DropdownMenuTrigger
+        render={
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            aria-label="More"
+            className="text-muted-foreground"
+          />
+        }
+      >
+        <MoreHorizontal />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         <DropdownMenuItem onSelect={() => setLinking(true)}>
@@ -183,22 +166,28 @@ export function PullPanel({
               {onReview && <ReviewButton onOpen={() => onReview(pr.url)} />}
               <RefreshButton onClick={reload} />
               <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon-xs"
-                    aria-label="PR actions"
-                    className="text-muted-foreground"
-                  >
-                    <MoreHorizontal />
-                  </Button>
+                <DropdownMenuTrigger
+                  render={
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      aria-label="PR actions"
+                      className="text-muted-foreground"
+                    />
+                  }
+                >
+                  <MoreHorizontal />
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuItem asChild>
-                    <a href={pr.url} target="_blank" rel="noreferrer">
-                      <ExternalLink />
-                      Open on GitHub
-                    </a>
+                  <DropdownMenuItem
+                    render={(linkProps) => (
+                      <a {...linkProps} href={pr.url} target="_blank" rel="noreferrer">
+                        {linkProps.children}
+                      </a>
+                    )}
+                  >
+                    <ExternalLink />
+                    Open on GitHub
                   </DropdownMenuItem>
                   <DropdownMenuItem
                     variant="destructive"
@@ -532,7 +521,7 @@ function ActivePull({
           ? "Merge opens once the conflict is resolved."
           : null;
 
-  const yoloMethod: MergeMethod | undefined = methods.includes("squash") ? "squash" : methods[0];
+  const yoloMethod = preferredMergeMethod(methods);
 
   return (
     <>
@@ -558,15 +547,17 @@ function ActivePull({
       <div className="flex flex-wrap gap-2">
         {pr.state === "open" && methods.length > 0 && (
           <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                size="sm"
-                disabled={busy !== null || pr.draft || mergeBlocked !== null}
-                title={pr.draft ? "A draft cannot be merged; switch Draft off first" : undefined}
-              >
-                {busy === "merge" ? <Spinner /> : <GitMerge />}
-                Merge
-              </Button>
+            <DropdownMenuTrigger
+              render={
+                <Button
+                  size="sm"
+                  disabled={busy !== null || pr.draft || mergeBlocked !== null}
+                  title={pr.draft ? "A draft cannot be merged; switch Draft off first" : undefined}
+                />
+              }
+            >
+              {busy === "merge" ? <Spinner /> : <GitMerge />}
+              Merge
             </DropdownMenuTrigger>
             <DropdownMenuContent>
               {methods.map((m) => (
@@ -641,13 +632,8 @@ function ActivePull({
           >
             <span className="min-w-0 flex-1 font-medium">Auto-fix</span>
             {pr.autofix && (
-              <span
-                className={cn(
-                  "text-xs",
-                  pr.loop.status === "needs_input" ? "text-destructive" : "text-muted-foreground",
-                )}
-              >
-                {LOOP_LABEL[pr.loop.status]}
+              <span className={cn("text-xs", AUTOFIX_STATUS[pr.loop.status].tone)}>
+                {AUTOFIX_STATUS[pr.loop.status].label}
               </span>
             )}
             <Switch
@@ -793,7 +779,7 @@ function Description({
         </div>
       ) : shown ? (
         <div className="chat-md code-md min-w-0 text-sm [overflow-wrap:anywhere] [&_h1]:text-base [&_h2]:text-sm [&_h3]:text-sm">
-          <Streamdown components={markdownComponents}>{shown}</Streamdown>
+          <Markdown>{shown}</Markdown>
         </div>
       ) : (
         <p className="text-muted-foreground text-sm">No description.</p>

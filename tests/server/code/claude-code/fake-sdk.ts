@@ -129,7 +129,7 @@ export class FakeQuery implements CodingQuery {
 
   async *[Symbol.asyncIterator](): AsyncGenerator<CodingSdkMessage> {
     while (true) {
-      // eslint-disable-next-line react-doctor/async-await-in-loop -- a stream
+      // eslint-disable-next-line react-doctor/async-await-in-loop
       const next = await this.out.next();
       if (next === END) return;
       if (next.type === "__crash") throw next.error;
@@ -160,11 +160,22 @@ export const echo: Brain = async (query) => {
 
 async function* prompts(query: FakeQuery): AsyncGenerator<CodingSdkUserMessage> {
   while (true) {
-    // eslint-disable-next-line react-doctor/async-await-in-loop -- one prompt at a time
+    // eslint-disable-next-line react-doctor/async-await-in-loop
     const input = await query.nextInput();
     if (!input) return;
     yield input;
   }
+}
+
+export interface FakeTool {
+  name: string;
+  description: string;
+  handler: (args: Record<string, unknown>) => Promise<unknown>;
+}
+
+export interface FakeMcpServer {
+  name: string;
+  tools: FakeTool[];
 }
 
 export class FakeSdk implements CodingSdk {
@@ -205,6 +216,14 @@ export class FakeSdk implements CodingSdk {
       (error: unknown) => query.out.push({ type: "__crash", error }),
     );
     return query;
+  }
+
+  tool(name: string, description: string, _shape: unknown, handler: FakeTool["handler"]): FakeTool {
+    return { name, description, handler };
+  }
+
+  createSdkMcpServer(options: { name: string; tools: unknown[] }): FakeMcpServer {
+    return { name: options.name, tools: options.tools as FakeTool[] };
   }
 
   async getSessionMessages(sessionId: string): Promise<CodingHistoryMessage[]> {

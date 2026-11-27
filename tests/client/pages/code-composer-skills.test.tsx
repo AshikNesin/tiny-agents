@@ -1,0 +1,113 @@
+/**
+ * @vitest-environment jsdom
+ */
+import React from "react";
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
+import { Composer } from "@/pages/code/Composer";
+import type { HarnessInfo } from "@/lib/code/api";
+import { NO_CAPABILITIES } from "../../../packages/code/src/contracts/capabilities";
+import { AppQueryProvider } from "../query-provider";
+
+vi.mock("@groot/shell/lib/api", async (importOriginal) => {
+  const original = await importOriginal<typeof import("@groot/shell/lib/api")>();
+  return {
+    ...original,
+    apiClient: Object.assign(Object.create(original.apiClient) as typeof original.apiClient, {
+      get: async (path: string) =>
+        path.endsWith("/skills")
+          ? [
+              { name: "show-me", description: "Explain it visually" },
+              { name: "release-notes", description: "Write release notes" },
+              { name: "v2-notes", description: "Notes for v2" },
+            ]
+          : null,
+    }),
+  };
+});
+
+const harness = {
+  id: "pi",
+  kind: "pi",
+  label: "Native",
+  status: { state: "ready" },
+  capabilities: {
+    ...NO_CAPABILITIES,
+    workspace: {
+      ...NO_CAPABILITIES.workspace,
+      skills: true,
+      requiresCwd: true,
+    },
+    extras: { ...NO_CAPABILITIES.extras, commands: true },
+  },
+  commands: [{ command: "/compact", hint: "Summarize" }],
+  ssh: null,
+} as unknown as HarnessInfo;
+
+afterEach(() => vi.unstubAllGlobals());
+
+describe("Code composer slash skills", () => {
+  it("lists skills after / and sends the picked one with the message", async () => {
+    const user = userEvent.setup();
+    const onSend = vi.fn().mockResolvedValue(undefined);
+    render(
+      <AppQueryProvider>
+        <Composer draftKey="t1" harness={harness} cwd="/work" threadId="t1" onSend={onSend} />
+      </AppQueryProvider>,
+    );
+    const box = screen.getByRole("textbox");
+
+    await user.type(box, "/sh");
+    await waitFor(() =>
+      expect(screen.getAllByRole("option").map((o) => o.textContent)).toEqual([
+        "show-meExplain it visually",
+      ]),
+    );
+    await user.keyboard("{Enter}");
+    expect(box).toHaveValue("");
+    expect(screen.getByTestId("code-composer-chips")).toHaveTextContent("show-me");
+
+    await user.type(box, "draw the repo{Enter}");
+    await waitFor(() => expect(onSend).toHaveBeenCalled());
+    expect(onSend.mock.calls[0]![0]).toBe("draw the repo");
+    expect(onSend.mock.calls[0]![1]).toMatchObject({ skills: ["show-me"] });
+  });
+
+  it("lists a skill whose name has a digit", async () => {
+    const user = userEvent.setup();
+    render(
+      <AppQueryProvider>
+        <Composer draftKey="t2" harness={harness} cwd="/work" threadId="t2" onSend={vi.fn()} />
+      </AppQueryProvider>,
+    );
+
+    await user.type(screen.getByRole("textbox"), "/v2");
+
+    await waitFor(() =>
+      expect(screen.getAllByRole("option").map((o) => o.textContent)).toEqual([
+        "v2-notesNotes for v2",
+      ]),
+    );
+  });
+
+  it("keeps what is typed right after picking a skill where it was typed", async () => {
+    const frames: FrameRequestCallback[] = [];
+    vi.stubGlobal("requestAnimationFrame", (run: FrameRequestCallback) => frames.push(run));
+    const user = userEvent.setup();
+    render(
+      <AppQueryProvider>
+        <Composer draftKey="t3" harness={harness} cwd="/work" threadId="t3" onSend={vi.fn()} />
+      </AppQueryProvider>,
+    );
+    const box = screen.getByRole("textbox");
+    await user.type(box, "/sh");
+    await screen.findByRole("option", { name: /show-me/ });
+
+    await user.keyboard("{Enter}dr");
+    for (const run of frames.splice(0)) run(0);
+    await user.keyboard("aw");
+
+    expect(box).toHaveValue("draw");
+  });
+});

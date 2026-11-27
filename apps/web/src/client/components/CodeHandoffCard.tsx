@@ -35,11 +35,9 @@ export function CodeHandoffCard({ handoff }: { handoff: NonNullable<ChatToolCall
           {handoff.cwd ? ` · ${shortPath(handoff.cwd)}` : ""}
         </p>
       </div>
-      <Button asChild size="sm" variant="outline">
-        <Link to={threadPath(threadId)}>
-          Open in Code
-          <ArrowUpRight />
-        </Link>
+      <Button size="sm" variant="outline" render={<Link to={threadPath(threadId)} />}>
+        Open in Code
+        <ArrowUpRight />
       </Button>
     </div>
   );

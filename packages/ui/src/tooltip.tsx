@@ -1,20 +1,14 @@
 import * as React from "react";
-import { Tooltip as TooltipPrimitive } from "radix-ui";
+import { Tooltip as TooltipPrimitive } from "@base-ui/react/tooltip";
 import { motion, useReducedMotion } from "motion/react";
 import { cn } from "./lib/utils";
 
 function TooltipProvider({
-  delayDuration = 200,
-  skipDelayDuration = 300,
+  delay = 200,
+  timeout = 300,
   ...props
 }: React.ComponentProps<typeof TooltipPrimitive.Provider>) {
-  return (
-    <TooltipPrimitive.Provider
-      delayDuration={delayDuration}
-      skipDelayDuration={skipDelayDuration}
-      {...props}
-    />
-  );
+  return <TooltipPrimitive.Provider delay={delay} timeout={timeout} {...props} />;
 }
 
 const SLIDE = { top: { y: 4 }, bottom: { y: -4 }, left: { x: 4 }, right: { x: -4 } } as const;
@@ -29,27 +23,35 @@ function Tooltip({
   open: openProp,
   defaultOpen,
   onOpenChange,
-  delayDuration,
-  disableHoverableContent,
+  delay,
+  disableHoverablePopup,
   sideOffset = 6,
   ...props
 }: {
   children: React.ReactNode;
   content: React.ReactNode;
   side?: "top" | "right" | "bottom" | "left";
-} & Omit<React.ComponentProps<typeof TooltipPrimitive.Root>, "children"> &
-  Omit<React.ComponentProps<typeof TooltipPrimitive.Content>, "content" | "side">) {
+  className?: string;
+  open?: boolean;
+  defaultOpen?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  delay?: number;
+  disableHoverablePopup?: boolean;
+} & Omit<React.ComponentProps<typeof TooltipPrimitive.Positioner>, "side" | "className">) {
   const [uncontrolled, setUncontrolled] = React.useState(defaultOpen ?? false);
   const open = openProp ?? uncontrolled;
   const [mounted, setMounted] = React.useState(open);
   if (open && !mounted) setMounted(true);
   const reduceMotion = useReducedMotion() ?? false;
+  const tipId = React.useId();
 
   React.useEffect(() => {
     if (open) return;
     const id = setTimeout(() => setMounted(false), 160);
     return () => clearTimeout(id);
   }, [open]);
+
+  const trigger = React.isValidElement(children) ? children : <span>{children}</span>;
 
   return (
     <TooltipPrimitive.Root
@@ -58,34 +60,42 @@ function Tooltip({
         setUncontrolled(next);
         onOpenChange?.(next);
       }}
-      delayDuration={delayDuration}
-      disableHoverableContent={disableHoverableContent}
+      disableHoverablePopup={disableHoverablePopup}
     >
-      <TooltipPrimitive.Trigger asChild>{children}</TooltipPrimitive.Trigger>
+      <TooltipPrimitive.Trigger
+        delay={delay}
+        aria-describedby={open ? tipId : undefined}
+        render={trigger}
+      />
       {mounted && (
-        <TooltipPrimitive.Portal forceMount>
-          <TooltipPrimitive.Content
+        <TooltipPrimitive.Portal keepMounted>
+          <TooltipPrimitive.Positioner
             side={side}
             sideOffset={sideOffset}
-            forceMount
             className="z-50"
             {...props}
           >
-            <motion.div
-              className={cn(
-                "rounded-lg bg-foreground px-2.5 py-1.5 text-xs font-medium text-background shadow-md",
-                className,
-              )}
-              initial={{ opacity: 0, ...SLIDE[side] }}
-              animate={{ opacity: open ? 1 : 0, x: 0, y: 0 }}
-              transition={reduceMotion ? { duration: 0 } : open ? ENTER : EXIT}
-              onAnimationComplete={() => {
-                if (!open) setMounted(false);
-              }}
+            <TooltipPrimitive.Popup
+              id={tipId}
+              role="tooltip"
+              render={
+                <motion.div
+                  className={cn(
+                    "rounded-lg bg-foreground px-2.5 py-1.5 text-xs font-medium text-background shadow-md",
+                    className,
+                  )}
+                  initial={{ opacity: 0, ...SLIDE[side] }}
+                  animate={{ opacity: open ? 1 : 0, x: 0, y: 0 }}
+                  transition={reduceMotion ? { duration: 0 } : open ? ENTER : EXIT}
+                  onAnimationComplete={() => {
+                    if (!open) setMounted(false);
+                  }}
+                />
+              }
             >
               {content}
-            </motion.div>
-          </TooltipPrimitive.Content>
+            </TooltipPrimitive.Popup>
+          </TooltipPrimitive.Positioner>
         </TooltipPrimitive.Portal>
       )}
     </TooltipPrimitive.Root>

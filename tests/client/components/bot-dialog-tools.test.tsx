@@ -8,13 +8,16 @@
  * bot's own browser profile.
  */
 import React from "react";
-import { render, screen, within } from "@testing-library/react";
+import { render as renderPlain, screen, within } from "@testing-library/react";
+import { AppQueryProvider } from "../query-provider";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vite-plus/test";
 import { BotDialog } from "@/components/BotDialog";
 import type { Bot } from "../../../apps/web/src/shared/api/bots";
 import type { CatalogModel } from "../../../apps/web/src/shared/api/models";
 import { botsApi } from "@/lib/bots-api";
+
+const render = (ui: React.ReactElement) => renderPlain(ui, { wrapper: AppQueryProvider });
 
 vi.mock("@/lib/bots-api", () => ({
   botsApi: {
@@ -110,11 +113,11 @@ describe("BotDialog tool permissions", () => {
     const off = within(group).getByRole("radio", { name: "Off" });
     const ask = within(group).getByRole("radio", { name: "Ask" });
 
-    expect(ask).toHaveAttribute("data-state", "on");
+    expect(ask).toHaveAttribute("aria-checked", "true");
 
     await user.click(off);
-    expect(off).toHaveAttribute("data-state", "on");
-    expect(ask).toHaveAttribute("data-state", "off");
+    expect(off).toHaveAttribute("aria-checked", "true");
+    expect(ask).toHaveAttribute("aria-checked", "false");
   });
 });
 
@@ -142,8 +145,8 @@ describe("BotDialog browser profile", () => {
     await user.click(await screen.findByRole("tab", { name: "Tools" }));
     const group = await screen.findByRole("radiogroup", { name: "Browser profile" });
     expect(within(group).getByRole("radio", { name: "Shared" })).toHaveAttribute(
-      "data-state",
-      "on",
+      "aria-checked",
+      "true",
     );
     await user.click(within(group).getByRole("radio", { name: "Own" }));
     expect(screen.getByText("A browser of its own, with separate sign-ins.")).toBeInTheDocument();

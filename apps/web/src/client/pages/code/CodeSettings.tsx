@@ -1,6 +1,14 @@
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import type { CodeSettingsSectionId } from "../settings/sections";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
+import {
+  Link,
+  Navigate,
+  useLocation,
+  useNavigate,
+  useParams,
+  useSearchParams,
+} from "react-router-dom";
 import {
   ArrowLeft,
   ChevronDown,
@@ -16,13 +24,14 @@ import { Button, EmptyState, Input, monoClass, metaLabelClass } from "@groot/ui"
 import { useConfirm } from "@groot/ui/primitives";
 import { Textarea } from "@groot/ui/textarea";
 import { cn } from "@groot/ui/lib/utils";
-import { SearchSelect } from "../../components/ui/search-select";
+import { SearchSelect } from "@groot/ui/search-select";
 import { Spinner } from "../../components/ui/spinner";
-import { Switch } from "../../components/ui/switch";
+import { Switch } from "@groot/ui/switch";
 import { errorMessage } from "../../lib/errors";
-import { projectsApi, reviewsApi } from "../../lib/code/projects";
+import { projectsApi, reviewsApi, useProjects } from "../../lib/code/projects";
+import { useCodeStore } from "../../store/code";
 import { RESOURCE_QUERY, useResource } from "../../queries/resource";
-import type { HarnessInfo, ModelOption } from "../../lib/code/api";
+import type { HarnessInfo } from "../../lib/code/api";
 import { useViewerRole } from "../../store/people";
 import type {
   GitHubStatus,
@@ -30,14 +39,8 @@ import type {
   ProjectView,
   ReviewInboxSettings,
 } from "../../../shared/api/code";
-import { loadModels } from "./controls";
+import { useHarnessModels } from "./controls";
 import { INBOX_SETTINGS_KEY } from "./ReviewList";
-
-const SECTIONS = [
-  { id: "projects", label: "Projects" },
-  { id: "github", label: "GitHub" },
-  { id: "reviews", label: "Reviews" },
-] as const;
 
 function SettingsGroup({
   title,
@@ -167,67 +170,35 @@ const list = (text: string) =>
     .map((item) => item.trim())
     .filter(Boolean);
 
-export function CodeSettings({
-  section,
-  projectId,
-  harnesses,
-  projects,
-  onChange,
-}: {
-  section?: string;
-  projectId?: string;
-  harnesses: HarnessInfo[];
-  projects: ProjectView[] | null;
-  onChange(): void;
-}) {
-  if (!section) return <Navigate to="/code/settings/projects" replace />;
-  if (!SECTIONS.some((s) => s.id === section)) return <Navigate to="/code/settings" replace />;
+export const projectSettingsPath = (id: string) =>
+  `/settings/projects?project=${encodeURIComponent(id)}`;
+
+export function LegacyCodeSettings() {
+  const { section, projectId } = useParams();
+  const { search } = useLocation();
+  if (projectId) return <Navigate to={projectSettingsPath(projectId)} replace />;
+  const target = section === "github" || section === "reviews" ? section : "projects";
+  return <Navigate to={`/settings/${target}${search}`} replace />;
+}
+
+export function CodeSettingsSection({ section }: { section: CodeSettingsSectionId }) {
+  const [searchParams] = useSearchParams();
+  const harnessList = useCodeStore((s) => s.harnesses);
+  const statuses = useCodeStore((s) => s.statuses);
+  const harnesses = useMemo(
+    () => (harnessList ?? []).map((h) => ({ ...h, status: statuses[h.id] ?? h.status })),
+    [harnessList, statuses],
+  );
+  const { projects, reload } = useProjects();
   return (
-    <div className="flex h-full min-h-0 flex-col" data-testid="code-settings-page">
-      <header
-        className={cn("border-border flex h-13 shrink-0 items-center gap-1 border-b px-2 sm:px-3")}
-      >
-        <Button
-          asChild
-          variant="ghost"
-          size="icon-sm"
-          className="shrink-0 md:hidden"
-          aria-label="All threads"
-        >
-          <Link to="/code">
-            <ArrowLeft />
-          </Link>
-        </Button>
-        <h1 className="px-1 text-sm font-medium">Settings</h1>
-        <nav aria-label="Settings sections" className="ml-2 flex items-center gap-0.5">
-          {SECTIONS.map((s) => (
-            <Link
-              key={s.id}
-              to={`/code/settings/${s.id}`}
-              aria-current={section === s.id ? "page" : undefined}
-              className={cn(
-                "rounded-lg px-2.5 py-1 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
-                section === s.id
-                  ? "bg-muted text-foreground"
-                  : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              {s.label}
-            </Link>
-          ))}
-        </nav>
-      </header>
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto w-full max-w-2xl space-y-8 px-4 py-6 sm:px-6">
-          <SettingsBody
-            section={section}
-            projectId={projectId}
-            harnesses={harnesses}
-            projects={projects}
-            onChange={onChange}
-          />
-        </div>
-      </div>
+    <div className="space-y-8" data-testid="code-settings-page">
+      <SettingsBody
+        section={section}
+        projectId={searchParams.get("project") ?? undefined}
+        harnesses={harnesses}
+        projects={projects}
+        onChange={reload}
+      />
     </div>
   );
 }
@@ -281,7 +252,7 @@ function SettingsBody({
         icon={FolderGit2}
         title="No such project"
         description={
-          <Link to="/code/settings/projects" className="underline underline-offset-2">
+          <Link to="/settings/projects" className="underline underline-offset-2">
             All projects
           </Link>
         }
@@ -304,13 +275,6 @@ function ProjectsSettings({
 }) {
   return (
     <>
-      <div className="space-y-1 px-1">
-        <h2 className="text-lg font-semibold">Projects</h2>
-        <p className="text-muted-foreground text-sm">
-          A project is a GitHub repository checked out on the sandbox. Each thread started in it
-          gets its own worktree and branch, and can publish a pull request.
-        </p>
-      </div>
       <AddProject harnesses={harnesses} onChange={onChange} />
       {projects.length > 0 && (
         <SettingsGroup title="Your projects">
@@ -318,7 +282,7 @@ function ProjectsSettings({
             {projects.map((p) => (
               <li key={p.id}>
                 <Link
-                  to={`/code/settings/projects/${encodeURIComponent(p.id)}`}
+                  to={projectSettingsPath(p.id)}
                   className="hover:bg-muted/60 flex items-center gap-3 px-4 py-3 outline-none first:rounded-t-xl last:rounded-b-xl focus-visible:ring-3 focus-visible:ring-ring/50"
                   data-testid="code-project"
                 >
@@ -377,7 +341,7 @@ function AddProject({ harnesses, onChange }: { harnesses: HarnessInfo[]; onChang
       setRepo("");
       onChange();
       toast.success("Project ready: the repository is cloned on the sandbox.");
-      navigate(`/code/settings/projects/${encodeURIComponent(created.id)}`);
+      navigate(projectSettingsPath(created.id));
     } catch (e) {
       toast.error(errorMessage(e, "Could not create the project."));
     } finally {
@@ -408,7 +372,7 @@ function AddProject({ harnesses, onChange }: { harnesses: HarnessInfo[]; onChang
                   : "Install the App on a repository first."
               }
               triggerClassName="border-input h-9 min-w-56 flex-1 justify-between rounded-lg border px-3"
-              contentClassName="w-(--radix-popover-trigger-width)"
+              contentClassName="w-(--anchor-width)"
             >
               <span className={cn("truncate", !repo && "text-muted-foreground")}>
                 {repo ||
@@ -552,7 +516,7 @@ function ProjectHeader({ project }: { project: ProjectView }) {
   return (
     <div className="space-y-2 px-1">
       <Link
-        to="/code/settings/projects"
+        to="/settings/projects"
         className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 text-xs"
       >
         <ArrowLeft className="size-3.5" />
@@ -592,18 +556,8 @@ function GeneralGroup({
   harnesses: HarnessInfo[];
   update: Update;
 }) {
-  const [models, setModels] = useState<ModelOption[]>([]);
   const defaultHarness = harnesses.find((h) => h.id === project.defaultInstanceId);
-  useEffect(() => {
-    let cancelled = false;
-    if (!defaultHarness) return;
-    void loadModels(defaultHarness.id)
-      .then((list) => !cancelled && setModels(list))
-      .catch(() => !cancelled && setModels([]));
-    return () => {
-      cancelled = true;
-    };
-  }, [defaultHarness]);
+  const models = useHarnessModels(defaultHarness?.id);
   const model = models.find((m) => m.id === project.defaultModel);
   const field = (name: string) => fieldId(project, name);
   return (
@@ -753,7 +707,7 @@ function PullRequestGroups({ project, update }: { project: ProjectView; update: 
           onChange={(draftPulls) => update({ settings: { draftPulls } })}
         />
         <SwitchRow
-          label="Archive the thread when its PR merges"
+          label="Archive the thread when its PR merges or closes"
           checked={settings.archiveOnMerge}
           onChange={(archiveOnMerge) => update({ settings: { archiveOnMerge } })}
         />
@@ -905,7 +859,7 @@ function DangerZone({ project, onChange }: { project: ProjectView; onChange(): v
     try {
       await projectsApi.remove(project.id);
       onChange();
-      navigate("/code/settings/projects");
+      navigate("/settings/projects");
     } catch (e) {
       toast.error(errorMessage(e, "Could not remove it."));
     }
@@ -949,12 +903,6 @@ function ReviewListSettings() {
   };
   return (
     <>
-      <div className="space-y-1 px-1">
-        <h2 className="text-lg font-semibold">Reviews</h2>
-        <p className="text-muted-foreground text-sm">
-          What the Reviews list in the sidebar shows from GitHub.
-        </p>
-      </div>
       <SettingsGroup title="Show">
         <SwitchRow
           label="Only requests to you"
@@ -1054,7 +1002,6 @@ function GitHubSettings() {
   return (
     <>
       <div className="space-y-1 px-1">
-        <h2 className="text-lg font-semibold">GitHub</h2>
         <p className="text-muted-foreground text-sm">
           {status.login ? `Acts as ${status.login}.` : (status.error ?? "Not signed in.")}
           {status.tools &&

@@ -3,7 +3,7 @@ import { Button } from "@groot/ui/button";
 import { Card } from "@groot/ui/card";
 import { StatusBadge } from "@groot/ui/status-badge";
 import { cn } from "@groot/ui/lib/utils";
-import { Switch } from "../../components/ui/switch";
+import { Switch } from "@groot/ui/switch";
 import type { MessageRate, Routine } from "../../../shared/api/routines";
 import { formatIst } from "../../../shared/routines-schedule";
 import { ROUTINE_NEEDS_ATTENTION, routineState } from "../../../shared/machines/routine";

@@ -7,9 +7,7 @@ import { Button } from "@groot/ui/button";
 function Example({ dismissOnOutsideClick }: { dismissOnOutsideClick?: boolean }) {
   return (
     <Dialog>
-      <DialogTrigger asChild>
-        <Button>Open</Button>
-      </DialogTrigger>
+      <DialogTrigger render={<Button />}>Open</DialogTrigger>
       <DialogContent dismissOnOutsideClick={dismissOnOutsideClick}>
         <h2>Dialog body</h2>
       </DialogContent>

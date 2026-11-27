@@ -49,7 +49,7 @@ import {
 
 const token = await authToken("browser-test@example.com");
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- response data varies per route
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Data = any;
 
 function call(

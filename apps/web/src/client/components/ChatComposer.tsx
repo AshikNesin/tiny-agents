@@ -9,8 +9,9 @@ import {
   useRef,
   useState,
 } from "react";
-import { ArrowUp, AtSign, ChevronDown, Cpu, ListPlus, Paperclip, Plus, Square } from "lucide-react";
-import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import { AtSign, ChevronDown, Cpu, ListPlus, Paperclip, Plus, Sparkles, Zap } from "lucide-react";
+import { useViewerRole } from "../store/people";
+import { useSkills } from "../queries/skills";
 import { Button } from "@groot/ui/button";
 import {
   DropdownMenu,
@@ -29,6 +30,7 @@ import {
   editText,
   emptyDraft,
   insertMention as draftInsertMention,
+  activeSkillToken,
   isNewChatCommand,
   outgoing,
   restoreRefused,
@@ -54,8 +56,8 @@ import {
   type MentionAutocompleteHandle,
   type MentionableBot,
 } from "./MentionAutocomplete";
-import { Spinner } from "./ui/spinner";
-import { SearchSelect, type SearchSelectOption } from "./ui/search-select";
+import { SearchSelect, type SearchSelectOption } from "@groot/ui/search-select";
+import { ComposerSendIcon } from "./composer-send-icon";
 
 const ACCEPTED_FILES =
   "image/png,image/jpeg,image/webp,image/gif,.pdf,.txt,.md,.json,.csv,.yaml,.yml,.xml,.html,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.odt,.ods,.odp,.zip,.tar,.gz,.tgz,.bz2,.7z,.rar,.mp3,.wav,.ogg,.m4a,.mp4,.webm,.mov,.tsv,.log,.ts,.tsx,.js,.jsx,.mjs,.cjs,.py,.go,.rs,.java,.kt,.rb,.php,.sh,.sql,.toml,.ini,.cfg,.diff,.patch,.css,.c,.h,.cpp,.swift";
@@ -82,6 +84,30 @@ interface ChatComposerProps {
   onStop: () => Promise<void>;
   onEditBot: () => void;
   onNewChat?: () => boolean;
+  yolo?: boolean;
+  onYoloChange?: (on: boolean) => void;
+}
+
+function YoloChip({ on, onChange }: { on: boolean; onChange?: (on: boolean) => void }) {
+  if (!on && !onChange) return null;
+  return (
+    <button
+      type="button"
+      aria-pressed={on}
+      disabled={!onChange}
+      onClick={() => onChange?.(!on)}
+      title={on ? "YOLO: tools run without asking, except vault items" : "Run tools without asking"}
+      className={cn(
+        "inline-flex h-7 shrink-0 items-center gap-1 rounded-full px-2 text-xs font-medium outline-none focus-visible:ring-1 focus-visible:ring-ring [&_svg]:size-3.5",
+        on ? "text-warning" : "text-muted-foreground hover:text-foreground",
+        onChange ? "hover:bg-muted" : "cursor-default",
+      )}
+      data-testid="yolo-chip"
+    >
+      <Zap className={on ? "" : "opacity-70"} />
+      YOLO
+    </button>
+  );
 }
 
 function formatContext(tokens: number): string {
@@ -149,7 +175,20 @@ function ModelChip({
 }
 
 export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function ChatComposer(
-  { bot, model, models = [], onModelChange, canAnswer, busy, onSend, onStop, onEditBot, onNewChat },
+  {
+    bot,
+    model,
+    models = [],
+    onModelChange,
+    canAnswer,
+    busy,
+    onSend,
+    onStop,
+    onEditBot,
+    onNewChat,
+    yolo,
+    onYoloChange,
+  },
   ref,
 ) {
   const [draft, setDraft] = useState<ComposerDraft<AttachmentRef>>(() =>
@@ -166,7 +205,6 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
   const mentionFromMenu = useRef(false);
   const mentionRef = useRef<MentionAutocompleteHandle>(null);
   const coarsePointer = useMemo(prefersCoarsePointer, []);
-  const reduceMotion = useReducedMotion() ?? false;
 
   const roster = useBotsStore((s) => s.bots);
   const mentionCandidates = useMemo(() => mentionableBots(roster, bot.id), [roster, bot.id]);
@@ -179,6 +217,14 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
   }, [text, mentionTipSeen]);
   const mention = activeMentionToken(text, caret);
   const mentionOpen = mention !== null && !mentionClosed;
+  const owner = useViewerRole() === "owner";
+  const library = useSkills({ enabled: owner }).data;
+  const botSkills = useMemo(
+    () => (library ?? []).filter((skill) => bot.skillIds.includes(skill.id)),
+    [library, bot.skillIds],
+  );
+  const skillToken = owner ? activeSkillToken(text, caret) : null;
+  const skillOpen = skillToken !== null && !mentionClosed && botSkills.length > 0;
 
   const modelKnown = model !== undefined;
   const enabled = canAnswer && modelKnown;
@@ -284,6 +330,13 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
     setMentionHint(null);
     setCaret(next.caret);
     pendingCaret.current = next.caret;
+  };
+
+  const insertSkill = (chosen: MentionableBot) => {
+    const start = `/${chosen.name} `;
+    setDraft((current) => editText(current, start + current.text.slice(caret)));
+    setCaret(start.length);
+    pendingCaret.current = start.length;
   };
 
   const startMention = () => {
@@ -416,28 +469,30 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
           />
           <div className="flex min-w-0 items-center gap-1">
             <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  disabled={!enabled}
-                  aria-label="Add files or mention a bot"
-                  title="Add files or mention a bot"
-                  className="text-muted-foreground shrink-0 rounded-full"
-                  data-testid="composer-add"
-                >
-                  <Plus />
-                </Button>
+              <DropdownMenuTrigger
+                render={
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    disabled={!enabled}
+                    aria-label="Add files or mention a bot"
+                    title="Add files or mention a bot"
+                    className="text-muted-foreground shrink-0 rounded-full"
+                    data-testid="composer-add"
+                  />
+                }
+              >
+                <Plus />
               </DropdownMenuTrigger>
               <DropdownMenuContent
                 align="start"
                 side="top"
                 className="w-64"
-                onCloseAutoFocus={(event) => {
-                  if (!mentionFromMenu.current) return;
+                finalFocus={() => {
+                  if (!mentionFromMenu.current) return true;
                   mentionFromMenu.current = false;
-                  event.preventDefault();
                   textareaRef.current?.focus({ preventScroll: true });
+                  return false;
                 }}
               >
                 <DropdownMenuItem
@@ -465,6 +520,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
                   onChange={onModelChange}
                 />
               )}
+              {yolo !== undefined && <YoloChip on={yolo} onChange={onYoloChange} />}
             </div>
             {busy && !showStop && (
               <Button
@@ -505,30 +561,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
                 }
                 className="size-8 rounded-full disabled:opacity-30"
               >
-                <AnimatePresence mode="popLayout" initial={false}>
-                  <motion.span
-                    key={showStop ? (stopping ? "stopping" : "stop") : "send"}
-                    initial={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.6 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={
-                      reduceMotion
-                        ? { opacity: 0 }
-                        : { opacity: 0, scale: 0.6, transition: { duration: 0.06 } }
-                    }
-                    transition={{ type: "spring", duration: 0.08, bounce: 0 }}
-                    className="flex items-center justify-center leading-none"
-                  >
-                    {showStop ? (
-                      stopping ? (
-                        <Spinner className="size-4" aria-hidden />
-                      ) : (
-                        <Square className="size-3 fill-current" />
-                      )
-                    ) : (
-                      <ArrowUp className="size-4" />
-                    )}
-                  </motion.span>
-                </AnimatePresence>
+                <ComposerSendIcon mode={showStop ? (stopping ? "busy" : "stop") : "send"} />
               </Button>
             </div>
           </div>
@@ -543,6 +576,17 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
           >
             {busy ? "Enter steers · Alt+Enter queues · Esc stops" : "Type @ to tag another bot"}
           </p>
+        )}
+        {skillOpen && skillToken && (
+          <MentionAutocomplete
+            ref={mentionRef}
+            bots={botSkills}
+            query={skillToken.query}
+            onSelect={insertSkill}
+            onClose={() => setMentionClosed(true)}
+            label="Use a skill"
+            icon={() => <Sparkles className="text-muted-foreground size-4" />}
+          />
         )}
         {mentionOpen && mention && (
           <MentionAutocomplete

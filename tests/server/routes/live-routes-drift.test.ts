@@ -25,7 +25,7 @@ import { fakeComputer, type FakeComputer } from "../app/agent/computer-fakes";
 const OWNER_ID = 990_401;
 const token = await authToken("live-drift-owner@example.com", OWNER_ID);
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- response data varies per route
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Data = any;
 
 const agentRuntime = {

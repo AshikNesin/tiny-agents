@@ -43,6 +43,11 @@ const REVIEW = {
   updatedAt: "2026-11-17T00:00:00.000Z",
 } satisfies PullReviewView;
 
+let models = [
+  { id: "sonnet", label: "Sonnet", isDefault: true },
+  { id: "opus", label: "Opus" },
+];
+
 function stubFetch() {
   const fetch = vi.fn(async (url: string, init?: RequestInit) => {
     const path = new URL(String(url), "http://x").pathname;
@@ -50,10 +55,7 @@ function stubFetch() {
       path === "/api/v1/code/reviews/rv1" && (init?.method ?? "GET") === "GET"
         ? REVIEW
         : path.endsWith("/models")
-          ? [
-              { id: "sonnet", label: "Sonnet", isDefault: true },
-              { id: "opus", label: "Opus" },
-            ]
+          ? models
           : path.endsWith("/threads")
             ? { headSha: REVIEW.headSha, threads: [] }
             : path.endsWith("/ask")
@@ -90,5 +92,26 @@ describe("the review assistant's model", () => {
 
     const ask = fetch.mock.calls.find(([url]) => String(url).endsWith("/reviews/rv1/ask"));
     expect(JSON.parse(String(ask?.[1]?.body))).toEqual({ message: "What breaks?", model: "opus" });
+  });
+
+  it("lists a model turned on after the picker was last opened", async () => {
+    const user = userEvent.setup();
+    stubFetch();
+    const page = (
+      <MemoryRouter>
+        <ConfirmProvider>
+          <PullReview reviewId="rv1" harnesses={[]} rows={[]} />
+        </ConfirmProvider>
+      </MemoryRouter>
+    );
+    const first = render(page);
+    await screen.findByRole("button", { name: "Model" });
+    first.unmount();
+    models = [...models, { id: "haiku", label: "Haiku" }];
+
+    render(page);
+    await user.click(await screen.findByRole("button", { name: "Model" }));
+
+    expect(await screen.findByRole("option", { name: /Haiku/ })).toBeInTheDocument();
   });
 });

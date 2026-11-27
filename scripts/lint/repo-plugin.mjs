@@ -52,7 +52,7 @@ const renderedElements = (node) => {
 };
 
 const LOAD_IN_EFFECT_MESSAGE =
-  "R15: load request/response data with useResource from apps/web/src/client/queries/resource.ts (writes: useMutation), not a fetch in useEffect. A hand-rolled load needs its own cancel flag, busy reset and refresh after a change, and agents kept missing one (issue #412). A live stream or socket is not a resource: list the file in R15's except in scripts/lint/boundaries.ts with the reason.";
+  "R15: load request/response data with useResource from apps/web/src/client/queries/resource.ts (writes: useMutation), not a fetch, an `xxxApi.` call or a `load…`/`fetch…` helper in useEffect. A hand-rolled load needs its own cancel flag, busy reset and refresh after a change, and agents kept missing one (issue #412). A live stream or socket is not a resource: list the file in R15's except in scripts/lint/boundaries.ts with the reason.";
 
 const EFFECT_HOOKS = new Set(["useEffect", "useLayoutEffect"]);
 
@@ -76,6 +76,17 @@ const isLoadCall = (node) => {
     callee.object.type === "Identifier" &&
     callee.object.name.endsWith("Api")
   );
+};
+
+const LOADER_NAME = /^(load|fetch)[A-Z]/;
+
+const loaderName = (node) => {
+  const callee = node.callee;
+  if (callee.type === "Identifier") return LOADER_NAME.test(callee.name) ? callee.name : null;
+  if (callee.type === "MemberExpression" && callee.property.type === "Identifier") {
+    return LOADER_NAME.test(callee.property.name) ? callee.property.name : null;
+  }
+  return null;
 };
 
 const CASTS = new Set(["TSAsExpression", "TSTypeAssertion"]);
@@ -152,7 +163,20 @@ const allowedComments = allowedBy(BASELINE_PATH);
 
 export const SILENT_FALLBACK_BASELINE = "scripts/lint/silent-fallback-baseline.json";
 
-const allowedSilentFallbacks = allowedBy(SILENT_FALLBACK_BASELINE);
+const fallbackBaselines = new Map();
+
+const allowedSilentFallbacks = (cwd, file) => {
+  if (!fallbackBaselines.has(cwd)) {
+    const baseline = path.join(cwd, SILENT_FALLBACK_BASELINE);
+    fallbackBaselines.set(
+      cwd,
+      existsSync(baseline) ? JSON.parse(readFileSync(baseline, "utf8")) : {},
+    );
+  }
+  return fallbackBaselines.get(cwd)[path.relative(cwd, file).replaceAll("\\", "/")] ?? {};
+};
+
+export const fallbackSite = (text) => text.replace(/\s+/g, " ").trim();
 
 const SILENT_FALLBACK_MESSAGE =
   "R17: this drops the error and carries on as if the call worked. Agents shipped this three times: a DNS lookup failure let the browser through (#445), an auto-dismiss failure left a question pending (#469), and a slow `chromium --version` sent a HeadlessChrome user agent (#494). Handle the failure, rethrow it, or catch into a function whose name says why ignoring it is safe (`.catch(ignoreClosedSocket)`).";
@@ -169,14 +193,64 @@ const calledMethod = (node) =>
     ? node.callee.property.name
     : null;
 
-const silentFallbacks = (node) => {
-  if (node.type === "CatchClause") return node.body.body.length === 0 ? [node] : [];
+const silentFallbacks = (node, text) => {
+  if (node.type === "CatchClause") {
+    return node.body.body.length === 0 ? [{ node, site: "catch {}" }] : [];
+  }
   if (node.type !== "CallExpression") return [];
   const method = calledMethod(node);
   const handler =
     method === "catch" ? node.arguments[0] : method === "then" ? node.arguments[1] : undefined;
-  return ignoresError(handler) ? [handler] : [];
+  return ignoresError(handler)
+    ? [{ node: handler, site: fallbackSite(`.${method}(${text(handler)})`) }]
+    : [];
 };
+
+const RACE_MESSAGE =
+  "R19: another request can insert between this read and the insert below it, because an `await` sits between them. Agents shipped this race four times in e511da5 (task idempotency key, skill name, passkey register, singleton jobs). Put a unique index on the key and insert with `.onConflictDoNothing()` or `.onConflictDoUpdate()`, then read the row back; or do the read and the insert in one sync `db.transaction()` in apps/.";
+
+const READ_METHODS = new Set(["findFirst", "findMany"]);
+
+const readTable = (node) => {
+  if (node.type !== "CallExpression" || node.callee.type !== "MemberExpression") return null;
+  const { object, property, computed } = node.callee;
+  if (computed) return null;
+  if (property.name === "from" && node.arguments[0]?.type === "Identifier") {
+    return node.arguments[0].name;
+  }
+  if (
+    READ_METHODS.has(property.name) &&
+    object.type === "MemberExpression" &&
+    !object.computed &&
+    object.object.type === "MemberExpression" &&
+    !object.object.computed &&
+    object.object.property.name === "query"
+  ) {
+    return object.property.name;
+  }
+  return null;
+};
+
+const guardedByConflict = (call) => {
+  for (let node = call; node.parent; node = node.parent) {
+    const { parent } = node;
+    if (parent.type === "MemberExpression" && parent.object === node) {
+      if (!parent.computed && parent.property.name.startsWith("onConflict")) return true;
+    } else if (!(parent.type === "CallExpression" && parent.callee === node)) {
+      return false;
+    }
+  }
+  return false;
+};
+
+const insertTable = (node) =>
+  node.type === "CallExpression" &&
+  calledMethod(node) === "insert" &&
+  node.arguments.length === 1 &&
+  node.arguments[0].type === "Identifier" &&
+  !guardedByConflict(node)
+    ? node.arguments[0].name
+    : null;
 
 const MODULE_SCOPES = new Set(["module", "global"]);
 
@@ -297,21 +371,68 @@ export default {
     "no-silent-fallback": {
       create(context) {
         const found = [];
-        const collect = (node) => found.push(...silentFallbacks(node));
+        const text = (node) => context.sourceCode.getText(node);
+        const collect = (node) => found.push(...silentFallbacks(node, text));
         return {
           CatchClause: collect,
           CallExpression: collect,
           "Program:exit"(program) {
             const allowed = allowedSilentFallbacks(context.cwd ?? process.cwd(), context.filename);
-            for (const node of found.slice(allowed)) {
-              context.report({ node, message: SILENT_FALLBACK_MESSAGE });
+            const seen = new Map();
+            for (const { node, site } of found) {
+              const count = (seen.get(site) ?? 0) + 1;
+              seen.set(site, count);
+              if (count > (allowed[site] ?? 0)) {
+                context.report({ node, message: `${SILENT_FALLBACK_MESSAGE} Site: \`${site}\`` });
+              }
             }
-            if (found.length < allowed) {
-              context.report({
-                node: program,
-                message: `R17: ${SILENT_FALLBACK_BASELINE} allows ${allowed} silent fallbacks here but the file has ${found.length}. Lower its count to ${found.length} to lock in the cut; the baseline only shrinks.`,
-              });
+            for (const [site, count] of Object.entries(allowed)) {
+              if ((seen.get(site) ?? 0) < count) {
+                context.report({
+                  node: program,
+                  message: `R17: ${SILENT_FALLBACK_BASELINE} allows ${count} of \`${site}\` here but the file has ${seen.get(site) ?? 0}. Lower or delete that entry to lock in the cut; the baseline only shrinks.`,
+                });
+              }
             }
+          },
+        };
+      },
+    },
+    "no-check-then-insert": {
+      create(context) {
+        const frames = [];
+        const enter = () => frames.push({ reads: [], inserts: [], awaits: [] });
+        const exit = () => {
+          const { reads, inserts, awaits } = frames.pop();
+          for (const insert of inserts) {
+            const raced = reads.some(
+              (read) =>
+                read.table === insert.table &&
+                awaits.some((resumed) => resumed >= read.end && resumed <= insert.start),
+            );
+            if (raced) context.report({ node: insert.node, message: RACE_MESSAGE });
+          }
+        };
+        return {
+          Program: enter,
+          "Program:exit": exit,
+          FunctionDeclaration: enter,
+          "FunctionDeclaration:exit": exit,
+          FunctionExpression: enter,
+          "FunctionExpression:exit": exit,
+          ArrowFunctionExpression: enter,
+          "ArrowFunctionExpression:exit": exit,
+          AwaitExpression(node) {
+            frames.at(-1).awaits.push(node.end ?? node.range[1]);
+          },
+          CallExpression(node) {
+            const frame = frames.at(-1);
+            const start = node.start ?? node.range[0];
+            const end = node.end ?? node.range[1];
+            const read = readTable(node);
+            if (read) frame.reads.push({ table: read, end });
+            const insert = insertTable(node);
+            if (insert) frame.inserts.push({ table: insert, start, node });
           },
         };
       },
@@ -500,7 +621,13 @@ export default {
     "no-load-in-effect": {
       create(context) {
         const held = [];
+        const loaders = [];
+        const localNames = new Set();
         const effectNames = new Set();
+        const insideEffect = (node) => {
+          for (let p = node.parent; p; p = p.parent) if (isEffectCall(p)) return true;
+          return false;
+        };
         const isFunction = (n) =>
           n?.type === "ArrowFunctionExpression" ||
           n?.type === "FunctionExpression" ||
@@ -546,7 +673,12 @@ export default {
               collectNames(node.arguments[0]);
               return;
             }
-            if (!isLoadCall(node)) return;
+            if (!isLoadCall(node)) {
+              const name = loaderName(node);
+              if (name && insideEffect(node))
+                loaders.push({ node, name, member: node.callee.type === "MemberExpression" });
+              return;
+            }
             for (let p = node.parent; p; p = p.parent) {
               if (isEffectCall(p)) {
                 context.report({ node, message: LOAD_IN_EFFECT_MESSAGE });
@@ -555,9 +687,20 @@ export default {
             }
             held.push({ node, names: holderNames(node) });
           },
+          FunctionDeclaration(node) {
+            if (node.id) localNames.add(node.id.name);
+          },
+          VariableDeclarator(node) {
+            if (node.id.type === "Identifier") localNames.add(node.id.name);
+          },
           "Program:exit"() {
             for (const { node, names } of held) {
               if (names.some((n) => effectNames.has(n))) {
+                context.report({ node, message: LOAD_IN_EFFECT_MESSAGE });
+              }
+            }
+            for (const { node, name, member } of loaders) {
+              if (member || !localNames.has(name)) {
                 context.report({ node, message: LOAD_IN_EFFECT_MESSAGE });
               }
             }

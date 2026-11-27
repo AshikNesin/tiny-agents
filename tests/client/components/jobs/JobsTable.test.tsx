@@ -153,7 +153,7 @@ describe("JobsTable", () => {
     renderTable();
 
     await user.click(screen.getByRole("button", { name: "Actions for job report (bbbbbb)" }));
-    const items = screen.getAllByRole("menuitem").map((item) => item.textContent);
+    const items = (await screen.findAllByRole("menuitem")).map((item) => item.textContent);
     expect(items).toEqual(["Retry", "Re-run", "Delete"]);
 
     await user.click(screen.getByRole("menuitem", { name: "Delete" }));

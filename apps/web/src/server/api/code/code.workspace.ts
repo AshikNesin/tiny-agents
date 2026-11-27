@@ -26,7 +26,7 @@ export interface WorkspaceOptions {
 export class WorkspaceError extends Error {
   constructor(
     message: string,
-    readonly code: "rejected" | "diverged" | "missing" | "failed" = "failed",
+    readonly code: "rejected" | "denied" | "diverged" | "missing" | "failed" = "failed",
   ) {
     super(message);
     this.name = "WorkspaceError";
@@ -209,6 +209,30 @@ export function createWorkspace(options: WorkspaceOptions): Workspace {
     return exec(command, { timeoutMs });
   }
 
+  function pushFailure(result: ExecResult, branch: string, what: string): WorkspaceError {
+    const said = result.stderr;
+    if (/without `?workflow`? scope|workflows? permission/i.test(said)) {
+      const fix =
+        options.credential.kind === "gh"
+          ? "the GitHub login lacks the workflow scope. Run `gh auth refresh -h github.com -s workflow`, then push again."
+          : "the GitHub token lacks write access to workflows. Grant it Workflows: write, then push again.";
+      return new WorkspaceError(
+        `GitHub refused the push: it changes .github/workflows and ${fix}`,
+        "denied",
+      );
+    }
+    if (/\[remote rejected\]|^remote: (error|fatal)/im.test(said)) {
+      return new WorkspaceError(`GitHub refused the push: ${tail(result, 600)}`, "denied");
+    }
+    if (/\[rejected\]|non-fast-forward|fetch first/i.test(said)) {
+      return new WorkspaceError(
+        `GitHub rejected the push: ${branch} on GitHub has commits this worktree lacks. The app never force-pushes.`,
+        "rejected",
+      );
+    }
+    return new WorkspaceError(`${what}: ${tail(result)}`);
+  }
+
   async function must(command: string, what: string, timeoutMs?: number): Promise<string> {
     const result = await run(command, timeoutMs);
     if (result.exitCode !== 0) throw new WorkspaceError(`${what}: ${tail(result)}`);
@@ -370,7 +394,10 @@ export function createWorkspace(options: WorkspaceOptions): Workspace {
         const found = await run(`${git(checkout)} rev-parse --verify --quiet ${q(ref)}`);
         if (found.exitCode === 0) return true;
       }
-      return false;
+      const listed = await authed(
+        `-C ${q(checkout)} ls-remote --exit-code --heads origin ${q(`refs/heads/${branch}`)}`,
+      );
+      return listed.exitCode === 0;
     },
     async addWorktreeForBranch(checkout, path, branch) {
       const local = await run(
@@ -460,13 +487,7 @@ export function createWorkspace(options: WorkspaceOptions): Workspace {
         `-C ${q(path)} -c core.hooksPath=/dev/null push --quiet --no-verify ${q(remote(repo))} ${q(`refs/heads/${base}:refs/heads/${base}`)}`,
       );
       if (result.exitCode !== 0) {
-        const rejected = /rejected|non-fast-forward|fetch first/i.test(result.stderr);
-        throw new WorkspaceError(
-          rejected
-            ? `GitHub rejected the push: ${base} moved there. The app never force-pushes.`
-            : `Could not push ${base}: ${tail(result)}`,
-          rejected ? "rejected" : "failed",
-        );
+        throw pushFailure(result, base, `Could not push ${base}`);
       }
     },
     async changedPaths(path, from, to) {
@@ -507,13 +528,7 @@ export function createWorkspace(options: WorkspaceOptions): Workspace {
         `-C ${q(path)} -c core.hooksPath=/dev/null push --quiet --no-verify ${q(remote(repo))} ${q(`HEAD:refs/heads/${branch}`)}`,
       );
       if (result.exitCode !== 0) {
-        const rejected = /rejected|non-fast-forward|fetch first/i.test(result.stderr);
-        throw new WorkspaceError(
-          rejected
-            ? `GitHub rejected the push: ${branch} moved there. The app never force-pushes.`
-            : `Could not push: ${tail(result)}`,
-          rejected ? "rejected" : "failed",
-        );
+        throw pushFailure(result, branch, "Could not push");
       }
       return sha;
     },

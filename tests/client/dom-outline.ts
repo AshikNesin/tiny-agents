@@ -19,12 +19,21 @@ function normalized(root: Element): Element {
   const clone = root.cloneNode(true) as Element;
   clone.normalize();
   for (const svg of clone.querySelectorAll("svg")) svg.replaceChildren();
+  for (const attr of ["data-starting-style", "data-ending-style", "data-instant"]) {
+    for (const el of clone.querySelectorAll(`[${attr}]`)) el.removeAttribute(attr);
+  }
+  if (clone instanceof HTMLElement && clone.tagName === "BODY") {
+    clone.style.removeProperty("overflow");
+    if (!clone.getAttribute("style")) clone.removeAttribute("style");
+  }
   for (const el of clone.querySelectorAll<HTMLElement>("[style]")) {
     el.style.removeProperty("opacity");
     el.style.removeProperty("transform");
     el.style.removeProperty("animation-duration");
     el.style.removeProperty("animation-name");
     el.style.removeProperty("transition-duration");
+    el.style.removeProperty("--collapsible-panel-height");
+    el.style.removeProperty("--collapsible-panel-width");
     if (!el.getAttribute("style")) el.removeAttribute("style");
   }
   return clone;

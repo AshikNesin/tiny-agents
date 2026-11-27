@@ -42,6 +42,15 @@ import {
   type FakeQuery,
 } from "./fake-sdk";
 import { describeTurnOutcomeRule, type TurnCase } from "../turn-outcome-conformance";
+import type { AppToolPort } from "../../../../packages/code/src/server/index";
+import {
+  claudeCodeSkills,
+  claudeCodeTools,
+} from "../../../../apps/web/src/server/api/code/code.tools";
+import { readFile, readdir } from "node:fs/promises";
+import { setOwnerToolPermissions } from "../../../../apps/web/src/server/api/bots/tool-permissions";
+import { connections, db, skills } from "../../../../apps/web/src/server/db";
+import type { FakeMcpServer } from "./fake-sdk";
 
 const TOKEN = Buffer.alloc(32, 9).toString("base64");
 const cleanups: Array<() => Promise<void> | void> = [];
@@ -93,7 +102,13 @@ async function startServer(sdk: FakeSdk, dir: string, limits: Partial<CodingLimi
 
 async function setup(
   brain: Brain,
-  options: { limits?: Partial<CodingLimits>; host?: HarnessHost; liveLimit?: number } = {},
+  options: {
+    limits?: Partial<CodingLimits>;
+    host?: HarnessHost;
+    liveLimit?: number;
+    tools?: AppToolPort;
+    skills?: typeof claudeCodeSkills;
+  } = {},
 ): Promise<Setup> {
   const sdk = new FakeSdk(brain);
   const dir = await mkdtemp(path.join(tmpdir(), "claude-code-"));
@@ -104,6 +119,8 @@ async function setup(
     resolveWorker: async () => ({ url: server.url, token: TOKEN }),
     timings: { reconnectMinMs: 10, reconnectMaxMs: 40, requestTimeoutMs: 5_000 },
     ...(options.liveLimit !== undefined ? { liveLimit: options.liveLimit } : {}),
+    ...(options.tools ? { tools: options.tools } : {}),
+    ...(options.skills ? { skills: options.skills } : {}),
   });
   const events: InstanceEvent[] = [];
   harness.subscribe((event) => events.push(event));
@@ -524,6 +541,143 @@ describe("Claude Code harness", () => {
     await expect(
       harness.respond!(nativeId, ask.key, { decision: "deny" }),
     ).resolves.toBeUndefined();
+  });
+
+  it("lets Claude Code use the owner's shared connections, under Settings > Tools", async () => {
+    const issueTools = ["search_issues", "create_issue", "delete_issue"].map((name) => ({
+      name,
+      description: name.replace("_", " "),
+      inputSchema: { type: "object" },
+    }));
+    const [linear] = await db
+      .insert(connections)
+      .values([
+        {
+          name: "Linear",
+          slug: "linear",
+          url: "https://mcp.linear.test/mcp",
+          allBots: true,
+          toolsCache: JSON.stringify(issueTools),
+        },
+        {
+          name: "Diary",
+          slug: "diary",
+          url: "https://mcp.diary.test/mcp",
+          allBots: false,
+          toolsCache: JSON.stringify([{ name: "read_diary", inputSchema: { type: "object" } }]),
+        },
+      ])
+      .returning();
+    await setOwnerToolPermissions({
+      mcp__linear__search_issues: "allow",
+      mcp__linear__delete_issue: "off",
+    });
+    cleanups.push(async () => {
+      await db.delete(connections);
+      await setOwnerToolPermissions({});
+    });
+    const called: Array<[string, string, Record<string, unknown>]> = [];
+    const tools = claudeCodeTools(() => ({
+      status: () => ({ status: "connected" as const }),
+      call: async (id: string, tool: string, args: Record<string, unknown>) => {
+        called.push([id, tool, args]);
+        return { content: [{ type: "text", text: `${tool} ok` }] };
+      },
+    }));
+    const { harness, sdk, dir, events } = await setup(manual, { tools });
+    const { nativeId } = await harness.createThread({ message: "find the SSE issue", cwd: dir });
+    const query = await queryOf(sdk);
+    await query.nextInput();
+
+    const servers = query.options.mcpServers as Record<string, FakeMcpServer>;
+    expect(Object.keys(servers)).toEqual(["linear"]);
+    const [search, create] = servers.linear!.tools;
+    expect(servers.linear!.tools.map((tool) => tool.name)).toEqual([
+      "search_issues",
+      "create_issue",
+    ]);
+    expect(query.options.allowedTools).toEqual([
+      "mcp__linear__search_issues",
+      "mcp__linear__create_issue",
+    ]);
+    expect(query.options.env.ENABLE_TOOL_SEARCH).toBe("true");
+
+    await expect(search!.handler({ query: "sse" })).resolves.toEqual({
+      content: [{ type: "text", text: "search_issues ok" }],
+    });
+    const created = create!.handler({ title: "Fix SSE" });
+    const ask = await attention(events);
+    expect(ask.text).toContain("mcp__linear__create_issue");
+    expect(called.map(([, tool]) => tool)).toEqual(["search_issues"]);
+    await harness.respond!(nativeId, ask.key, { decision: "allow" });
+    await expect(created).resolves.toEqual({
+      content: [{ type: "text", text: "create_issue ok" }],
+    });
+    expect(called).toEqual([
+      [linear!.id, "search_issues", { query: "sse" }],
+      [linear!.id, "create_issue", { title: "Fix SSE" }],
+    ]);
+  });
+
+  it("gives Claude Code the owner's shared skills as a local plugin", async () => {
+    await db.insert(skills).values([
+      {
+        name: "release-notes",
+        description: "Write release notes: group by area",
+        body: "Group changes by area.",
+        files: JSON.stringify([
+          { path: "template.md", content: "## Changes" },
+          { path: "../escape.md", content: "nope" },
+        ]),
+        allBots: true,
+      },
+      { name: "diary", description: "Keep the diary", body: "Private.", allBots: false },
+    ]);
+    cleanups.push(async () => {
+      await db.delete(skills);
+    });
+    const { harness, sdk, dir } = await setup(manual, { skills: claudeCodeSkills });
+    await harness.createThread({ message: "write the notes", cwd: dir });
+    const query = await queryOf(sdk);
+    await query.nextInput();
+
+    const plugins = query.options.plugins ?? [];
+    expect(plugins).toHaveLength(1);
+    const root = plugins[0]!.path;
+    expect(root.startsWith(dir)).toBe(true);
+    expect(await readdir(path.join(root, "skills"))).toEqual(["release-notes"]);
+    expect(await readFile(path.join(root, "skills", "release-notes", "SKILL.md"), "utf8")).toBe(
+      '---\nname: release-notes\ndescription: "Write release notes: group by area"\n---\n\nGroup changes by area.\n',
+    );
+    expect(await readFile(path.join(root, "skills", "release-notes", "template.md"), "utf8")).toBe(
+      "## Changes",
+    );
+    expect(await readdir(path.join(root, "skills", "release-notes"))).toEqual([
+      "SKILL.md",
+      "template.md",
+    ]);
+    expect(
+      JSON.parse(await readFile(path.join(root, ".claude-plugin", "plugin.json"), "utf8")),
+    ).toMatchObject({ name: "tiny-agents" });
+  });
+
+  it("keeps a shared skill whose stored files are unreadable", async () => {
+    await db.insert(skills).values([
+      {
+        name: "broken",
+        description: "Files did not parse",
+        body: "Still useful.",
+        files: "{",
+        allBots: true,
+      },
+    ]);
+    cleanups.push(async () => {
+      await db.delete(skills);
+    });
+
+    await expect(claudeCodeSkills()).resolves.toEqual([
+      { name: "broken", description: "Files did not parse", body: "Still useful.", files: [] },
+    ]);
   });
 
   it("answers AskUserQuestion with the user's answers", async () => {

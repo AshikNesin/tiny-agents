@@ -7,9 +7,12 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 import { z } from "zod";
 import {
   botConnections,
+  botGuests,
   bots,
   connections,
   db,
+  guests,
+  users,
   vaultAuditEvents,
   vaultItems,
   vaultValues,
@@ -34,7 +37,7 @@ beforeAll(async () => {
 
 const buildApp = (): TestApp => createTestApp();
 
-// oxlint-disable-next-line typescript/no-explicit-any -- response data varies per route
+// oxlint-disable-next-line typescript/no-explicit-any
 type Data = any;
 
 async function call(
@@ -515,6 +518,46 @@ describe("MCP connections (header auth, streamable http)", () => {
     const detail = await call(app, `/api/v1/connections/${created.data.id}`, 200);
     expect(detail.data.botIds).toEqual([bot!.id]);
     expect(await db.$count(botConnections)).toBe(1);
+  }, 30_000);
+
+  it("gives a new connection to every bot, a bot shared with a guest included, and defers its tools", async () => {
+    const app = buildApp();
+    const [ops] = await db
+      .insert(bots)
+      .values({ name: "Ops", modelId: "m", conversationId: "952" })
+      .returning();
+    const [shared] = await db
+      .insert(bots)
+      .values({ name: "Shared", modelId: "m", conversationId: "953" })
+      .returning();
+    await db.insert(users).values({ id: 990_952, email: "conn-guest@example.com", password: "!" });
+    await db.insert(guests).values({ userId: 990_952 });
+    await db.insert(botGuests).values({ botId: shared!.id, userId: 990_952 });
+    configured = [];
+
+    const created = await call(app, "/api/v1/connections", 201, {
+      method: "POST",
+      json: {
+        name: "Demo",
+        url: mcpServer.url,
+        authType: "header",
+        headerName: "x-api-key",
+        secret: "secret123",
+      },
+    });
+    expect(created.data).toMatchObject({ allBots: true });
+    expect([...created.data.botIds].sort()).toEqual([ops!.id, shared!.id].sort());
+    await until(() => configured.includes(952) && configured.includes(953), "bots reconfigured");
+    const capability = installed.get("mcp:demo") as unknown as {
+      extension: { tools: { deferred?: boolean }[] };
+    };
+    expect(capability.extension.tools.every((tool) => tool.deferred === true)).toBe(true);
+    const opsBot = await call(app, `/api/v1/bots/${ops!.id}`, 200);
+    expect(opsBot.data.connectionIds).toEqual([created.data.id]);
+    const sharedBot = await call(app, `/api/v1/bots/${shared!.id}`, 200);
+    expect(sharedBot.data.connectionIds).toEqual([created.data.id]);
+    expect(await db.$count(botConnections)).toBe(0);
+    await db.delete(users).where(eq(users.id, 990_952));
   }, 30_000);
 
   it("shows a tool's schema and turns it off for every bot", async () => {

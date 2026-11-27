@@ -1,5 +1,5 @@
 bash -c 'set -e
-MARK="$HOME/.tiny-agents/browser-stack-v1"
+MARK="$HOME/.tiny-agents/browser-stack-v2"
 [ -f "$MARK" ] && command -v Xtigervnc >/dev/null 2>&1 && command -v google-chrome-stable >/dev/null 2>&1 && { echo ready; exit 0; }
 mkdir -p "$HOME/.tiny-agents"
 exec 9>"$HOME/.tiny-agents/browser-stack.lock"
@@ -16,6 +16,10 @@ if ! command -v google-chrome-stable >/dev/null 2>&1; then
   sudo -n apt-get install -y -qq "$TMP/chrome.deb"
   rm -rf "$TMP"
 fi
+sudo -n mkdir -p /etc/opt/chrome/policies/managed
+printf '\''%s\n'\'' '\''{"PasswordManagerEnabled":false}'\'' | sudo -n tee /etc/opt/chrome/policies/managed/tiny-agents.json >/dev/null
+sudo -n mkdir -p /etc/chromium/policies/managed
+printf '\''%s\n'\'' '\''{"PasswordManagerEnabled":false}'\'' | sudo -n tee /etc/chromium/policies/managed/tiny-agents.json >/dev/null
 sudo -n mkdir -p /tmp/.X11-unix
 sudo -n chmod 1777 /tmp/.X11-unix
 touch "$MARK"

@@ -31,7 +31,6 @@ import {
   codeApi,
   threadPath,
   type HarnessInfo,
-  type ModelOption,
   type PermissionMode,
   type ThreadSettings,
   type ThreadSummary,
@@ -55,7 +54,7 @@ import {
   PermissionPicker,
   PullChip,
   ReasoningPicker,
-  loadModels,
+  useHarnessModels,
   useArchive,
 } from "./controls";
 import {
@@ -110,10 +109,14 @@ function Header({
   const place = projectName ?? row?.cwd?.split("/").findLast(Boolean);
   return (
     <header className="border-border flex h-11 shrink-0 items-center gap-2 border-b px-3">
-      <Button asChild variant="ghost" size="icon-sm" className="lg:hidden" aria-label="All threads">
-        <Link to="/code">
-          <ArrowLeft />
-        </Link>
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        className="lg:hidden"
+        aria-label="All threads"
+        render={<Link to="/code" />}
+      >
+        <ArrowLeft />
       </Button>
       <h1 className="flex min-w-0 flex-1 items-baseline gap-1.5 text-sm">
         {place && (
@@ -357,22 +360,13 @@ export function ThreadView({
   const caps = harness.capabilities;
   const listRow = rows.find((r) => r.id === id);
   const row = thread ?? listRow;
-  const [models, setModels] = useState<ModelOption[]>([]);
+  const models = useHarnessModels(harness.id);
   const archive = useArchive();
   const owner = useViewerRole() === "owner";
   const comments = useThreadComments(id, owner);
   const commentsSent = useCommentStore((s) => s.sent);
   useMarkSeen(id, state.cursor);
   const lastTurn = useMemo(() => lastTurnOf(items), [items]);
-
-  useEffect(() => {
-    void loadModels(harness.id)
-      .then(setModels)
-      .catch((error: unknown) => {
-        setModels([]);
-        toast.error(errorMessage(error, `Could not load ${harness.label}'s models.`));
-      });
-  }, [harness.id, harness.label]);
 
   const run = useCallback(async (what: string, action: () => Promise<unknown>) => {
     try {

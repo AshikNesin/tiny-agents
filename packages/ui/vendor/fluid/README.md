@@ -10,13 +10,15 @@ The public entry is `@groot/ui/command-menu` (`packages/ui/src/command-menu.tsx`
 Everything in this folder is its private support code — dialog, tabs, scroll
 area, button, fluid-hover hook and the shape/size/icon/surface contexts — kept
 outside `src/` so it stays off the kit's public export map (see
-`scripts/check-kit-exports.ts`). Do not import it from other packages.
+`scripts/check-kit-exports.ts`). Do not import it from other packages. The
+question card and the thinking indicator are the exceptions: `src/fluid/`
+re-exports them as `@groot/ui/fluid/ask-user-questions` and
+`@groot/ui/fluid/thinking-indicator`.
 
 Local changes from upstream:
 
-- `@/…` alias imports rewritten to relative paths; `@radix-ui/react-*` imports
-  rewritten to the `radix-ui` umbrella package (the Radix flavor is used
-  because `@groot/ui` is built on Radix).
+- `@/…` alias imports rewritten to relative paths; the Base UI flavor is used
+  because `@groot/ui` is built on Base UI ([ADR 0044](../../../../docs/adr/0044-base-ui-replaces-radix.md)).
 - Square `h-N w-N` sizing in `button.tsx` rewritten to `size-N`
   (`pnpm check:tokens`).
 - Formatted with `vp fmt`.

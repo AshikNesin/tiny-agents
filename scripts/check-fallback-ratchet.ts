@@ -3,19 +3,34 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import process from "node:process";
 import { pathToFileURL } from "node:url";
-import { ratchetProblems } from "./check-comment-ratchet";
 import { SILENT_FALLBACK_BASELINE } from "./lint/repo-plugin.mjs";
 
-type Baseline = Record<string, number>;
+type Baseline = Record<string, Record<string, number>>;
+
+const totals = (baseline: Baseline) => {
+  const sum = new Map<string, number>();
+  for (const sites of Object.values(baseline)) {
+    for (const [site, count] of Object.entries(sites)) sum.set(site, (sum.get(site) ?? 0) + count);
+  }
+  return sum;
+};
 
 export function fallbackRatchetProblems(baseline: Baseline, base: Baseline | null): string[] {
-  return ratchetProblems(baseline, baseline, base, SILENT_FALLBACK_BASELINE);
+  if (!base) return [];
+  const before = totals(base);
+  return [...totals(baseline)]
+    .filter(([site, count]) => count > (before.get(site) ?? 0))
+    .map(
+      ([site, count]) =>
+        `\`${site}\`: ${SILENT_FALLBACK_BASELINE} allows ${count}, up from ${before.get(site) ?? 0}. It only shrinks; a site that moves keeps its entry, and a changed one is new.`,
+    );
 }
 
 function baseBaseline(ref: string): Baseline | null {
   const git = (...args: string[]) => execFileSync("git", args, { encoding: "utf8" });
   if (!git("ls-tree", "--name-only", ref, "--", SILENT_FALLBACK_BASELINE).trim()) return null;
-  return JSON.parse(git("show", `${ref}:${SILENT_FALLBACK_BASELINE}`));
+  const base = JSON.parse(git("show", `${ref}:${SILENT_FALLBACK_BASELINE}`));
+  return Object.values(base).every((value) => typeof value === "number") ? null : base;
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactElement } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   Archive,
@@ -54,13 +54,14 @@ function ThreadMenu({
   row: ThreadSummary;
   active: boolean;
   harness?: HarnessInfo;
-  children: ReactNode;
+  children: ReactElement;
 }) {
   const navigate = useNavigate();
   const confirm = useConfirm();
   const archive = useArchive();
   const can = harness?.capabilities.threads;
   const title = row.title || "Untitled";
+  const pr = row.pr;
   const remove = async () => {
     const yes = await confirm({
       title: `Delete “${title}”?`,
@@ -79,14 +80,18 @@ function ThreadMenu({
   };
   return (
     <ContextMenu>
-      <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
+      <ContextMenuTrigger render={children} />
       <ContextMenuContent>
-        {row.pr && (
-          <ContextMenuItem asChild>
-            <a href={row.pr.url} target="_blank" rel="noreferrer">
-              <GitPullRequest />
-              Open PR #{row.pr.number}
-            </a>
+        {pr && (
+          <ContextMenuItem
+            render={(linkProps) => (
+              <a {...linkProps} href={pr.url} target="_blank" rel="noreferrer">
+                {linkProps.children}
+              </a>
+            )}
+          >
+            <GitPullRequest />
+            Open PR #{pr.number}
           </ContextMenuItem>
         )}
         {can?.archive && (
@@ -325,7 +330,7 @@ export function ThreadList({
       ))}
       <div className="border-sidebar-border flex items-center gap-1 border-t p-2">
         <Link
-          to="/code/settings"
+          to="/settings/projects"
           data-testid="code-settings"
           className="text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-foreground flex h-8 items-center gap-2 rounded-lg px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
         >

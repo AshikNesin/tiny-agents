@@ -1,19 +1,14 @@
 import type { BotListEntry } from "../../shared/api/bots";
+import { readStored, writeStored } from "./browser-storage";
 
 const LAST_BOT_KEY = "tiny-agents:last-bot";
 
 export function rememberLastBot(botId: string) {
-  try {
-    localStorage.setItem(LAST_BOT_KEY, botId);
-  } catch {}
+  writeStored(LAST_BOT_KEY, botId);
 }
 
 function readLastBot(): string | null {
-  try {
-    return localStorage.getItem(LAST_BOT_KEY);
-  } catch {
-    return null;
-  }
+  return readStored(LAST_BOT_KEY);
 }
 
 export function landingBotId(bots: BotListEntry[]): string | null {

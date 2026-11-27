@@ -4,7 +4,8 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { ConfirmProvider } from "@groot/ui/primitives";
 import { MemoryRouter } from "react-router-dom";
-import { CodeSettings } from "@/pages/code/CodeSettings";
+import { CodeSettingsSection } from "@/pages/code/CodeSettings";
+import { useCodeStore } from "@/store/code";
 import type { HarnessInfo } from "@/lib/code/api";
 import { usePeopleStore } from "@/store/people";
 import { AppQueryProvider } from "../query-provider";
@@ -24,6 +25,7 @@ vi.mock("@/lib/code/projects", async (importOriginal) => {
   const original = await importOriginal<typeof import("@/lib/code/projects")>();
   return {
     ...original,
+    useProjects: () => ({ projects: [], reload: () => {} }),
     projectsApi: {
       ...original.projectsApi,
       github: () =>
@@ -53,7 +55,7 @@ function open() {
   render(
     <ConfirmProvider>
       <MemoryRouter>
-        <CodeSettings section="projects" harnesses={[shelley]} projects={[]} onChange={() => {}} />
+        <CodeSettingsSection section="projects" />
       </MemoryRouter>
     </ConfirmProvider>,
   );
@@ -61,6 +63,7 @@ function open() {
 
 beforeEach(() => {
   usePeopleStore.setState({ role: "owner" });
+  useCodeStore.setState({ harnesses: [shelley], statuses: {} });
   appRepositories.mockResolvedValue([
     { fullName: "AshikNesin/30DaysOfWebDev", installationId: 1, private: false },
     { fullName: "AshikNesin/tiny-agents", installationId: 1, private: false },

@@ -10,7 +10,7 @@ import {
   toolTitle,
   type ToolInfo,
 } from "../../lib/tool-permissions";
-import { ToggleGroup, ToggleGroupItem } from "../ui/toggle-group";
+import { ToggleGroup, ToggleGroupItem } from "@groot/ui/toggle-group";
 
 type Permissions = Record<string, ToolPermission>;
 type SetPermissions = (next: (current: Permissions) => Permissions) => void;
@@ -28,7 +28,6 @@ function PermissionToggle({
 }) {
   return (
     <ToggleGroup
-      type="single"
       value={value}
       onValueChange={(next: string) => {
         if (next) onChange(next as ToolPermission);
@@ -99,7 +98,6 @@ function BrowserProfileRow({
         </p>
       </div>
       <ToggleGroup
-        type="single"
         value={browserProfile}
         onValueChange={(next: string) => {
           if (next) onChange(next as BrowserProfile);
@@ -137,8 +135,8 @@ export function ToolkitGroup({
   setExpanded: (next: (current: Record<string, boolean>) => Record<string, boolean>) => void;
   toolPermissions: Permissions;
   setToolPermissions: SetPermissions;
-  browserProfile: BrowserProfile;
-  onBrowserProfileChange: (next: BrowserProfile) => void;
+  browserProfile?: BrowserProfile;
+  onBrowserProfileChange?: (next: BrowserProfile) => void;
 }) {
   const setUp = !toolkit.setupHint;
   const isOpen =
@@ -185,7 +183,7 @@ export function ToolkitGroup({
       </div>
       {isOpen && (
         <div id={bodyId} className="border-border/60 border-t px-3.5 pb-3 pt-1">
-          {toolkit.id === "browser" && !searching && (
+          {toolkit.id === "browser" && !searching && browserProfile && onBrowserProfileChange && (
             <BrowserProfileRow browserProfile={browserProfile} onChange={onBrowserProfileChange} />
           )}
           {shown.map((tool) => (

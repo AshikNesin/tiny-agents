@@ -17,8 +17,6 @@ export function ChatPaneHeader({
   menuView,
   onMenuViewChange,
   onEditBot,
-  yolo,
-  onYoloChange,
   live,
   canReset,
   onOpenMenu,
@@ -30,8 +28,6 @@ export function ChatPaneHeader({
   menuView: BotMenuView;
   onMenuViewChange: (view: BotMenuView) => void;
   onEditBot: () => void;
-  yolo: boolean;
-  onYoloChange: (on: boolean) => void;
   live: Pick<LiveViews, "hasComputer" | "liveShown" | "liveBusy" | "liveLabel" | "toggleLive">;
   canReset: boolean;
   onOpenMenu: () => void;
@@ -65,8 +61,6 @@ export function ChatPaneHeader({
             view={menuView}
             onViewChange={onMenuViewChange}
             onEditBot={onEditBot}
-            yolo={yolo}
-            onYoloChange={onYoloChange}
           />
         )}
         {(bot.guestIds?.length ?? 0) > 0 && (

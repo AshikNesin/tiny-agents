@@ -44,9 +44,10 @@ import { getTerminalService } from "../terminal/terminal.instance";
 import { reviewCard } from "../../../shared/code-messages";
 import { codeGitHub } from "./code.github";
 import { codeHub } from "./code.hub";
+import { archiveCodeThread } from "./code.pulls";
 import { app } from "../../app-root";
 import { applyTitle } from "./code.naming";
-import { repoOf } from "./code.projects";
+import { projectModel, repoOf } from "./code.projects";
 import { threadReview, type DraftInput } from "./code.review";
 import { follow } from "./code.store";
 import { saying, type Workspace } from "./code.workspace";
@@ -140,7 +141,9 @@ async function reviewView(row: CodeReviewRow, project: CodeProjectRow): Promise<
     worktreeThreadId: await worktreeThreadOf(row, project),
     assistant: (() => {
       const instance = assistantInstance(project);
-      return instance ? { instanceId: instance.id, model: project.defaultModel ?? null } : null;
+      return instance
+        ? { instanceId: instance.id, model: projectModel(project, instance.id) ?? null }
+        : null;
     })(),
     archived: row.archivedAt !== null,
     updatedAt: row.updatedAt.toISOString(),
@@ -347,7 +350,7 @@ async function startAssistant(
   const { nativeId } = await instance.createThread({
     cwd: worktree,
     message: `${card}\n\n${message}`,
-    model: model ?? project.defaultModel ?? undefined,
+    model: model ?? projectModel(project, instance.id),
     ...(permissionMode ? { permissionMode } : {}),
   });
   const threadId = await follow(instance.id, nativeId);
@@ -377,9 +380,8 @@ export async function archiveReview(id: string): Promise<void> {
     const ws = await codeGitHub().workspace(project);
     await ws.removeWorktree(project.checkoutPath, row.worktree);
   }
-  const assistant = row.threadId ? codeHub()?.resolve(row.threadId) : undefined;
-  if (assistant?.instance.archive) {
-    await assistant.instance.archive(assistant.nativeId, true).catch((error: unknown) => {
+  if (row.threadId) {
+    await archiveCodeThread(row.threadId, true).catch((error: unknown) => {
       logger.warn({ error, threadId: row.threadId }, "Code: could not archive the review thread");
     });
   }

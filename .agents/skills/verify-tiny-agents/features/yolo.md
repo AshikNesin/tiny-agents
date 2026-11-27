@@ -1,20 +1,20 @@
 # YOLO mode
 
-In a bot's chat the owner can switch on YOLO mode: tool calls that would show an approval card run straight away instead, including Ask (always) tools. It asks for confirmation first, shows a banner above the composer while on, applies to that chat only, survives a reload, approves cards already waiting when it is switched on, and switches off with the banner's `Turn off` or a New chat.
+In a bot's chat the owner can switch on YOLO mode: tool calls that would show an approval card run straight away instead, including Ask (always) tools. It asks for confirmation first, shows the composer's `YOLO` chip pressed while on, applies to that chat only, survives a reload, approves cards already waiting when it is switched on, and switches off with the chip or a New chat.
 
 ## Sub-features
 
 - `yolo-confirm` dialog `Turn on YOLO mode?` with `Cancel` / `Turn on`.
-- `yolo-state` bot menu (header `<bot> menu`) row `data-testid=yolo-toggle` (`menuitemcheckbox`, `aria-checked`, `YOLO mode`) and banner `data-testid=yolo-banner` (`YOLO · no approval needed, except vault items`).
+- `yolo-state` composer chip `data-testid=yolo-chip` (button `YOLO`, `aria-pressed`), the same word as Code's permission chip.
 - `yolo-persist` the switch is server-side per chat: kept across reloads.
 - `yolo-run` an Ask (always) call runs without a card; its row reads `auto-approved (YOLO)`.
 - `yolo-waiting` switching on approves a card that is already waiting.
-- `yolo-off` banner `Turn off` (or the bot menu's `YOLO mode` row) brings cards back.
+- `yolo-off` the chip, pressed again, brings cards back.
 - `yolo-new-chat` New chat starts with YOLO off.
 
 ## How to get to it (user POV)
 
-- A bot's chat → header `<bot> menu` (the bot's name) → `YOLO mode`. Owners only; guests have no bot menu.
+- A bot's chat → the `YOLO` chip beside the model in the composer. Owners only; a guest sees it only while it is on, and cannot press it.
 
 ## Driving it with ta-verify
 
