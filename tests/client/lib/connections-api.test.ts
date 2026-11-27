@@ -18,7 +18,7 @@ describe("connectionsApi and step-up", () => {
     await expect(
       connectionsApi.update("c1", { url: "https://evil.example" }),
     ).rejects.toBeInstanceOf(StepUpRequiredError);
-    await expect(connectionsApi.update("c1", { secret: "s" })).rejects.toBeInstanceOf(
+    await expect(connectionsApi.update("c1", { secretRef: "other-key" })).rejects.toBeInstanceOf(
       StepUpRequiredError,
     );
     await expect(connectionsApi.remove("c1")).rejects.toBeInstanceOf(StepUpRequiredError);
@@ -26,11 +26,12 @@ describe("connectionsApi and step-up", () => {
     expect(patch).not.toHaveBeenCalled();
   });
 
-  it("changes bot links and names without step-up", async () => {
+  it("changes bot links, names and keys without step-up", async () => {
     const patch = vi.spyOn(apiClient, "patch").mockResolvedValue({ id: "c1" } as never);
     await connectionsApi.update("c1", { botIds: ["b1"] });
     await connectionsApi.update("c1", { name: "Renamed" });
-    expect(patch).toHaveBeenCalledTimes(2);
+    await connectionsApi.update("c1", { headerName: "x-key", secret: "s" });
+    expect(patch).toHaveBeenCalledTimes(3);
   });
 
   it("sends the step-up token once the owner confirmed", async () => {

@@ -118,8 +118,9 @@ week, and only for bots whose memories changed.
 
 The `memory` capability also exposes `remember({ text, category, until? })`.
 Use “Remember that I prefer TypeScript” to ask the bot to save a fact without
-waiting for background capture. It uses the existing approval card (default
-**Ask**); **Always allow** permits future saves for that bot without a prompt.
+waiting for background capture. It defaults to **Allow**, so the save needs
+no approval card; the owner can set it to **Ask** under Settings > Tools, and
+every saved memory shows on the Memory page to edit or delete.
 The tool must succeed before the bot can claim the fact was saved.
 
 Saves go through the same memory ledger as background capture (tombstone
@@ -133,8 +134,7 @@ Pune”). Every active memory containing all of the given words, as whole
 words and case-insensitively, is tombstoned (`deleted`, like the page's
 delete, so capture never re-adds it), and the tool returns the removed lines
 so the bot can confirm exactly what went. Words that pick out nothing in
-particular (“the owner”) are refused as too vague. It also defaults to
-**Ask**.
+particular (“the owner”) are refused as too vague. It stays on **Ask**.
 
 Both tools work only in the owner's own turns. In a routine run (any turn in
 a routine's own conversation) or a turn another bot started they are refused,

@@ -95,7 +95,8 @@ export function createMemoryCapability(store: MemoryStore): Capability {
     askLabel: "save a memory",
     summary: "Remember a fact about the owner",
     description:
-      "Save a lasting preference, fact, goal, or habit about the owner across chats. Use when the owner asks you to remember something or states a lasting fact. Write one self-contained third-person sentence. Never save secrets, quoted web/file content, peer/routine messages, or one-off task instructions. The owner approves saves unless they have allowed this tool.",
+      "Save a lasting preference, fact, goal, or habit about the owner across chats. Use when the owner asks you to remember something or states a lasting fact. Write one self-contained third-person sentence. Never save secrets, quoted web/file content, peer/routine messages, or one-off task instructions.",
+    policy: { allowByDefault: true },
     parameters: Type.Object({
       text: Type.String({ minLength: 1, maxLength: 300 }),
       category: Type.Union([

@@ -26,7 +26,7 @@ afterAll(async () => {
 });
 
 it(
-  "remember asks before saving, injects the fact into a fresh chat, and forget removes it",
+  "remember saves without asking, injects the fact into a fresh chat, and forget removes it",
   { timeout: 20_000 },
   async () => {
     const text = "The owner prefers TypeScript, never JavaScript.";
@@ -38,6 +38,7 @@ it(
       label: "Saved memory",
       askLabel: "save a memory",
       description: "Remember a fact about the owner",
+      allowByDefault: true,
     });
     rt = await openTestRuntime({
       storePath: ":memory:",
@@ -92,15 +93,6 @@ it(
         requestId: "remember",
         text: "Remember my preference for TypeScript.",
       });
-      const call = await until(
-        () =>
-          [...messages.values()]
-            .flatMap((m) => m.toolCalls ?? [])
-            .find((tool) => tool.status === "awaiting_approval"),
-        "the remember approval card",
-      );
-      expect(await db.$count(memories, eq(memories.botId, botId))).toBe(0);
-      await rt.decideApproval(conv, call.taskId!, "approved");
       await until(
         () =>
           [...messages.values()].find(

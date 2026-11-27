@@ -124,9 +124,10 @@ no restart:
   model that runs on pi for the fallback. Anything else is refused (400) and
   nothing moves.
 
-Creating an account, changing its endpoint or key, and deleting it need the
+Creating an account, changing its endpoint, and deleting it need the
 vault's step-up (password or passkey): a stolen session that could repoint an
-account would receive every prompt sent through it. A new host needs the key
+account would receive every prompt sent through it. Replacing only the key,
+and discovering or testing an endpoint, don't. A new host needs the key
 again. Changes reach open pickers through `models.changed` on `/events`.
 
 ### API (owner only)
@@ -134,16 +135,16 @@ again. Changes reach open pickers through `models.changed` on `/events`.
 | Route                                         | Step-up | Purpose                                                    |
 | --------------------------------------------- | ------- | ---------------------------------------------------------- |
 | `GET /api/v1/models/providers`                |         | Accounts, their models and key hints; templates            |
-| `POST /api/v1/models/discover`                | yes     | List an endpoint's models without saving                   |
+| `POST /api/v1/models/discover`                |         | List an endpoint's models without saving                   |
 | `POST /api/v1/models/providers`               | yes     | Create an account (discovers again, stores the key)        |
 | `PATCH /api/v1/models/providers/:id`          |         | Name, enabled, Claude plan fallback; `If-Match: <version>` |
-| `PUT /api/v1/models/providers/:id/connection` | yes     | Endpoint, key, private network                             |
+| `PUT /api/v1/models/providers/:id/connection` | some    | Endpoint, key, private network (a key alone needs none)    |
 | `GET /api/v1/models/providers/:id/available`  |         | Listed models the account lacks (Add a model); reads only  |
 | `POST /api/v1/models/providers/:id/refresh`   |         | Discover again; marks models no longer listed              |
 | `DELETE /api/v1/models/providers/:id`         | yes     | 409 `in_use` unless `?moveTo=<modelId>`                    |
 | `POST /api/v1/models/providers/:id/models`    |         | Add a model by id                                          |
 | `PATCH` / `DELETE /api/v1/models/:id`         |         | Name, enabled, overrides / delete (same in-use rule)       |
-| `POST /api/v1/models/test`                    | yes     | One 16-token completion, saved model or unsaved account    |
+| `POST /api/v1/models/test`                    |         | One 16-token completion, saved model or unsaved account    |
 | `GET` / `PUT /api/v1/models/roles`            |         | Roles and whether each is the fallback                     |
 
 Bodies are strict (unknown fields are refused) and capped at 64 KB. No

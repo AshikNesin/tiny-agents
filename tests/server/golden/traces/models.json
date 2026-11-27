@@ -476,7 +476,8 @@
                 "name": "remember",
                 "label": "Saved memory",
                 "askLabel": "save a memory",
-                "description": "Remember a fact about the owner"
+                "description": "Remember a fact about the owner",
+                "allowByDefault": true
               },
               {
                 "name": "forget",

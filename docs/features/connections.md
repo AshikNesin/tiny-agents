@@ -102,9 +102,10 @@ connection reports it until the next start moves it or the owner enters the
 value again.
 
 Where a connection points and what it sends are guarded like a model
-account's: adding a connection, deleting it, and changing its URL, header
-name, secret or `secretRef` need a fresh vault step-up (`X-Vault-Step-Up`,
-403 `step_up_required` without one). Renaming and choosing bots don't. A URL
+account's: adding a connection, deleting it, and changing its URL or
+`secretRef` need a fresh vault step-up (`X-Vault-Step-Up`, 403
+`step_up_required` without one). Renaming, choosing bots and replacing the
+header name or value on the same host don't. A URL
 that moves to another host deletes the connection's own item unless the same
 change sends a new value (`secretRef: null` doesn't keep it), and drops the
 reference unless the same change names one, so a stored secret never follows

@@ -88,8 +88,7 @@ router.get("/connections/:id", async (c) => {
 router.patch("/connections/:id", async (c) => {
   const id = parseStringParam(c.req.param("id"), "id");
   const payload = await parseBody(c, updateConnectionSchema);
-  const { name: _name, botIds: _botIds, ...reach } = payload;
-  if (Object.values(reach).some((value) => value !== undefined)) assertStepUp(c);
+  if (payload.url !== undefined || payload.secretRef !== undefined) assertStepUp(c);
   return ok(c, await connectionsService.update(id, payload));
 });
 

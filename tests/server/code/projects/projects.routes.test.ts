@@ -1417,23 +1417,17 @@ describe("the Thread-Id trailer and per-turn checkpoints", () => {
 });
 
 describe("GitHub credential changes", () => {
-  it("requires step-up to set a PAT, start App setup, or disconnect the App", async () => {
-    const step = await stepUpToken();
-    const denied = await Promise.all([
+  it("sets a PAT and starts App setup without step-up, but disconnecting the App needs it", async () => {
+    const [pat, manifest, install, disconnect] = await Promise.all([
       call("PUT", "/github", { token: "ghp_notasteup1234567890" }),
       call("POST", "/github/app/manifest", {}),
       call("POST", "/github/app/install", undefined),
       call("DELETE", "/github/app", undefined),
     ]);
-    expect(denied.map((r) => r.status)).toEqual([403, 403, 403, 403]);
-
-    const granted = await api<GitHubStatus>(app, "/api/v1/code/github", {
-      method: "PUT",
-      token,
-      stepUp: step,
-      json: { token: "ghp_withasteup1234567890" },
-    });
-    expect(granted.status).toBe(200);
+    expect(pat.status).toBe(200);
+    expect(manifest.status).not.toBe(403);
+    expect(install.status).not.toBe(403);
+    expect(disconnect.status).toBe(403);
   });
 });
 

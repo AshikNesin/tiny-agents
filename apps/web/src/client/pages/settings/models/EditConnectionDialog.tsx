@@ -46,7 +46,9 @@ export function EditConnectionDialog({
               ? { baseUrl: baseUrl.trim() }
               : {}),
             ...(apiKey.trim() ? { apiKey: apiKey.trim() } : {}),
-            allowPrivateNetwork: allowPrivate,
+            ...(allowPrivate !== account.allowPrivateNetwork
+              ? { allowPrivateNetwork: allowPrivate }
+              : {}),
           },
         }),
       );

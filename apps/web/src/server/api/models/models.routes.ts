@@ -15,6 +15,7 @@ import {
   updateConnectionSchema,
 } from "./models.schema";
 import * as service from "./models.service";
+import { assertStepUp } from "../vault/vault.stepup";
 
 const router = new Hono<AppEnv>();
 
@@ -50,9 +51,13 @@ router.patch("/models/providers/:id", async (c) =>
   ok(c, await service.patchAccount(idParam(c), await parseBody(c, patchAccountSchema), ifMatch(c))),
 );
 
-router.put("/models/providers/:id/connection", async (c) =>
-  ok(c, await service.updateConnection(idParam(c), await parseBody(c, updateConnectionSchema))),
-);
+router.put("/models/providers/:id/connection", async (c) => {
+  const id = idParam(c);
+  const payload = await parseBody(c, updateConnectionSchema);
+  const { apiKey: _apiKey, ...reach } = payload;
+  if (Object.values(reach).some((value) => value !== undefined)) assertStepUp(c);
+  return ok(c, await service.updateConnection(id, payload));
+});
 
 router.get("/models/providers/:id/available", async (c) =>
   ok(c, { models: await service.availableModels(idParam(c)) }),

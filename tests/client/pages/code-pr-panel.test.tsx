@@ -321,10 +321,12 @@ describe("getting it merged", () => {
     const toggle = screen.getByRole("switch", { name: "Draft" });
     expect(toggle).toBeChecked();
     expect(screen.getByRole("button", { name: "Merge" })).toBeDisabled();
+    expect(screen.getByText("Turn Draft off to merge")).toBeInTheDocument();
     act(() => toggle.click());
     await wait(0);
     expect(screen.getByRole("switch", { name: "Draft" })).not.toBeChecked();
     expect(screen.getByRole("button", { name: "Merge" })).toBeEnabled();
+    expect(screen.queryByText("Turn Draft off to merge")).toBeNull();
     act(() => screen.getByRole("switch", { name: "Draft" }).click());
     await wait(0);
     expect(readied).toEqual([false, true]);
