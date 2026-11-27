@@ -328,6 +328,10 @@ export interface ProjectThreadInput extends CreateThreadInput {
   branch?: string;
 }
 
+export function projectModel(project: CodeProjectRow, instanceId: string): string | undefined {
+  return instanceId === project.defaultInstanceId ? (project.defaultModel ?? undefined) : undefined;
+}
+
 export async function startProjectThread(
   project: CodeProjectRow,
   instance: HarnessInstance,
@@ -357,7 +361,7 @@ export async function startProjectThread(
       ...create,
       cwd: path,
       message: `${projectPreamble(project, branch, scripts, setupFailure)}\n\n${input.message}`,
-      model: input.model ?? project.defaultModel ?? undefined,
+      model: input.model ?? projectModel(project, instance.id),
     });
   } catch (error) {
     await ws.removeWorktree(project.checkoutPath, path).catch(() => undefined);

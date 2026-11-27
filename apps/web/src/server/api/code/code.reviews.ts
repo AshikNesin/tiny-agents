@@ -47,7 +47,7 @@ import { codeHub } from "./code.hub";
 import { archiveCodeThread } from "./code.pulls";
 import { app } from "../../app-root";
 import { applyTitle } from "./code.naming";
-import { repoOf } from "./code.projects";
+import { projectModel, repoOf } from "./code.projects";
 import { threadReview, type DraftInput } from "./code.review";
 import { follow } from "./code.store";
 import { saying, type Workspace } from "./code.workspace";
@@ -141,7 +141,9 @@ async function reviewView(row: CodeReviewRow, project: CodeProjectRow): Promise<
     worktreeThreadId: await worktreeThreadOf(row, project),
     assistant: (() => {
       const instance = assistantInstance(project);
-      return instance ? { instanceId: instance.id, model: project.defaultModel ?? null } : null;
+      return instance
+        ? { instanceId: instance.id, model: projectModel(project, instance.id) ?? null }
+        : null;
     })(),
     archived: row.archivedAt !== null,
     updatedAt: row.updatedAt.toISOString(),
@@ -348,7 +350,7 @@ async function startAssistant(
   const { nativeId } = await instance.createThread({
     cwd: worktree,
     message: `${card}\n\n${message}`,
-    model: model ?? project.defaultModel ?? undefined,
+    model: model ?? projectModel(project, instance.id),
     ...(permissionMode ? { permissionMode } : {}),
   });
   const threadId = await follow(instance.id, nativeId);

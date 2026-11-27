@@ -109,11 +109,17 @@ export function NewThread({
     if (focused) box.current?.focus();
   }, [focused, projects]);
 
+  const pickInstance = (id: string) => {
+    setInstanceId(id);
+    setModel(
+      project && id === project.defaultInstanceId ? (project.defaultModel ?? DEFAULT) : DEFAULT,
+    );
+  };
+
   useEffect(() => {
     if (!project) return;
     const preferred = harnesses.find((h) => h.id === project.defaultInstanceId) ?? harnesses[0];
-    setInstanceId(preferred?.id ?? "");
-    setModel(project.defaultModel ?? DEFAULT);
+    pickInstance(preferred?.id ?? "");
   }, [project, harnesses]);
 
   useEffect(() => {
@@ -211,7 +217,7 @@ export function NewThread({
                     <SearchSelect
                       label="Agent"
                       value={instanceId}
-                      onValueChange={setInstanceId}
+                      onValueChange={pickInstance}
                       options={harnesses.map((h) => ({ value: h.id, label: h.label }))}
                       searchable={false}
                       data-testid="code-new-agent"
