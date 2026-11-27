@@ -19,7 +19,7 @@ A user creates a bot, chats with it and watches the reply stream in. The convers
 
 - `/chats` after sign-in. Empty account: `Create your first bot`; otherwise sidebar region `Bots` → `New bot`.
 - A bot's chat: its link in the `Bots` sidebar list (`/chats/<botId>`).
-- New chat: `Start a new chat` → `New chat`. History: the header's `Past chats` button, or `h`.
+- New chat: `Start a new chat` (starts at once, no confirm; the old chat goes to Chat history). History: the header's `Past chats` button, or `h`.
 
 ## Driving it with ta-verify
 
@@ -30,7 +30,7 @@ Preconditions:
 - **Create bot.** Open the dialog, wait for the button `Test Model (faux)` (the catalog loads async), fill `Name` with `Verify Bot <stamp>`, press `Create bot`. Dialog closes; a sidebar link with that name appears; `GET /api/v1/bots` has the row.
 - **Send.** In the composer (placeholder `Ask <bot name>…`/`Message <bot name>…`) type `hello <stamp>`, press Enter. The user bubble shows, then `Echo: hello <stamp>` within ~30 s.
 - **Reload.** `page.reload()`. The echo is still visible.
-- **New chat.** `Start a new chat` → `New chat` (exact). No `Echo: hello <stamp>` text left.
+- **New chat.** `Start a new chat`, no dialog. No `Echo: hello <stamp>` text left.
 - **History.** `Past chats` → the first `data-testid=past-chat-item` containing `hello <stamp>` (Run again and Edit also leave past chats). URL contains `/history/`; the echo shows; `data-testid=past-chat-footer` (Continue) replaces the composer.
 - **Fold.** Send `/trace`; `reply-work` contains `Worked:`. Wait for `Here is where things stand:` and the `Run this again` button before pressing keys: Edit and Run again are off while the bot replies.
 - **Run again.** Blur the composer, press `t`; `GET /api/v1/bots/<id>/chats` lists one past chat and `/trace` shows once.

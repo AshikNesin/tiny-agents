@@ -24,7 +24,7 @@ Preconditions:
 - Baseline run, doctor OK, signed in. A bot of the journey's own (`setup:` via the API).
 
 - **Empty.** `<bot> menu` → `Chat history` → the text above; row menu → `Chat history` → the same page.
-- **List.** Send `plan the trip <stamp>`, wait for the echo, `Start a new chat` → dialog `Start a new chat?` → `New chat`. Open `Chat history`: one item with the message text and `2 messages`; `GET /api/v1/bots/<id>/chats` has `title` = the message, `messageCount` 2.
+- **List.** Send `plan the trip <stamp>`, wait for the echo, `Start a new chat` (no dialog). Open `Chat history`: one item with the message text and `2 messages`; `GET /api/v1/bots/<id>/chats` has `title` = the message, `messageCount` 2.
 - **Read.** Click the item: URL has `/history/`, heading contains the title, footer reads `Past chat · <title>`, no composer. `Back to current chat` returns.
 - **Continue (footer).** Reopen it, footer `Continue this chat`: toast `Chat continued…`, not on `/history/`, the old echo shows, a new message gets its echo. The chats list is empty (the fresh chat was empty, so nothing new was recorded).
 - **Row menu + actions menu.** Two more New chats with a message between them, open history from the row menu, open the newest, `Past chat actions` → `Continue this chat`.

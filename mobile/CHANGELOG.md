@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.17.2
+
+### Patch Changes
+
+- **New chat** starts a fresh chat straight away, without asking first. The chat you leave is still in past
+  chats, where you can read or continue it.
+
 ## 0.17.1
 
 ### Patch Changes

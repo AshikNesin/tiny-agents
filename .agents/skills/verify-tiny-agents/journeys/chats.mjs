@@ -121,7 +121,6 @@ await journey("chats", async ({ page, step, proof, cleanup, api, stamp }) => {
   });
   await step("New chat clears the transcript", async () => {
     await page.getByRole("button", { name: "Start a new chat" }).click();
-    await page.getByRole("button", { name: "New chat", exact: true }).click();
     await expect(page.getByText(new RegExp(`Echo: hello ${stamp}`, "i"))).toHaveCount(0);
   });
   await step("old chat is readable from Chat history", async () => {
