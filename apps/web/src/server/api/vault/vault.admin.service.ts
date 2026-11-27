@@ -411,7 +411,10 @@ export async function linkItem(input: {
 }): Promise<VaultItemData> {
   await assertHandleFree(input.policy.handle);
   const backend = readBackends().get(input.backend);
-  if (!backend) throw Boom.badRequest(`The ${input.backend} backend is not configured`);
+  if (!backend)
+    throw Boom.badRequest(
+      `${input.backend === "onepassword" ? "1Password" : "The local vault"} is not configured`,
+    );
   let summary: BackendItemSummary;
   try {
     summary = await backend.describe(input.externalId);
