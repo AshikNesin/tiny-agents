@@ -137,6 +137,8 @@ describe("threads in the chat sidebar", () => {
     const regions = screen.getAllByRole("region").map((r) => r.getAttribute("aria-label"));
     expect(regions).toEqual(["Projects", "Threads", "Bots"]);
     const projects = within(screen.getByRole("region", { name: "Projects" }));
+    const avatar = projects.getByRole("link", { name: "web" }).querySelector("img");
+    expect(avatar?.getAttribute("src")).toBe("https://api.dicebear.com/10.x/gaze/svg?seed=web");
     fireEvent.click(projects.getByRole("link", { name: "web" }));
     expect(screen.getByTestId("where")).toHaveTextContent("/chats/b2");
     const bots = within(screen.getByRole("region", { name: "Bots" }));

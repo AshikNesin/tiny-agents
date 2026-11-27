@@ -5,7 +5,7 @@ import type { BotListEntry } from "../../../shared/api/bots";
 import { relativeTime } from "../../lib/bot-groups";
 import { attentionOf } from "../../lib/attention";
 import { projectChatPath } from "../../lib/code/api";
-import { ProjectAvatar } from "../BotAvatar";
+import { BotAvatar } from "../BotAvatar";
 import { SidebarSection } from "./SidebarSection";
 
 export function ProjectsSection({
@@ -43,7 +43,7 @@ export function ProjectsSection({
                   active ? "bg-sidebar-accent" : "hover:bg-sidebar-accent",
                 )}
               >
-                <ProjectAvatar name={bot.name} className="size-6" />
+                <BotAvatar name={bot.name} className="size-6" />
                 <span className={cn("min-w-0 flex-1 truncate", unread && "font-medium")}>
                   {bot.name}
                 </span>
