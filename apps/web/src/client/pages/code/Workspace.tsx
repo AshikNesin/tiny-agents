@@ -13,6 +13,7 @@ import { codeApi, threadPath } from "../../lib/code/api";
 import { useThreadCommenting } from "../../lib/code/comments";
 import { listOrder, statusSections } from "../../lib/code/list";
 import { projectsApi, reviewPath, reviewsApi, useProjects } from "../../lib/code/projects";
+import { usePullActions } from "../../lib/code/use-thread-pulls";
 import { errorMessage } from "../../lib/errors";
 import type { WorkflowName } from "../../../shared/code-status";
 import { useLiveChanges } from "../../lib/code/use-live-changes";
@@ -219,22 +220,21 @@ export function CodeWorkspace() {
     },
     [threadId],
   );
+  const { act } = usePullActions(threadId ?? "");
   const publish = useCallback(() => {
     if (!threadId) return;
     setPane("pr");
-    void projectsApi
-      .publish(threadId, { commit: true })
-      .then(() => toast.success("Pushed to GitHub"))
-      .catch((error: unknown) => toast.error(errorMessage(error, "Could not publish.")));
-  }, [threadId, setPane]);
+    void act("publish", () => projectsApi.publish(threadId, { commit: true })).then(
+      (done) => done && toast.success("Pushed to GitHub"),
+    );
+  }, [threadId, setPane, act]);
   const pushBase = useCallback(() => {
     if (!threadId) return;
     setPane("pr");
-    void projectsApi
-      .pushBase(threadId)
-      .then(() => toast.success("Pushed to GitHub"))
-      .catch((error: unknown) => toast.error(errorMessage(error, "Could not push.")));
-  }, [threadId, setPane]);
+    void act("push", () => projectsApi.pushBase(threadId)).then(
+      (done) => done && toast.success("Pushed to GitHub"),
+    );
+  }, [threadId, setPane, act]);
   const archiveThread = useArchive();
   const archive = useCallback(() => {
     if (!threadId) return;
@@ -249,12 +249,11 @@ export function CodeWorkspace() {
       confirmLabel: "Merge",
     }).then((yes) => {
       if (!yes) return;
-      void projectsApi
-        .merge(threadId, "squash")
-        .then(() => toast.success(`Merged #${prNumber}`))
-        .catch((error: unknown) => toast.error(errorMessage(error, "Could not merge.")));
+      void act("merge", () => projectsApi.merge(threadId)).then(
+        (done) => done && toast.success(`Merged #${prNumber}`),
+      );
     });
-  }, [threadId, prNumber, setPane, confirm]);
+  }, [threadId, prNumber, setPane, confirm, act]);
   const commenting = useThreadCommenting(threadId, (text) => {
     setInsert({ text, nonce: Date.now() });
     if (window.matchMedia("(max-width: 1023px)").matches) setPane(null);
@@ -484,7 +483,7 @@ export function CodeWorkspace() {
         hidden={wide || undefined}
         data-state={listOpen ? "open" : "closed"}
         className={cn(
-          "bg-sidebar text-sidebar-foreground border-sidebar-border w-full shrink-0 flex-col lg:w-68 lg:border-r-[0.5px]",
+          "sidebar-surface text-sidebar-foreground border-sidebar-border w-full shrink-0 flex-col lg:w-68 lg:border-r-[0.5px]",
           full ? "hidden" : "flex",
           listOpen ? "lg:flex" : "lg:hidden",
         )}

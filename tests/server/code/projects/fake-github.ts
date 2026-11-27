@@ -28,6 +28,7 @@ interface FakePull {
   fromFork: boolean;
   maintainerCanModify?: boolean;
   inMergeQueue: boolean;
+  mergeMethods?: PullSnapshot["mergeMethods"];
   queueRemovals: Array<{ id: string; at: string; reason: string }>;
 }
 
@@ -123,7 +124,7 @@ export function fakeGitHub(local: LocalExec, bare: string, login = "ashik"): Fak
           : { owner: "acme", name: "web" },
         maintainerCanModify: pr.maintainerCanModify ?? false,
         mergeable: pr.mergeable,
-        mergeMethods: ["squash", "merge"],
+        mergeMethods: pr.mergeMethods ?? ["squash", "merge"],
         author: pr.author ?? login,
         inMergeQueue: pr.inMergeQueue,
         queueRemovals: pr.queueRemovals,

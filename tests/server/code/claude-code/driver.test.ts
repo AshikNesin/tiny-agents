@@ -661,6 +661,25 @@ describe("Claude Code harness", () => {
     ).toMatchObject({ name: "tiny-agents" });
   });
 
+  it("keeps a shared skill whose stored files are unreadable", async () => {
+    await db.insert(skills).values([
+      {
+        name: "broken",
+        description: "Files did not parse",
+        body: "Still useful.",
+        files: "{",
+        allBots: true,
+      },
+    ]);
+    cleanups.push(async () => {
+      await db.delete(skills);
+    });
+
+    await expect(claudeCodeSkills()).resolves.toEqual([
+      { name: "broken", description: "Files did not parse", body: "Still useful.", files: [] },
+    ]);
+  });
+
   it("answers AskUserQuestion with the user's answers", async () => {
     const { harness, sdk, dir, events } = await setup(manual);
     const { nativeId } = await harness.createThread({ message: "set up storage", cwd: dir });

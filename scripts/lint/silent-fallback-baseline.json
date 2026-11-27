@@ -22,17 +22,11 @@
   "apps/web/src/client/components/chat-pane/live-views.tsx": {
     ".catch(() => undefined)": 1
   },
-  "apps/web/src/client/components/live/use-selected-profile.ts": {
-    "catch {}": 1
-  },
   "apps/web/src/client/components/shell/settings-commands.ts": {
     ".catch(() => undefined)": 1
   },
   "apps/web/src/client/components/ui/hooks/use-highlighted-code.ts": {
     ".catch(() => {})": 1
-  },
-  "apps/web/src/client/lib/browser-panel.ts": {
-    "catch {}": 1
   },
   "apps/web/src/client/lib/clipboard.ts": {
     "catch {}": 1
@@ -46,20 +40,13 @@
   "apps/web/src/client/lib/code/projects.ts": {
     ".catch(() => null)": 1
   },
-  "apps/web/src/client/lib/composer-browser.ts": {
-    "catch {}": 2
-  },
   "apps/web/src/client/lib/feedback.ts": {
     ".catch(() => toast.error(\"Feedback isn't available right now\"))": 1
-  },
-  "apps/web/src/client/lib/last-bot.ts": {
-    "catch {}": 1
   },
   "apps/web/src/client/lib/live-view.ts": {
     ".catch(() => toast.error(\"Could not enter full screen.\"))": 1,
     ".catch(() => undefined)": 2,
-    ".catch(() => { toast.error(\"Could not read the clipboard. Allow clipboard access and try again.\"); })": 1,
-    "catch {}": 3
+    ".catch(() => { toast.error(\"Could not read the clipboard. Allow clipboard access and try again.\"); })": 1
   },
   "apps/web/src/client/lib/sse.ts": {
     "catch {}": 2
@@ -86,23 +73,13 @@
     ".catch(() => undefined)": 1
   },
   "apps/web/src/client/pages/code/CodeSettings.tsx": {
-    ".catch(() => !cancelled && setModels([]))": 1,
     ".catch(() => null)": 1
   },
   "apps/web/src/client/pages/code/Composer.tsx": {
     ".catch(() => [])": 1
   },
-  "apps/web/src/client/pages/code/DiffWorkspace.tsx": {
-    "catch {}": 1
-  },
-  "apps/web/src/client/pages/code/PullReview.tsx": {
-    ".catch(() => !cancelled && setModels([]))": 1
-  },
   "apps/web/src/client/pages/code/PullThreads.tsx": {
     ".catch((): PullThreadsView | null => null)": 1
-  },
-  "apps/web/src/client/pages/code/ResizablePane.tsx": {
-    "catch {}": 1
   },
   "apps/web/src/client/pages/code/ReviewPanel.tsx": {
     ".catch((): CheckpointView[] => [])": 1
@@ -119,9 +96,6 @@
   "apps/web/src/client/pages/tasks/Tasks.tsx": {
     ".catch(() => toast.error(\"Couldn't undo\"))": 1
   },
-  "apps/web/src/client/pages/terminal/Terminal.tsx": {
-    "catch {}": 4
-  },
   "apps/web/src/client/pages/vault/VaultItemDetail.tsx": {
     ".catch(() => {})": 1
   },
@@ -137,9 +111,6 @@
   },
   "apps/web/src/client/store/code.ts": {
     ".catch(() => set({ harnesses: [] }))": 1
-  },
-  "apps/web/src/client/store/ui.ts": {
-    "catch {}": 2
   },
   "apps/web/src/server/api/bots/bots.list.ts": {
     "catch {}": 1
@@ -183,9 +154,6 @@
     ".catch(() => null)": 1,
     ".catch(() => undefined)": 8
   },
-  "apps/web/src/server/api/code/code.registry.ts": {
-    ".catch(() => undefined)": 1
-  },
   "apps/web/src/server/api/code/code.reviews.ts": {
     ".catch(() => undefined)": 3
   },
@@ -212,9 +180,6 @@
     ".catch(() => [])": 1
   },
   "apps/web/src/server/api/routines/routines.arming.ts": {
-    "catch {}": 1
-  },
-  "apps/web/src/server/api/skills/skills.service.ts": {
     "catch {}": 1
   },
   "apps/web/src/server/api/traces/traces.service.ts": {

@@ -9,8 +9,8 @@ import {
   type ConversationRef,
   type ToolPermission,
 } from "@tiny-agents/agent";
-import { db, bots, connections as connectionsTable, skills as skillsTable } from "../../db";
-import { takesShared } from "./bot-reach";
+import { db, bots } from "../../db";
+import { reachedConnections, reachedSkills } from "./bot-reach";
 import { botPermissions, ownerToolPermissions } from "./tool-permissions";
 import type { BotData } from "../../../shared/api/bots";
 import type { BrowserProfile } from "../../../shared/api/live";
@@ -60,13 +60,6 @@ export type BotWithLinks = BotRow & {
 };
 
 const withLinks = {
-  skills: { columns: { skillId: true, enabled: true } },
-  connections: {
-    columns: { connectionId: true, enabled: true },
-    with: {
-      connection: { columns: { slug: true, toolsCache: true, disabledTools: true } },
-    },
-  },
   guests: { columns: { userId: true } },
 } as const;
 
@@ -94,37 +87,14 @@ export function toBot(row: BotWithLinks): Bot {
 export async function findBotRow(id: string): Promise<BotWithLinks> {
   const bot = await db.query.bots.findFirst({ where: eq(bots.id, id), with: withLinks });
   if (!bot) throw Boom.notFound("Bot not found");
-  const shared = takesShared(bot);
-  const linkedConnections = new Set(bot.connections.map((link) => link.connectionId));
-  const linkedSkills = new Set(bot.skills.map((link) => link.skillId));
-  const sharedConnections = shared
-    ? await db.query.connections.findMany({
-        where: eq(connectionsTable.allBots, true),
-        columns: { id: true, slug: true, toolsCache: true, disabledTools: true },
-      })
-    : [];
-  const sharedSkills = shared
-    ? await db.query.skills.findMany({
-        where: eq(skillsTable.allBots, true),
-        columns: { id: true },
-      })
-    : [];
+  const [connections, skills] = await Promise.all([reachedConnections(bot), reachedSkills(bot)]);
   return {
     ...bot,
-    connections: [
-      ...bot.connections
-        .filter((link) => link.enabled)
-        .map(({ connectionId, connection }) => ({ connectionId, connection })),
-      ...sharedConnections
-        .filter((connection) => !linkedConnections.has(connection.id))
-        .map(({ id: connectionId, ...connection }) => ({ connectionId, connection })),
-    ],
-    skills: [
-      ...bot.skills.filter((link) => link.enabled).map(({ skillId }) => ({ skillId })),
-      ...sharedSkills
-        .filter((skill) => !linkedSkills.has(skill.id))
-        .map((skill) => ({ skillId: skill.id })),
-    ],
+    connections: connections.map(({ id: connectionId, slug, toolsCache, disabledTools }) => ({
+      connectionId,
+      connection: { slug, toolsCache, disabledTools },
+    })),
+    skills: skills.map((skill) => ({ skillId: skill.id })),
   };
 }
 

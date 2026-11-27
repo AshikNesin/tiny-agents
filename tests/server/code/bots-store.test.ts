@@ -121,6 +121,22 @@ describe("code hand-off store", () => {
     ).toEqual({ error: 'No harness "nope". Available: shelley, claude-code.' });
   });
 
+  it("keeps the project's default model for the project's own harness", async () => {
+    await db
+      .update(codeProjects)
+      .set({ defaultModel: "shelley-opus" })
+      .where(eq(codeProjects.id, fixture.project.id));
+    ok(
+      await codeStore.start({
+        conversationId: 101,
+        idempotencyKey: "model-1",
+        task: "t",
+        harness: "claude-code",
+      }),
+    );
+    expect(fake.created[0]).not.toHaveProperty("model", "shelley-opus");
+  });
+
   it("asks which project when there are several, and for one when there is none", async () => {
     await db.insert(codeProjects).values({
       ...fixture.project,

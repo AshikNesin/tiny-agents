@@ -16,7 +16,13 @@ import {
 
 export type SettingsSectionInfo = Omit<SettingsSection, "element" | "items">;
 
-const OWNER_SECTIONS: SettingsSectionInfo[] = [
+function defineSections<const Id extends string>(
+  sections: Array<SettingsSectionInfo & { id: Id }>,
+) {
+  return sections;
+}
+
+const OWNER_SECTIONS = defineSections([
   {
     id: "account",
     label: "Account",
@@ -100,9 +106,9 @@ const OWNER_SECTIONS: SettingsSectionInfo[] = [
     description: "Update a local install from git and restart it.",
     keywords: ["update", "upgrade", "version", "restart", "release", "git", "pnpm local"],
   },
-];
+]);
 
-const CODE_SECTIONS: SettingsSectionInfo[] = [
+const CODE_SECTIONS = defineSections([
   {
     id: "projects",
     label: "Projects",
@@ -128,11 +134,17 @@ const CODE_SECTIONS: SettingsSectionInfo[] = [
     description: "What the Reviews list in the Code sidebar shows from GitHub.",
     keywords: ["pull requests", "review requests", "drafts", "bots", "filters"],
   },
-];
+]);
 
-const GUEST_SECTION_IDS = new Set(["appearance", "security"]);
+export type CodeSettingsSectionId = (typeof CODE_SECTIONS)[number]["id"];
+export type SettingsSectionId = (typeof OWNER_SECTIONS)[number]["id"] | CodeSettingsSectionId;
 
-export function settingsSectionsFor(guest: boolean, code: boolean): SettingsSectionInfo[] {
+const GUEST_SECTION_IDS = new Set<SettingsSectionId>(["appearance", "security"]);
+
+export function settingsSectionsFor(
+  guest: boolean,
+  code: boolean,
+): Array<SettingsSectionInfo & { id: SettingsSectionId }> {
   if (guest) return OWNER_SECTIONS.filter((s) => GUEST_SECTION_IDS.has(s.id));
   return code ? [...OWNER_SECTIONS, ...CODE_SECTIONS] : OWNER_SECTIONS;
 }

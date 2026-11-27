@@ -52,7 +52,7 @@ const renderedElements = (node) => {
 };
 
 const LOAD_IN_EFFECT_MESSAGE =
-  "R15: load request/response data with useResource from apps/web/src/client/queries/resource.ts (writes: useMutation), not a fetch in useEffect. A hand-rolled load needs its own cancel flag, busy reset and refresh after a change, and agents kept missing one (issue #412). A live stream or socket is not a resource: list the file in R15's except in scripts/lint/boundaries.ts with the reason.";
+  "R15: load request/response data with useResource from apps/web/src/client/queries/resource.ts (writes: useMutation), not a fetch, an `xxxApi.` call or a `load…`/`fetch…` helper in useEffect. A hand-rolled load needs its own cancel flag, busy reset and refresh after a change, and agents kept missing one (issue #412). A live stream or socket is not a resource: list the file in R15's except in scripts/lint/boundaries.ts with the reason.";
 
 const EFFECT_HOOKS = new Set(["useEffect", "useLayoutEffect"]);
 
@@ -76,6 +76,17 @@ const isLoadCall = (node) => {
     callee.object.type === "Identifier" &&
     callee.object.name.endsWith("Api")
   );
+};
+
+const LOADER_NAME = /^(load|fetch)[A-Z]/;
+
+const loaderName = (node) => {
+  const callee = node.callee;
+  if (callee.type === "Identifier") return LOADER_NAME.test(callee.name) ? callee.name : null;
+  if (callee.type === "MemberExpression" && callee.property.type === "Identifier") {
+    return LOADER_NAME.test(callee.property.name) ? callee.property.name : null;
+  }
+  return null;
 };
 
 const CASTS = new Set(["TSAsExpression", "TSTypeAssertion"]);
@@ -610,7 +621,13 @@ export default {
     "no-load-in-effect": {
       create(context) {
         const held = [];
+        const loaders = [];
+        const localNames = new Set();
         const effectNames = new Set();
+        const insideEffect = (node) => {
+          for (let p = node.parent; p; p = p.parent) if (isEffectCall(p)) return true;
+          return false;
+        };
         const isFunction = (n) =>
           n?.type === "ArrowFunctionExpression" ||
           n?.type === "FunctionExpression" ||
@@ -656,7 +673,12 @@ export default {
               collectNames(node.arguments[0]);
               return;
             }
-            if (!isLoadCall(node)) return;
+            if (!isLoadCall(node)) {
+              const name = loaderName(node);
+              if (name && insideEffect(node))
+                loaders.push({ node, name, member: node.callee.type === "MemberExpression" });
+              return;
+            }
             for (let p = node.parent; p; p = p.parent) {
               if (isEffectCall(p)) {
                 context.report({ node, message: LOAD_IN_EFFECT_MESSAGE });
@@ -665,9 +687,20 @@ export default {
             }
             held.push({ node, names: holderNames(node) });
           },
+          FunctionDeclaration(node) {
+            if (node.id) localNames.add(node.id.name);
+          },
+          VariableDeclarator(node) {
+            if (node.id.type === "Identifier") localNames.add(node.id.name);
+          },
           "Program:exit"() {
             for (const { node, names } of held) {
               if (names.some((n) => effectNames.has(n))) {
+                context.report({ node, message: LOAD_IN_EFFECT_MESSAGE });
+              }
+            }
+            for (const { node, name, member } of loaders) {
+              if (member || !localNames.has(name)) {
                 context.report({ node, message: LOAD_IN_EFFECT_MESSAGE });
               }
             }

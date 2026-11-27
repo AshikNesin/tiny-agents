@@ -424,10 +424,10 @@ describe("reviewing a Code thread's own PR", () => {
   it("lets go of the thread's worktree when the thread is archived and checks the PR out on its own", async () => {
     const { threadId, head } = await threadPull();
     const review = await open();
-    const { onThreadArchived } =
+    const { archiveCodeThread } =
       await import("../../../../apps/web/src/server/api/code/code.pulls");
 
-    await onThreadArchived(threadId, true);
+    await archiveCodeThread(threadId, true);
 
     expect((await reviewFiles(review.key)).map((f) => f.path)).toEqual(["src/retry.ts"]);
     expect(await sh(local, `git -C ${REVIEW_DIR()} rev-parse HEAD`)).toBe(head);

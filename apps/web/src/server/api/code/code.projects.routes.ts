@@ -339,7 +339,7 @@ router.post("/code/threads/:id/pr/merge", async (c) => {
   const id = threadParam(c.req.param("id"));
   const { method } = await parseBody(
     c,
-    z.object({ method: z.enum(["merge", "squash", "rebase"]) }),
+    z.object({ method: z.enum(["merge", "squash", "rebase"]).optional() }),
   );
   await mergePull(id, method);
   return ok<ThreadPullsView>(c, await threadPulls(id, false));

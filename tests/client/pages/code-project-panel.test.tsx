@@ -267,6 +267,21 @@ describe("the project chat's side panel", () => {
     expect(merged).toHaveTextContent("#529");
   });
 
+  it("says a paused pull request is paused, not open", async () => {
+    const paused = thread("ccc", {
+      pr: { number: 12, loop: "paused", url: "https://x/12" },
+      status: { group: "review", reason: null },
+    });
+    useCodeStore.setState({ threads: [paused] });
+    renderAt("/code/p/p1");
+    await screen.findByPlaceholderText("Message web");
+    fireEvent.click(panel().querySelector('[data-thread="demo:ccc"]')!);
+    open(paused);
+    const bar = await within(panel()).findByTestId("project-panel-pr");
+    expect(bar).toHaveTextContent("Paused");
+    expect(within(bar).getByLabelText("Pull request #12, Paused")).toBeInTheDocument();
+  });
+
   it("search narrows the list by title", async () => {
     renderAt("/code/p/p1");
     await screen.findByPlaceholderText("Message web");

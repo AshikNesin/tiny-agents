@@ -22,6 +22,7 @@ import {
   type PiThreadConfig,
 } from "@tiny-agents/code/server";
 import type { ModelOption } from "@tiny-agents/code/contracts";
+import type { ClaudeWorkerLocator } from "@tiny-agents/agent/claude-worker";
 import { appEnv, type AppEnv } from "../../env";
 import { TOOL_SEARCH_TOOLKIT } from "../bots/bot-toolkits";
 import { ownerToolPermissions } from "../bots/tool-permissions";
@@ -36,7 +37,7 @@ import {
   nativeSkills,
   sharedConnectionToolkits,
 } from "./code.tools";
-import { sharedSkills } from "../skills/skills.store";
+import { reachedSkills } from "../bots/bot-reach";
 
 const SKILLS_TOOLKIT = "skills";
 
@@ -67,29 +68,15 @@ function claudeCodeHarness(env: AppEnv, host: HarnessHost): HarnessInstance | un
   const locator = sharedClaudeWorkerLocator(env);
   if (!locator) return undefined;
   let hint: InstanceStatus | undefined;
+  let poll: ReturnType<typeof setInterval> | undefined;
   const readLogin = () =>
     void locator
       .account()
       .then((account) => {
-        hint =
-          account.state === "ready" && !account.subscription
-            ? {
-                state: "reconnecting",
-                detail: "Sign Claude Code in: Settings → Models → Claude plan → Sign in.",
-              }
-            : account.state === "installing"
-              ? {
-                  state: "connecting",
-                  detail: "Setting up Claude Code on the sandbox…",
-                }
-              : account.state === "error"
-                ? { state: "reconnecting", detail: account.detail }
-                : undefined;
+        hint = claudeSignInHint(account);
       })
-      .catch(() => undefined);
-  readLogin();
-  setInterval(readLogin, 5 * 60_000).unref?.();
-  return createClaudeCodeHarness({
+      .catch(keepTheLastHintWhileTheWorkerIsUnreachable);
+  const harness = createClaudeCodeHarness({
     host,
     resolveWorker: () => locator.resolve(),
     tools: claudeCodeTools(),
@@ -97,6 +84,39 @@ function claudeCodeHarness(env: AppEnv, host: HarnessHost): HarnessInstance | un
     status: () => hint ?? { state: "connected" },
     models: claudePlanModels,
   });
+  return {
+    ...harness,
+    start() {
+      harness.start();
+      if (poll) return;
+      readLogin();
+      poll = setInterval(readLogin, 5 * 60_000);
+      poll.unref?.();
+    },
+    stop() {
+      clearInterval(poll);
+      poll = undefined;
+      harness.stop();
+    },
+  };
+}
+
+function keepTheLastHintWhileTheWorkerIsUnreachable(): void {}
+
+type ClaudeAccount = Awaited<ReturnType<ClaudeWorkerLocator["account"]>>;
+
+function claudeSignInHint(account: ClaudeAccount): InstanceStatus | undefined {
+  if (account.state === "ready" && !account.subscription) {
+    return {
+      state: "reconnecting",
+      detail: "Sign Claude Code in: Settings → Models → Claude plan → Sign in.",
+    };
+  }
+  if (account.state === "installing") {
+    return { state: "connecting", detail: "Setting up Claude Code on the sandbox…" };
+  }
+  if (account.state === "error") return { state: "reconnecting", detail: account.detail };
+  return undefined;
 }
 
 function claudePlanModels(): ModelOption[] {
@@ -133,7 +153,7 @@ function nativeModels(runtime: AgentRuntime): ModelOption[] {
 async function nativeConfig(config: PiThreadConfig): Promise<BotAgentConfig> {
   const [shared, skills, owner] = await Promise.all([
     sharedConnectionToolkits(),
-    sharedSkills(),
+    reachedSkills("code-thread"),
     ownerToolPermissions(),
   ]);
   const coding = codingSelection(config.permissionMode);

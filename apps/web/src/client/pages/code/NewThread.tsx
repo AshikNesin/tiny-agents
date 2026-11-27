@@ -6,54 +6,28 @@ import { Button } from "@groot/ui";
 import { SearchSelect, type SearchSelectOption } from "@groot/ui/search-select";
 import { Spinner } from "../../components/ui/spinner";
 import { errorMessage } from "../../lib/errors";
-import {
-  codeApi,
-  threadPath,
-  type HarnessInfo,
-  type ModelOption,
-  type PermissionMode,
-} from "../../lib/code/api";
+import { codeApi, threadPath, type HarnessInfo, type PermissionMode } from "../../lib/code/api";
 import type { ProjectView } from "../../../shared/api/code";
-import { DEFAULT, ModelPicker, PermissionPicker, composerPermission, loadModels } from "./controls";
+import {
+  DEFAULT,
+  ModelPicker,
+  PermissionPicker,
+  composerPermission,
+  useHarnessModels,
+} from "./controls";
 import { useCodeStore } from "../../store/code";
 import { useUiStore } from "../../store/ui";
+import { readStored, writeStored } from "../../lib/browser-storage";
 
 const PROJECT_KEY = "tiny-agents:code-project";
 const RECENT_PROJECTS = 5;
 
-const storageIsBlockedInPrivateWindows = (): void => undefined;
-
 function lastProject(): string | null {
-  try {
-    return localStorage.getItem(PROJECT_KEY);
-  } catch {
-    storageIsBlockedInPrivateWindows();
-    return null;
-  }
+  return readStored(PROJECT_KEY);
 }
 
 function rememberProject(id: string): void {
-  try {
-    localStorage.setItem(PROJECT_KEY, id);
-  } catch {
-    storageIsBlockedInPrivateWindows();
-  }
-}
-
-function useModels(instanceId: string | undefined): ModelOption[] {
-  const [models, setModels] = useState<ModelOption[]>([]);
-  useEffect(() => {
-    setModels([]);
-    if (!instanceId) return;
-    let live = true;
-    void loadModels(instanceId)
-      .then((list) => live && setModels(list))
-      .catch((error: unknown) => toast.error(errorMessage(error, "Could not load the models.")));
-    return () => {
-      live = false;
-    };
-  }, [instanceId]);
-  return models;
+  writeStored(PROJECT_KEY, id);
 }
 
 function useProjectOptions(projects: ProjectView[] | null): {
@@ -99,6 +73,12 @@ function useProjectOptions(projects: ProjectView[] | null): {
   return { options: ranked.options, latest: latest || undefined };
 }
 
+function modelFor(project: ProjectView | null, instanceId: string): string {
+  return project && instanceId === project.defaultInstanceId
+    ? (project.defaultModel ?? DEFAULT)
+    : DEFAULT;
+}
+
 export function NewThread({
   focused,
   projects,
@@ -129,17 +109,22 @@ export function NewThread({
     "";
   const project = projects?.find((p) => p.id === projectId) ?? null;
   const harness = harnesses.find((h) => h.id === instanceId);
-  const models = useModels(harness?.id);
+  const models = useHarnessModels(harness?.id);
 
   useEffect(() => {
     if (focused) box.current?.focus();
   }, [focused, projects]);
 
+  const pickInstance = (id: string) => {
+    setInstanceId(id);
+    setModel(modelFor(project, id));
+  };
+
   useEffect(() => {
     if (!project) return;
     const preferred = harnesses.find((h) => h.id === project.defaultInstanceId) ?? harnesses[0];
     setInstanceId(preferred?.id ?? "");
-    setModel(project.defaultModel ?? DEFAULT);
+    setModel(modelFor(project, preferred?.id ?? ""));
   }, [project, harnesses]);
 
   useEffect(() => {
@@ -237,7 +222,7 @@ export function NewThread({
                     <SearchSelect
                       label="Agent"
                       value={instanceId}
-                      onValueChange={setInstanceId}
+                      onValueChange={pickInstance}
                       options={harnesses.map((h) => ({ value: h.id, label: h.label }))}
                       searchable={false}
                       data-testid="code-new-agent"

@@ -31,7 +31,6 @@ import {
   codeApi,
   threadPath,
   type HarnessInfo,
-  type ModelOption,
   type PermissionMode,
   type ThreadSettings,
   type ThreadSummary,
@@ -55,7 +54,7 @@ import {
   PermissionPicker,
   PullChip,
   ReasoningPicker,
-  loadModels,
+  useHarnessModels,
   useArchive,
 } from "./controls";
 import {
@@ -361,22 +360,13 @@ export function ThreadView({
   const caps = harness.capabilities;
   const listRow = rows.find((r) => r.id === id);
   const row = thread ?? listRow;
-  const [models, setModels] = useState<ModelOption[]>([]);
+  const models = useHarnessModels(harness.id);
   const archive = useArchive();
   const owner = useViewerRole() === "owner";
   const comments = useThreadComments(id, owner);
   const commentsSent = useCommentStore((s) => s.sent);
   useMarkSeen(id, state.cursor);
   const lastTurn = useMemo(() => lastTurnOf(items), [items]);
-
-  useEffect(() => {
-    void loadModels(harness.id)
-      .then(setModels)
-      .catch((error: unknown) => {
-        setModels([]);
-        toast.error(errorMessage(error, `Could not load ${harness.label}'s models.`));
-      });
-  }, [harness.id, harness.label]);
 
   const run = useCallback(async (what: string, action: () => Promise<unknown>) => {
     try {

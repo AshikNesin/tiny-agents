@@ -1,4 +1,8 @@
-import { WORKFLOW_KINDS, type WorkflowName } from "../../../shared/code-status";
+import {
+  preferredMergeMethod,
+  WORKFLOW_KINDS,
+  type WorkflowName,
+} from "../../../shared/code-status";
 import { eq, inArray } from "drizzle-orm";
 import { Boom } from "@groot/core/errors";
 import { logger } from "@groot/core/logger";
@@ -12,7 +16,14 @@ import {
   type PullSnapshot,
 } from "@tiny-agents/github";
 import type { TurnOutcome } from "@tiny-agents/code/server";
-import { db, jobs, type CodePullRow, type CodeProjectRow, type CodeThreadRow } from "../../db";
+import {
+  codeThreads,
+  db,
+  jobs,
+  type CodePullRow,
+  type CodeProjectRow,
+  type CodeThreadRow,
+} from "../../db";
 import type { PullView, ThreadPullsView } from "../../../shared/api/code";
 import { codePullUpdate, type CodePullKind } from "../notifications/notifications.events";
 import {
@@ -29,6 +40,7 @@ import {
 import { checkpointTurn } from "./code.checkpoints";
 import { codeGitHub } from "./code.github";
 import { codeHub } from "./code.hub";
+import { threadKey } from "./code.threads";
 import { pullTitle } from "./code.naming";
 import { reportPull, type PullReportKind } from "./code.report";
 import { finishPass, startPass, timeOutPass } from "./code.passes";
@@ -323,9 +335,13 @@ export async function noteOwnerInput(threadId: string): Promise<void> {
   }
 }
 
-export async function mergePull(threadId: string, method: MergeMethod): Promise<void> {
+export async function mergePull(threadId: string, picked?: MergeMethod): Promise<void> {
   const { open, repo, github } = await openPullContext(threadId);
-  await (await github()).merge(repo, open.number, method).catch((error: unknown) => {
+  const client = await github();
+  const method =
+    picked ?? preferredMergeMethod((await client.snapshot(repo, open.number)).mergeMethods);
+  if (!method) throw Boom.conflict(`${repo.owner}/${repo.name} allows no merge method.`);
+  await client.merge(repo, open.number, method).catch((error: unknown) => {
     throw Boom.conflict(`GitHub did not merge #${open.number}: ${githubMessage(error)}`);
   });
   await reconcileNow(open.id);
@@ -625,28 +641,30 @@ async function holdsUncommittedWork(
 }
 
 async function archiveThread(threadId: string): Promise<void> {
-  const target = codeHub()?.resolve(threadId);
   try {
-    if (target?.instance.archive && target.instance.capabilities().threads.archive) {
-      await target.instance.archive(target.nativeId, true);
-      void codeHub()?.refresh(target.instance.id);
-    }
-    await onProjectThreadArchived(threadId, true);
+    await archiveCodeThread(threadId, true);
   } catch (error) {
     logger.warn({ error, threadId }, "Code: could not archive a finished thread");
   }
 }
 
-export async function onThreadArchived(threadId: string, archived: boolean): Promise<void> {
-  if (archived) {
-    const open = await openPullOf(threadId);
+export async function archiveCodeThread(threadId: string, archived: boolean): Promise<string[]> {
+  const target = codeHub()?.resolve(threadId);
+  const canArchive = target?.instance.archive && target.instance.capabilities().threads.archive;
+  const moved = canArchive
+    ? (await target.instance.archive!(target.nativeId, archived)).moved.map((child) =>
+        threadKey(target.instance.id, child),
+      )
+    : [];
+  for (const id of new Set([threadId, ...moved])) {
+    await db.update(codeThreads).set({ archived }).where(eq(codeThreads.id, id));
+    const open = archived ? await openPullOf(id) : undefined;
     if (open)
-      await moveLoop(open.id, "off", {
-        reason: "The thread was archived.",
-        autofix: false,
-      });
+      await moveLoop(open.id, "off", { reason: "The thread was archived.", autofix: false });
+    await onProjectThreadArchived(id, archived);
   }
-  await onProjectThreadArchived(threadId, archived);
+  if (target) void codeHub()?.refresh(target.instance.id);
+  return moved;
 }
 
 export async function armReconcile(

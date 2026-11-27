@@ -9,6 +9,7 @@ import {
   type RefObject,
 } from "react";
 import { cn } from "@groot/ui/lib/utils";
+import { readStored, writeStored } from "../../lib/browser-storage";
 
 const STEP = 16;
 const BIG_STEP = 64;
@@ -51,19 +52,12 @@ const ASSISTANT: PanelLimits = {
 };
 
 function readWidth(key: string): number | null {
-  try {
-    const stored = Number(window.localStorage.getItem(key));
-    return stored > 0 ? stored : null;
-  } catch {
-    return null;
-  }
+  const stored = Number(readStored(key));
+  return stored > 0 ? stored : null;
 }
 
 function saveWidth(key: string, width: number | null) {
-  try {
-    if (width === null) window.localStorage.removeItem(key);
-    else window.localStorage.setItem(key, String(Math.round(width)));
-  } catch {}
+  writeStored(key, width === null ? null : String(Math.round(width)));
 }
 
 function useStoredWidth(key: string) {

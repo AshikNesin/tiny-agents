@@ -1,16 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
-import {
-  ArrowUp,
-  File,
-  Folder,
-  ListPlus,
-  Paperclip,
-  Plus,
-  Sparkles,
-  Square,
-  X,
-} from "lucide-react";
-import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import { File, Folder, ListPlus, Paperclip, Plus, Sparkles, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button, monoClass } from "@groot/ui";
 import {
@@ -32,6 +21,7 @@ import { codeApi, type HarnessInfo, type Skill } from "../../lib/code/api";
 import { RESOURCE_QUERY, wait } from "../../queries/resource";
 import {
   canSend as draftCanSend,
+  activeSkillToken,
   editText,
   emptyDraft,
   hasContent,
@@ -45,18 +35,18 @@ import {
   readStoredDraft,
   writeStoredDraft,
 } from "../../lib/composer-browser";
+import { activeMentionToken } from "../../lib/mentions";
 import { canStageMore, stageUploads, unstageUpload, type Staging } from "../../lib/staged-uploads";
+import { ComposerSendIcon } from "../../components/composer-send-icon";
 
 function tokenAt(
   text: string,
   cursor: number,
 ): { kind: "@" | "/"; start: number; query: string } | undefined {
-  const before = text.slice(0, cursor);
-  const at = /(^|\s)@([^\s@]*)$/.exec(before);
-  if (at) return { kind: "@", start: cursor - at[2].length - 1, query: at[2] };
-  const slash = /^\/([a-z-]*)$/.exec(before);
-  if (slash) return { kind: "/", start: 0, query: slash[1] };
-  return undefined;
+  const mention = activeMentionToken(text, cursor);
+  if (mention) return { kind: "@", ...mention };
+  const skill = activeSkillToken(text, cursor);
+  return skill ? { kind: "/", start: 0, query: skill.query } : undefined;
 }
 
 interface Suggestion {
@@ -107,7 +97,6 @@ export function Composer({
   lastTurn = null,
   onSend,
 }: ComposerProps) {
-  const reduceMotion = useReducedMotion() ?? false;
   const caps = harness.capabilities;
   const canUpload = caps.workspace.uploads;
   const canFind = caps.workspace.findFiles;
@@ -246,12 +235,10 @@ export function Composer({
     const cursor = area.current?.selectionStart ?? text.length;
     if (pick.skill) {
       setSelectedSkills((prev) => [...prev, pick.value]);
-      setDraft((current) => editText(current, text.slice(cursor).trimStart()));
+      const rest = text.slice(cursor).trimStart();
+      setDraft((current) => editText(current, rest));
       setToken(undefined);
-      requestAnimationFrame(() => {
-        area.current?.setSelectionRange(0, 0);
-        area.current?.focus();
-      });
+      placeCaretOnceRendered(rest, 0);
       return;
     }
     const replacement =
@@ -259,10 +246,15 @@ export function Composer({
     const next = text.slice(0, token.start) + replacement + text.slice(cursor);
     setDraft((current) => editText(current, next));
     setToken(undefined);
+    placeCaretOnceRendered(next, token.start + replacement.length);
+  };
+
+  const placeCaretOnceRendered = (expected: string, pos: number) => {
     requestAnimationFrame(() => {
-      const pos = token.start + replacement.length;
-      area.current?.setSelectionRange(pos, pos);
-      area.current?.focus();
+      const box = area.current;
+      if (!box || box.value !== expected) return;
+      box.setSelectionRange(pos, pos);
+      box.focus();
     });
   };
 
@@ -587,28 +579,7 @@ export function Composer({
             }
             className="size-8 shrink-0 rounded-full disabled:opacity-30"
           >
-            <AnimatePresence mode="popLayout" initial={false}>
-              <motion.span
-                key={showStop ? "stop" : sending ? "sending" : "send"}
-                initial={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.6 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={
-                  reduceMotion
-                    ? { opacity: 0 }
-                    : { opacity: 0, scale: 0.6, transition: { duration: 0.06 } }
-                }
-                transition={{ type: "spring", duration: 0.08, bounce: 0 }}
-                className="flex items-center justify-center leading-none"
-              >
-                {showStop ? (
-                  <Square className="size-3 fill-current" />
-                ) : sending ? (
-                  <Spinner className="size-4" aria-hidden />
-                ) : (
-                  <ArrowUp className="size-4" />
-                )}
-              </motion.span>
-            </AnimatePresence>
+            <ComposerSendIcon mode={showStop ? "stop" : sending ? "busy" : "send"} />
           </Button>
         </div>
       </div>

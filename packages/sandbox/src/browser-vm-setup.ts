@@ -20,7 +20,10 @@ import {
 export { LAUNCH_LOCK_FILE } from "./vm-stack";
 export { shQuote };
 
-export const STACK_VERSION = "v1";
+export const STACK_VERSION = "v2";
+
+const CHROME_POLICY = JSON.stringify({ PasswordManagerEnabled: false });
+const CHROME_POLICY_DIRS = ["/etc/opt/chrome/policies/managed", "/etc/chromium/policies/managed"];
 
 export interface LaunchStackOptions {
   profileDir: string;
@@ -86,6 +89,10 @@ const BROWSER_STACK: VmStackSpec<LaunchStackOptions> = {
     '  sudo -n apt-get install -y -qq "$TMP/chrome.deb"',
     '  rm -rf "$TMP"',
     "fi",
+    ...CHROME_POLICY_DIRS.flatMap((dir) => [
+      `sudo -n mkdir -p ${dir}`,
+      `printf '%s\\n' ${shQuote(CHROME_POLICY)} | sudo -n tee ${dir}/tiny-agents.json >/dev/null`,
+    ]),
   ],
   launch: {
     lockHolders: "browser",

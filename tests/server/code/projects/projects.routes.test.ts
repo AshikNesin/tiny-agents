@@ -537,8 +537,10 @@ describe("publish and the PR tab", () => {
     await pr(thread.id);
 
     const row = (await db.query.codeThreads.findFirst({ where: eq(codeThreads.id, thread.id) }))!;
-    expect(row.worktree).toBeNull();
+    expect([row.archived, row.worktree]).toEqual([true, null]);
     expect(existsSync(thread.worktree)).toBe(false);
+    const listed = await call<Array<{ id: string }>>("GET", "/threads");
+    expect(listed.body.data!.map((listedThread) => listedThread.id)).not.toContain(thread.id);
   });
 
   it("keeps the worktree of a closed PR's thread that has uncommitted changes", async () => {
@@ -970,6 +972,16 @@ describe("Auto-fix", () => {
     expect(github.merged).toEqual([]);
   });
 
+  it("merges with the repository's own method when none is picked", async () => {
+    const thread = await publishedThread();
+    github.pull(1).mergeMethods = ["rebase"];
+
+    const merged = await call("POST", `/threads/${encodeURIComponent(thread.id)}/pr/merge`, {});
+
+    expect(merged.status).toBe(200);
+    expect(github.merged).toEqual([{ number: 1, method: "rebase" }]);
+  });
+
   it("YOLO Merge refuses a method the repository does not allow", async () => {
     const thread = await publishedThread();
     const refused = await call("POST", `/threads/${encodeURIComponent(thread.id)}/pr/yolo`, {
@@ -1090,10 +1102,10 @@ describe("thread lifecycle", () => {
   it("removes the worktree on archive and turns Auto-fix off; the branch stays", async () => {
     const project = await newProject();
     const thread = await newThread(project.id);
-    const { onThreadArchived } =
+    const { archiveCodeThread } =
       await import("../../../../apps/web/src/server/api/code/code.pulls");
     await commit(thread.worktree, "a.txt");
-    await onThreadArchived(thread.id, true);
+    await archiveCodeThread(thread.id, true);
     expect(existsSync(thread.worktree)).toBe(false);
     const enc = encodeURIComponent(thread.id);
     const [start] = (await call<CheckpointView[]>("GET", `/threads/${enc}/checkpoints`)).body.data!;
@@ -1106,7 +1118,7 @@ describe("thread lifecycle", () => {
       await sh(local, `git -C ${project.checkoutPath} rev-parse --verify ${thread.branch}`),
     ).toMatch(/^[0-9a-f]{40}$/);
 
-    await onThreadArchived(thread.id, false);
+    await archiveCodeThread(thread.id, false);
     expect(existsSync(join(thread.worktree, "a.txt"))).toBe(true);
   });
 });

@@ -1,6 +1,11 @@
+import type { MergeMethod } from "@tiny-agents/github";
 import type { RunStatus } from "./machines/run";
 
 type ThreadGroup = "needs-you" | "working" | "review" | "done";
+
+export function preferredMergeMethod(methods: readonly MergeMethod[]): MergeMethod | undefined {
+  return methods.includes("squash") ? "squash" : methods[0];
+}
 
 export interface ThreadStatus {
   group: ThreadGroup;

@@ -9,21 +9,9 @@ import {
   useRef,
   useState,
 } from "react";
-import {
-  ArrowUp,
-  AtSign,
-  ChevronDown,
-  Cpu,
-  ListPlus,
-  Paperclip,
-  Plus,
-  Sparkles,
-  Square,
-  Zap,
-} from "lucide-react";
+import { AtSign, ChevronDown, Cpu, ListPlus, Paperclip, Plus, Sparkles, Zap } from "lucide-react";
 import { useViewerRole } from "../store/people";
 import { useSkills } from "../queries/skills";
-import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { Button } from "@groot/ui/button";
 import {
   DropdownMenu,
@@ -68,8 +56,8 @@ import {
   type MentionAutocompleteHandle,
   type MentionableBot,
 } from "./MentionAutocomplete";
-import { Spinner } from "./ui/spinner";
 import { SearchSelect, type SearchSelectOption } from "@groot/ui/search-select";
+import { ComposerSendIcon } from "./composer-send-icon";
 
 const ACCEPTED_FILES =
   "image/png,image/jpeg,image/webp,image/gif,.pdf,.txt,.md,.json,.csv,.yaml,.yml,.xml,.html,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.odt,.ods,.odp,.zip,.tar,.gz,.tgz,.bz2,.7z,.rar,.mp3,.wav,.ogg,.m4a,.mp4,.webm,.mov,.tsv,.log,.ts,.tsx,.js,.jsx,.mjs,.cjs,.py,.go,.rs,.java,.kt,.rb,.php,.sh,.sql,.toml,.ini,.cfg,.diff,.patch,.css,.c,.h,.cpp,.swift";
@@ -217,7 +205,6 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
   const mentionFromMenu = useRef(false);
   const mentionRef = useRef<MentionAutocompleteHandle>(null);
   const coarsePointer = useMemo(prefersCoarsePointer, []);
-  const reduceMotion = useReducedMotion() ?? false;
 
   const roster = useBotsStore((s) => s.bots);
   const mentionCandidates = useMemo(() => mentionableBots(roster, bot.id), [roster, bot.id]);
@@ -574,34 +561,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
                 }
                 className="size-8 rounded-full disabled:opacity-30"
               >
-                <AnimatePresence mode="popLayout" initial={false}>
-                  <motion.span
-                    key={showStop ? (stopping ? "stopping" : "stop") : "send"}
-                    initial={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.6 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={
-                      reduceMotion
-                        ? { opacity: 0 }
-                        : {
-                            opacity: 0,
-                            scale: 0.6,
-                            transition: { duration: 0.06 },
-                          }
-                    }
-                    transition={{ type: "spring", duration: 0.08, bounce: 0 }}
-                    className="flex items-center justify-center leading-none"
-                  >
-                    {showStop ? (
-                      stopping ? (
-                        <Spinner className="size-4" aria-hidden />
-                      ) : (
-                        <Square className="size-3 fill-current" />
-                      )
-                    ) : (
-                      <ArrowUp className="size-4" />
-                    )}
-                  </motion.span>
-                </AnimatePresence>
+                <ComposerSendIcon mode={showStop ? (stopping ? "busy" : "stop") : "send"} />
               </Button>
             </div>
           </div>

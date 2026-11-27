@@ -63,7 +63,13 @@ function ThreadsToggle({
   );
 }
 
-export function ProjectChat({ projectId }: { projectId: string }) {
+export function ProjectChat({
+  projectId,
+  onOpenMenu,
+}: {
+  projectId: string;
+  onOpenMenu?: () => void;
+}) {
   const { data: opened, loadError } = useResource(
     ["code", "project-chat", projectId],
     () => projectsApi.openChat(projectId),
@@ -123,7 +129,7 @@ export function ProjectChat({ projectId }: { projectId: string }) {
           models={models}
           canAnswer={canAnswer}
           onEditBot={() => void openEditBot(bot.id)}
-          onOpenMenu={() => navigate("/code")}
+          onOpenMenu={onOpenMenu ?? (() => navigate("/code"))}
           headerActions={<ThreadsToggle projectId={projectId} pressed={shown} onToggle={toggle} />}
         />
       </div>

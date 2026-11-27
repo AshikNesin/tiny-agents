@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { toast } from "sonner";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { RESOURCE_QUERY } from "../../queries/resource";
 import { errorMessage } from "../errors";
@@ -58,4 +59,26 @@ export function useThreadPulls(
     setView,
     reload: useCallback(() => setReloads((n) => n + 1), []),
   };
+}
+
+export function usePullActions(threadId: string) {
+  const client = useQueryClient();
+  const [busy, setBusy] = useState<string | null>(null);
+  const act = useCallback(
+    async (what: string, work: () => Promise<ThreadPullsView | void>): Promise<boolean> => {
+      setBusy(what);
+      try {
+        const next = await work();
+        if (next) client.setQueriesData<ThreadPullsView>({ queryKey: pullsKey(threadId) }, next);
+        return true;
+      } catch (error) {
+        toast.error(errorMessage(error, `Could not ${what}.`));
+        return false;
+      } finally {
+        setBusy(null);
+      }
+    },
+    [client, threadId],
+  );
+  return { busy, act };
 }

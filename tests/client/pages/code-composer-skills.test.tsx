@@ -4,7 +4,7 @@
 import React from "react";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vite-plus/test";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { Composer } from "@/pages/code/Composer";
 import type { HarnessInfo } from "@/lib/code/api";
 import { NO_CAPABILITIES } from "../../../packages/code/src/contracts/capabilities";
@@ -20,6 +20,7 @@ vi.mock("@groot/shell/lib/api", async (importOriginal) => {
           ? [
               { name: "show-me", description: "Explain it visually" },
               { name: "release-notes", description: "Write release notes" },
+              { name: "v2-notes", description: "Notes for v2" },
             ]
           : null,
     }),
@@ -43,6 +44,8 @@ const harness = {
   commands: [{ command: "/compact", hint: "Summarize" }],
   ssh: null,
 } as unknown as HarnessInfo;
+
+afterEach(() => vi.unstubAllGlobals());
 
 describe("Code composer slash skills", () => {
   it("lists skills after / and sends the picked one with the message", async () => {
@@ -69,5 +72,42 @@ describe("Code composer slash skills", () => {
     await waitFor(() => expect(onSend).toHaveBeenCalled());
     expect(onSend.mock.calls[0]![0]).toBe("draw the repo");
     expect(onSend.mock.calls[0]![1]).toMatchObject({ skills: ["show-me"] });
+  });
+
+  it("lists a skill whose name has a digit", async () => {
+    const user = userEvent.setup();
+    render(
+      <AppQueryProvider>
+        <Composer draftKey="t2" harness={harness} cwd="/work" threadId="t2" onSend={vi.fn()} />
+      </AppQueryProvider>,
+    );
+
+    await user.type(screen.getByRole("textbox"), "/v2");
+
+    await waitFor(() =>
+      expect(screen.getAllByRole("option").map((o) => o.textContent)).toEqual([
+        "v2-notesNotes for v2",
+      ]),
+    );
+  });
+
+  it("keeps what is typed right after picking a skill where it was typed", async () => {
+    const frames: FrameRequestCallback[] = [];
+    vi.stubGlobal("requestAnimationFrame", (run: FrameRequestCallback) => frames.push(run));
+    const user = userEvent.setup();
+    render(
+      <AppQueryProvider>
+        <Composer draftKey="t3" harness={harness} cwd="/work" threadId="t3" onSend={vi.fn()} />
+      </AppQueryProvider>,
+    );
+    const box = screen.getByRole("textbox");
+    await user.type(box, "/sh");
+    await screen.findByRole("option", { name: /show-me/ });
+
+    await user.keyboard("{Enter}dr");
+    for (const run of frames.splice(0)) run(0);
+    await user.keyboard("aw");
+
+    expect(box).toHaveValue("draw");
   });
 });

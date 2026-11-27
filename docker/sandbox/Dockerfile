@@ -84,6 +84,9 @@ RUN apt-get update -qq \
 # through a wrapper that adds --no-sandbox: the real launcher is diverted.
 # (On arm64 that is the symlink to Chromium, whose own menu entry gets the
 # flag from /etc/chromium.d above.)
+# Chrome's own "Save password?" prompt stays off: the vault keeps sign-ins.
+COPY chrome-policy.json /etc/opt/chrome/policies/managed/tiny-agents.json
+COPY chrome-policy.json /etc/chromium/policies/managed/tiny-agents.json
 COPY --chmod=755 chrome-wrapper.sh /usr/local/lib/tiny-agents/google-chrome-stable
 RUN dpkg-divert --local --rename --add /usr/bin/google-chrome-stable \
  && ln -s /usr/local/lib/tiny-agents/google-chrome-stable /usr/bin/google-chrome-stable
@@ -105,7 +108,7 @@ RUN userdel -r ubuntu 2>/dev/null || true \
  && mkdir -p /run/sshd /etc/ssh/host-keys /etc/ssh/authorized-keys
 
 # The install markers the app checks (STACK_VERSION, COMPUTER_STACK_VERSION).
-ARG BROWSER_STACK_VERSION=v1
+ARG BROWSER_STACK_VERSION=v2
 ARG COMPUTER_STACK_VERSION=v1
 RUN su exedev -c "mkdir -p ~/.tiny-agents \
  && touch ~/.tiny-agents/browser-stack-${BROWSER_STACK_VERSION} \

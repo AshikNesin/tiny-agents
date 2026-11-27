@@ -60,6 +60,8 @@
   --sidebar-accent-foreground: oklch(0.115 0 0);
   --sidebar-border: oklch(0.16 0.007 78.1 / 8%);
   --sidebar-ring: oklch(0.115 0 0 / 30%);
+  --sidebar-glow-top: oklch(0.88 0.06 210 / 65%);
+  --sidebar-glow-bottom: oklch(0.92 0.05 80 / 70%);
 }
 
 @theme inline {
@@ -154,6 +156,8 @@
   --sidebar-accent-foreground: oklch(0.991 0 0);
   --sidebar-border: oklch(0.991 0 0 / 8%);
   --sidebar-ring: oklch(0.991 0 0 / 30%);
+  --sidebar-glow-top: oklch(0.42 0.06 230 / 30%);
+  --sidebar-glow-bottom: oklch(0.4 0.04 70 / 22%);
 }
 
 :root {
@@ -487,6 +491,13 @@
   text-decoration: underline;
   text-underline-offset: 2px;
   cursor: pointer;
+}
+
+@utility sidebar-surface {
+  background-color: var(--sidebar);
+  background-image:
+    radial-gradient(130% 65% at 0% 0%, var(--sidebar-glow-top), transparent 70%),
+    radial-gradient(120% 60% at 100% 100%, var(--sidebar-glow-bottom), transparent 70%);
 }
 
 @layer base {
