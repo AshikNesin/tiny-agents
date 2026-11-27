@@ -196,6 +196,7 @@ const hoverShown = () =>
     );
     expect(highlights.length).toBeGreaterThan(0);
     for (const el of highlights) expect(el.style.opacity).toBe("1");
+    expect(document.querySelectorAll("[role=tabpanel]")).toHaveLength(1);
   });
 const user = userEvent.setup();
 
