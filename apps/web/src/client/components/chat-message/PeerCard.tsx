@@ -1,5 +1,4 @@
-import { Streamdown } from "streamdown";
-import { markdownComponents } from "../../lib/markdown";
+import { Markdown } from "../../lib/markdown";
 import type { ChatMessage } from "../../lib/chat-types";
 import { BotAvatar } from "../BotAvatar";
 import { TypingIndicator, OTHER_PILL, USER_PILL } from "../ui/transcript-parts";
@@ -125,7 +124,7 @@ export function PeerIncomingCard({
           data-slot="reply-card"
           className="bg-bubble chat-md min-w-0 max-w-[92%] md:max-w-[80%] rounded-3xl px-4 py-2"
         >
-          <Streamdown components={markdownComponents}>{text}</Streamdown>
+          <Markdown streaming={streaming}>{text}</Markdown>
         </div>
         <CopyButton text={text} />
       </div>

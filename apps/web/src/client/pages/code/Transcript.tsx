@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { Streamdown } from "streamdown";
 import {
   ArrowUpRight,
   Bot,
@@ -27,7 +26,7 @@ import {
 import { toast } from "sonner";
 import { Button, monoClass } from "@groot/ui";
 import { cn } from "@groot/ui/lib/utils";
-import { markdownComponents } from "../../lib/markdown";
+import { Markdown } from "../../lib/markdown";
 import { TypingIndicator, USER_PILL } from "../../components/ui/transcript-parts";
 import {
   Trace,
@@ -200,7 +199,7 @@ function SubagentResult({
   }
   return (
     <div className="bg-muted/40 max-h-96 overflow-y-auto overscroll-contain rounded-lg px-3 py-2 text-sm">
-      <Streamdown components={markdownComponents}>{result}</Streamdown>
+      <Markdown>{result}</Markdown>
     </div>
   );
 }
@@ -919,7 +918,7 @@ export function TranscriptRow({
     case "assistant":
       return (
         <div className="chat-md code-md min-w-0 px-0.5">
-          <Streamdown components={markdownComponents}>{item.text}</Streamdown>
+          <Markdown>{item.text}</Markdown>
         </div>
       );
     case "thinking":
@@ -946,7 +945,7 @@ export function TranscriptRow({
               Subagent <span className={monoClass}>{item.from}</span> reported
             </p>
             <div className="chat-md code-md min-w-0">
-              <Streamdown components={markdownComponents}>{item.text}</Streamdown>
+              <Markdown>{item.text}</Markdown>
             </div>
           </div>
         </div>
@@ -995,7 +994,7 @@ export function StreamingTail({ text, thinking }: { text: string; thinking: stri
   if (text) {
     return (
       <div className="chat-md code-md min-w-0 px-0.5">
-        <Streamdown components={markdownComponents}>{text}</Streamdown>
+        <Markdown streaming>{text}</Markdown>
       </div>
     );
   }

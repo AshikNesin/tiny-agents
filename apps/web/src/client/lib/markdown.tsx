@@ -1,5 +1,7 @@
 import { Children, isValidElement, type ComponentProps, type ReactNode } from "react";
 import { Link } from "react-router-dom";
+import { Streamdown } from "streamdown";
+import { MermaidBlock } from "./mermaid-block";
 
 type ParagraphProps = ComponentProps<"p"> & { node?: unknown };
 
@@ -43,3 +45,13 @@ function MarkdownAnchor({ node: _node, href, children, ...props }: AnchorProps) 
 }
 
 export const markdownComponents = { p: MarkdownParagraph, a: MarkdownAnchor };
+
+const markdownPlugins = { renderers: [{ language: "mermaid", component: MermaidBlock }] };
+
+export function Markdown({ children, streaming }: { children: string; streaming?: boolean }) {
+  return (
+    <Streamdown components={markdownComponents} plugins={markdownPlugins} isAnimating={streaming}>
+      {children}
+    </Streamdown>
+  );
+}
