@@ -890,11 +890,13 @@ function DangerZone({ project, onChange }: { project: ProjectView; onChange(): v
 
 function ReviewListSettings() {
   const client = useQueryClient();
-  const { data: settings } = useResource(
+  const stored = useResource(
     INBOX_SETTINGS_KEY,
     () => reviewsApi.settings(),
     "Could not read your review list settings.",
   );
+  const settings =
+    stored.status === "ready" ? stored.data : stored.status === "failed" ? stored.last : undefined;
   if (!settings) {
     return (
       <div className="flex justify-center p-6">
@@ -977,13 +979,15 @@ function ReviewListSettings() {
 const GITHUB_KEY = ["code", "github", "status"];
 
 function useGitHubStatus() {
-  const { data } = useResource(GITHUB_KEY, () => projectsApi.github().catch(() => null), "");
+  const read = useResource(GITHUB_KEY, () => projectsApi.github().catch(() => null), "");
   const client = useQueryClient();
   const setStatus = useCallback(
     (next: GitHubStatus) => client.setQueryData<GitHubStatus | null>(GITHUB_KEY, next),
     [client],
   );
-  return { status: data, setStatus };
+  const status =
+    read.status === "ready" ? read.data : read.status === "failed" ? (read.last ?? null) : null;
+  return { status, setStatus };
 }
 
 function GitHubSettings() {

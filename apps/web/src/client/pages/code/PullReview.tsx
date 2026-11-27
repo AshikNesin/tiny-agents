@@ -62,11 +62,18 @@ export function PullReview({
 }) {
   const navigate = useNavigate();
   const reviewKey = ["code", "reviews", "detail", reviewId];
-  const { data: review, loadError: error } = useResource(
+  const loaded = useResource(
     reviewKey,
     () => reviewsApi.get(reviewId),
     "Could not open the review.",
   );
+  const review =
+    loaded.status === "ready"
+      ? loaded.data
+      : loaded.status === "failed"
+        ? (loaded.last ?? null)
+        : null;
+  const error = loaded.status === "failed" ? loaded.loadError : null;
   const client = useQueryClient();
   const setReview = (next: PullReviewView) => client.setQueryData(reviewKey, next);
   const [updating, setUpdating] = useState(false);

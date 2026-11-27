@@ -165,7 +165,14 @@ function FieldRow({
 export function VaultItemDetail({ handle }: { handle: string }) {
   const navigate = useNavigate();
   const { run } = useStepUp();
-  const { data: detail, loadError, refresh } = useVaultItem(handle);
+  const resource = useVaultItem(handle);
+  const { refresh } = resource;
+  const detail =
+    resource.status === "ready"
+      ? resource.data
+      : resource.status === "failed"
+        ? (resource.last ?? null)
+        : null;
   const mutations = useVaultMutations();
   const [policy, setPolicy] = useState<VaultPolicy | null>(null);
   const [policyFrom, setPolicyFrom] = useState<Detail | null>(null);
@@ -226,13 +233,13 @@ export function VaultItemDetail({ handle }: { handle: string }) {
     }
   };
 
-  if (loadError) {
+  if (resource.status === "failed") {
     return (
       <PageLayout title="Vault item" backTo="/vault" maxWidth="4xl">
         <EmptyState
           icon={TriangleAlert}
           title="Couldn't load the item"
-          description={loadError}
+          description={resource.loadError}
           variant="destructive"
         />
       </PageLayout>

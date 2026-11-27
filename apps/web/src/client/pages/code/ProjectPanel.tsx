@@ -228,11 +228,17 @@ function Archived({ projectId, onThread }: { projectId: string; onThread(id: str
 }
 
 function ArchivedRows({ projectId, onThread }: { projectId: string; onThread(id: string): void }) {
-  const { data } = useResource(
+  const archived = useResource(
     ["code", "threads", "archived"],
     () => codeApi.list("archived"),
     "Could not load archived threads.",
   );
+  const data =
+    archived.status === "ready"
+      ? archived.data
+      : archived.status === "failed"
+        ? archived.last
+        : undefined;
   if (!data) return <Spinner className="mx-2 my-1 size-3.5" />;
   const rows = projectThreads(data, projectId, "");
   if (rows.length === 0) return <p className="text-muted-foreground px-2 py-1 text-xs">None.</p>;
@@ -250,7 +256,14 @@ function ThreadInPanel({ id, onBack }: { id: string; onBack(): void }) {
     "Could not open this thread.",
     { enabled: threads !== null && !listed },
   );
-  const row = listed ?? unlisted.data ?? undefined;
+  const row =
+    listed ??
+    (unlisted.status === "ready"
+      ? unlisted.data
+      : unlisted.status === "failed"
+        ? unlisted.last
+        : undefined);
+  const loadError = unlisted.status === "failed" ? unlisted.loadError : null;
   const harness = row ? harnessOf(harnesses, row.instanceId) : undefined;
   return (
     <>
@@ -288,9 +301,9 @@ function ThreadInPanel({ id, onBack }: { id: string; onBack(): void }) {
             pr={row.pr ?? null}
             composerTop={<PullBar row={row} />}
           />
-        ) : unlisted.loadError || (row && !harness) ? (
+        ) : loadError || (row && !harness) ? (
           <p className="text-muted-foreground p-6 text-center text-sm">
-            {unlisted.loadError ?? "This thread's coding agent is not connected to this server."}
+            {loadError ?? "This thread's coding agent is not connected to this server."}
           </p>
         ) : (
           <div className="flex h-full items-center justify-center">
@@ -411,12 +424,17 @@ function ContextBlock({
 }
 
 function Memories({ botId }: { botId: string }) {
-  const { data } = useResource(
+  const saved = useResource(
     ["bots", botId, "memories", "active"],
     () => botsApi.listMemories(botId, false),
     "Could not load the project's memory.",
   );
-  const memories = data?.memories ?? null;
+  const memories =
+    saved.status === "ready"
+      ? saved.data.memories
+      : saved.status === "failed"
+        ? (saved.last?.memories ?? null)
+        : null;
   return (
     <ContextBlock title="Memory">
       {memories === null ? (

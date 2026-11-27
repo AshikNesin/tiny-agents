@@ -1,6 +1,7 @@
 import React from "react";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vite-plus/test";
+import { ResourceView } from "@/components/ResourceView";
 import { useResource } from "@/queries/resource";
 import { AppQueryProvider } from "../query-provider";
 
@@ -9,8 +10,30 @@ let refresh: () => Promise<void> = async () => {};
 function Probe({ queryFn }: { queryFn: () => Promise<string> }) {
   const resource = useResource(["probe"], queryFn, "Failed to load");
   refresh = resource.refresh;
-  if (resource.loadError) return <p>error: {resource.loadError}</p>;
-  return <p>{resource.data ?? "loading"}</p>;
+  if (resource.status === "failed") return <p>error: {resource.loadError}</p>;
+  if (resource.status === "loading") return <p>loading</p>;
+  return <p>{resource.data}</p>;
+}
+
+function LastProbe({ queryFn }: { queryFn: () => Promise<string> }) {
+  const resource = useResource(["last-probe"], queryFn, "Failed to load");
+  refresh = resource.refresh;
+  if (resource.status === "loading") return <p>loading</p>;
+  if (resource.status === "ready") return <p>ready: {resource.data}</p>;
+  return (
+    <p>
+      failed: {resource.loadError}, last: {resource.last ?? "nothing"}
+    </p>
+  );
+}
+
+function ViewProbe({ queryFn }: { queryFn: () => Promise<string> }) {
+  const resource = useResource(["view-probe"], queryFn, "Failed to load");
+  return (
+    <ResourceView resource={resource} failedTitle="Couldn't load tasks">
+      {(data) => <p>ready: {data}</p>}
+    </ResourceView>
+  );
 }
 
 function deferred<T>() {
@@ -114,5 +137,64 @@ describe("useResource", () => {
     });
     expect(await screen.findByText("newer")).toBeTruthy();
     expect(screen.queryByText("older")).toBeNull();
+  });
+});
+
+describe("useResource after a failed refresh", () => {
+  it("fails with the earlier read as last, and with nothing when no read ever answered", async () => {
+    const queryFn = vi
+      .fn<() => Promise<string>>()
+      .mockResolvedValueOnce("tasks")
+      .mockRejectedValueOnce(new Error("boom"));
+    const loaded = render(
+      <AppQueryProvider>
+        <LastProbe queryFn={queryFn} />
+      </AppQueryProvider>,
+    );
+    expect(await screen.findByText("ready: tasks")).toBeTruthy();
+
+    await act(() => refresh());
+    expect(await screen.findByText("failed: boom, last: tasks")).toBeTruthy();
+    loaded.unmount();
+
+    render(
+      <AppQueryProvider>
+        <LastProbe queryFn={() => Promise.reject(new Error("down"))} />
+      </AppQueryProvider>,
+    );
+    expect(await screen.findByText("failed: down, last: nothing")).toBeTruthy();
+  });
+});
+
+describe("ResourceView", () => {
+  it("shows the failure with a Retry button, then the content once the retry answers", async () => {
+    const first = deferred<string>();
+    const retry = deferred<string>();
+    const queryFn = vi
+      .fn<() => Promise<string>>()
+      .mockReturnValueOnce(first.promise)
+      .mockReturnValueOnce(retry.promise);
+    render(
+      <AppQueryProvider>
+        <ViewProbe queryFn={queryFn} />
+      </AppQueryProvider>,
+    );
+
+    expect(screen.getByText("Loading…")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
+
+    await act(async () => first.reject(new Error("boom")));
+    expect(await screen.findByText("Couldn't load tasks")).toBeTruthy();
+    expect(screen.getByText("boom")).toBeTruthy();
+    expect(screen.queryByText("Loading…")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    await waitFor(() => expect(queryFn).toHaveBeenCalledTimes(2));
+    expect(screen.queryByText("ready: tasks")).toBeNull();
+
+    await act(async () => retry.resolve("tasks"));
+    expect(await screen.findByText("ready: tasks")).toBeTruthy();
+    expect(screen.queryByText("Couldn't load tasks")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
   });
 });

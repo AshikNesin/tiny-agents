@@ -186,11 +186,17 @@ function Archived({ activeId, harnesses }: { activeId?: string; harnesses: Harne
 }
 
 function ArchivedRows({ activeId, harnesses }: { activeId?: string; harnesses: HarnessInfo[] }) {
-  const { data } = useResource(
+  const archived = useResource(
     ["code", "threads", "archived"],
     () => codeApi.list("archived"),
     "Could not load archived threads.",
   );
+  const data =
+    archived.status === "ready"
+      ? archived.data
+      : archived.status === "failed"
+        ? archived.last
+        : undefined;
   if (!data) return <Spinner className="mx-2 my-1 size-3.5" />;
   const rows = data.filter((row) => !row.parentId && !row.review);
   if (rows.length === 0) return <p className="text-muted-foreground px-2 py-1 text-xs">None.</p>;

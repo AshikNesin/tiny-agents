@@ -20,7 +20,14 @@ import { HookUrlDialog } from "./HookUrlDialog";
 const AWAITING_POLL_MS = 4_000;
 
 export function Routines() {
-  const { data, loadError, refresh } = useRoutines();
+  const resource = useRoutines();
+  const { refresh } = resource;
+  const data =
+    resource.status === "ready"
+      ? resource.data
+      : resource.status === "failed"
+        ? (resource.last ?? null)
+        : null;
   const routines = data?.routines ?? null;
   const runs = data?.runs ?? null;
   const mutations = useRoutineMutations();
@@ -120,11 +127,11 @@ export function Routines() {
         </Button>
       }
     >
-      {loadError ? (
+      {resource.status === "failed" ? (
         <EmptyState
           icon={CalendarClock}
           title="Couldn't load routines"
-          description={loadError}
+          description={resource.loadError}
           variant="destructive"
           action={
             <Button variant="outline" onClick={() => void refresh()}>

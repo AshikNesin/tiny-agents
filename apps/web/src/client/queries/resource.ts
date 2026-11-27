@@ -45,11 +45,11 @@ export function useRefreshOn(trigger: unknown, refresh: () => Promise<void>): vo
   }, [trigger, refresh]);
 }
 
-export interface Resource<T> {
-  data: T | null;
-  loadError: string | null;
-  refresh: () => Promise<void>;
-}
+export type Resource<T> = { refresh: () => Promise<void> } & (
+  | { status: "loading" }
+  | { status: "failed"; loadError: string; last: T | undefined }
+  | { status: "ready"; data: T }
+);
 
 export type ResourceOptions<T> = Pick<
   UseQueryOptions<T, Error, T, QueryKey>,
@@ -63,11 +63,11 @@ export function useResource<T>(
   options: ResourceOptions<T> = {},
 ): Resource<T> {
   const query = useQuery({ queryKey, queryFn, ...RESOURCE_QUERY, ...options });
-  return {
-    data: query.data ?? null,
-    loadError: useLoadError(query, queryKey, fallback),
-    refresh: useRefresh(queryKey),
-  };
+  const loadError = useLoadError(query, queryKey, fallback);
+  const refresh = useRefresh(queryKey);
+  if (loadError !== null) return { status: "failed", loadError, last: query.data, refresh };
+  if (query.data !== undefined) return { status: "ready", data: query.data, refresh };
+  return { status: "loading", refresh };
 }
 
 function useRefresh(queryKey: QueryKey): () => Promise<void> {

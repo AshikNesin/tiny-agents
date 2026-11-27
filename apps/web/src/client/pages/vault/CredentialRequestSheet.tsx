@@ -10,14 +10,14 @@ import { CredentialRequestForm } from "../../components/vault/CredentialRequestF
 
 export function CredentialRequestSheet({ taskId }: { taskId: number }) {
   const navigate = useNavigate();
-  const { data: request, loadError } = useCredentialRequest(taskId);
+  const resource = useCredentialRequest(taskId);
   const done = () => void navigate("/chats");
 
-  if (loadError || !request) {
+  if (resource.status !== "ready") {
     return (
       <PageLayout title="Credential request" maxWidth="4xl" backTo="/chats">
-        {loadError ? (
-          <EmptyState icon={Lock} title="Nothing to fill" description={loadError} />
+        {resource.status === "failed" ? (
+          <EmptyState icon={Lock} title="Nothing to fill" description={resource.loadError} />
         ) : (
           <p className="py-8 text-center text-sm text-muted-foreground">Loading…</p>
         )}
@@ -25,6 +25,7 @@ export function CredentialRequestSheet({ taskId }: { taskId: number }) {
     );
   }
 
+  const request = resource.data;
   if (request.bot) {
     const focus = new URLSearchParams({ focus: `credentials:${taskId}` });
     return <Navigate replace to={`/chats/${encodeURIComponent(request.bot.id)}?${focus}`} />;

@@ -282,7 +282,12 @@ export function FilesPane({
     onFocused();
   }, [focus, onFocused]);
 
-  const changedFiles = changed.data ?? [];
+  const changedFiles =
+    changed.status === "ready"
+      ? changed.data
+      : changed.status === "failed"
+        ? (changed.last ?? [])
+        : [];
   const openStatus = changedFiles.find((entry) => entry.path === open)?.status;
   const clearSearch = () => {
     setText("");
@@ -354,17 +359,17 @@ export function FilesPane({
               <Kbd keys="s" />
             )}
           </form>
-          {files.loadError ? (
+          {files.status === "failed" ? (
             <p className="text-destructive px-3 py-2 text-xs">{files.loadError}</p>
           ) : searched ? (
-            hits.loadError ? (
+            hits.status === "failed" ? (
               <p className="text-destructive px-3 py-2 text-xs">{hits.loadError}</p>
-            ) : hits.data ? (
+            ) : hits.status === "ready" ? (
               <Hits hits={hits.data} query={searched} open={open} onOpen={setOpen} />
             ) : (
               <Spinner className="mx-3 my-2 size-3.5" />
             )
-          ) : files.data && (changed.data || changed.loadError) ? (
+          ) : files.status === "ready" && changed.status !== "loading" ? (
             <div className="flex min-h-0 flex-1 flex-col pt-1.5">
               <WorktreeTree
                 paths={files.data}
@@ -387,9 +392,9 @@ export function FilesPane({
                 <Kbd keys="p" /> finds a file by name, <Kbd keys="s" /> searches inside them.
               </p>
             </div>
-          ) : file.loadError ? (
+          ) : file.status === "failed" ? (
             <p className="text-destructive p-3 text-xs">{file.loadError}</p>
-          ) : !file.data || file.data.path !== open ? (
+          ) : file.status !== "ready" || file.data.path !== open ? (
             <Spinner className="m-3 size-3.5" />
           ) : file.data.content === null ? (
             <div className="flex flex-col">

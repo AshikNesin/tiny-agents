@@ -241,12 +241,24 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
   const mention = activeMentionToken(text, caret);
   const mentionOpen = mention !== null && !mentionClosed;
   const owner = useViewerRole() === "owner";
-  const library = useSkills({ enabled: owner }).data;
+  const skillLibrary = useSkills({ enabled: owner });
+  const library =
+    skillLibrary.status === "ready"
+      ? skillLibrary.data
+      : skillLibrary.status === "failed"
+        ? (skillLibrary.last ?? null)
+        : null;
   const botSkills = useMemo(
     () => (library ?? []).filter((skill) => bot.skillIds.includes(skill.id)),
     [library, bot.skillIds],
   );
-  const toolChoices = useBotTools(bot.id, { enabled: owner }).data;
+  const botTools = useBotTools(bot.id, { enabled: owner });
+  const toolChoices =
+    botTools.status === "ready"
+      ? botTools.data
+      : botTools.status === "failed"
+        ? (botTools.last ?? null)
+        : null;
   const [tools, setTools] = useState<string[]>([]);
   const skillToken = owner ? activeSkillToken(text, caret) : null;
   const slashQuery = skillToken?.query ?? null;

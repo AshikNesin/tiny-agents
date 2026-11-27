@@ -429,7 +429,9 @@ function Playground({ tool }: { tool: ToolDetail }) {
 }
 
 export function ConnectionToolDetail({ id, tool: serverName }: { id: string; tool: string }) {
-  const { data: tool, loadError, refresh } = useConnectionTool(id, serverName);
+  const resource = useConnectionTool(id, serverName);
+  const refresh = resource.refresh;
+  const tool = resource.status === "ready" ? resource.data : null;
   const setTool = useSetConnectionTool(id, serverName);
   const { updateTool } = useConnectionMutations();
   const [saving, setSaving] = useState(false);
@@ -459,13 +461,13 @@ export function ConnectionToolDetail({ id, tool: serverName }: { id: string; too
 
   const backTo = `/connections/${id}`;
 
-  if (loadError) {
+  if (resource.status === "failed") {
     return (
       <PageLayout title="Tool" maxWidth="4xl" backTo={backTo}>
         <EmptyState
           icon={Wrench}
           title="Couldn't load tool"
-          description={loadError}
+          description={resource.loadError}
           variant="destructive"
           action={
             <>
@@ -481,7 +483,7 @@ export function ConnectionToolDetail({ id, tool: serverName }: { id: string; too
     );
   }
 
-  if (!tool) {
+  if (tool === null) {
     return (
       <PageLayout title="Tool" maxWidth="4xl" backTo={backTo}>
         <p className="py-8 text-center text-sm text-muted-foreground">Loading…</p>

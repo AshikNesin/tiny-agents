@@ -22,16 +22,19 @@ import {
 const NO_MODELS: ModelOption[] = [];
 
 export function useHarnessModels(instanceId: string | undefined): ModelOption[] {
-  const { data, loadError } = useResource(
+  const models = useResource(
     ["code", "models", instanceId],
     () => codeApi.models(instanceId!),
     "Could not load the models.",
     { enabled: Boolean(instanceId) },
   );
+  const loadError = models.status === "failed" ? models.loadError : null;
   useEffect(() => {
     if (loadError) toast.error(loadError);
   }, [loadError]);
-  return (instanceId && data) || NO_MODELS;
+  const listed =
+    models.status === "ready" ? models.data : models.status === "failed" ? models.last : undefined;
+  return (instanceId && listed) || NO_MODELS;
 }
 
 export const DEFAULT = "default";

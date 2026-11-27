@@ -70,11 +70,14 @@ export function ProjectChat({
   projectId: string;
   onOpenMenu: () => void;
 }) {
-  const { data: opened, loadError } = useResource(
+  const chat = useResource(
     ["code", "project-chat", projectId],
     () => projectsApi.openChat(projectId),
     "Could not open the project chat.",
   );
+  const opened =
+    chat.status === "ready" ? chat.data : chat.status === "failed" ? (chat.last ?? null) : null;
+  const loadError = chat.status === "failed" ? chat.loadError : null;
   const adoptBot = useBotsStore((s) => s.adoptBot);
   const refreshBots = useBotsStore((s) => s.refreshBotsInBackground);
   const bot = useBotsStore((s) => (opened ? (s.fullBots[opened.id] ?? opened) : null));
@@ -150,11 +153,14 @@ export function ProjectChat({
 export function OpenProjectChat() {
   const { projectId = "" } = useParams();
   const { search } = useLocation();
-  const { data: opened, loadError } = useResource(
+  const chat = useResource(
     ["code", "project-chat", projectId],
     () => projectsApi.openChat(projectId),
     "Could not open the project chat.",
   );
+  const opened =
+    chat.status === "ready" ? chat.data : chat.status === "failed" ? (chat.last ?? null) : null;
+  const loadError = chat.status === "failed" ? chat.loadError : null;
   const adoptBot = useBotsStore((s) => s.adoptBot);
   useEffect(() => {
     if (opened) adoptBot(opened);

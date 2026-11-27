@@ -19,7 +19,13 @@ import { errorMessage } from "../../lib/errors";
 
 export function SkillDetail({ id }: { id: string }) {
   const navigate = useNavigate();
-  const { data: skill, loadError, refresh } = useSkill(id);
+  const resource = useSkill(id);
+  const skill =
+    resource.status === "ready"
+      ? resource.data
+      : resource.status === "failed"
+        ? (resource.last ?? null)
+        : null;
   const setSkill = useSetSkill(id);
   const mutations = useSkillMutations();
   const bots = useBotChoices().data ?? null;
@@ -33,18 +39,18 @@ export function SkillDetail({ id }: { id: string }) {
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
-  if (loadError) {
+  if (resource.status === "failed") {
     return (
       <PageLayout title="Skill" maxWidth="4xl" backTo="/skills">
         <ErrorState
           title="Couldn't load skill"
-          description={loadError}
+          description={resource.loadError}
           action={
             <>
               <Button variant="outline" onClick={() => navigate("/skills")}>
                 Back to skills
               </Button>
-              <Button onClick={() => void refresh()}>Retry</Button>
+              <Button onClick={() => void resource.refresh()}>Retry</Button>
             </>
           }
         />

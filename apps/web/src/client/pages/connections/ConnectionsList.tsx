@@ -50,7 +50,9 @@ function ConnectionRows({ connections }: { connections: Connection[] }) {
 
 export function ConnectionsList() {
   const navigate = useNavigate();
-  const { data: connections, loadError, refresh } = useConnections();
+  const resource = useConnections();
+  const refresh = resource.refresh;
+  const connections = resource.status === "ready" ? resource.data : null;
   const [addOpen, setAddOpen] = useState(false);
 
   useEffect(() => {
@@ -82,11 +84,11 @@ export function ConnectionsList() {
         </Button>
       }
     >
-      {loadError ? (
+      {resource.status === "failed" ? (
         <EmptyState
           icon={Plug}
           title="Couldn't load connections"
-          description={loadError}
+          description={resource.loadError}
           variant="destructive"
           action={
             <Button variant="outline" onClick={() => void refresh()}>
@@ -94,9 +96,9 @@ export function ConnectionsList() {
             </Button>
           }
         />
-      ) : connections === null ? (
+      ) : resource.status === "loading" ? (
         <p className="py-8 text-center text-sm text-muted-foreground">Loading…</p>
-      ) : connections.length === 0 ? (
+      ) : resource.data.length === 0 ? (
         <EmptyState
           icon={Plug}
           title="No connections yet"

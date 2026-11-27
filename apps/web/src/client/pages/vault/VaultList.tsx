@@ -236,7 +236,14 @@ function AppItemsSection({ items }: { items: VaultItem[] }) {
 
 export function VaultList() {
   const navigate = useNavigate();
-  const { data: overview, loadError, reload } = useVaultOverview();
+  const resource = useVaultOverview();
+  const { reload } = resource;
+  const overview =
+    resource.status === "ready"
+      ? resource.data
+      : resource.status === "failed"
+        ? (resource.last ?? null)
+        : null;
   const [picker, setPicker] = useState(false);
   const [linking, setLinking] = useState<UnlinkedItem | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -296,11 +303,11 @@ export function VaultList() {
         </>
       }
     >
-      {loadError ? (
+      {resource.status === "failed" ? (
         <EmptyState
           icon={KeyRound}
           title="Couldn't load the vault"
-          description={loadError}
+          description={resource.loadError}
           variant="destructive"
           action={
             <Button variant="outline" onClick={() => void refresh()}>

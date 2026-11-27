@@ -53,7 +53,7 @@ let reload!: (refresh?: boolean) => Promise<void>;
 function OverviewProbe() {
   const overview = useVaultOverview();
   reload = overview.reload;
-  return <p>{overview.data ? "loaded" : "loading"}</p>;
+  return <p>{overview.status === "ready" ? "loaded" : "loading"}</p>;
 }
 
 describe("useVaultOverview", () => {

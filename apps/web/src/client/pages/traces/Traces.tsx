@@ -35,7 +35,13 @@ export const HARNESS_LABEL: Record<TraceSession["harness"], string> = {
 };
 
 function Summary() {
-  const { data } = useTraceSummary();
+  const summary = useTraceSummary();
+  const data =
+    summary.status === "ready"
+      ? summary.data
+      : summary.status === "failed"
+        ? summary.last
+        : undefined;
   if (!data) return null;
   return (
     <p className="text-muted-foreground text-sm" data-testid="traces-summary">
@@ -154,7 +160,13 @@ const emptyOlder = (filter: TraceListFilter): OlderPages => ({
 
 export function TracesPage() {
   const [filter, setFilter] = useState<TraceListFilter>("all");
-  const { data, loadError, refresh } = useTraceList(filter);
+  const resource = useTraceList(filter);
+  const data =
+    resource.status === "ready"
+      ? resource.data
+      : resource.status === "failed"
+        ? (resource.last ?? null)
+        : null;
   const [older, setOlder] = useState<OlderPages>(() => emptyOlder(filter));
   const [loadingMore, setLoadingMore] = useState(false);
   const more = older.filter === filter ? older : emptyOlder(filter);
@@ -185,21 +197,21 @@ export function TracesPage() {
   };
 
   let body: ReactNode;
-  if (loadError) {
+  if (resource.status === "failed") {
     body = (
       <ErrorState
-        title={loadError}
+        title={resource.loadError}
         action={
-          <Button variant="outline" onClick={() => void refresh()}>
+          <Button variant="outline" onClick={() => void resource.refresh()}>
             Try again
           </Button>
         }
       />
     );
-  } else if (!data) {
+  } else if (resource.status === "loading") {
     body = <SkeletonList />;
-  } else if (data.kind === "side") {
-    const calls = [...data.calls, ...more.calls];
+  } else if (resource.data.kind === "side") {
+    const calls = [...resource.data.calls, ...more.calls];
     body =
       calls.length === 0 ? (
         <EmptyState
@@ -215,7 +227,7 @@ export function TracesPage() {
         />
       );
   } else {
-    const sessions = [...data.sessions, ...more.sessions];
+    const sessions = [...resource.data.sessions, ...more.sessions];
     body =
       sessions.length === 0 ? (
         <EmptyState

@@ -41,7 +41,12 @@ export function ReviewPanel({
     "",
   );
   useRefreshOn(`${String(settledKey)}\u0000${reload}`, checkpointList.refresh);
-  const checkpoints = checkpointList.data ?? [];
+  const checkpoints =
+    checkpointList.status === "ready"
+      ? checkpointList.data
+      : checkpointList.status === "failed"
+        ? (checkpointList.last ?? [])
+        : [];
   const checkpoint = checkpoints.find((c) => c.id === scope);
   const view = useDiffView();
 

@@ -186,12 +186,19 @@ export function usePullConversations(
   reload: unknown,
 ): ((path: string) => FileConversations) | undefined {
   const id = review?.id;
-  const { data, refresh: read } = useResource(
+  const threads = useResource(
     ["code", "reviews", "threads", id],
     () => reviewsApi.threads(id!).catch((): PullThreadsView | null => null),
     "",
     { enabled: Boolean(id) },
   );
+  const data =
+    threads.status === "ready"
+      ? threads.data
+      : threads.status === "failed"
+        ? (threads.last ?? null)
+        : null;
+  const read = threads.refresh;
   useRefreshOn(reload, read);
 
   return useMemo(() => {

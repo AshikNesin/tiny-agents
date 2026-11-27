@@ -172,10 +172,14 @@ export function useProjects(): {
   projects: ProjectView[] | null;
   reload(): void;
 } {
-  const { data, refresh } = useResource(
-    ["code", "projects"],
-    () => projectsApi.list().catch(() => null),
-    "",
-  );
-  return { projects: data, reload: refresh };
+  const listed = useResource(["code", "projects"], () => projectsApi.list().catch(() => null), "");
+  return {
+    projects:
+      listed.status === "ready"
+        ? listed.data
+        : listed.status === "failed"
+          ? (listed.last ?? null)
+          : null,
+    reload: listed.refresh,
+  };
 }

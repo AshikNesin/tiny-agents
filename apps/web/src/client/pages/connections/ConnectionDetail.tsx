@@ -23,7 +23,9 @@ import { ConnectionDangerZone, RemoveConnectionDialog } from "./detail/RemoveCon
 
 export function ConnectionDetail({ id }: { id: string }) {
   const navigate = useNavigate();
-  const { data: connection, loadError, refresh } = useConnection(id);
+  const resource = useConnection(id);
+  const refresh = resource.refresh;
+  const connection = resource.status === "ready" ? resource.data : null;
   const setConnection = useSetConnection(id);
   const mutations = useConnectionMutations();
   const bots = useBotsStore((s) => (s.loading && s.bots.length === 0 ? null : s.bots));
@@ -138,13 +140,13 @@ export function ConnectionDetail({ id }: { id: string }) {
     }
   };
 
-  if (loadError) {
+  if (resource.status === "failed") {
     return (
       <PageLayout title="Connections" maxWidth="4xl" backTo="/connections">
         <EmptyState
           icon={Wrench}
           title="Couldn't load connection"
-          description={loadError}
+          description={resource.loadError}
           variant="destructive"
           action={
             <>
@@ -160,7 +162,7 @@ export function ConnectionDetail({ id }: { id: string }) {
     );
   }
 
-  if (!connection) {
+  if (connection === null) {
     return (
       <PageLayout title="Connections" maxWidth="4xl" backTo="/connections">
         <p className="py-8 text-center text-sm text-muted-foreground">Loading…</p>

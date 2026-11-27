@@ -50,7 +50,9 @@ export function useNextMessage(
     "No suggestion.",
     { enabled: live },
   );
-  const suggestion = live ? (answer.data?.suggestion ?? null) : null;
+  const answered =
+    answer.status === "ready" ? answer.data : answer.status === "failed" ? answer.last : undefined;
+  const suggestion = live ? (answered?.suggestion ?? null) : null;
   useEffect(() => {
     if (suggestion && agent !== null) setBest({ agent, text: suggestion });
   }, [suggestion, agent]);

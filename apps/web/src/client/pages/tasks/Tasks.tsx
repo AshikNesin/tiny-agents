@@ -94,7 +94,14 @@ function toLocalInput(iso: string | null): string {
 }
 
 export function Tasks() {
-  const { data: tasks, loadError, refresh } = useTasks();
+  const resource = useTasks();
+  const { refresh } = resource;
+  const tasks =
+    resource.status === "ready"
+      ? resource.data
+      : resource.status === "failed"
+        ? (resource.last ?? null)
+        : null;
   const setTask = useSetTask();
   const mutations = useTaskMutations();
   const [tab, setTab] = useState<Tab>("today");
@@ -251,11 +258,11 @@ export function Tasks() {
         </p>
       )}
 
-      {loadError ? (
+      {resource.status === "failed" ? (
         <EmptyState
           icon={ListTodo}
           title="Couldn't load tasks"
-          description={loadError}
+          description={resource.loadError}
           variant="destructive"
           action={
             <Button variant="outline" onClick={() => void refresh()}>
@@ -263,7 +270,7 @@ export function Tasks() {
             </Button>
           }
         />
-      ) : tasks === null ? (
+      ) : resource.status === "loading" ? (
         <p className="text-muted-foreground py-8 text-center text-sm">Loading…</p>
       ) : list.length === 0 ? (
         <EmptyState

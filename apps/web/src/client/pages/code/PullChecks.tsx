@@ -280,7 +280,10 @@ function LogExcerpt({
     "Could not read the log.",
     { structuralSharing: false },
   );
-  const { data: log, loadError: error, refresh } = read;
+  const log =
+    read.status === "ready" ? read.data : read.status === "failed" ? (read.last ?? null) : null;
+  const error = read.status === "failed" ? read.loadError : null;
+  const refresh = read.refresh;
 
   useRefreshOn(check.state, refresh);
   useEffect(() => {
