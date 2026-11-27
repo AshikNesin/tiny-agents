@@ -1,5 +1,6 @@
 package groot.mobile.data
 
+import groot.mobile.data.api.StepUpToken
 import groot.mobile.data.api.TinyAgentsApi
 
 class StepUp(private val api: TinyAgentsApi, private val now: () -> Long = System::currentTimeMillis) {
@@ -8,8 +9,12 @@ class StepUp(private val api: TinyAgentsApi, private val now: () -> Long = Syste
 
     fun current(): String? = token?.takeIf { now() < expiresAt - EXPIRY_MARGIN_MS }
 
-    suspend fun confirm(password: String): String {
-        val issued = api.stepUp(password)
+    suspend fun confirm(password: String): String = hold(api.stepUp(password))
+
+    suspend fun confirmWithPasskey(assert: suspend (optionsJson: String) -> String): String =
+        hold(api.stepUpWithPasskey(assert(api.stepUpPasskeyOptions())))
+
+    private fun hold(issued: StepUpToken): String {
         token = issued.token
         expiresAt = issued.expiresAt
         return issued.token

@@ -69,19 +69,14 @@ describe("golden: settings and owner tools", () => {
       values: { username: "me@example.com", password: "hunter2" },
       policy: { handle: "bank" },
     };
-    await r.http("create without step-up", "/api/v1/vault/items", { method: "POST", json: item });
-    await r.http("create", "/api/v1/vault/items", {
-      method: "POST",
-      json: item,
-      headers: steppedUp(),
-    });
-    await r.http("create the same handle", "/api/v1/vault/items", {
-      method: "POST",
-      json: item,
-      headers: steppedUp(),
-    });
+    await r.http("create", "/api/v1/vault/items", { method: "POST", json: item });
+    await r.http("create the same handle", "/api/v1/vault/items", { method: "POST", json: item });
     await r.http("overview after", "/api/v1/vault");
     await r.http("detail", "/api/v1/vault/items/bank");
+    await r.http("reveal without step-up", "/api/v1/vault/items/bank/reveal", {
+      method: "POST",
+      json: { field: "password" },
+    });
     await r.http("reveal", "/api/v1/vault/items/bank/reveal", {
       method: "POST",
       json: { field: "password" },
@@ -90,7 +85,6 @@ describe("golden: settings and owner tools", () => {
     await r.http("change the password", "/api/v1/vault/items/bank", {
       method: "PATCH",
       json: { field: "password", value: "correct horse" },
-      headers: steppedUp(),
     });
     await r.http("tighten the policy", "/api/v1/vault/items/bank", {
       method: "PUT",

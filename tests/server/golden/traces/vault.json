@@ -54,22 +54,6 @@
     }
   },
   {
-    "http": "create without step-up",
-    "method": "POST",
-    "path": "/api/v1/vault/items",
-    "status": 403,
-    "body": {
-      "success": false,
-      "error": {
-        "code": "FORBIDDEN",
-        "message": "Confirm it's you first (step-up required)",
-        "details": {
-          "code": "step_up_required"
-        }
-      }
-    }
-  },
-  {
     "http": "create",
     "method": "POST",
     "path": "/api/v1/vault/items",
@@ -248,6 +232,22 @@
             "unattended": false
           }
         ]
+      }
+    }
+  },
+  {
+    "http": "reveal without step-up",
+    "method": "POST",
+    "path": "/api/v1/vault/items/bank/reveal",
+    "status": 403,
+    "body": {
+      "success": false,
+      "error": {
+        "code": "FORBIDDEN",
+        "message": "Confirm it's you first (step-up required)",
+        "details": {
+          "code": "step_up_required"
+        }
       }
     }
   },

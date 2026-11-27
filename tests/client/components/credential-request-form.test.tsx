@@ -93,7 +93,7 @@ describe("credential request form gating", () => {
     expect(api.submitRequest).not.toHaveBeenCalled();
   });
 
-  it("sends a saving submit through step-up, and one that saves nothing straight", async () => {
+  it("sends a saving submit without asking to confirm it's you", async () => {
     api.submitRequest.mockResolvedValue({ filled: ["email", "password"], savedHandle: null });
     api.gateRuns.count = 0;
     mount(REQUEST);
@@ -108,7 +108,7 @@ describe("credential request form gating", () => {
       values: { email: "ana@example.com", password: "pw" },
       save: true,
     });
-    expect(api.gateRuns.count).toBe(1);
+    expect(api.gateRuns.count).toBe(0);
 
     fireEvent.change(screen.getByLabelText("Email*"), { target: { value: "ana@example.com" } });
     fireEvent.change(screen.getByLabelText("Password*"), { target: { value: "pw" } });
@@ -120,7 +120,7 @@ describe("credential request form gating", () => {
       values: { email: "ana@example.com", password: "pw" },
       save: false,
     });
-    expect(api.gateRuns.count).toBe(1);
+    expect(api.gateRuns.count).toBe(0);
   });
 
   it("accepts a plain username in a field the bot typed as email", async () => {

@@ -190,28 +190,31 @@ items not linked yet, and the backend's status. Items can be created
 (login, card, contact, API key), linked, edited, revealed, copied and
 deleted.
 
-Writes, reveals and copies need **step-up**: the owner re-enters their
-password (or uses a passkey) and gets a token valid for 5 minutes, held in
-page memory only and sent as `X-Vault-Step-Up` (which also makes these routes
-CSRF-proof). Revealed values hide after 30 seconds; copied ones are cleared
-from the clipboard after 30 seconds (best effort). Delete and reveal send a
+Reveals, copies, deletes, links, and changes to where a value may go (an
+item's URLs or policy) need **step-up**: the owner re-enters their password
+(or uses a passkey, on the Android app too) and gets a token valid for 5
+minutes, held in page memory only and sent as `X-Vault-Step-Up`. Adding an
+item, changing its title or values, saving a typed sign-in and moving local
+items to 1Password don't: they hand the vault a value, they never send one
+out, so a stolen session gains nothing from them. Revealed values hide after 30
+seconds; copied ones are cleared from the clipboard after 30 seconds (best effort). Delete and reveal send a
 Pushover alert. Every response is `Cache-Control: no-store`, request bodies
 are never logged, and Sentry drops the bodies of vault requests.
 
-| Method & path                                | Step-up | Does                                                   |
-| -------------------------------------------- | ------- | ------------------------------------------------------ |
-| `GET /api/v1/vault[?refresh=1]`              | —       | Backends, items (metadata + policy), unlinked items    |
-| `GET /api/v1/vault/items/:handle`            | —       | Item, which fields hold a value, audit trail           |
-| `POST /api/v1/vault/step-up[/options]`       | —       | `{password}` or `{passkey}` → `{token, expiresAt}`     |
-| `POST /api/v1/vault/items`                   | yes     | Create in the primary backend + policy row             |
-| `POST /api/v1/vault/links`                   | yes     | Link an existing backend item                          |
-| `PUT /api/v1/vault/items/:handle`            | yes     | Update title, urls, values and/or policy               |
-| `PATCH /api/v1/vault/items/:handle`          | yes     | `{field, value}`: change one value (rotate a password) |
-| `DELETE /api/v1/vault/items/:handle`         | yes     | Unlink; `?purge=true` deletes it in the backend too    |
-| `POST /api/v1/vault/items/:handle/reveal`    | yes     | `{field, purpose: reveal \| copy}` → one value         |
-| `GET /api/v1/vault/requests/:taskId`         | —       | A pending credential request (metadata)                |
-| `POST /api/v1/vault/requests/:taskId/submit` | on save | `{values, save}`: fill, optionally save, resume        |
-| `POST /api/v1/vault/requests/:taskId/cancel` | —       | Cancel the request                                     |
+| Method & path                                | Step-up      | Does                                                   |
+| -------------------------------------------- | ------------ | ------------------------------------------------------ |
+| `GET /api/v1/vault[?refresh=1]`              | —            | Backends, items (metadata + policy), unlinked items    |
+| `GET /api/v1/vault/items/:handle`            | —            | Item, which fields hold a value, audit trail           |
+| `POST /api/v1/vault/step-up[/options]`       | —            | `{password}` or `{passkey}` → `{token, expiresAt}`     |
+| `POST /api/v1/vault/items`                   | —            | Create in the primary backend + policy row             |
+| `POST /api/v1/vault/links`                   | yes          | Link an existing backend item                          |
+| `PUT /api/v1/vault/items/:handle`            | urls, policy | Update title, urls, values and/or policy               |
+| `PATCH /api/v1/vault/items/:handle`          | —            | `{field, value}`: change one value (rotate a password) |
+| `DELETE /api/v1/vault/items/:handle`         | yes          | Unlink; `?purge=true` deletes it in the backend too    |
+| `POST /api/v1/vault/items/:handle/reveal`    | yes          | `{field, purpose: reveal \| copy}` → one value         |
+| `GET /api/v1/vault/requests/:taskId`         | —            | A pending credential request (metadata)                |
+| `POST /api/v1/vault/requests/:taskId/submit` | —            | `{values, save}`: fill, optionally save, resume        |
+| `POST /api/v1/vault/requests/:taskId/cancel` | —            | Cancel the request                                     |
 
 ## Redaction
 

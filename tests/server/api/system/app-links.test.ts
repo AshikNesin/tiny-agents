@@ -25,7 +25,10 @@ describe("Android app links", () => {
     expect(res.headers.get("content-type")).toContain("application/json");
     expect(await res.json()).toEqual([
       {
-        relation: ["delegate_permission/common.handle_all_urls"],
+        relation: [
+          "delegate_permission/common.handle_all_urls",
+          "delegate_permission/common.get_login_creds",
+        ],
         target: {
           namespace: "android_app",
           package_name: "io.nesin.tinyagents",

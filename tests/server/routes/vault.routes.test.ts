@@ -51,7 +51,9 @@ import { WindowMismatchError } from "../../../packages/sandbox/src/computer-sess
 import { secretRedactor } from "../../../packages/agent/src/redact";
 import type { CredentialRequest } from "../../../packages/agent/src/credentials";
 import { useTestRuntime } from "../fixtures";
-import { api, createTestApp, type TestApp } from "../helpers";
+import { api, createTestApp, setAppConfig, type TestApp } from "../helpers";
+import { createSoftPasskey } from "../fixtures/passkey";
+import { memoryRateLimitStore } from "@groot/core/rate-limit/store";
 
 const CANARY = "canary-pw-7Hq2Zx";
 const PASSWORD = "owner-password-123";
@@ -134,13 +136,51 @@ async function assertNoCanary(): Promise<void> {
 }
 
 describe("vault routes", () => {
-  it("refuses writes without step-up and a wrong password, without ending the session (#164)", async () => {
-    const response = await createGithub("not-a-token");
+  it("refuses a write that needs step-up and a wrong password, without ending the session (#164)", async () => {
+    expect((await createGithub("")).status).toBe(201);
+    const response = await vault("/items/github", { method: "DELETE", stepUp: "not-a-token" });
     expect(response.status).toBe(403);
     const wrong = await vault("/step-up", { method: "POST", json: { password: "nope" } });
     expect(wrong.status).toBe(401);
     expect(wrong.body.error?.code).not.toBe("SESSION_INVALID");
-    expect(await db.$count(vaultItems)).toBe(0);
+    expect(await db.$count(vaultItems)).toBe(1);
+  });
+
+  it("adds an item and changes its values without step-up, and asks for it to reveal, delete or change where a value goes", async () => {
+    expect((await createGithub("")).status).toBe(201);
+    const renamed = await vault("/items/github", {
+      method: "PUT",
+      json: { title: "GitHub work", values: { password: "pw-2" } },
+    });
+    expect(renamed.status).toBe(200);
+    const rotated = await vault("/items/github", {
+      method: "PATCH",
+      json: { field: "password", value: "pw-3" },
+    });
+    expect(rotated.status).toBe(200);
+
+    const guarded: [string, string, unknown][] = [
+      ["PUT", "/items/github", { urls: ["https://evil.example.com/login"] }],
+      ["PUT", "/items/github", { policy: { origins: ["https://evil.example.com"] } }],
+      ["PUT", "/items/github", { policy: { approval: "allowed" } }],
+      ["POST", "/items/github/reveal", { field: "password" }],
+      ["DELETE", "/items/github", undefined],
+    ];
+    for (const [method, path, json] of guarded) {
+      const refused = await vault(path, { method, ...(json ? { json } : {}) });
+      expect(refused.status, `${method} ${path} ${JSON.stringify(json)}`).toBe(403);
+      expect(refused.body.error?.details).toEqual({ code: "step_up_required" });
+    }
+
+    const item = await db.query.vaultItems.findFirst({ where: eq(vaultItems.handle, "github") });
+    expect(JSON.parse(item!.originsJson)).toEqual(["https://github.com"]);
+    expect(item?.approval).not.toBe("allowed");
+    const revealed = await vault("/items/github/reveal", {
+      method: "POST",
+      stepUp: issueStepUp(ownerUserId).token,
+      json: { field: "password" },
+    });
+    expect(revealed.body.data.value).toBe("pw-3");
   });
 
   it("refuses a passkey it does not know without ending the session (#174)", async () => {
@@ -168,6 +208,34 @@ describe("vault routes", () => {
     expect(unknown.status).toBe(401);
     expect(unknown.body.error?.code).not.toBe("SESSION_INVALID");
     expect(unknown.body.error?.message).toMatch(/Passkey not found/);
+  });
+
+  it("confirms with a passkey from the Android app once its certificate is set", async () => {
+    const print = "ab".repeat(32);
+    const androidOrigin = `android:apk-key-hash:${Buffer.from(print, "hex").toString("base64url")}`;
+    const passkey = await createSoftPasskey(ownerUserId, { origin: androidOrigin });
+    const fresh = createTestApp({ rateLimitStore: memoryRateLimitStore() });
+    const confirm = async () => {
+      const options = await api<Data>(fresh, "/api/v1/vault/step-up/options", {
+        method: "POST",
+        token,
+      });
+      return api<Data>(fresh, "/api/v1/vault/step-up", {
+        method: "POST",
+        token,
+        json: { passkey: passkey.assert(options.body.data.challenge) },
+      });
+    };
+
+    expect((await confirm()).status).toBe(401);
+
+    vi.stubEnv("ANDROID_APP_CERT_SHA256", print);
+    setAppConfig();
+    const confirmed = await confirm();
+    expect(confirmed.status).toBe(200);
+    expect((await createGithub(confirmed.body.data.token)).status).toBe(201);
+    vi.unstubAllEnvs();
+    setAppConfig();
   });
 
   it("accepts the password of an account made before groot 3.0 (bcrypt hash)", async () => {
@@ -909,26 +977,10 @@ describe("credential request submit", () => {
       return runtime;
     };
 
-    const stepUpToken = () => issueStepUp(ownerUserId).token;
-
-    it("refuses a saving submit without step-up, filling nothing", async () => {
-      const runtime = install();
-      const refused = await vault("/requests/7/submit", {
-        method: "POST",
-        json: { values: { email: "ana@example.com", password: CANARY }, save: true },
-      });
-      expect(refused.status).toBe(403);
-      expect(refused.body.error?.details).toEqual({ code: "step_up_required" });
-      expect(fills).toEqual([]);
-      expect(await db.query.vaultItems.findFirst()).toBeUndefined();
-      expect(runtime.settleCredentialRequest).not.toHaveBeenCalled();
-    });
-
-    it("fills and saves the vault when the owner confirmed", async () => {
+    it("fills and saves the vault without step-up", async () => {
       const runtime = install();
       const submitted = await vault("/requests/7/submit", {
         method: "POST",
-        stepUp: stepUpToken(),
         json: { values: { email: "ana@example.com", password: CANARY }, save: true },
       });
       expect(submitted.status).toBe(200);

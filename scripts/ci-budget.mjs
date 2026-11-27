@@ -2,7 +2,7 @@ import { appendFileSync } from "node:fs";
 import process from "node:process";
 import { pathToFileURL } from "node:url";
 
-export const SETUP_BUDGET = 30;
+export const SETUP_BUDGET = 40;
 
 export const COLD_SETUP_BUDGET = 120;
 

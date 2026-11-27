@@ -220,8 +220,8 @@ class ChatViewModel(private val container: AppContainer, val botId: String) : Vi
         container.bots.refresh()
     }
 
-    fun submitCredentials(taskId: Int, values: Map<String, String>, save: Boolean, stepUp: String?, done: () -> Unit) = act("Could not fill the sign-in.") {
-        container.api.submitCredentials(taskId, values, save, stepUp)
+    fun submitCredentials(taskId: Int, values: Map<String, String>, save: Boolean, done: () -> Unit) = act("Could not fill the sign-in.") {
+        container.api.submitCredentials(taskId, values, save)
         done()
     }
 

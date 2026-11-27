@@ -80,7 +80,6 @@ import groot.mobile.ui.components.BotAvatar
 import groot.mobile.ui.components.MenuRow
 import groot.mobile.ui.components.Sheet
 import groot.mobile.ui.components.StatusDot
-import groot.mobile.ui.components.rememberStepUpGate
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 
@@ -222,19 +221,12 @@ fun ChatPane(
         ImageViewer(ref, onSave = { viewModel.save(ref) {} }, onDismiss = { viewer = null })
     }
     credentials?.let { call ->
-        val gate = rememberStepUpGate()
         CredentialSheet(
             call = call,
             botName = bot.name,
             onSubmit = { values, save ->
                 call.taskId?.let { taskId ->
-                    if (save) {
-                        gate.run { token ->
-                            viewModel.submitCredentials(taskId, values, save, token) { credentials = null }
-                        }
-                    } else {
-                        viewModel.submitCredentials(taskId, values, save, null) { credentials = null }
-                    }
+                    viewModel.submitCredentials(taskId, values, save) { credentials = null }
                 }
             },
             onDismiss = { credentials = null },
