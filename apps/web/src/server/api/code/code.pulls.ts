@@ -1,4 +1,8 @@
-import { WORKFLOW_KINDS, type WorkflowName } from "../../../shared/code-status";
+import {
+  preferredMergeMethod,
+  WORKFLOW_KINDS,
+  type WorkflowName,
+} from "../../../shared/code-status";
 import { eq, inArray } from "drizzle-orm";
 import { Boom } from "@groot/core/errors";
 import { logger } from "@groot/core/logger";
@@ -331,9 +335,13 @@ export async function noteOwnerInput(threadId: string): Promise<void> {
   }
 }
 
-export async function mergePull(threadId: string, method: MergeMethod): Promise<void> {
+export async function mergePull(threadId: string, picked?: MergeMethod): Promise<void> {
   const { open, repo, github } = await openPullContext(threadId);
-  await (await github()).merge(repo, open.number, method).catch((error: unknown) => {
+  const client = await github();
+  const method =
+    picked ?? preferredMergeMethod((await client.snapshot(repo, open.number)).mergeMethods);
+  if (!method) throw Boom.conflict(`${repo.owner}/${repo.name} allows no merge method.`);
+  await client.merge(repo, open.number, method).catch((error: unknown) => {
     throw Boom.conflict(`GitHub did not merge #${open.number}: ${githubMessage(error)}`);
   });
   await reconcileNow(open.id);

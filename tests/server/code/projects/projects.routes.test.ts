@@ -972,6 +972,16 @@ describe("Auto-fix", () => {
     expect(github.merged).toEqual([]);
   });
 
+  it("merges with the repository's own method when none is picked", async () => {
+    const thread = await publishedThread();
+    github.pull(1).mergeMethods = ["rebase"];
+
+    const merged = await call("POST", `/threads/${encodeURIComponent(thread.id)}/pr/merge`, {});
+
+    expect(merged.status).toBe(200);
+    expect(github.merged).toEqual([{ number: 1, method: "rebase" }]);
+  });
+
   it("YOLO Merge refuses a method the repository does not allow", async () => {
     const thread = await publishedThread();
     const refused = await call("POST", `/threads/${encodeURIComponent(thread.id)}/pr/yolo`, {
