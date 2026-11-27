@@ -7,6 +7,7 @@ import type {
   TestResult,
 } from "@tiny-agents/models";
 import type { Jsonified } from "../json";
+import type { VaultBackendName } from "./vault";
 
 export type { CatalogModel, DiscoveredModel, ProviderKind, ProviderSummary, ProviderTemplate };
 
@@ -63,7 +64,7 @@ export interface AccountData {
   statusDetail: string | null;
   checkedAt: Date | null;
   version: number;
-  credential: { hint: string | null; backend: string } | null;
+  credential: { hint: string | null; backend: VaultBackendName } | null;
   models: AccountModel[];
 }
 

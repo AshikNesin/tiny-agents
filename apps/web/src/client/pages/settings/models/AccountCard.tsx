@@ -8,6 +8,7 @@ import { Text } from "@groot/ui/typography";
 import { formatRelativeTime } from "@groot/shell/lib/date.utils";
 import { useStepUp } from "../../../components/vault/StepUp";
 import { errorMessage } from "../../../lib/errors";
+import { BACKEND_LABEL } from "../../../lib/vault-api";
 import type { Account, AccountModel } from "../../../../shared/api/models";
 import { useModelDiscovery, useModelMutations } from "../../../queries/models";
 import { ClaudePlanStatus } from "../../../components/ClaudePlanStatus";
@@ -37,7 +38,7 @@ function accountSummary(account: Account, accounts: Account[]): string {
     ? `through ${accounts.find((a) => a.id === account.viaProviderId)?.name ?? "a gateway"}`
     : hostOf(account.baseUrl);
   const key = account.credential
-    ? `${account.credential.hint ?? "key"} · ${account.credential.backend}`
+    ? `${account.credential.hint ?? "key"} · ${BACKEND_LABEL[account.credential.backend]}`
     : undefined;
   const count = `${account.models.length} model${account.models.length === 1 ? "" : "s"}`;
   const checked = account.checkedAt

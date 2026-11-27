@@ -35,7 +35,8 @@ const api = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/models-api", () => ({ modelsApi: api }));
-vi.mock("@/lib/vault-api", () => ({
+vi.mock("@/lib/vault-api", async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   hasStepUp: () => true,
   apiError: (_error: unknown, fallback: string) => fallback,
   StepUpRequiredError: class extends Error {},

@@ -148,7 +148,12 @@ async function accountView(row: ProviderRow, usage: Map<string, number>): Promis
     statusDetail: row.statusDetail,
     checkedAt: row.checkedAt,
     version: row.version,
-    credential: item ? { hint: row.credentialHint, backend: item.backend } : null,
+    credential: item
+      ? {
+          hint: row.credentialHint,
+          backend: item.backend as NonNullable<AccountData["credential"]>["backend"],
+        }
+      : null,
     models: rows
       .sort((a, b) => a.name.localeCompare(b.name))
       .map((model) => modelView(model, usage.get(model.id) ?? 0)),
