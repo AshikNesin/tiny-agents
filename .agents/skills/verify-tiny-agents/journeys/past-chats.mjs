@@ -26,10 +26,7 @@ await journey("past-chats", async ({ page, step, proof, cleanup, api, stamp }) =
   };
   const newChat = async () => {
     await page.getByRole("button", { name: "Start a new chat" }).click();
-    const confirm = page.getByRole("dialog", { name: "Start a new chat?" });
-    await expect(confirm).toBeVisible();
-    await confirm.getByRole("button", { name: "New chat", exact: true }).click();
-    await expect(confirm).toHaveCount(0);
+    await expect(page.getByRole("dialog", { name: "Start a new chat?" })).toHaveCount(0);
   };
 
   await step("setup: a bot of its own via the API", async () => {

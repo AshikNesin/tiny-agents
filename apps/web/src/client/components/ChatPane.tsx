@@ -20,7 +20,7 @@ import { useMessageScroller } from "./ui/message-scroller";
 import { errorMessage } from "../lib/errors";
 import { ChatPaneHeader } from "./chat-pane/ChatPaneHeader";
 import { ModelWarning } from "./chat-pane/ChatPaneNotices";
-import { NewChatConfirmDialog, YoloConfirmDialog } from "./chat-pane/ChatPaneConfirmations";
+import { YoloConfirmDialog } from "./chat-pane/ChatPaneConfirmations";
 import { DropOverlay, useFileDrop } from "./chat-pane/file-drop";
 import { useLiveViews } from "./chat-pane/live-views";
 import { QueuedMessages } from "./chat-pane/QueuedMessages";
@@ -61,7 +61,6 @@ function ChatPaneBody({
   const chat = useChat(bot.id);
   const { messages, busy, yolo } = chat;
   const setMobileOpen = useUiStore((s) => s.setMobileOpen);
-  const [confirmReset, setConfirmReset] = useState(false);
   const [confirmYolo, setConfirmYolo] = useState(false);
   const role = useViewerRole();
   const owner = role === "owner";
@@ -75,12 +74,23 @@ function ChatPaneBody({
     await chat.setYolo(on);
   };
   const canReset = owner && (messages.length > 0 || chat.outbox.length > 0);
+  const newChat = async () => {
+    try {
+      adoptBot(await botsApi.reset(bot.id));
+    } catch (error) {
+      toast.error(errorMessage(error, "Failed to start a new chat"));
+    }
+  };
+  const newChatRef = useRef(newChat);
+  useEffect(() => {
+    newChatRef.current = newChat;
+  });
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (!(e.metaKey || e.ctrlKey) || !e.shiftKey || e.key.toLowerCase() !== "o") return;
       e.preventDefault();
-      if (canReset) setConfirmReset(true);
+      if (canReset) void newChatRef.current();
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
@@ -186,7 +196,7 @@ function ChatPaneBody({
         keys: "n",
         label: "Start a new chat",
         enabled: canReset,
-        run: () => setConfirmReset(true),
+        run: () => void newChatRef.current(),
       },
       {
         id: "edit",
@@ -251,18 +261,9 @@ function ChatPaneBody({
     }
   };
 
-  const doReset = async () => {
-    setConfirmReset(false);
-    try {
-      adoptBot(await botsApi.reset(bot.id));
-    } catch (error) {
-      toast.error(errorMessage(error, "Failed to start a new chat"));
-    }
-  };
-
   const newChatFromComposer = () => {
     if (!owner || chat.health === "loading") return false;
-    if (canReset) void doReset();
+    if (canReset) void newChat();
     return true;
   };
 
@@ -280,7 +281,7 @@ function ChatPaneBody({
           live={live}
           canReset={canReset}
           onOpenMenu={onOpenMenu ?? (() => setMobileOpen(true))}
-          onNewChat={() => setConfirmReset(true)}
+          onNewChat={() => void newChat()}
           actions={headerActions}
         />
 
@@ -340,12 +341,6 @@ function ChatPaneBody({
         open={confirmYolo}
         onOpenChange={setConfirmYolo}
         onTurnOn={() => void setYolo(true)}
-      />
-      <NewChatConfirmDialog
-        botName={bot.name}
-        open={confirmReset}
-        onOpenChange={setConfirmReset}
-        onReset={doReset}
       />
     </div>
   );

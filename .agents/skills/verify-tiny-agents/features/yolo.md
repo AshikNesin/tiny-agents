@@ -27,7 +27,7 @@ Preconditions:
 - **Run unasked.** Send `/improve`: no `<bot> wants to update own instructions` card, a row with `auto-approved (YOLO)`; `GET /bots/:id` `systemPrompt` contains the line once.
 - **Off.** Banner `Turn off` → banner gone; `/improve` shows the card; prompt unchanged while it waits.
 - **Approve waiting.** With that card up, switch YOLO on: the card goes, a second `Updated own instructions` row appears, the prompt now has the line twice.
-- **New chat.** `Start a new chat` → `New chat`: toggle `aria-pressed=false`, no banner, also after reload.
+- **New chat.** `Start a new chat` (no confirm): toggle `aria-pressed=false`, no banner, also after reload.
 - **Proof.** `ta-verify drive $S/journeys/yolo.mjs` → `on`, `auto-approved`, `card-again`, `waiting-approved`, `new-chat-off`.
 
 ## Gotchas

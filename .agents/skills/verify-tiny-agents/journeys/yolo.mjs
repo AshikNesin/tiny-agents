@@ -94,7 +94,6 @@ await journey("yolo", async ({ page, step, proof, cleanup, api, stamp }) => {
 
   await step("New chat turns YOLO off", async () => {
     await page.getByRole("button", { name: "Start a new chat" }).click();
-    await page.getByRole("button", { name: "New chat", exact: true }).click();
     await expectYolo(false);
     await page.reload();
     await expect(composer).toBeVisible({ timeout: 15_000 });

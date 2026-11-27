@@ -8,6 +8,13 @@
   item, on Android 14 or newer. The password stays as the fallback. Adding an item, changing a value, and saving a sign-in a bot asked
   for no longer ask at all.
 
+## 0.17.2
+
+### Patch Changes
+
+- **New chat** starts a fresh chat straight away, without asking first. The chat you leave is still in past
+  chats, where you can read or continue it.
+
 ## 0.17.1
 
 ### Patch Changes

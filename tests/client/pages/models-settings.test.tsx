@@ -28,7 +28,8 @@ const api = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/models-api", () => ({ modelsApi: api }));
-vi.mock("@/lib/vault-api", () => ({
+vi.mock("@/lib/vault-api", async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   hasStepUp: () => true,
   apiError: (_error: unknown, fallback: string) => fallback,
   StepUpRequiredError: class extends Error {},
@@ -256,7 +257,33 @@ describe("Settings → Models · account summary", () => {
 
     expect(
       await screen.findByText(
-        "Anthropic · api.anthropic.com · sk-…a1B2 · local · 1 model · checked an hour ago",
+        "Anthropic · api.anthropic.com · sk-…a1B2 · Local · 1 model · checked an hour ago",
+      ),
+    ).toBeTruthy();
+  });
+
+  it("names 1Password as the key's vault", async () => {
+    api.accounts.mockResolvedValue({
+      accounts: [
+        {
+          ...account([{}]),
+          checkedAt: "2026-11-06T05:30:00.000Z",
+          credential: { hint: "sk-…a1B2", backend: "onepassword" },
+        },
+      ],
+      templates: TEMPLATES,
+    });
+    render(
+      <AppQueryProvider>
+        <ConfirmProvider>
+          <ModelsSettings />
+        </ConfirmProvider>
+      </AppQueryProvider>,
+    );
+
+    expect(
+      await screen.findByText(
+        "Anthropic · api.anthropic.com · sk-…a1B2 · 1Password · 1 model · checked an hour ago",
       ),
     ).toBeTruthy();
   });

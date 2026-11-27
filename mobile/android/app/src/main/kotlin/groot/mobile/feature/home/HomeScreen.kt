@@ -50,7 +50,6 @@ import groot.mobile.ui.brand.Dims
 import groot.mobile.ui.components.ActionTile
 import groot.mobile.ui.components.AppIcon
 import groot.mobile.ui.components.BotAvatar
-import groot.mobile.ui.components.ConfirmDialog
 import groot.mobile.ui.components.EmptyState
 import groot.mobile.ui.components.IconBtn
 import groot.mobile.ui.components.LoadingBox
@@ -71,7 +70,9 @@ fun HomeRoute(container: AppContainer, onNavigate: (String) -> Unit) {
     val drawer = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     var menu by remember { mutableStateOf(false) }
-    var confirmNewChat by remember { mutableStateOf(false) }
+    val chat: ChatViewModel? = bot?.let { current ->
+        viewModel(key = "chat:${current.id}", factory = viewModelFactory { initializer { ChatViewModel(container, current.id) } })
+    }
     BackHandler(enabled = drawer.isOpen) { scope.launch { drawer.close() } }
     LaunchedEffect(drawer.isOpen) { if (drawer.isOpen) viewModel.loadThreads() }
     LifecycleStartEffect(Unit) {
@@ -109,7 +110,7 @@ fun HomeRoute(container: AppContainer, onNavigate: (String) -> Unit) {
                 bots = bots,
                 onMenu = { scope.launch { drawer.open() } },
                 onTitle = { if (bot != null) menu = true },
-                onNewChat = { confirmNewChat = true },
+                onNewChat = { chat?.newChat() },
             )
             when {
                 bot != null -> ChatPane(
@@ -153,19 +154,6 @@ fun HomeRoute(container: AppContainer, onNavigate: (String) -> Unit) {
                 menu = false
                 viewModel.togglePin(bot.id)
             },
-        )
-    }
-    if (confirmNewChat && bot != null) {
-        val chat: ChatViewModel = viewModel(key = "chat:${bot.id}", factory = viewModelFactory { initializer { ChatViewModel(container, bot.id) } })
-        ConfirmDialog(
-            title = "Start a new chat?",
-            text = "${bot.name} starts fresh. This chat moves to past chats, where you can read or continue it.",
-            confirmLabel = "New chat",
-            onConfirm = {
-                confirmNewChat = false
-                chat.newChat()
-            },
-            onDismiss = { confirmNewChat = false },
         )
     }
 }

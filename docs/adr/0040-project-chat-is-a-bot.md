@@ -15,8 +15,8 @@ push.
 ## Decision
 
 **A project chat is a bot with `bots.project_id` set.** One per project
-(unique column). Opening the chat from the Code sidebar makes it on first
-use (`openProjectChat` in `code.chat.ts`) and shows its `ChatPane` inside
+(unique column). Adding the project in Settings, or opening its chat, makes
+it on first use (`openProjectChat` in `code.chat.ts`) and shows its `ChatPane` inside
 Code at `/code/p/<project>`. Deleting the project leaves a plain bot;
 deleting the bot removes the chat.
 

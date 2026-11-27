@@ -8,6 +8,7 @@ import { NO_CAPABILITIES } from "@tiny-agents/code/contracts";
 import { CodeWorkspace } from "@/pages/code/Workspace";
 import { LegacyCodeSettings } from "@/pages/code/CodeSettings";
 import { SettingsPage } from "@/pages/settings/SettingsPage";
+import { useBotsStore } from "@/store/bots";
 import { useCodeStore } from "@/store/code";
 import { usePeopleStore } from "@/store/people";
 import type { HarnessInfo } from "@/lib/code/api";
@@ -18,6 +19,7 @@ const render = (ui: Parameters<typeof renderBare>[0]) =>
   renderBare(ui, { wrapper: AppQueryProvider });
 
 const patches: Array<[string, unknown]> = [];
+const posts: string[] = [];
 const puts: Array<[string, unknown]> = [];
 
 vi.mock("sonner", () => ({
@@ -36,7 +38,12 @@ vi.mock("@groot/shell/lib/api", async (importOriginal) => {
     ...original,
     apiClient: Object.assign(Object.create(original.apiClient) as typeof original.apiClient, {
       get: async (path: string) => reads[path]?.() ?? [],
-      post: async () => ({}),
+      post: async (path: string) => {
+        posts.push(path);
+        if (path === "/code/projects") return { ...project, id: "p2" };
+        if (path === "/code/projects/p2/chat") return { id: "b2", name: "web", projectId: "p2" };
+        return {};
+      },
       put: async (path: string, body: unknown) => {
         puts.push([path, body]);
         return path === "/code/reviews/settings" ? { ...inbox, ...(body as object) } : github;
@@ -174,6 +181,19 @@ describe("Code settings", () => {
     const link = await within(main).findByRole("link", { name: /tiny-agents/ });
     expect(link).toHaveAttribute("href", "/settings/projects?project=p1");
     expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("makes a new project's chat when it is added, so Chat lists it", async () => {
+    useBotsStore.setState({ models: [{ id: "m1" } as never] });
+    renderAt("/settings/projects");
+    const viaApp = await screen.findByRole("switch", { name: "Use the GitHub App" });
+    await waitFor(() => expect(viaApp).toBeChecked());
+    await userEvent.click(viaApp);
+    await userEvent.type(await screen.findByPlaceholderText(/owner\/repository/), "acme/web");
+    await userEvent.click(screen.getByRole("button", { name: "Add" }));
+    await waitFor(() => expect(posts).toContain("/code/projects/p2/chat"));
+    expect(useBotsStore.getState().fullBots.b2?.projectId).toBe("p2");
+    expect(posts).toEqual(["/code/projects", "/code/projects/p2/chat"]);
   });
 
   it("starts Add a project with the repository the Reviews screen asked for (#386)", async () => {

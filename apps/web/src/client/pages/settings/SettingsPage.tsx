@@ -40,7 +40,8 @@ const LEGACY_TABS: Record<string, string> = { general: "account", claude: "model
 export function SettingsPage() {
   const { pathname, search } = useLocation();
   const legacyTab = new URLSearchParams(search).get("tab");
-  const restricted = useViewerRole() !== "owner";
+  const role = useViewerRole();
+  const restricted = role !== "owner";
   const code = useCodeStore((s) => s.harnesses === null || s.harnesses.length > 0);
   const sections = useMemo<SettingsSection[]>(
     () => settingsSectionsFor(restricted, code).map((s) => ({ ...s, element: ELEMENTS[s.id] })),
@@ -49,5 +50,6 @@ export function SettingsPage() {
   if (legacyTab && pathname.replace(/\/+$/, "") === "/settings") {
     return <Navigate to={`/settings/${LEGACY_TABS[legacyTab] ?? legacyTab}`} replace />;
   }
+  if (role === null) return null;
   return <Settings sections={sections} />;
 }
