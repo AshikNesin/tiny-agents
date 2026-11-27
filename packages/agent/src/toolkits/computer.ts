@@ -12,6 +12,7 @@ import {
   type LiveComputer,
 } from "@tiny-agents/sandbox/computer";
 import { safeMessage, vaultUseFromSink, vaultGatePlan } from "./vault";
+import { fail } from "./result";
 
 export { createComputerSessions, type ComputerSessions } from "@tiny-agents/sandbox/computer";
 
@@ -26,11 +27,6 @@ export interface ComputerToolkitOptions {
   settleMs?: number;
   takeoverWaitMs?: number;
 }
-
-const fail = (text: string): ToolExecutionResult => ({
-  output: [{ type: "text", text }],
-  isError: true,
-});
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 

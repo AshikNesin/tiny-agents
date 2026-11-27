@@ -1,5 +1,4 @@
 import { Type } from "typebox";
-import type { ToolExecutionResult } from "@earendil-works/pi-durable";
 import type { Capability } from "../capabilities";
 import { defineToolkit, tool } from "../toolkit";
 import type { VaultBroker } from "../vault";
@@ -19,6 +18,7 @@ import {
   type BrowserTarget,
 } from "@tiny-agents/sandbox/browser";
 import { createBrowserVaultTools } from "./browser-vault";
+import { fail } from "./result";
 
 export {
   closeAllBrowserSessions,
@@ -57,11 +57,6 @@ const ref = (description: string) =>
 const offset = Type.Optional(
   Type.Integer({ minimum: 0, description: "Character to start from, from the last result's note" }),
 );
-
-const fail = (text: string): ToolExecutionResult => ({
-  output: [{ type: "text", text }],
-  isError: true,
-});
 
 export function createBrowserToolkit(options: BrowserToolkitOptions = {}): Capability {
   const sessions = options.sessions ?? createBrowserSessions(options);

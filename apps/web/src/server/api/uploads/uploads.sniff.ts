@@ -233,3 +233,8 @@ export function sniffFile(bytes: Uint8Array, ext: string): SniffResult {
             : "text";
   return { mime, kind };
 }
+
+export function extensionOf(name: string): string {
+  const dot = name.lastIndexOf(".");
+  return dot === -1 ? "" : name.slice(dot + 1).toLowerCase();
+}

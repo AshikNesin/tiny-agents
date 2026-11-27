@@ -62,6 +62,7 @@ export const gates = [
   { name: "Design tokens", run: "pnpm check:tokens" },
   { name: "pnpm policy", run: "pnpm check:pnpm-policy" },
   { name: "Old modules", run: "pnpm check:old-modules" },
+  { name: "Duplicate functions", run: "pnpm check:duplicates" },
   { name: "Comment ratchet", run: "pnpm check:comments --base origin/${GITHUB_BASE_REF:-main}" },
   {
     name: "Silent fallback ratchet",

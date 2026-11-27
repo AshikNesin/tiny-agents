@@ -8,6 +8,7 @@ import { defineToolkit, tool } from "../toolkit";
 import { VAULT_RULE, type VaultBroker } from "../vault";
 import { checkPublicUrl, isPrivateAddress } from "@tiny-agents/sandbox";
 import { safeMessage, vaultUseFromSink, vaultGatePlan } from "./vault";
+import { fail } from "./result";
 
 export interface WebToolkitOptions {
   apiKey?: string;
@@ -44,11 +45,6 @@ const SEARCH_TIMEOUT_MS = 30_000;
 const FETCH_TIMEOUT_MS = 150_000;
 
 type WebSource = { url: string; title: string };
-
-const fail = (text: string): ToolExecutionResult => ({
-  output: [{ type: "text", text }],
-  isError: true,
-});
 
 const defaultResolve = async (hostname: string) =>
   (await lookup(hostname, { all: true })).map((entry) => entry.address);

@@ -30,17 +30,13 @@ import {
   type SecretFillField,
 } from "@tiny-agents/sandbox/browser";
 import { safeMessage, vaultUseFromSink, vaultGatePlan } from "./vault";
+import { fail } from "./result";
 
 export interface BrowserVaultOptions {
   vault?: VaultBroker;
   ownerWaits?: WaitTracker;
   allowedPrivateHosts?: string;
 }
-
-const fail = (text: string): ToolExecutionResult => ({
-  output: [{ type: "text", text }],
-  isError: true,
-});
 
 async function currentOrigin(session: BrowserSession): Promise<string> {
   if (!session.origin || !session.fillSecret) {

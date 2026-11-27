@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
-import { defaultPermission } from "../../../../packages/agent/src/capabilities";
+import { defaultPermission } from "../../../../packages/agent/src/wire";
 import { createMemoryCapability } from "../../../../packages/agent/src/toolkits/memory";
 
 describe("memory tool permissions", () => {

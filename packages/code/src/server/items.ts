@@ -1,3 +1,6 @@
+import { record } from "@tiny-agents/std";
+
+export { record };
 export class Emitter<T> {
   private readonly listeners = new Set<(value: T) => void>();
 
@@ -26,12 +29,6 @@ export class Emitter<T> {
 export function firstLine(value: string, max = 140): string {
   const line = value.split("\n")[0]?.trim() ?? "";
   return line.length > max ? `${line.slice(0, max - 1)}…` : line;
-}
-
-export function record(value: unknown): Record<string, unknown> | undefined {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : undefined;
 }
 
 export function excerpt(text: string, max = 1500): string {

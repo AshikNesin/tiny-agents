@@ -11,3 +11,12 @@ export function isSkipReply(message: Pick<ChatMessage, "role" | "text" | "toolCa
     (message.toolCalls?.length ?? 0) === 0
   );
 }
+
+export function defaultPermission(tool: {
+  askOnly?: boolean;
+  readOnly?: boolean;
+  allowByDefault?: boolean;
+}): "allow" | "ask" {
+  if (tool.askOnly) return "ask";
+  return tool.readOnly || tool.allowByDefault ? "allow" : "ask";
+}

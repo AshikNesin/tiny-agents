@@ -33,6 +33,7 @@ import { zodShape, type SdkToolResult } from "./sdk";
 import { SessionLog } from "./session-log";
 import { writeSkillsPlugin } from "./coding-skills";
 import { asRateLimitInfo, usagePauseReason } from "./usage";
+import { record } from "@tiny-agents/std";
 
 export class CodingError extends Error {
   constructor(
@@ -1089,12 +1090,6 @@ function resetsAtOf(value: unknown): { resetsAt?: string } {
 
 function roundCost(value: number): number {
   return Math.round(value * 1e6) / 1e6;
-}
-
-function record(value: unknown): Record<string, unknown> | undefined {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : undefined;
 }
 
 function defaultSchedule(fn: () => void, ms: number): () => void {

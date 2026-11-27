@@ -14,7 +14,7 @@ import {
   initialExtraction,
   startExtraction,
 } from "./uploads.extraction";
-import { sniffFile, SniffError, TEXT_EXTENSIONS } from "./uploads.sniff";
+import { extensionOf, sniffFile, SniffError, TEXT_EXTENSIONS } from "./uploads.sniff";
 import type { StoredUpload, UploadMeta, UploadStatus } from "../../../shared/api/uploads";
 
 const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
@@ -66,11 +66,6 @@ function sanitizeName(name: string): string {
   // oxlint-disable-next-line no-control-regex
   const trimmed = name.replace(/[\r\n"\\/\x00-\x1f]/g, "_").trim();
   return trimmed.slice(0, 200) || "file";
-}
-
-function extensionOf(name: string): string {
-  const dot = name.lastIndexOf(".");
-  return dot === -1 ? "" : name.slice(dot + 1).toLowerCase();
 }
 
 function checkExtension(name: string): void {

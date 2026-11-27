@@ -5,6 +5,7 @@ import { innerDetails } from "./approvals";
 import { parseStored, toJson } from "./durable-json";
 import type { ChatCredentialRequest } from "./types";
 import { pendingToolTask, sealedAsNotPending, wakeOwnerWait, type HostTx } from "./waiting";
+import { record } from "@tiny-agents/std";
 
 const CREDENTIAL_FIELD_TYPES = [
   "text",
@@ -85,11 +86,6 @@ export function credentialResultDetails(
     ...(doc.savedHandle ? { savedHandle: doc.savedHandle } : {}),
   };
 }
-
-const record = (value: unknown): Record<string, unknown> | undefined =>
-  value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : undefined;
 
 export function credentialsOf(details: unknown): ChatCredentialRequest | undefined {
   const value = innerDetails(details);

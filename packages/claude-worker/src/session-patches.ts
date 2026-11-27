@@ -4,6 +4,7 @@ import { homedir } from "node:os";
 import path from "node:path";
 import { createInterface } from "node:readline";
 import type { CodingHistoryMessage } from "./coding-protocol";
+import { record } from "@tiny-agents/std";
 
 export function claudeConfigDir(env: Readonly<Record<string, string | undefined>>): string {
   return env.CLAUDE_CONFIG_DIR?.trim() || path.join(env.HOME?.trim() || homedir(), ".claude");
@@ -20,11 +21,6 @@ async function sessionFile(configDir: string, sessionId: string): Promise<string
   }
   return null;
 }
-
-const record = (value: unknown): Record<string, unknown> | undefined =>
-  value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : undefined;
 
 async function sessionPatches(
   configDir: string,

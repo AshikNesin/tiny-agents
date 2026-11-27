@@ -14,6 +14,7 @@ import type {
 import type { GateUserMessage } from "./policy";
 import { finishedToolRow, liveToolRow, type LiveTool } from "./tool-call-row";
 import { sentTextsOf } from "./toolkits/message-owner";
+import { record } from "@tiny-agents/std";
 
 export interface RawChat {
   entries: readonly EntryRecord[];
@@ -183,12 +184,6 @@ export function queuedOf(
     });
   }
   return out;
-}
-
-function record(value: unknown): Record<string, unknown> | undefined {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : undefined;
 }
 
 function toolCallView(

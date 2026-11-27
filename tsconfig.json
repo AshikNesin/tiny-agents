@@ -30,6 +30,7 @@
       "@tiny-agents/github": ["./packages/github/src/index.ts"],
       "@tiny-agents/models": ["./packages/models/src/index.ts"],
       "@tiny-agents/sandbox": ["./packages/sandbox/src/index.ts"],
+      "@tiny-agents/std": ["./packages/std/src/index.ts"],
       "@tiny-agents/sandbox/terminal": ["./packages/sandbox/src/subpaths/terminal.ts"],
       "@tiny-agents/sandbox/browser": ["./packages/sandbox/src/subpaths/browser.ts"],
       "@tiny-agents/sandbox/computer": ["./packages/sandbox/src/subpaths/computer.ts"],

@@ -2,6 +2,7 @@ import { Type } from "typebox";
 import type { ToolExecutionResult } from "@earendil-works/pi-durable";
 import type { Capability } from "../capabilities";
 import { defineToolkit, tool } from "../toolkit";
+import { fail } from "./result";
 
 export type BotCreationRefusal =
   | "disabled"
@@ -34,11 +35,6 @@ export interface BotCreationStore {
       }
   >;
 }
-
-const fail = (text: string): ToolExecutionResult => ({
-  output: [{ type: "text", text }],
-  isError: true,
-});
 
 function refusal(
   status: BotCreationRefusal,

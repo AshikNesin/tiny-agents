@@ -1,8 +1,8 @@
-import type { ToolExecutionResult } from "@earendil-works/pi-durable";
 import { Type } from "typebox";
 import type { Capability } from "../capabilities";
 import { defineToolkit, tool } from "../toolkit";
 import type { Transcriber } from "./vision-transcribe";
+import { fail, ok } from "./result";
 
 export interface VisionStore {
   image(
@@ -14,12 +14,6 @@ export interface VisionStore {
 }
 
 export { createTranscriber, type Transcriber } from "./vision-transcribe";
-
-const ok = (text: string): ToolExecutionResult => ({ output: [{ type: "text", text }] });
-const fail = (text: string): ToolExecutionResult => ({
-  output: [{ type: "text", text }],
-  isError: true,
-});
 
 export function createVisionToolkit(store: VisionStore, transcriber: Transcriber): Capability {
   const seeImage = tool({

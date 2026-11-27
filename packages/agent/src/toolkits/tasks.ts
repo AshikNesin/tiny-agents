@@ -1,11 +1,12 @@
 import { ProviderDoc } from "@earendil-works/pi-durable";
-import type { Extension, ToolExecutionApi, ToolExecutionResult } from "@earendil-works/pi-durable";
+import type { Extension, ToolExecutionApi } from "@earendil-works/pi-durable";
 import type { Context } from "@earendil-works/chord/context";
 import { Type } from "typebox";
 import { z } from "zod";
 import type { Capability } from "../capabilities";
 import { durableMemo } from "../durable-json";
 import { defineToolkit, tool } from "../toolkit";
+import { fail, ok } from "./result";
 
 type TaskStatus = "todo" | "in_progress" | "done";
 type TaskPriority = "low" | "medium" | "high" | "urgent";
@@ -63,14 +64,6 @@ function present(t: TaskRecord): string {
   if (t.description) bits.push(`— ${t.description.slice(0, 120)}`);
   return `[${t.id}] ${bits.join(" · ")}`;
 }
-
-const ok = (text: string): ToolExecutionResult => ({
-  output: [{ type: "text", text }],
-});
-const fail = (text: string): ToolExecutionResult => ({
-  output: [{ type: "text", text }],
-  isError: true,
-});
 
 const startedMemo = durableMemo("delete_task:started", z.boolean());
 const removedMemo = durableMemo("delete_task:removed", z.boolean());

@@ -1,7 +1,8 @@
 import { Type } from "typebox";
-import { section, type ToolExecutionResult } from "@earendil-works/pi-durable";
+import { section } from "@earendil-works/pi-durable";
 import type { Capability } from "./capabilities";
 import { defineToolkit, tool } from "./toolkit";
+import { fail, ok } from "./toolkits/result";
 
 interface SkillSummary {
   name: string;
@@ -24,12 +25,6 @@ export interface SkillStore {
 }
 
 export const SKILL_NAME = /^[a-z0-9]+(-[a-z0-9]+)*$/;
-
-const ok = (text: string): ToolExecutionResult => ({ output: [{ type: "text", text }] });
-const fail = (text: string): ToolExecutionResult => ({
-  output: [{ type: "text", text }],
-  isError: true,
-});
 
 export function createSkillsCapability(store: SkillStore): Capability {
   const loadSkill = tool({

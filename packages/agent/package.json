@@ -23,6 +23,7 @@
     "@tiny-agents/claude-worker": "workspace:*",
     "@tiny-agents/models": "workspace:*",
     "@tiny-agents/sandbox": "workspace:*",
+    "@tiny-agents/std": "workspace:*",
     "typebox": "1.3.27",
     "undici": "8.12.3",
     "ws": "8.22.0",

@@ -7,7 +7,13 @@ import { app } from "../../app-root";
 import { extractionMachine, type ExtractStatus } from "../../../shared/machines/extraction";
 import { extract } from "./uploads.extract";
 import { defaultRunner, type ExtractRunner } from "./uploads.extract-runner";
-import { sniffFile, SniffError, type ExtractKind, type SniffResult } from "./uploads.sniff";
+import {
+  extensionOf,
+  sniffFile,
+  SniffError,
+  type ExtractKind,
+  type SniffResult,
+} from "./uploads.sniff";
 
 const CONCURRENCY = 2;
 const CACHE_SIZE = 8;
@@ -148,11 +154,6 @@ function pump(): void {
         pump();
       });
   }
-}
-
-function extensionOf(name: string): string {
-  const dot = name.lastIndexOf(".");
-  return dot === -1 ? "" : name.slice(dot + 1).toLowerCase();
 }
 
 async function extractOne(uploadId: string, kindHint: ExtractKind | undefined): Promise<void> {
