@@ -73,6 +73,12 @@ function useProjectOptions(projects: ProjectView[] | null): {
   return { options: ranked.options, latest: latest || undefined };
 }
 
+function modelFor(project: ProjectView | null, instanceId: string): string {
+  return project && instanceId === project.defaultInstanceId
+    ? (project.defaultModel ?? DEFAULT)
+    : DEFAULT;
+}
+
 export function NewThread({
   focused,
   projects,
@@ -111,15 +117,14 @@ export function NewThread({
 
   const pickInstance = (id: string) => {
     setInstanceId(id);
-    setModel(
-      project && id === project.defaultInstanceId ? (project.defaultModel ?? DEFAULT) : DEFAULT,
-    );
+    setModel(modelFor(project, id));
   };
 
   useEffect(() => {
     if (!project) return;
     const preferred = harnesses.find((h) => h.id === project.defaultInstanceId) ?? harnesses[0];
-    pickInstance(preferred?.id ?? "");
+    setInstanceId(preferred?.id ?? "");
+    setModel(modelFor(project, preferred?.id ?? ""));
   }, [project, harnesses]);
 
   useEffect(() => {

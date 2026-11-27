@@ -331,7 +331,7 @@ function PullBar({ row }: { row: ThreadSummary }) {
       <PullChip pr={row.pr} className="bg-transparent px-0" />
       {branch}
       <span className="text-muted-foreground ml-auto shrink-0">
-        {pullState(row.pr.loop) ?? "open"}
+        {pullState(row.pr.loop)?.label ?? "Open"}
       </span>
       <ExternalLink className="text-muted-foreground size-3 shrink-0" aria-hidden />
     </a>
