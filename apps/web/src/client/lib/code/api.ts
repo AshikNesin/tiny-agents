@@ -10,6 +10,7 @@ import type {
   RecoveryAction,
   RequestAnswer,
   Skill,
+  ToolChoice,
   SlashCommand,
   ThreadSettings,
   ThreadSnapshot,
@@ -61,6 +62,7 @@ export const codeApi = {
     options: {
       queue?: boolean;
       skills?: string[];
+      tools?: string[];
       attachments?: string[];
       withReview?: boolean;
     } = {},
@@ -94,6 +96,7 @@ export const codeApi = {
   models: (instanceId: string) => apiClient.get<ModelOption[]>(`${harness(instanceId)}/models`),
   skills: (instanceId: string, cwd: string, threadId?: string) =>
     apiClient.get<Skill[]>(`${harness(instanceId)}/skills`, { cwd, threadId }),
+  tools: (instanceId: string) => apiClient.get<ToolChoice[]>(`${harness(instanceId)}/tools`),
   findFiles: (instanceId: string, dir: string, q: string, content?: "only") =>
     apiClient.get<FileMatch[]>(`${harness(instanceId)}/find-files`, { dir, q, content }),
 

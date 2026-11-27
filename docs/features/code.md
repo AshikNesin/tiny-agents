@@ -127,8 +127,12 @@ agent to commit but not push.
 - A queued message can be edited, sent now or cancelled.
 - `Esc` leaves the composer; `Esc` again stops the agent.
 - `@` completes files and folders in the working directory where the harness
-  can find files, and `/` hints the harness's commands and, where the harness
-  takes skills, its skills (a pick joins the message's skills).
+  can find files, and `/` hints the harness's commands, where the harness
+  takes skills its skills (a pick joins the message's skills), and, for
+  Native and Claude Code, the connections and tools a thread can use (a pick
+  is a chip, named at the top of the message; see
+  [Chats](./chats.md#the--menu-commands-skills-and-tools)). The new thread box
+  has no `/` menu.
 - **+** attaches files and picks skills, where the harness takes them.
 - The model, reasoning and permission chips sit in the composer.
 

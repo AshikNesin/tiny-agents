@@ -14,6 +14,7 @@ import type {
   Skill,
   SlashCommand,
   ThreadSettings,
+  ToolChoice,
   ThreadSnapshot,
   ThreadSummary,
   TurnOutcome,
@@ -57,6 +58,7 @@ export interface HarnessInstance {
   models(): Promise<ModelOption[]>;
   commands?(): SlashCommand[];
   skills?(cwd: string, nativeId?: string): Promise<Skill[]>;
+  tools?(): Promise<ToolChoice[]>;
   findFiles?(dir: string, query: string, content?: "only"): Promise<FileMatch[]>;
   upload?(file: Blob, filename: string): Promise<{ ref: string }>;
   browse?(path?: string): Promise<DirectoryListing>;

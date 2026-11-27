@@ -1,3 +1,5 @@
+import { splitToolPicks } from "../../../shared/tool-picks";
+import { sentToolName } from "../../lib/slash-menu";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import {
@@ -690,7 +692,10 @@ function RequestRow({
 function UserText({ text: sent }: { text: string }) {
   const project = splitProjectPreamble(sent);
   const review = project ? null : splitReviewCard(sent);
-  const text = project ? project.message : review ? review.message : sent;
+  const full = project ? project.message : review ? review.message : sent;
+  const skills = /^(?:\/[a-z0-9-]+ )+/.exec(full)?.[0] ?? "";
+  const picks = splitToolPicks(full.slice(skills.length));
+  const text = picks.tools.length > 0 ? `${skills}${picks.text}` : full;
   return (
     <>
       {review && (
@@ -726,6 +731,19 @@ function UserText({ text: sent }: { text: string }) {
             <span className="text-warning shrink-0">· setup script failed</span>
           )}
         </p>
+      )}
+      {picks.tools.length > 0 && (
+        <ul aria-label="Tools asked for" className="flex max-w-full flex-wrap justify-end gap-1">
+          {picks.tools.map((name) => (
+            <li
+              key={name}
+              className="bg-muted text-muted-foreground flex items-center gap-1 rounded-full px-2 py-0.5 text-xs"
+            >
+              <Wrench className="size-3" aria-hidden />
+              {sentToolName(name)}
+            </li>
+          ))}
+        </ul>
       )}
       <MessageText text={text} />
     </>

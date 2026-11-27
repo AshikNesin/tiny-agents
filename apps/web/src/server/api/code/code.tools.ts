@@ -5,6 +5,8 @@ import {
   type ToolPermission,
 } from "@tiny-agents/agent";
 import type { AppToolPort } from "@tiny-agents/code/server";
+import type { ToolChoice } from "@tiny-agents/code/contracts";
+import { toolChoices, usableTools } from "../bots/tool-choices";
 import { connectionCapabilityId, connectionTools } from "../bots/bot-toolkits";
 import { ownerToolPermissions } from "../bots/tool-permissions";
 import { getConnectionManager, type ConnectionManager } from "../connections/connections.manager";
@@ -25,6 +27,20 @@ function permissionOf(owner: Record<string, ToolPermission>, slug: string, tool:
   return owner[mcpToolName(slug, tool)] ?? "ask";
 }
 
+async function codeTools(live: Pick<Connections, "status">) {
+  const [rows, owner] = await Promise.all([
+    reachedConnections("code-thread"),
+    ownerToolPermissions(),
+  ]);
+  return usableTools(rows, owner, live);
+}
+
+export async function codeToolChoices(
+  live: () => Pick<Connections, "status"> = getConnectionManager,
+): Promise<ToolChoice[]> {
+  return toolChoices(await codeTools(live()));
+}
+
 function textOf(result: McpCallResult): string {
   return result.content
     .map((block) =>
@@ -36,33 +52,16 @@ function textOf(result: McpCallResult): string {
 export function claudeCodeTools(live: () => Connections = getConnectionManager): AppToolPort {
   return {
     async list() {
-      const [rows, owner] = await Promise.all([
-        reachedConnections("code-thread"),
-        ownerToolPermissions(),
-      ]);
-      return rows
-        .filter((row) => live().status(row.id).status !== "needs_auth")
-        .flatMap((row) =>
-          connectionTools(row).flatMap((tool) => {
-            const permission = permissionOf(owner, row.slug, tool.name);
-            if (permission === "off") return [];
-            return [
-              {
-                server: row.slug,
-                name: tool.name,
-                description: (tool.description ?? tool.title ?? tool.name).slice(
-                  0,
-                  DESCRIPTION_MAX,
-                ),
-                inputSchema:
-                  tool.inputSchema && typeof tool.inputSchema === "object"
-                    ? tool.inputSchema
-                    : { type: "object" },
-                ask: permission === "ask",
-              },
-            ];
-          }),
-        );
+      return (await codeTools(live())).map(({ connection, tool, permission }) => ({
+        server: connection.slug,
+        name: tool.name,
+        description: (tool.description ?? tool.title ?? tool.name).slice(0, DESCRIPTION_MAX),
+        inputSchema:
+          tool.inputSchema && typeof tool.inputSchema === "object"
+            ? tool.inputSchema
+            : { type: "object" },
+        ask: permission === "ask",
+      }));
     },
     async call(server, tool, input) {
       const [rows, owner] = await Promise.all([

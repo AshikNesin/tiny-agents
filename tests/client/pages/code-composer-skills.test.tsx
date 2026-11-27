@@ -16,13 +16,22 @@ vi.mock("@groot/shell/lib/api", async (importOriginal) => {
     ...original,
     apiClient: Object.assign(Object.create(original.apiClient) as typeof original.apiClient, {
       get: async (path: string) =>
-        path.endsWith("/skills")
+        path.endsWith("/tools")
           ? [
-              { name: "show-me", description: "Explain it visually" },
-              { name: "release-notes", description: "Write release notes" },
-              { name: "v2-notes", description: "Notes for v2" },
+              {
+                name: "mcp__github__list_issues",
+                label: "List issues",
+                description: "Open issues",
+                connection: { slug: "github", name: "GitHub" },
+              },
             ]
-          : null,
+          : path.endsWith("/skills")
+            ? [
+                { name: "show-me", description: "Explain it visually" },
+                { name: "release-notes", description: "Write release notes" },
+                { name: "v2-notes", description: "Notes for v2" },
+              ]
+            : null,
     }),
   };
 });
@@ -109,5 +118,32 @@ describe("Code composer slash skills", () => {
     await user.keyboard("aw");
 
     expect(box).toHaveValue("draw");
+  });
+
+  it("lists the harness's tools after / and sends the picked one as a chip", async () => {
+    const user = userEvent.setup();
+    const onSend = vi.fn().mockResolvedValue(undefined);
+    render(
+      <AppQueryProvider>
+        <Composer draftKey="t4" harness={harness} cwd="/work" threadId="t4" onSend={onSend} />
+      </AppQueryProvider>,
+    );
+    const box = screen.getByRole("textbox");
+
+    await user.type(box, "/git");
+    await waitFor(() =>
+      expect(screen.getAllByRole("option").map((o) => o.textContent)).toEqual([
+        "githubEvery GitHub tool (1)",
+        "List issuesGitHub · Open issues",
+      ]),
+    );
+    await user.keyboard("{ArrowDown}{Enter}");
+    expect(box).toHaveValue("");
+    expect(screen.getByTestId("code-composer-chips")).toHaveTextContent("GitHub: List issues");
+
+    await user.type(box, "triage them{Enter}");
+    await waitFor(() => expect(onSend).toHaveBeenCalled());
+    expect(onSend.mock.calls[0]![0]).toBe("triage them");
+    expect(onSend.mock.calls[0]![1]).toMatchObject({ tools: ["mcp__github__list_issues"] });
   });
 });

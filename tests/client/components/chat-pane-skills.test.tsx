@@ -22,6 +22,14 @@ vi.mock("@/lib/bots-api", () => ({
     read: vi.fn(),
     capabilities: vi.fn().mockResolvedValue([]),
     pastChats: vi.fn().mockResolvedValue([]),
+    tools: vi.fn().mockResolvedValue([
+      {
+        name: "mcp__github__list_issues",
+        label: "List issues",
+        description: "Open issues",
+        connection: { slug: "github", name: "GitHub" },
+      },
+    ]),
   },
 }));
 
@@ -108,7 +116,9 @@ describe("ChatPane slash skills", () => {
 
     await user.type(composer, "/s");
     await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(2));
-    expect(screen.getByRole("listbox", { name: "Use a skill" })).toHaveTextContent("show-me");
+    expect(screen.getByRole("listbox", { name: "Commands, skills and tools" })).toHaveTextContent(
+      "show-me",
+    );
     expect(screen.queryByText("shopping")).not.toBeInTheDocument();
 
     await user.type(composer, "h{Enter}");
@@ -117,5 +127,26 @@ describe("ChatPane slash skills", () => {
 
     await waitFor(() => expect(sendMock).toHaveBeenCalled());
     expect(sendMock.mock.calls[0]![2]).toBe("/show-me draw the repo");
+  });
+
+  it("lists the bot's tools on / and sends a picked connection with the message", async () => {
+    const composer = renderPane();
+
+    await user.type(composer, "/git");
+    await waitFor(() =>
+      expect(screen.getAllByRole("option").map((option) => option.textContent)).toEqual([
+        "githubEvery GitHub tool (1)",
+        "List issuesGitHub · Open issues",
+      ]),
+    );
+    await user.keyboard("{Enter}");
+    expect(composer.value).toBe("");
+    expect(screen.getByTestId("tool-chips")).toHaveTextContent("GitHub (all tools)");
+
+    await user.type(composer, "what is open?{Enter}");
+    await waitFor(() => expect(sendMock).toHaveBeenCalled());
+    expect(sendMock.mock.calls[0]![2]).toBe("what is open?");
+    expect(sendMock.mock.calls[0]![6]).toEqual(["mcp__github__*"]);
+    expect(screen.queryByTestId("tool-chips")).not.toBeInTheDocument();
   });
 });

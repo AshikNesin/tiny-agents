@@ -29,13 +29,25 @@ The chat page uses the same single-letter keys as the Code workspace, from
 command palette runs the same commands under **Chat actions**. Letters typed
 in the composer are text; Escape outside it stops a reply.
 
-## Skills
+## The `/` menu: commands, skills and tools
 
-Typing `/` at the start of a message lists the bot's skills (the owner only;
+Typing `/` at the start of a message opens one menu (the owner only;
 `activeSkillToken` in `lib/composer-draft.ts`, `SlashSkills.kt` on Android).
-A pick writes `/skill-name `, and the skills prompt section in
-`packages/agent/src/skills.ts` tells the model that such a message asks for
-that skill. Typing the name by hand works the same.
+`slashEntries` in `lib/slash-menu.ts` builds it for the chat and the Code
+composer alike:
+
+- **Commands:** `/new` starts a new chat.
+- **Skills:** the bot's skills. A pick writes `/skill-name `, and the skills
+  prompt section in `packages/agent/src/skills.ts` tells the model that such a
+  message asks for that skill. Typing the name by hand works the same.
+- **Tools:** each connection the bot reaches, and, once you type, its single
+  tools (by connection, tool name or label). Tools set to Off are left out
+  (`GET /bots/:id/tools`, `botToolChoices` in `chats.service.ts`). A pick is a
+  chip above the composer, sent as `tools` with the message. The server checks
+  each pick against that same list and puts one line naming them at the top of
+  the message (`withToolPicks` in `apps/web/src/shared/tool-picks.ts`), so the
+  model loads those tools and uses them. The sent message shows them as chips,
+  not as that line.
 
 ## Long replies
 

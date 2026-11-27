@@ -1,4 +1,4 @@
-import type { ModelOption, PermissionMode, Skill } from "../../contracts";
+import type { ModelOption, PermissionMode, Skill, ToolChoice } from "../../contracts";
 
 type PiToolStatus =
   | "pending"
@@ -89,6 +89,7 @@ interface PiActivity {
 export interface PiPort {
   models(): ModelOption[];
   skills(cwd: string): Promise<Skill[]>;
+  tools(): Promise<ToolChoice[]>;
   create(config: PiThreadConfig): Promise<number>;
   configure(ref: number, config: PiThreadConfig): Promise<void>;
   submit(

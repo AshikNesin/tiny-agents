@@ -26,6 +26,7 @@ interface MentionAutocompleteProps {
   ref?: Ref<MentionAutocompleteHandle>;
   label?: string;
   icon?: (item: MentionableBot) => ReactNode;
+  filtered?: boolean;
 }
 
 export interface MentionAutocompleteHandle {
@@ -40,14 +41,16 @@ export function MentionAutocomplete({
   ref,
   label = "Mention a bot",
   icon = (bot) => <BotAvatar name={bot.name} className="size-8" />,
+  filtered = false,
 }: MentionAutocompleteProps) {
   const [selected, setSelected] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
 
   const matches = useMemo(() => {
+    if (filtered) return bots;
     const q = query.toLowerCase();
     return bots.filter((bot) => bot.name.toLowerCase().startsWith(q));
-  }, [bots, query]);
+  }, [bots, query, filtered]);
 
   useEffect(() => {
     setSelected(0);
