@@ -1,5 +1,5 @@
 import { eq, sql } from "drizzle-orm";
-import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vite-plus/test";
+import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 import {
   connections,
   db,
@@ -7,7 +7,7 @@ import {
   vaultItems,
   vaultValues,
 } from "../../../../apps/web/src/server/db";
-import { setReadBackendsForTests } from "../../../../apps/web/src/server/api/vault/backends";
+import { setVaultBackendsForTests } from "../../../../apps/web/src/server/api/vault/backends";
 import { createLocalBackend } from "../../../../apps/web/src/server/api/vault/backends/local";
 import {
   createItem,
@@ -15,7 +15,6 @@ import {
   linkItem,
   overview,
   reveal,
-  setWriteBackendsForTests,
   updateItem,
 } from "../../../../apps/web/src/server/api/vault/vault.admin.service";
 import {
@@ -33,14 +32,9 @@ import {
 
 const local = createLocalBackend();
 
-beforeAll(() => {
-  setReadBackendsForTests(new Map([["local", local]]));
-  setWriteBackendsForTests(new Map([["local", local]]));
-});
-
 beforeEach(async () => {
   clearStatusCache();
-  setWriteBackendsForTests(new Map([["local", local]]));
+  setVaultBackendsForTests(new Map([["local", local]]));
   await db.delete(vaultAuditEvents);
   await db.delete(vaultItems);
   await db.delete(vaultValues);

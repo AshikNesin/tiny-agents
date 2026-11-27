@@ -22,7 +22,7 @@ import type { HeldLiveAccess } from "./api/people/live-access";
 import type { VaultAlertSink } from "./api/vault/vault.alerts";
 import type { SupervisorChannel } from "./api/system/updates.service";
 import type { VapidKeys } from "@groot/core/notification/webpush.crypto";
-import type { BackendItemSummary, BackendName } from "./api/vault/backends/types";
+import type { BackendItemSummary, BackendName, VaultBackend } from "./api/vault/backends/types";
 import type { OnePasswordConnector } from "./api/vault/backends/onepassword";
 import type { BackendStatus } from "../shared/api/vault";
 
@@ -61,6 +61,10 @@ export interface App {
     appValues: Map<string, { at: number; value: string }>;
     candidates?: { at: number; items: (BackendItemSummary & { backend: BackendName })[] };
     onePasswordConnector?: OnePasswordConnector;
+    backends?: {
+      read: Map<BackendName, VaultBackend>;
+      write: Map<BackendName, VaultBackend>;
+    };
   };
   submittingRequests: Set<number>;
   modelRuntime?: Pick<AgentRuntime, "applyModelConfig">;

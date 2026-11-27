@@ -12,12 +12,9 @@ import {
 import { AutofillBehavior, ItemFieldType } from "@1password/sdk";
 import {
   setOnePasswordConnectorForTests,
-  setReadBackendsForTests,
+  setVaultBackendsForTests,
 } from "../../../apps/web/src/server/api/vault/backends";
-import {
-  createAppCredential,
-  setWriteBackendsForTests,
-} from "../../../apps/web/src/server/api/vault/vault.admin.service";
+import { createAppCredential } from "../../../apps/web/src/server/api/vault/vault.admin.service";
 import {
   clearStatusCache,
   forgetAppCredential,
@@ -49,8 +46,7 @@ beforeAll(async () => {
 });
 
 function rebuildBackends(): void {
-  setReadBackendsForTests(undefined);
-  setWriteBackendsForTests(undefined);
+  setVaultBackendsForTests(undefined);
   clearStatusCache();
 }
 

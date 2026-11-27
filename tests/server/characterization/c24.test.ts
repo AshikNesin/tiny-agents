@@ -5,12 +5,9 @@ import { storageService } from "@groot/core/storage";
 import { db, providers, uploads, vaultItems, vaultValues } from "../../../apps/web/src/server/db";
 import { createAccount } from "../../../apps/web/src/server/api/models/models.service";
 import { createAccountSchema } from "../../../apps/web/src/server/api/models/models.schema";
-import { setReadBackendsForTests } from "../../../apps/web/src/server/api/vault/backends";
+import { setVaultBackendsForTests } from "../../../apps/web/src/server/api/vault/backends";
 import { createLocalBackend } from "../../../apps/web/src/server/api/vault/backends/local";
-import {
-  createItem,
-  setWriteBackendsForTests,
-} from "../../../apps/web/src/server/api/vault/vault.admin.service";
+import { createItem } from "../../../apps/web/src/server/api/vault/vault.admin.service";
 import { createItemSchema } from "../../../apps/web/src/server/api/vault/vault.schema";
 import { createUpload } from "../../../apps/web/src/server/api/uploads/uploads.service";
 import { FAUX_PROVIDER_ID } from "../../../apps/web/src/server/api/models/models.config";
@@ -28,16 +25,14 @@ let local: ReturnType<typeof createLocalBackend>;
 beforeEach(async () => {
   await db.delete(vaultValues);
   local = createLocalBackend();
-  setReadBackendsForTests(new Map([["local", local]]));
-  setWriteBackendsForTests(new Map([["local", local]]));
+  setVaultBackendsForTests(new Map([["local", local]]));
   await db.delete(vaultItems);
 });
 afterEach(async () => {
   for (const table of ["providers", "vault_items", "uploads"]) {
     db.run(sql.raw(`DROP TRIGGER IF EXISTS temp.c24_refuse_${table}`));
   }
-  setReadBackendsForTests(undefined);
-  setWriteBackendsForTests(undefined);
+  setVaultBackendsForTests(undefined);
   await db.delete(vaultItems);
 });
 
