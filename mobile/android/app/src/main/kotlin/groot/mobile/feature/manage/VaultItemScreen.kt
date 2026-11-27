@@ -216,13 +216,11 @@ private fun VaultItemContent(
             Text("Saved straight to the backend; tiny-agents keeps no copy.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             VaultValueInput(field, draft, { draft = it }, label = "New value")
             PrimaryButton("Save", modifier = Modifier.fillMaxWidth(), enabled = draft.isNotEmpty(), onClick = {
-                gate.run { token ->
-                    resource.act("Couldn't save.", done = {
-                        editing = null
-                        container.notices.show("${VaultKinds.fieldLabel(field)} saved")
-                    }) {
-                        container.api.updateVaultItem(item.handle, vaultValueBody(field, draft), token)
-                    }
+                resource.act("Couldn't save.", done = {
+                    editing = null
+                    container.notices.show("${VaultKinds.fieldLabel(field)} saved")
+                }) {
+                    container.api.updateVaultItem(item.handle, vaultValueBody(field, draft))
                 }
             })
         }

@@ -86,7 +86,9 @@ router.post("/vault/move-to-1password", async (c) => {
 
 router.put("/vault/items/:handle", async (c) => {
   const handle = handleParam(c);
-  return ok(c, await admin.updateItem(handle, await parseBody(c, updateItemSchema)));
+  const body = await parseBody(c, updateItemSchema);
+  if (body.urls !== undefined || body.policy !== undefined) assertStepUp(c);
+  return ok(c, await admin.updateItem(handle, body));
 });
 
 router.patch("/vault/items/:handle", async (c) => {
@@ -110,7 +112,6 @@ router.get("/vault/requests/:taskId", async (c) => {
 router.post("/vault/requests/:taskId/submit", async (c) => {
   const taskId = taskParam(c);
   const body = await parseBody(c, submitCredentialsSchema);
-  if (body.save) assertStepUp(c);
   return ok(c, await requests.submitRequest(taskId, body));
 });
 

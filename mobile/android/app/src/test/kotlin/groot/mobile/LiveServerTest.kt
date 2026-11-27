@@ -294,12 +294,11 @@ class LiveServerTest {
         assertTrue(stepUp.token.isNotBlank() && stepUp.expiresAt > System.currentTimeMillis())
         val created = api.createVaultItem(
             vaultCreateBody("login", "Live $stamp", "example.com/login", mapOf("username" to "ana", "password" to "pw-1"), VaultPolicyDraft.defaultFor("login", "live-$stamp")),
-            stepUp.token,
         )
         try {
             assertEquals(listOf("https://example.com"), created.origins)
             api.updateVaultItem(created.handle, vaultPolicyBody("login", VaultPolicyDraft.of(created).copy(disabled = true)), stepUp.token)
-            api.updateVaultItem(created.handle, vaultValueBody("password", "pw-2"), stepUp.token)
+            api.updateVaultItem(created.handle, vaultValueBody("password", "pw-2"))
             val edited = api.vaultItem(created.handle)
             assertTrue(edited.item.disabled)
             assertEquals(listOf("https://example.com"), edited.item.origins)

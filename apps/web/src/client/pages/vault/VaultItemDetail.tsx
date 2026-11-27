@@ -199,10 +199,7 @@ export function VaultItemDetail({ handle }: { handle: string }) {
     if (!editing) return;
     setBusy(true);
     try {
-      const item = await run(() =>
-        mutations.update.mutateAsync({ handle, input: { values: { [editing]: draft } } }),
-      );
-      if (!item) return;
+      await mutations.update.mutateAsync({ handle, input: { values: { [editing]: draft } } });
       toast.success(`${FIELD_LABEL[editing]} saved`);
       setEditing(null);
       setDraft("");

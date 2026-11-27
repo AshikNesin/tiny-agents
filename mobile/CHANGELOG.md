@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.18.0
+
+### Minor Changes
+
+- **Confirm it's you** uses your fingerprint or face (a passkey) before revealing, copying or deleting a vault
+  item. The password stays as the fallback. Adding an item, changing a value, and saving a sign-in a bot asked
+  for no longer ask at all.
+
 ## 0.17.1
 
 ### Patch Changes
