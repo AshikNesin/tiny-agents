@@ -82,7 +82,9 @@ function ChatPaneBody({
     }
   };
   const newChatRef = useRef(newChat);
-  newChatRef.current = newChat;
+  useEffect(() => {
+    newChatRef.current = newChat;
+  });
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -194,7 +196,7 @@ function ChatPaneBody({
         keys: "n",
         label: "Start a new chat",
         enabled: canReset,
-        run: () => void newChat(),
+        run: () => void newChatRef.current(),
       },
       {
         id: "edit",
