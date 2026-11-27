@@ -235,12 +235,10 @@ export function Composer({
     const cursor = area.current?.selectionStart ?? text.length;
     if (pick.skill) {
       setSelectedSkills((prev) => [...prev, pick.value]);
-      setDraft((current) => editText(current, text.slice(cursor).trimStart()));
+      const rest = text.slice(cursor).trimStart();
+      setDraft((current) => editText(current, rest));
       setToken(undefined);
-      requestAnimationFrame(() => {
-        area.current?.setSelectionRange(0, 0);
-        area.current?.focus();
-      });
+      placeCaretOnceRendered(rest, 0);
       return;
     }
     const replacement =
@@ -248,10 +246,15 @@ export function Composer({
     const next = text.slice(0, token.start) + replacement + text.slice(cursor);
     setDraft((current) => editText(current, next));
     setToken(undefined);
+    placeCaretOnceRendered(next, token.start + replacement.length);
+  };
+
+  const placeCaretOnceRendered = (expected: string, pos: number) => {
     requestAnimationFrame(() => {
-      const pos = token.start + replacement.length;
-      area.current?.setSelectionRange(pos, pos);
-      area.current?.focus();
+      const box = area.current;
+      if (!box || box.value !== expected) return;
+      box.setSelectionRange(pos, pos);
+      box.focus();
     });
   };
 

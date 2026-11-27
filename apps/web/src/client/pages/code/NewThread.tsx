@@ -17,27 +17,17 @@ import {
 } from "./controls";
 import { useCodeStore } from "../../store/code";
 import { useUiStore } from "../../store/ui";
+import { readStored, writeStored } from "../../lib/browser-storage";
 
 const PROJECT_KEY = "tiny-agents:code-project";
 const RECENT_PROJECTS = 5;
 
-const storageIsBlockedInPrivateWindows = (): void => undefined;
-
 function lastProject(): string | null {
-  try {
-    return localStorage.getItem(PROJECT_KEY);
-  } catch {
-    storageIsBlockedInPrivateWindows();
-    return null;
-  }
+  return readStored(PROJECT_KEY);
 }
 
 function rememberProject(id: string): void {
-  try {
-    localStorage.setItem(PROJECT_KEY, id);
-  } catch {
-    storageIsBlockedInPrivateWindows();
-  }
+  writeStored(PROJECT_KEY, id);
 }
 
 function useProjectOptions(projects: ProjectView[] | null): {

@@ -1,4 +1,5 @@
 import type { EditorSshTarget } from "../../../shared/api/code";
+import { readStored, writeStored } from "../browser-storage";
 
 export type EditorId = "cursor" | "zed";
 
@@ -50,34 +51,15 @@ export function editorUrl(editor: EditorId, host: string, path: string): string 
     : `cursor://vscode-remote/ssh-remote+${authority}${folder}?windowId=_blank`;
 }
 
-const storageIsBlockedInPrivateWindows = (): void => undefined;
-
-function read(key: string): string | null {
-  try {
-    return localStorage.getItem(key);
-  } catch {
-    storageIsBlockedInPrivateWindows();
-    return null;
-  }
-}
-
-function write(key: string, value: string): void {
-  try {
-    localStorage.setItem(key, value);
-  } catch {
-    storageIsBlockedInPrivateWindows();
-  }
-}
-
 export function lastEditor(): EditorId {
-  return read(EDITOR_KEY) === "zed" ? "zed" : "cursor";
+  return readStored(EDITOR_KEY) === "zed" ? "zed" : "cursor";
 }
 
 export function lastHost(instanceId: string): string | null {
-  return read(HOST_KEY + instanceId);
+  return readStored(HOST_KEY + instanceId);
 }
 
 export function rememberEditor(editor: EditorId, instanceId: string, host: string): void {
-  write(EDITOR_KEY, editor);
-  write(HOST_KEY + instanceId, host.trim());
+  writeStored(EDITOR_KEY, editor);
+  writeStored(HOST_KEY + instanceId, host.trim());
 }

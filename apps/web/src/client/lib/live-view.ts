@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { useConfirm, type ConfirmOptions } from "@groot/ui/primitives";
 import type { VncHandle, VncState } from "../components/browser/VncView";
 import { errorMessage } from "./errors";
+import { readStored, readStoredJson, writeStored } from "./browser-storage";
 
 export type LiveViewKind = "browser" | "computer";
 export type Driver = "agent" | "human";
@@ -118,12 +119,8 @@ export function clampPanelWidth(value: number, viewport: number): number {
 
 function readPanelWidth(key: string, fallback: number): number {
   const viewport = window.innerWidth;
-  try {
-    const stored = Number(window.localStorage.getItem(key));
-    return clampPanelWidth(stored > 0 ? stored : fallback, viewport);
-  } catch {
-    return clampPanelWidth(fallback, viewport);
-  }
+  const stored = Number(readStored(key));
+  return clampPanelWidth(stored > 0 ? stored : fallback, viewport);
 }
 
 export function usePanelWidth(storageKey: string, defaultWidth: number) {
@@ -144,9 +141,7 @@ export function usePanelWidth(storageKey: string, defaultWidth: number) {
       handle.removeEventListener("pointermove", move);
       handle.removeEventListener("pointerup", stop);
       handle.removeEventListener("pointercancel", stop);
-      try {
-        window.localStorage.setItem(storageKey, String(latest));
-      } catch {}
+      writeStored(storageKey, String(latest));
     };
     handle.addEventListener("pointermove", move);
     handle.addEventListener("pointerup", stop);
@@ -179,16 +174,14 @@ function clampPipOffset(
 }
 
 function readPipOffset(): PipOffset {
-  try {
-    const parsed: unknown = JSON.parse(window.localStorage.getItem(PIP_KEY) ?? "null");
-    if (
-      parsed &&
-      typeof parsed === "object" &&
-      typeof (parsed as PipOffset).right === "number" &&
-      typeof (parsed as PipOffset).bottom === "number"
-    )
-      return { right: (parsed as PipOffset).right, bottom: (parsed as PipOffset).bottom };
-  } catch {}
+  const parsed = readStoredJson(PIP_KEY);
+  if (
+    parsed &&
+    typeof parsed === "object" &&
+    typeof (parsed as PipOffset).right === "number" &&
+    typeof (parsed as PipOffset).bottom === "number"
+  )
+    return { right: (parsed as PipOffset).right, bottom: (parsed as PipOffset).bottom };
   return DEFAULT_PIP_OFFSET;
 }
 
@@ -221,9 +214,7 @@ export function usePipPosition(ref: RefObject<HTMLElement | null>) {
       handle.removeEventListener("pointermove", move);
       handle.removeEventListener("pointerup", stop);
       handle.removeEventListener("pointercancel", stop);
-      try {
-        window.localStorage.setItem(PIP_KEY, JSON.stringify(latest));
-      } catch {}
+      writeStored(PIP_KEY, JSON.stringify(latest));
     };
     handle.addEventListener("pointermove", move);
     handle.addEventListener("pointerup", stop);

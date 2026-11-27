@@ -3,63 +3,41 @@ import { toast } from "sonner";
 import type { Bot } from "../../shared/api/bots";
 import { errorMessage } from "../lib/errors";
 import { useBotsStore } from "./bots";
+import { readStored, readStoredJson, writeStored } from "../lib/browser-storage";
 
 const SIDEBAR_COLLAPSED_KEY = "tiny-agents.sidebar.collapsed";
 
 const CODE_SIDEBAR_KEY = "tiny-agents:code-sidebar";
 
 function readCodeSidebar(): boolean {
-  try {
-    return localStorage.getItem(CODE_SIDEBAR_KEY) !== "closed";
-  } catch {
-    return true;
-  }
+  return readStored(CODE_SIDEBAR_KEY) !== "closed";
 }
 
 const CODE_PANE_KEY = "tiny-agents:code-pane";
 
 export type CodePane = "changes" | "pr" | "files" | "terminal";
 
-const storageIsBlockedInPrivateWindows = (): void => undefined;
-
 function readCodePane(): CodePane | null {
-  try {
-    const saved = localStorage.getItem(CODE_PANE_KEY);
-    if (saved === "closed") return null;
-    return saved === "pr" || saved === "files" || saved === "terminal" ? saved : "changes";
-  } catch {
-    return "changes";
-  }
+  const saved = readStored(CODE_PANE_KEY);
+  if (saved === "closed") return null;
+  return saved === "pr" || saved === "files" || saved === "terminal" ? saved : "changes";
 }
 
 const FOLDED_SECTIONS_KEY = "tiny-agents:sidebar-folded";
 
 function readFoldedSections(): string[] {
-  try {
-    const saved: unknown = JSON.parse(localStorage.getItem(FOLDED_SECTIONS_KEY) ?? "[]");
-    return Array.isArray(saved) ? saved.filter((name) => typeof name === "string") : [];
-  } catch {
-    storageIsBlockedInPrivateWindows();
-    return [];
-  }
+  const saved = readStoredJson(FOLDED_SECTIONS_KEY);
+  return Array.isArray(saved) ? saved.filter((name) => typeof name === "string") : [];
 }
 
 const CODE_PANE_WIDE_KEY = "tiny-agents:code-pane-wide";
 
 function readCodePaneWide(): boolean {
-  try {
-    return localStorage.getItem(CODE_PANE_WIDE_KEY) === "wide";
-  } catch {
-    return false;
-  }
+  return readStored(CODE_PANE_WIDE_KEY) === "wide";
 }
 
 function readCollapsed(): boolean {
-  try {
-    return localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "true";
-  } catch {
-    return false;
-  }
+  return readStored(SIDEBAR_COLLAPSED_KEY) === "true";
 }
 
 export type AppMode = "chat" | "code";
@@ -112,9 +90,7 @@ export const useUiStore = create<UiState>((set) => ({
   },
   collapsed: readCollapsed(),
   setCollapsed: (collapsed) => {
-    try {
-      localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(collapsed));
-    } catch {}
+    writeStored(SIDEBAR_COLLAPSED_KEY, String(collapsed));
     set({ collapsed });
   },
   codeSidebarOpen: readCodeSidebar(),
@@ -122,11 +98,7 @@ export const useUiStore = create<UiState>((set) => ({
   toggleSection: (name) => {
     const folded = useUiStore.getState().foldedSections;
     const next = folded.includes(name) ? folded.filter((n) => n !== name) : [...folded, name];
-    try {
-      localStorage.setItem(FOLDED_SECTIONS_KEY, JSON.stringify(next));
-    } catch {
-      storageIsBlockedInPrivateWindows();
-    }
+    writeStored(FOLDED_SECTIONS_KEY, JSON.stringify(next));
     set({ foldedSections: next });
   },
   newThreadDraft: { text: "", projectId: "" },
@@ -138,29 +110,19 @@ export const useUiStore = create<UiState>((set) => ({
       return;
     }
     const open = !useUiStore.getState().codeSidebarOpen;
-    try {
-      localStorage.setItem(CODE_SIDEBAR_KEY, open ? "open" : "closed");
-    } catch {}
+    writeStored(CODE_SIDEBAR_KEY, open ? "open" : "closed");
     set({ codeSidebarOpen: open });
   },
   codePane: readCodePane(),
   lastCodePane: readCodePane() ?? "changes",
   setCodePane: (codePane) => {
-    try {
-      localStorage.setItem(CODE_PANE_KEY, codePane ?? "closed");
-    } catch {
-      storageIsBlockedInPrivateWindows();
-    }
+    writeStored(CODE_PANE_KEY, codePane ?? "closed");
     set(codePane ? { codePane, lastCodePane: codePane } : { codePane });
   },
   codePaneWide: readCodePaneWide(),
   toggleCodePaneWide: () => {
     const wide = !useUiStore.getState().codePaneWide;
-    try {
-      localStorage.setItem(CODE_PANE_WIDE_KEY, wide ? "wide" : "normal");
-    } catch {
-      storageIsBlockedInPrivateWindows();
-    }
+    writeStored(CODE_PANE_WIDE_KEY, wide ? "wide" : "normal");
     set({ codePaneWide: wide });
   },
   codeTerminals: {},

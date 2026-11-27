@@ -4,7 +4,7 @@
 import React from "react";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vite-plus/test";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { Composer } from "@/pages/code/Composer";
 import type { HarnessInfo } from "@/lib/code/api";
 import { NO_CAPABILITIES } from "../../../packages/code/src/contracts/capabilities";
@@ -44,6 +44,8 @@ const harness = {
   commands: [{ command: "/compact", hint: "Summarize" }],
   ssh: null,
 } as unknown as HarnessInfo;
+
+afterEach(() => vi.unstubAllGlobals());
 
 describe("Code composer slash skills", () => {
   it("lists skills after / and sends the picked one with the message", async () => {
@@ -87,5 +89,25 @@ describe("Code composer slash skills", () => {
         "v2-notesNotes for v2",
       ]),
     );
+  });
+
+  it("keeps what is typed right after picking a skill where it was typed", async () => {
+    const frames: FrameRequestCallback[] = [];
+    vi.stubGlobal("requestAnimationFrame", (run: FrameRequestCallback) => frames.push(run));
+    const user = userEvent.setup();
+    render(
+      <AppQueryProvider>
+        <Composer draftKey="t3" harness={harness} cwd="/work" threadId="t3" onSend={vi.fn()} />
+      </AppQueryProvider>,
+    );
+    const box = screen.getByRole("textbox");
+    await user.type(box, "/sh");
+    await screen.findByRole("option", { name: /show-me/ });
+
+    await user.keyboard("{Enter}dr");
+    for (const run of frames.splice(0)) run(0);
+    await user.keyboard("aw");
+
+    expect(box).toHaveValue("draw");
   });
 });
