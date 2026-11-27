@@ -28,7 +28,7 @@ import {
 } from "@groot/ui/dropdown-menu";
 import { Spinner } from "../../components/ui/spinner";
 import { errorMessage } from "../../lib/errors";
-import { type HarnessInfo, type ModelOption, type ThreadSummary } from "../../lib/code/api";
+import { type HarnessInfo, type ThreadSummary } from "../../lib/code/api";
 import { reviewsApi } from "../../lib/code/projects";
 import { useResource } from "../../queries/resource";
 import {
@@ -40,7 +40,7 @@ import {
 import { harnessOf } from "../../store/code";
 import type { PullReviewView } from "../../../shared/api/code";
 import { ThreadView } from "./ThreadView";
-import { DEFAULT, ModelPicker, loadModels } from "./controls";
+import { DEFAULT, ModelPicker, useHarnessModels } from "./controls";
 import { PendingComments } from "./PendingComments";
 import { AssistantPane } from "./ResizablePane";
 import { PullDiffs } from "./PullDiffs";
@@ -549,18 +549,7 @@ function AskFirst({
   const [text, setText] = useState("");
   const [asking, setAsking] = useState(false);
   const [model, setModel] = useState(review.assistant?.model ?? DEFAULT);
-  const [models, setModels] = useState<ModelOption[]>([]);
-  const instanceId = review.assistant?.instanceId;
-  useEffect(() => {
-    if (!instanceId) return;
-    let cancelled = false;
-    loadModels(instanceId)
-      .then((list) => !cancelled && setModels(list))
-      .catch(() => !cancelled && setModels([]));
-    return () => {
-      cancelled = true;
-    };
-  }, [instanceId]);
+  const models = useHarnessModels(review.assistant?.instanceId);
   const comments = useThreadComments(review.key);
   const sent = useCommentStore((s) => s.sent);
   const count = comments.length;

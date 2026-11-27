@@ -30,7 +30,7 @@ import { errorMessage } from "../../lib/errors";
 import { projectsApi, reviewsApi, useProjects } from "../../lib/code/projects";
 import { useCodeStore } from "../../store/code";
 import { RESOURCE_QUERY, useResource } from "../../queries/resource";
-import type { HarnessInfo, ModelOption } from "../../lib/code/api";
+import type { HarnessInfo } from "../../lib/code/api";
 import { useViewerRole } from "../../store/people";
 import type {
   GitHubStatus,
@@ -38,7 +38,7 @@ import type {
   ProjectView,
   ReviewInboxSettings,
 } from "../../../shared/api/code";
-import { loadModels } from "./controls";
+import { useHarnessModels } from "./controls";
 import { INBOX_SETTINGS_KEY } from "./ReviewList";
 
 function SettingsGroup({
@@ -555,18 +555,8 @@ function GeneralGroup({
   harnesses: HarnessInfo[];
   update: Update;
 }) {
-  const [models, setModels] = useState<ModelOption[]>([]);
   const defaultHarness = harnesses.find((h) => h.id === project.defaultInstanceId);
-  useEffect(() => {
-    let cancelled = false;
-    if (!defaultHarness) return;
-    void loadModels(defaultHarness.id)
-      .then((list) => !cancelled && setModels(list))
-      .catch(() => !cancelled && setModels([]));
-    return () => {
-      cancelled = true;
-    };
-  }, [defaultHarness]);
+  const models = useHarnessModels(defaultHarness?.id);
   const model = models.find((m) => m.id === project.defaultModel);
   const field = (name: string) => fieldId(project, name);
   return (
