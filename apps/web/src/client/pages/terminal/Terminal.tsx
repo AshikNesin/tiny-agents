@@ -68,7 +68,7 @@ export function TerminalPage() {
   const [status, setStatus] = useState<TerminalStatusWire | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [searchParams] = useSearchParams();
-  const [active, setActive] = useState<string | null>(() => searchParams.get("tab"));
+  const [picked, setActive] = useState<string | null>(() => searchParams.get("tab"));
   const [tabStatus, setTabStatus] = useState<TabStatus>({});
   const [creating, setCreating] = useState(false);
   const [keysOpen, setKeysOpen] = useState(readKeysOpen);
@@ -107,14 +107,7 @@ export function TerminalPage() {
 
   const names = useMemo(() => (sessions ?? []).map((s) => s.name), [sessions]);
 
-  useEffect(() => {
-    if (sessions === null) return;
-    if (names.length === 0) {
-      setActive((current) => (current === null ? current : null));
-      return;
-    }
-    if (!active || !names.includes(active)) setActive(names[0]!);
-  }, [sessions, names, active]);
+  const active = picked !== null && names.includes(picked) ? picked : (names[0] ?? null);
 
   useEffect(() => {
     const listed = new Set(names);
