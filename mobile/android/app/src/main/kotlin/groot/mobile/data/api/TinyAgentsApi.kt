@@ -393,14 +393,8 @@ class TinyAgentsApi(private val client: ApiClient) {
 
     suspend fun vaultItem(handle: String): VaultItemDetail = VaultItemDetail.from(client.getObject("/vault/items/${enc(handle)}"))
 
-    suspend fun stepUp(password: String): StepUpToken = stepUpWith(jsonOf("password" to password))
-
-    suspend fun stepUpPasskeyOptions(): String = client.postObject("/vault/step-up/options").toString()
-
-    suspend fun stepUpWithPasskey(responseJson: String): StepUpToken = stepUpWith(JSONObject().put("passkey", JSONObject(responseJson)))
-
-    private suspend fun stepUpWith(body: JSONObject): StepUpToken {
-        val json = client.postObject("/vault/step-up", body)
+    suspend fun stepUp(password: String): StepUpToken {
+        val json = client.postObject("/vault/step-up", jsonOf("password" to password))
         return StepUpToken(json.string("token"), json.long("expiresAt"))
     }
 

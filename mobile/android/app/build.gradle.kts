@@ -49,8 +49,6 @@ dependencies {
     implementation(libs.okhttp)
     implementation(libs.unifiedpush.connector)
     implementation(libs.unifiedpush.embedded.fcm)
-    implementation(libs.androidx.credentials)
-    implementation(libs.androidx.fragment)
 
     testImplementation(libs.roborazzi)
     testImplementation(libs.roborazzi.compose)

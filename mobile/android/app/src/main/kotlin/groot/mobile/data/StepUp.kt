@@ -11,9 +11,6 @@ class StepUp(private val api: TinyAgentsApi, private val now: () -> Long = Syste
 
     suspend fun confirm(password: String): String = hold(api.stepUp(password))
 
-    suspend fun confirmWithPasskey(assert: suspend (optionsJson: String) -> String): String =
-        hold(api.stepUpWithPasskey(assert(api.stepUpPasskeyOptions())))
-
     private fun hold(issued: StepUpToken): String {
         token = issued.token
         expiresAt = issued.expiresAt

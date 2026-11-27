@@ -192,7 +192,7 @@ deleted.
 
 Reveals, copies, deletes, links, and changes to where a value may go (an
 item's URLs or policy) need **step-up**: the owner re-enters their password
-(or uses a passkey, on the Android app too) and gets a token valid for 5
+(or uses a passkey on the web, or a fingerprint on Android) and gets a token valid for 5
 minutes, held in page memory only and sent as `X-Vault-Step-Up`. Adding an
 item, changing its title or values, saving a typed sign-in and moving local
 items to 1Password don't: they hand the vault a value, they never send one

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.19.0
+
+### Minor Changes
+
+- **Confirm it's you** can use your fingerprint instead of your password. Enter the password once with **Use
+  fingerprint next time** ticked; after that the app asks for your fingerprint. The passkey prompt from 0.18.0 is
+  gone.
+
 ## 0.18.1
 
 ### Patch Changes

@@ -51,6 +51,7 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
         container.scope.launch {
             runCatching { container.push.signOut() }
             runCatching { container.api.logout() }
+            container.fingerprint.forget()
             container.session.signOut()
         }
     }
@@ -59,6 +60,7 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
         container.scope.launch {
             runCatching { container.push.signOut() }
             runCatching { container.api.logout() }
+            container.fingerprint.forget()
             container.session.forgetServer()
             container.appPreferences.clear()
             container.themeModeStore.setThemeMode(ThemeMode.System)

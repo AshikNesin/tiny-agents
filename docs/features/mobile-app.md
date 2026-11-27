@@ -73,14 +73,6 @@ app is signed in to just opens the app.
    verifies at install time. Until then, the links open in the app only if
    App info → Open by default → Add links lists the server and it is ticked.
 
-The same certificate lets the app confirm vault reveals with a passkey
-(fingerprint or face): the statement also grants
-`delegate_permission/common.get_login_creds`, and the server accepts passkey
-answers whose origin is the app's `android:apk-key-hash:` (the
-`androidPasskeyOrigins` list in `app-links.ts`). It works when `RP_ID` is the
-host that serves the file and the phone has a passkey for it in Google
-Password Manager; otherwise the app asks for the password.
-
 ## Keeping it in step with the web app
 
 The app's wire types mirror `apps/web/src/shared/api/` and

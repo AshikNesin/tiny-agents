@@ -15,33 +15,17 @@ interface AssetLinkStatement {
   target: { namespace: "android_app"; package_name: string; sha256_cert_fingerprints: string[] };
 }
 
-function fingerprints(env: Pick<AppVars, "ANDROID_APP_CERT_SHA256">): string[] {
-  return (env.ANDROID_APP_CERT_SHA256 ?? "")
-    .split(",")
-    .map((value) => fingerprint(value))
-    .filter((value): value is string => value !== null);
-}
-
-export function androidPasskeyOrigins(
-  env: Pick<AppVars, "ANDROID_APP_CERT_SHA256"> = appEnv(),
-): string[] {
-  return fingerprints(env).map((print) => {
-    const bytes = Uint8Array.from(print.split(":"), (pair) => Number.parseInt(pair, 16));
-    return `android:apk-key-hash:${Buffer.from(bytes).toString("base64url")}`;
-  });
-}
-
 export function assetLinks(
   env: Pick<AppVars, "ANDROID_APP_CERT_SHA256" | "ANDROID_APP_PACKAGE"> = appEnv(),
 ): AssetLinkStatement[] | null {
-  const prints = fingerprints(env);
+  const prints = (env.ANDROID_APP_CERT_SHA256 ?? "")
+    .split(",")
+    .map((value) => fingerprint(value))
+    .filter((value): value is string => value !== null);
   if (prints.length === 0) return null;
   return [
     {
-      relation: [
-        "delegate_permission/common.handle_all_urls",
-        "delegate_permission/common.get_login_creds",
-      ],
+      relation: ["delegate_permission/common.handle_all_urls"],
       target: {
         namespace: "android_app",
         package_name: env.ANDROID_APP_PACKAGE ?? DEFAULT_ANDROID_PACKAGE,

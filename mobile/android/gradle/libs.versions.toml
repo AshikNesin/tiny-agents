@@ -23,9 +23,6 @@ okhttp = "5.3.2"
 # the owner has no distributor app; neither needs a Firebase project.
 unifiedpushConnector = "3.3.5"
 unifiedpushEmbeddedFcm = "3.1.0"
-# Tiny Agents: confirm it's you with a passkey (fingerprint or face) before vault reveals.
-credentials = "1.6.0"
-fragment = "1.8.9"
 
 [libraries]
 # Kit runtime
@@ -49,8 +46,6 @@ androidx-lifecycle-runtime-compose = { group = "androidx.lifecycle", name = "lif
 okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhttp" }
 unifiedpush-connector = { group = "org.unifiedpush.android", name = "connector", version.ref = "unifiedpushConnector" }
 unifiedpush-embedded-fcm = { group = "org.unifiedpush.android", name = "embedded-fcm-distributor", version.ref = "unifiedpushEmbeddedFcm" }
-androidx-credentials = { group = "androidx.credentials", name = "credentials", version.ref = "credentials" }
-androidx-fragment = { group = "androidx.fragment", name = "fragment", version.ref = "fragment" }
 
 # Test only
 junit = { group = "junit", name = "junit", version.ref = "junit" }
