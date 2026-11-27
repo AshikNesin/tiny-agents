@@ -21,9 +21,9 @@ import { ConfirmProvider } from "@groot/ui/primitives";
 import { ComputerPanel } from "@/components/ComputerPanel";
 import type { Bot } from "../../../apps/web/src/shared/api/bots";
 import type { ComputerStatus } from "../../../apps/web/src/shared/api/live";
-import { botsApi } from "@/lib/bots-api";
 import { createRfb } from "@/lib/novnc";
 import { usePeopleStore } from "@/store/people";
+import { computerBackend } from "./live-backend";
 
 const fakes = vi.hoisted(() => ({ rfbs: [] as (EventTarget & { viewOnly: boolean })[] }));
 
@@ -66,22 +66,7 @@ const liveStatus = (s: Partial<ComputerStatus> = {}): ComputerStatus => ({
   ...s,
 });
 
-function mockApi(initial: ComputerStatus) {
-  let current = initial;
-  return {
-    status: vi.spyOn(botsApi, "computerStatus").mockImplementation(async () => current),
-    driver: vi.spyOn(botsApi, "computerDriver").mockImplementation(async (_id, driver) => {
-      current = { ...current, driver, ...(driver === "agent" ? { takeover: null } : {}) };
-    }),
-    start: vi.spyOn(botsApi, "computerStart").mockResolvedValue({ starting: true }),
-    ticket: vi.spyOn(botsApi, "computerVncTicket").mockResolvedValue({
-      path: "/api/v1/bots/b1/computer/vnc?ticket=t1",
-      scale: 1,
-    }),
-    reset: vi.spyOn(botsApi, "computerReset").mockResolvedValue(undefined as never),
-    set: (next: ComputerStatus) => (current = next),
-  };
-}
+const mockApi = computerBackend;
 
 const connected = async () => {
   await waitFor(() => expect(fakes.rfbs.length).toBeGreaterThan(0), { timeout: 4000 });
@@ -103,8 +88,7 @@ describe("ComputerPanel", () => {
   });
 
   it("streams the desktop at its fixed size without asking it to resize", async () => {
-    const resize = vi.spyOn(botsApi, "browserResize");
-    mockApi(liveStatus());
+    const api = mockApi(liveStatus());
     render(<ComputerPanel bot={bot} onClose={vi.fn()} />);
     await screen.findByTestId("computer-vnc");
     await waitFor(() => expect(createRfb).toHaveBeenCalledTimes(1));
@@ -118,7 +102,8 @@ describe("ComputerPanel", () => {
     expect(screen.getByTestId("computer-driver").textContent).toBe("Clicker is driving");
     expect(screen.queryByText("1280×800")).not.toBeInTheDocument();
     expect(fakes.rfbs[0]!.viewOnly).toBe(true);
-    expect(resize).not.toHaveBeenCalled();
+    expect(api.resizes()).toHaveLength(0);
+    expect(api.api.sent("POST", "/bots/b1/browser/resize")).toHaveLength(0);
   });
 
   it("takes control from a click on the desktop and hands it back", async () => {
@@ -127,13 +112,13 @@ describe("ComputerPanel", () => {
     await connected();
     const viewport = screen.getByTestId("computer-viewport");
     fireEvent.click(within(viewport).getByRole("button", { name: "Take control" }));
-    await waitFor(() => expect(api.driver).toHaveBeenCalledWith("b1", "human"));
+    await waitFor(() => expect(api.drivers()).toContain("human"));
     await waitFor(() => expect(fakes.rfbs[0]!.viewOnly).toBe(false));
     expect(screen.getByTestId("computer-driver").textContent).toBe("You're driving");
     expect(within(viewport).getByTestId("computer-driving-frame")).toBeInTheDocument();
     expect(screen.getByTestId("computer-paste")).toBeInTheDocument();
     fireEvent.click(screen.getByTestId("computer-release"));
-    await waitFor(() => expect(api.driver).toHaveBeenCalledWith("b1", "agent"));
+    await waitFor(() => expect(api.drivers()).toContain("agent"));
     await waitFor(() => expect(fakes.rfbs[0]!.viewOnly).toBe(true));
   });
 
@@ -144,7 +129,7 @@ describe("ComputerPanel", () => {
       "Sign in to the mail app",
     );
     fireEvent.click(screen.getByText("I'm done"));
-    await waitFor(() => expect(api.driver).toHaveBeenCalledWith("b1", "agent"));
+    await waitFor(() => expect(api.drivers()).toContain("agent"));
     await waitFor(() =>
       expect(screen.queryByTestId("computer-takeover-reason")).not.toBeInTheDocument(),
     );
@@ -169,7 +154,7 @@ describe("ComputerPanel", () => {
     const api = mockApi(liveStatus({ active: false, driver: null }));
     render(<ComputerPanel bot={bot} onClose={vi.fn()} />);
     fireEvent.click(await screen.findByTestId("computer-open"));
-    await waitFor(() => expect(api.start).toHaveBeenCalledWith("b1"));
+    await waitFor(() => expect(api.starts()).not.toHaveLength(0));
     act(() => {
       api.set(liveStatus({ active: false, driver: null, starting: true, phase: "installing" }));
     });

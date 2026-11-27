@@ -331,23 +331,41 @@ export default {
       meta: { schema: [{ type: "object" }] },
       create(context) {
         const allow = context.options[0]?.allow ?? [];
+        const firstParty = (specifier) =>
+          typeof specifier === "string" &&
+          FIRST_PARTY_SPECIFIER.test(specifier) &&
+          !mockAllowed(specifier, allow);
+        const imported = new Set();
+        const viCall = (node) =>
+          node.callee.type === "MemberExpression" &&
+          node.callee.object.type === "Identifier" &&
+          node.callee.object.name === "vi" &&
+          node.callee.property.type === "Identifier"
+            ? node.callee.property.name
+            : undefined;
+        const rootName = (node) => {
+          let root = node;
+          while (root?.type === "MemberExpression") root = root.object;
+          return root?.type === "Identifier" ? root.name : undefined;
+        };
         return {
+          ImportDeclaration(node) {
+            if (node.importKind === "type" || !firstParty(node.source.value)) return;
+            for (const specifier of node.specifiers) {
+              if (specifier.importKind !== "type") imported.add(specifier.local.name);
+            }
+          },
           CallExpression(node) {
-            const { callee } = node;
-            const [source] = node.arguments;
-            if (
-              callee.type !== "MemberExpression" ||
-              callee.object.type !== "Identifier" ||
-              callee.object.name !== "vi" ||
-              callee.property.type !== "Identifier" ||
-              (callee.property.name !== "mock" && callee.property.name !== "doMock") ||
-              source?.type !== "Literal" ||
-              typeof source.value !== "string" ||
-              !FIRST_PARTY_SPECIFIER.test(source.value) ||
-              mockAllowed(source.value, allow)
-            )
-              return;
-            context.report({ node, message: FIRST_PARTY_MOCK_MESSAGE });
+            const called = viCall(node);
+            const [target] = node.arguments;
+            const mocksModule =
+              (called === "mock" || called === "doMock") &&
+              target?.type === "Literal" &&
+              firstParty(target.value);
+            const spiesOnImport = called === "spyOn" && imported.has(rootName(target));
+            if (mocksModule || spiesOnImport) {
+              context.report({ node, message: FIRST_PARTY_MOCK_MESSAGE });
+            }
           },
         };
       },

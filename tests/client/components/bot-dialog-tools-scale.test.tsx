@@ -95,7 +95,7 @@ beforeEach(() => {
   api.get("/skills", (): Skill[] => []);
   api.get("/connections", (): Connection[] => []);
   api.get("/people", (): GuestList => ({ guests: [] }));
-  api.patch("/bots/b1", (request): Bot => ({ ...bot, ...(request.body as BotUpdateBody) }));
+  api.patch<BotUpdateBody>("/bots/b1", (request): Bot => ({ ...bot, ...request.body }));
 });
 
 describe("BotDialog tools at scale (issue #91)", () => {

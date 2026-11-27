@@ -818,6 +818,17 @@ const FIXTURES: Record<string, Fixture> = {
       'import { vi } from "vite-plus/test";\nconst specifier = "@/lib/bots-api";\nvi.mock("sonner", () => ({ toast: { error: vi.fn() } }));\nvi.mock("streamdown");\nvi.mock(specifier);\nvi.stubGlobal("fetch", vi.fn());\n',
     rules: [],
   },
+  "tests/client/r21-spy-fail.test.tsx": {
+    source:
+      'import { vi } from "vite-plus/test";\nimport { botsApi } from "@/lib/bots-api";\nimport * as shell from "@groot/shell/lib/api";\nimport store from "../../apps/web/src/client/store/bots";\nvi.spyOn(botsApi, "list").mockResolvedValue([]);\nvi.spyOn(shell.apiClient, "get");\nvi.spyOn(store, "getState");\n',
+    rules: ["R21", "R21", "R21"],
+    mentions: "fakeApi() from tests/client/fakes/api.ts",
+  },
+  "tests/client/r21-spy-pass.test.tsx": {
+    source:
+      'import { vi } from "vite-plus/test";\nimport { toast } from "sonner";\nimport * as sse from "@/lib/sse";\nimport type { Bot } from "@/lib/chat-types";\nconst local = { run: (bot: Bot) => bot };\nvi.spyOn(console, "error").mockImplementation(() => undefined);\nvi.spyOn(window, "setInterval");\nvi.spyOn(HTMLElement.prototype, "getBoundingClientRect");\nvi.spyOn(Date, "now");\nvi.spyOn(toast, "error");\nvi.spyOn(sse, "subscribeSse");\nvi.spyOn(local, "run");\n',
+    rules: [],
+  },
   "tests/server/r21-elsewhere-pass.test.ts": {
     source: 'import { vi } from "vite-plus/test";\nvi.mock("@/lib/bots-api");\n',
     rules: [],

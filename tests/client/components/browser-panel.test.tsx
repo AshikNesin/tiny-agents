@@ -21,9 +21,10 @@ import { ConfirmProvider } from "@groot/ui/primitives";
 import { BrowserPanel } from "@/components/BrowserPanel";
 import type { Bot } from "../../../apps/web/src/shared/api/bots";
 import type { BrowserStatus } from "../../../apps/web/src/shared/api/live";
-import { botsApi } from "@/lib/bots-api";
 import { createRfb } from "@/lib/novnc";
 import { usePeopleStore } from "@/store/people";
+import { ApiFailure } from "../fakes/api";
+import { browserBackend } from "./live-backend";
 
 const fakes = vi.hoisted(() => ({ rfbs: [] as FakeRfb[] }));
 
@@ -88,24 +89,7 @@ const vncStatus = (s: Partial<BrowserStatus> = {}): BrowserStatus => ({
   ...s,
 });
 
-function mockApi(initial: BrowserStatus) {
-  let current = initial;
-  const api = {
-    status: vi.spyOn(botsApi, "browserStatus").mockImplementation(async () => current),
-    driver: vi.spyOn(botsApi, "browserDriver").mockImplementation(async (_id, driver) => {
-      current = { ...current, driver };
-    }),
-    start: vi.spyOn(botsApi, "browserStart").mockResolvedValue({ starting: true }),
-    ticket: vi.spyOn(botsApi, "browserVncTicket").mockResolvedValue({
-      path: "/api/v1/bots/b1/browser/vnc?ticket=t1",
-      scale: 2,
-    }),
-    resize: vi.spyOn(botsApi, "browserResize").mockResolvedValue(undefined as never),
-    reset: vi.spyOn(botsApi, "browserResetProfile").mockResolvedValue(undefined as never),
-    set: (next: BrowserStatus) => (current = next),
-  };
-  return api;
-}
+const mockApi = browserBackend;
 
 function stubResizeObserver() {
   const observer = { notify: () => {} };
@@ -177,7 +161,7 @@ describe("BrowserPanel", () => {
     expect(screen.queryByTestId("browser-paste")).not.toBeInTheDocument();
     expect(screen.queryByTestId("browser-reset")).not.toBeInTheDocument();
     expect(screen.getByTestId("browser-fullscreen")).toBeInTheDocument();
-    expect(api.resize).not.toHaveBeenCalled();
+    expect(api.resizes()).toHaveLength(0);
   });
 
   it("offers a guest no way to open a closed browser (S2)", async () => {
@@ -208,7 +192,7 @@ describe("BrowserPanel", () => {
 
     const viewport = screen.getByTestId("browser-viewport");
     fireEvent.click(within(viewport).getByRole("button", { name: "Take control" }));
-    await waitFor(() => expect(api.driver).toHaveBeenCalledWith("b1", "human"));
+    await waitFor(() => expect(api.drivers()).toContain("human"));
     await waitFor(() => expect(latestRfb().viewOnly).toBe(false));
     expect(latestRfb().focus).toHaveBeenCalled();
     expect(screen.getByTestId("browser-driver").textContent).toBe("You're driving");
@@ -220,12 +204,12 @@ describe("BrowserPanel", () => {
       screen.getByTestId("browser-release"),
     );
 
-    const polls = api.status.mock.calls.length;
+    const polls = api.statuses().length;
     api.set(vncStatus({ url: "https://example.org/", driver: "agent" }));
     fireEvent.click(screen.getByTestId("browser-release"));
-    await waitFor(() => expect(api.driver).toHaveBeenCalledWith("b1", "agent"));
+    await waitFor(() => expect(api.drivers()).toContain("agent"));
     await waitFor(() => expect(latestRfb().viewOnly).toBe(true));
-    await waitFor(() => expect(api.status.mock.calls.length).toBeGreaterThan(polls));
+    await waitFor(() => expect(api.statuses().length).toBeGreaterThan(polls));
     expect(screen.getByTestId("browser-driver").textContent).toBe("Surfer is driving");
     expect(screen.queryByTestId("browser-driving-frame")).not.toBeInTheDocument();
   });
@@ -336,13 +320,10 @@ describe("BrowserPanel", () => {
       notify();
       notify();
       notify();
-      await waitFor(
-        () => expect(api.resize).toHaveBeenCalledWith("b1", { width: 801, height: 600 }),
-        {
-          timeout: 2000,
-        },
-      );
-      const burst = api.resize.mock.calls.filter(([, size]) => size.width === 801).length;
+      await waitFor(() => expect(api.resizes()).toContainEqual({ width: 801, height: 600 }), {
+        timeout: 2000,
+      });
+      const burst = api.resizes().filter((size) => size.width === 801).length;
       expect(burst).toBeLessThanOrEqual(2);
     } finally {
       vi.unstubAllGlobals();
@@ -378,7 +359,7 @@ describe("BrowserPanel", () => {
       expect(latestRfb().resizeSession).toBe(false);
       observer.notify();
       await new Promise((resolve) => setTimeout(resolve, 300));
-      expect(api.resize).not.toHaveBeenCalled();
+      expect(api.resizes()).toHaveLength(0);
 
       fireEvent.click(screen.getByTestId("browser-pip-expand-stream"));
       expect(onLayout).toHaveBeenLastCalledWith("docked");
@@ -419,7 +400,7 @@ describe("BrowserPanel", () => {
     await connected();
     expect(latestRfb().viewOnly).toBe(true);
     fireEvent.click(screen.getByRole("button", { name: "Hand back" }));
-    await waitFor(() => expect(api.driver).toHaveBeenCalledWith("b1", "agent"));
+    await waitFor(() => expect(api.drivers()).toContain("agent"));
   });
 
   it("drags the picture in picture by its header and remembers where", async () => {
@@ -461,10 +442,9 @@ describe("BrowserPanel", () => {
       render(<BrowserPanel bot={bot} onClose={vi.fn()} />);
       await connected();
 
-      await waitFor(
-        () => expect(api.resize).toHaveBeenCalledWith("b1", { width: 500, height: 1176 }),
-        { timeout: 2000 },
-      );
+      await waitFor(() => expect(api.resizes()).toContainEqual({ width: 500, height: 1176 }), {
+        timeout: 2000,
+      });
     } finally {
       vi.unstubAllGlobals();
     }
@@ -478,21 +458,22 @@ describe("BrowserPanel", () => {
       () => box as DOMRect,
     );
     let finishFirst: () => void = () => undefined;
-    api.resize.mockImplementationOnce(
-      () => new Promise<never>((resolve) => (finishFirst = () => resolve(undefined as never))),
+    api.api.post.once(
+      "/bots/b1/browser/resize",
+      (request) => new Promise((resolve) => (finishFirst = () => resolve(request.body))),
     );
     try {
       render(<BrowserPanel bot={bot} onClose={vi.fn()} />);
       await connected();
-      await waitFor(() => expect(api.resize).toHaveBeenCalledTimes(1), { timeout: 2000 });
+      await waitFor(() => expect(api.resizes()).toHaveLength(1), { timeout: 2000 });
       box = { width: 1440, height: 900 };
       observer.notify();
       await new Promise((resolve) => setTimeout(resolve, 700));
-      expect(api.resize).toHaveBeenCalledTimes(1);
+      expect(api.resizes()).toHaveLength(1);
 
       finishFirst();
-      await waitFor(() => expect(api.resize).toHaveBeenCalledTimes(2), { timeout: 2000 });
-      expect(api.resize).toHaveBeenLastCalledWith("b1", { width: 1440, height: 900 });
+      await waitFor(() => expect(api.resizes()).toHaveLength(2), { timeout: 2000 });
+      expect(api.resizes().at(-1)).toEqual({ width: 1440, height: 900 });
     } finally {
       vi.unstubAllGlobals();
     }
@@ -500,7 +481,9 @@ describe("BrowserPanel", () => {
 
   it("retries a fit that failed, a couple of times, then leaves it", async () => {
     const api = mockApi(vncStatus());
-    api.resize.mockRejectedValue(new Error("The browser could not be resized"));
+    api.api.post("/bots/b1/browser/resize", () => {
+      throw new ApiFailure(502, "The browser could not be resized");
+    });
     stubResizeObserver();
     vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
       width: 800,
@@ -516,13 +499,13 @@ describe("BrowserPanel", () => {
         });
 
       await advance(350);
-      expect(api.resize).toHaveBeenCalledTimes(1);
+      expect(api.resizes()).toHaveLength(1);
       await advance(1000);
-      expect(api.resize).toHaveBeenCalledTimes(2);
+      expect(api.resizes()).toHaveLength(2);
       await advance(1000);
-      expect(api.resize).toHaveBeenCalledTimes(3);
+      expect(api.resizes()).toHaveLength(3);
       await advance(10_000);
-      expect(api.resize).toHaveBeenCalledTimes(3);
+      expect(api.resizes()).toHaveLength(3);
     } finally {
       vi.useRealTimers();
       vi.unstubAllGlobals();
@@ -542,7 +525,7 @@ describe("BrowserPanel", () => {
     expect(screen.getByText("Reconnecting…")).toBeInTheDocument();
 
     await waitFor(() => expect(fakes.rfbs.length).toBe(2), { timeout: 3000 });
-    expect(api.ticket).toHaveBeenCalledTimes(2);
+    expect(api.tickets()).toHaveLength(2);
     act(() => {
       latestRfb().dispatchEvent(new Event("connect"));
     });
@@ -605,7 +588,7 @@ describe("BrowserPanel", () => {
 
     api.set(vncStatus({ active: false, url: null, driver: null, mode: null, starting: true }));
     fireEvent.click(screen.getByTestId("browser-open"));
-    await waitFor(() => expect(api.start).toHaveBeenCalledWith("b1"));
+    await waitFor(() => expect(api.starts()).not.toHaveLength(0));
     expect(await screen.findByText("Starting the browser")).toBeInTheDocument();
     expect(screen.getByText("Starting")).toBeInTheDocument();
 
@@ -644,7 +627,7 @@ describe("BrowserPanel", () => {
 
     expect(await screen.findByTestId("browser-error")).toHaveTextContent("VM exec failed");
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
-    await waitFor(() => expect(api.start).toHaveBeenCalledWith("b1"));
+    await waitFor(() => expect(api.starts()).not.toHaveLength(0));
   });
 
   it("reset closes the browser and returns to the closed state", async () => {
@@ -656,7 +639,7 @@ describe("BrowserPanel", () => {
     fireEvent.click(screen.getByTestId("browser-reset"));
     expect(await screen.findByText("Reset this bot's browser?")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Reset" }));
-    await waitFor(() => expect(api.reset).toHaveBeenCalledWith("b1"));
+    await waitFor(() => expect(api.resets()).not.toHaveLength(0));
     expect(await screen.findByText("No browser is open.")).toBeInTheDocument();
     await waitFor(() => expect(latestRfb().disconnect).toHaveBeenCalled());
   });
@@ -671,6 +654,6 @@ describe("BrowserPanel", () => {
     expect(screen.getByText(/every bot on the shared profile/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     await waitFor(() => expect(screen.queryByText("Reset the shared browser?")).toBeNull());
-    expect(api.reset).not.toHaveBeenCalled();
+    expect(api.resets()).toHaveLength(0);
   });
 });

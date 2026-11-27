@@ -431,7 +431,7 @@ const BOUNDARY_RULES: BoundaryRule[] = [
     scope: "tests/client/**",
     rule: "repo/no-first-party-mock",
     options: { allow: ["@/lib/sse", "@/lib/novnc", "@/lib/xterm", "@/lib/terminal-ws"] },
-    enabled: false,
+    enabled: true,
   },
 ];
 

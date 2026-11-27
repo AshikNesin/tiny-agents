@@ -22,10 +22,11 @@ import { BrowserPanel } from "@/components/BrowserPanel";
 import { ComputerPanel } from "@/components/ComputerPanel";
 import type { Bot } from "../../../apps/web/src/shared/api/bots";
 import type { BrowserStatus, ComputerStatus } from "../../../apps/web/src/shared/api/live";
-import { botsApi } from "@/lib/bots-api";
 import { createRfb } from "@/lib/novnc";
 import { usePeopleStore } from "@/store/people";
 import { markup, outline } from "../dom-outline";
+import { ApiFailure } from "../fakes/api";
+import { browserBackend, computerBackend } from "./live-backend";
 
 const fakes = vi.hoisted(() => ({ rfbs: [] as EventTarget[] }));
 
@@ -79,30 +80,15 @@ const computerOff = (s: Partial<ComputerStatus> = {}) =>
   computer({ active: false, driver: null, ...s });
 
 function mockBrowser(status: BrowserStatus | Promise<BrowserStatus>) {
-  return {
-    status: vi.spyOn(botsApi, "browserStatus").mockImplementation(() => Promise.resolve(status)),
-    driver: vi.spyOn(botsApi, "browserDriver").mockResolvedValue(undefined as never),
-    start: vi.spyOn(botsApi, "browserStart").mockResolvedValue({ starting: true }),
-    ticket: vi.spyOn(botsApi, "browserVncTicket").mockResolvedValue({
-      path: "/api/v1/bots/b1/browser/vnc?ticket=t1",
-      scale: 2,
-    }),
-    resize: vi.spyOn(botsApi, "browserResize").mockResolvedValue(undefined as never),
-    reset: vi.spyOn(botsApi, "browserResetProfile").mockResolvedValue(undefined as never),
-  };
+  const live = browserBackend(status);
+  live.api.post(`${live.base}/driver`, (request) => request.body);
+  return live;
 }
 
 function mockComputer(status: ComputerStatus | Promise<ComputerStatus>) {
-  return {
-    status: vi.spyOn(botsApi, "computerStatus").mockImplementation(() => Promise.resolve(status)),
-    driver: vi.spyOn(botsApi, "computerDriver").mockResolvedValue(undefined as never),
-    start: vi.spyOn(botsApi, "computerStart").mockResolvedValue({ starting: true }),
-    ticket: vi.spyOn(botsApi, "computerVncTicket").mockResolvedValue({
-      path: "/api/v1/bots/b1/computer/vnc?ticket=t1",
-      scale: 1,
-    }),
-    reset: vi.spyOn(botsApi, "computerReset").mockResolvedValue(undefined as never),
-  };
+  const live = computerBackend(status);
+  live.api.post(`${live.base}/driver`, (request) => request.body);
+  return live;
 }
 
 const tabs = (
@@ -173,7 +159,7 @@ describe("BrowserPanel states", () => {
     asGuest();
     const api = mockBrowser(browserClosed());
     mount("browser");
-    await waitFor(() => expect(api.status).toHaveBeenCalled());
+    await waitFor(() => expect(api.statuses()).not.toHaveLength(0));
     await screen.findByText("Closed");
     pin();
   });
@@ -393,7 +379,7 @@ describe("the panels' actions", () => {
       const dialog = await screen.findByRole("alertdialog");
       expect(outline(dialog)).toMatchSnapshot();
       await user().click(screen.getByRole("button", { name: "Reset" }));
-      await waitFor(() => expect(api.reset).toHaveBeenCalledWith("b1"));
+      await waitFor(() => expect(api.resets()).not.toHaveLength(0));
       expect(vi.mocked(toast.success).mock.calls).toMatchSnapshot();
       await screen.findByText("No browser is open.");
     });
@@ -406,7 +392,7 @@ describe("the panels' actions", () => {
       const dialog = await screen.findByRole("alertdialog");
       expect(outline(dialog)).toMatchSnapshot();
       await user().click(screen.getByRole("button", { name: "Reset" }));
-      await waitFor(() => expect(api.reset).toHaveBeenCalledWith("b1"));
+      await waitFor(() => expect(api.resets()).not.toHaveLength(0));
       expect(vi.mocked(toast.success).mock.calls).toMatchSnapshot();
       await screen.findByText("The computer is off.");
     });
@@ -414,7 +400,9 @@ describe("the panels' actions", () => {
 
   it("says when the browser could not be opened", async () => {
     const api = mockBrowser(browserClosed());
-    api.start.mockRejectedValue({});
+    api.api.post(`${api.base}/start`, () => {
+      throw new ApiFailure(502, "");
+    });
     mount("browser");
     await user().click(await screen.findByTestId("browser-open"));
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Failed to open the browser"));
@@ -422,7 +410,9 @@ describe("the panels' actions", () => {
 
   it("says when the computer could not be opened", async () => {
     const api = mockComputer(computerOff());
-    api.start.mockRejectedValue({});
+    api.api.post(`${api.base}/start`, () => {
+      throw new ApiFailure(502, "");
+    });
     mount("computer");
     await user().click(await screen.findByTestId("computer-open"));
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Failed to open the computer"));
@@ -433,7 +423,7 @@ describe("the panels' actions", () => {
     mount("computer");
     await connect();
     await user().click(screen.getByRole("button", { name: "I'm done" }));
-    await waitFor(() => expect(api.driver).toHaveBeenCalledWith("b1", "agent"));
+    await waitFor(() => expect(api.drivers()).toContain("agent"));
     expect(screen.getByRole("button", { name: "I'm done" })).toHaveAttribute(
       "title",
       "Hand the computer back to Surfer",
@@ -454,7 +444,7 @@ describe("the panels' poll", () => {
     await screen.findByText("Starting the browser");
     await waitFor(() => expect(delays().at(-1)).toBe(1500));
     expect(delays()[0]).toBe(3000);
-    expect(api.status).toHaveBeenCalledWith("b1");
+    expect(api.statuses()).not.toHaveLength(0);
   });
 
   it("polls the computer every 3s, and every 1.5s while it starts", async () => {
@@ -464,6 +454,6 @@ describe("the panels' poll", () => {
     await screen.findByText("Starting the computer");
     await waitFor(() => expect(delays().at(-1)).toBe(1500));
     expect(delays()[0]).toBe(3000);
-    expect(api.status).toHaveBeenCalledWith("b1");
+    expect(api.statuses()).not.toHaveLength(0);
   });
 });

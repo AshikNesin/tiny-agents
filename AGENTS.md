@@ -7,7 +7,7 @@ and `pnpm verify:static` runs the gates CI runs. Guides start at
 
 ## Rules and their enforcers
 
-R1 to R20 are lint rules in `scripts/lint/boundaries.ts`, run by `pnpm check`.
+R1 to R21 are lint rules in `scripts/lint/boundaries.ts`, run by `pnpm check`.
 
 | Rule                                                                                                                                                                                                          | Enforcer                                                                         |
 | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
@@ -19,6 +19,7 @@ R1 to R20 are lint rules in `scripts/lint/boundaries.ts`, run by `pnpm check`.
 | UI primitives (Base UI, Radix, cmdk) are imported only in `packages/ui`; pages use `@groot/ui`. `@shadcn/react` is allowed anywhere.                                                                          | R18                                                                              |
 | Render breadcrumbs with `Breadcrumbs` from `@groot/ui/breadcrumb`.                                                                                                                                            | R5a, R5b, R5c                                                                    |
 | Code and every test under `tests/` typecheck.                                                                                                                                                                 | `pnpm typecheck`, run by the pre-push hook                                       |
+| No function is written twice; one every package needs lives in `packages/std`.                                                                                                                                | `pnpm check:duplicates`                                                          |
 | No unused file or export.                                                                                                                                                                                     | `pnpm check:dead`                                                                |
 | A module the rewrite retired stays gone, and a narrowed one narrow.                                                                                                                                           | `pnpm check:old-modules`                                                         |
 | Every path, link and `pnpm` script a doc names exists.                                                                                                                                                        | `pnpm check:doc-refs`                                                            |
@@ -52,6 +53,7 @@ R1 to R20 are lint rules in `scripts/lint/boundaries.ts`, run by `pnpm check`.
 | An input that turns a safety check on (the gate's `run`, a service's `viewer`) is required, never optional.                                                                                                   | `pnpm typecheck`                                                                 |
 | Verify journeys and recipes name real pages and settings sections.                                                                                                                                            | `tests/client/verify-journey-routes.test.ts`                                     |
 | A change under `mobile/android/` bumps `VERSION_CODE` (and `VERSION_NAME`) in `mobile/android/version.properties`, with a `mobile/CHANGELOG.md` entry, so CI releases the app.                                | `pnpm check:merge-main`, run by pre-push                                         |
+| A client test fakes the network with `fakeApi()` (`tests/client/fakes/api.ts`) and renders the real modules; it never mocks or spies on a first-party module.                                                 | R21                                                                              |
 | A new test fails before the change and asserts behavior, not a mock of the code it covers.                                                                                                                    | Judgment, see Testing                                                            |
 | Turn each operator correction into a row here.                                                                                                                                                                | Judgment, see below                                                              |
 

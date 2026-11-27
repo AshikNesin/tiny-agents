@@ -20,6 +20,7 @@ interface Route {
   pattern: RegExp;
   names: string[];
   reply: Reply;
+  once: boolean;
 }
 
 export class ApiFailure extends Error {
@@ -59,6 +60,10 @@ function envelope(status: number, payload: unknown): Response {
   });
 }
 
+export function networkDown(): TypeError {
+  return new TypeError("Failed to fetch");
+}
+
 afterEach(() => {
   vi.unstubAllGlobals();
 });
@@ -67,8 +72,13 @@ export function fakeApi() {
   const routes: Route[] = [];
   const requests: FakeRequest[] = [];
 
-  const on = (method: Method) => (path: string, reply: Reply) => {
-    routes.unshift({ method, ...compile(path), reply });
+  const on = (method: Method) => {
+    const add =
+      (once: boolean) =>
+      <Body = unknown>(path: string, reply: (request: FakeRequest<Body>) => unknown) => {
+        routes.unshift({ method, ...compile(path), reply: reply as Reply, once });
+      };
+    return Object.assign(add(false), { once: add(true) });
   };
 
   vi.stubGlobal("fetch", async (input: string | URL | Request, init?: RequestInit) => {
@@ -82,12 +92,15 @@ export function fakeApi() {
     const request: FakeRequest = {
       method,
       path,
-      params: Object.fromEntries((route?.names ?? []).map((name, at) => [name, match![at + 1]!])),
+      params: Object.fromEntries(
+        (route?.names ?? []).map((name, at) => [name, decodeURIComponent(match![at + 1]!)]),
+      ),
       query: url.searchParams,
       body: bodyOf(init),
       headers: new Headers(init?.headers),
     };
     requests.push(request);
+    if (route?.once) routes.splice(routes.indexOf(route), 1);
     if (!route) {
       return envelope(501, {
         success: false,
