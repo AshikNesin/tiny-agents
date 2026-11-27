@@ -32,6 +32,18 @@ function readCodePane(): CodePane | null {
   }
 }
 
+const FOLDED_SECTIONS_KEY = "tiny-agents:sidebar-folded";
+
+function readFoldedSections(): string[] {
+  try {
+    const saved: unknown = JSON.parse(localStorage.getItem(FOLDED_SECTIONS_KEY) ?? "[]");
+    return Array.isArray(saved) ? saved.filter((name) => typeof name === "string") : [];
+  } catch {
+    storageIsBlockedInPrivateWindows();
+    return [];
+  }
+}
+
 const CODE_PANE_WIDE_KEY = "tiny-agents:code-pane-wide";
 
 function readCodePaneWide(): boolean {
@@ -62,6 +74,8 @@ interface UiState {
   collapsed: boolean;
   setCollapsed: (collapsed: boolean) => void;
   codeSidebarOpen: boolean;
+  foldedSections: string[];
+  toggleSection: (name: string) => void;
   toggleSidebar: (mode: AppMode) => void;
   newThreadDraft: { text: string; projectId: string };
   setNewThreadDraft: (draft: Partial<{ text: string; projectId: string }>) => void;
@@ -104,6 +118,17 @@ export const useUiStore = create<UiState>((set) => ({
     set({ collapsed });
   },
   codeSidebarOpen: readCodeSidebar(),
+  foldedSections: readFoldedSections(),
+  toggleSection: (name) => {
+    const folded = useUiStore.getState().foldedSections;
+    const next = folded.includes(name) ? folded.filter((n) => n !== name) : [...folded, name];
+    try {
+      localStorage.setItem(FOLDED_SECTIONS_KEY, JSON.stringify(next));
+    } catch {
+      storageIsBlockedInPrivateWindows();
+    }
+    set({ foldedSections: next });
+  },
   newThreadDraft: { text: "", projectId: "" },
   setNewThreadDraft: (draft) =>
     set((state) => ({ newThreadDraft: { ...state.newThreadDraft, ...draft } })),

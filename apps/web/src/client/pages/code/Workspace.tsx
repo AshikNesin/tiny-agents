@@ -484,7 +484,7 @@ export function CodeWorkspace() {
         hidden={wide || undefined}
         data-state={listOpen ? "open" : "closed"}
         className={cn(
-          "bg-sidebar text-sidebar-foreground border-sidebar-border w-full shrink-0 flex-col lg:w-68 lg:border-r-[0.5px]",
+          "sidebar-surface text-sidebar-foreground border-sidebar-border w-full shrink-0 flex-col lg:w-68 lg:border-r-[0.5px]",
           full ? "hidden" : "flex",
           listOpen ? "lg:flex" : "lg:hidden",
         )}
