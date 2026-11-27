@@ -1,5 +1,33 @@
 # @tiny-agents/code
 
+## 0.3.0
+
+### Minor Changes
+
+- [#565](https://github.com/AshikNesin/tiny-agents/pull/565) [`566e80d`](https://github.com/AshikNesin/tiny-agents/commit/566e80df2f2d2ba9ad59d812d5f56170aafd6347) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Claude Code threads can now use your connections too. Every connection shared with every bot is offered to Claude Code, loaded on demand, and the calls run in the app, so connection sign-ins never reach the sandbox. Settings > Tools decides which tools run, ask or stay off, and a tool that asks shows the usual approval card.
+
+- [#566](https://github.com/AshikNesin/tiny-agents/pull/566) [`dadbaf1`](https://github.com/AshikNesin/tiny-agents/commit/dadbaf1810244339d908e356695882f03b0497f8) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Code threads can now use your skills. Every skill shared with every bot is offered in Native and Claude Code threads. Only each skill's name and description go into the prompt, and its instructions load when a thread uses it.
+
+- [#509](https://github.com/AshikNesin/tiny-agents/pull/509) [`7c34436`](https://github.com/AshikNesin/tiny-agents/commit/7c3443651e369eb579b5aa32c30ff7d90a7e4b45) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Code has a third agent, Native, built on the same runtime the chat bots use. It needs a sandbox and a model that runs on pi, and no other setup. A Native thread reads, writes and edits files and runs commands in its working directory on the sandbox, asks before it changes anything unless its permission mode says otherwise, takes a steer or a queued message while it works, and can be stopped, forked, compacted and continued after an error. Settings → Models has a new default, New Code threads, for the model a Native thread starts on.
+  
+  For developers: `AgentRuntime` gains `cwd` on a conversation's config, `fork`, `compact` and `continueReply`; `@tiny-agents/agent` exports `createCodingToolkit` and `codingSelection`; `@tiny-agents/code/server` exports `createPiHarness` and its `PiPort`; the model catalog has a `code_default` role; and a sandbox `exec` takes an abort `signal`.
+
+- [#586](https://github.com/AshikNesin/tiny-agents/pull/586) [`fbd8ec0`](https://github.com/AshikNesin/tiny-agents/commit/fbd8ec069d5a25b65b3b306cebcb77f9aba60d8d) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Typing `/` at the start of a message lists your skills: in a bot chat (the bot's skills) and in a Code thread whose agent takes skills (Native and Shelley). In a chat the pick is written as `/skill-name ...`, and the bot is told that such a message asks for that skill. In a Code thread the pick joins the message's skills like the **+** menu. Native threads now list skills too, the shared ones plus the repo's `.agents/skills` and `.claude/skills`, and a Native agent reads a repo skill's `SKILL.md` when asked for it by name.
+
+### Patch Changes
+
+- [`54143fb`](https://github.com/AshikNesin/tiny-agents/commit/54143fbd55708fab2684c0f8041189b3e29307df) Thanks [@ampagent](https://github.com/ampagent)! - Four audit fixes in the self-update channel, the legacy database migration, Shelley transcripts and the Claude turn queue.
+  
+  The self-update channel now notices when the `pnpm local` supervisor goes away: the supervisor status is cleared, and check/apply answer the same 409 as an unsupervised server instead of a silent no-op 202 while the owner's update button appears to work.
+  
+  The one-time Prisma-to-Drizzle migration is crash-safe. A crash between the renames used to leave no `app.db` at all, so the next boot silently created an empty database. The new database is now flushed to disk before the swap, and the next boot detects a half-done swap and either completes it or restores the pre-migration database before anything opens it.
+  
+  A Shelley screenshot URL with a malformed percent escape (a file named `shot%zz.png`) no longer fails the whole transcript build for that conversation; the image degrades to its raw path. Image asset refs whose ids grow past four digits keep loading, matching what the producer mints in long conversations.
+  
+  A turn whose Claude process failed to start is failed with that error instead of staying in the session's queue and being replayed to the next process, which could re-run the turn's actions a second time.
+- Updated dependencies [[`54143fb`](https://github.com/AshikNesin/tiny-agents/commit/54143fbd55708fab2684c0f8041189b3e29307df), [`566e80d`](https://github.com/AshikNesin/tiny-agents/commit/566e80df2f2d2ba9ad59d812d5f56170aafd6347), [`dadbaf1`](https://github.com/AshikNesin/tiny-agents/commit/dadbaf1810244339d908e356695882f03b0497f8), [`e511da5`](https://github.com/AshikNesin/tiny-agents/commit/e511da53df9f14db7849c0cdf861c34e2689baac)]:
+  - @tiny-agents/claude-worker@0.5.0
+
 ## 0.2.5
 
 ### Patch Changes

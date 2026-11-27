@@ -1,5 +1,19 @@
 # @groot/web
 
+## 0.5.6
+
+### Patch Changes
+
+- Updated dependencies [[`aa491b1`](https://github.com/AshikNesin/tiny-agents/commit/aa491b10e52ac4c00abafe8a55b5f83548ff606a), [`e511da5`](https://github.com/AshikNesin/tiny-agents/commit/e511da53df9f14db7849c0cdf861c34e2689baac), [`54143fb`](https://github.com/AshikNesin/tiny-agents/commit/54143fbd55708fab2684c0f8041189b3e29307df), [`e874110`](https://github.com/AshikNesin/tiny-agents/commit/e8741106e6aebff234095f90e704adf4cf3314a9), [`a64a13c`](https://github.com/AshikNesin/tiny-agents/commit/a64a13cd4b4fdc8027b9b51dfbe1bf75cacb5541), [`566e80d`](https://github.com/AshikNesin/tiny-agents/commit/566e80df2f2d2ba9ad59d812d5f56170aafd6347), [`dadbaf1`](https://github.com/AshikNesin/tiny-agents/commit/dadbaf1810244339d908e356695882f03b0497f8), [`2270c83`](https://github.com/AshikNesin/tiny-agents/commit/2270c838920582701bd50ece273b8fef61666b22), [`493c8d9`](https://github.com/AshikNesin/tiny-agents/commit/493c8d9ea684c2f46bc1ab18ee28be7d7648fad3), [`e511da5`](https://github.com/AshikNesin/tiny-agents/commit/e511da53df9f14db7849c0cdf861c34e2689baac), [`493c8d9`](https://github.com/AshikNesin/tiny-agents/commit/493c8d9ea684c2f46bc1ab18ee28be7d7648fad3), [`e511da5`](https://github.com/AshikNesin/tiny-agents/commit/e511da53df9f14db7849c0cdf861c34e2689baac), [`7c34436`](https://github.com/AshikNesin/tiny-agents/commit/7c3443651e369eb579b5aa32c30ff7d90a7e4b45), [`e88ecdd`](https://github.com/AshikNesin/tiny-agents/commit/e88ecdd64efc79d8f82b504332b61c3cffd29aa6), [`e511da5`](https://github.com/AshikNesin/tiny-agents/commit/e511da53df9f14db7849c0cdf861c34e2689baac), [`e511da5`](https://github.com/AshikNesin/tiny-agents/commit/e511da53df9f14db7849c0cdf861c34e2689baac), [`fbd8ec0`](https://github.com/AshikNesin/tiny-agents/commit/fbd8ec069d5a25b65b3b306cebcb77f9aba60d8d)]:
+  - @tiny-agents/agent@1.3.0
+  - @tiny-agents/sandbox@0.2.0
+  - @groot/core@2.4.2
+  - @groot/jobs@3.0.5
+  - @tiny-agents/code@0.3.0
+  - @groot/ui@2.0.0
+  - @tiny-agents/models@0.2.0
+  - @groot/shell@3.2.2
+
 ## 0.5.5
 
 ### Patch Changes
