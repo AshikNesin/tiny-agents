@@ -36,6 +36,17 @@ describe("the local sandbox image", () => {
     expect(dockerfile).toContain("google-chrome-stable_current_amd64.deb");
   });
 
+  it("turns off Chrome's password manager on the VM and in the image", () => {
+    const dirs = ["/etc/opt/chrome/policies/managed", "/etc/chromium/policies/managed"];
+    const policy = JSON.parse(readFileSync(join(dir, "chrome-policy.json"), "utf8"));
+    expect(policy).toEqual({ PasswordManagerEnabled: false });
+    for (const path of dirs) {
+      expect(dockerfile).toContain(`COPY chrome-policy.json ${path}/tiny-agents.json`);
+      expect(installStackCommand()).toContain(`sudo -n tee ${path}/tiny-agents.json`);
+    }
+    expect(installStackCommand()).toContain(`'{"PasswordManagerEnabled":false}'`);
+  });
+
   it("leaves the install markers the app checks", () => {
     expect(dockerfile).toContain(`ARG BROWSER_STACK_VERSION=${STACK_VERSION}`);
     expect(dockerfile).toContain(`ARG COMPUTER_STACK_VERSION=${COMPUTER_STACK_VERSION}`);
