@@ -10,7 +10,9 @@ import { connections, db } from "../../db";
 import { connectionCapabilityId, connectionTools } from "../bots/bot-toolkits";
 import { ownerToolPermissions } from "../bots/tool-permissions";
 import { getConnectionManager, type ConnectionManager } from "../connections/connections.manager";
+import { shQuote, type SandboxConnection } from "@tiny-agents/sandbox";
 import { sharedSkills } from "../skills/skills.store";
+import { skillHeading } from "../skills/skills.parse";
 import type { SkillFile } from "../../../shared/api/skills";
 
 type Connections = Pick<ConnectionManager, "call" | "status">;
@@ -80,10 +82,16 @@ export function claudeCodeTools(live: () => Connections = getConnectionManager):
         !connectionTools(row).some((known) => known.name === tool) ||
         permissionOf(owner, server, tool) === "off"
       ) {
-        return { content: `${server} ${tool} is not available to Code threads.`, isError: true };
+        return {
+          content: `${server} ${tool} is not available to Code threads.`,
+          isError: true,
+        };
       }
       const result = await live().call(row.id, tool, input);
-      return { content: textOf(result), ...(result.isError ? { isError: true } : {}) };
+      return {
+        content: textOf(result),
+        ...(result.isError ? { isError: true } : {}),
+      };
     },
   };
 }
@@ -100,6 +108,33 @@ export async function claudeCodeSkills() {
       name: skill.name,
       description: skill.description,
       body: skill.body,
-      files: skillFiles(skill.files).map(({ path, content }) => ({ path, content })),
+      files: skillFiles(skill.files).map(({ path, content }) => ({
+        path,
+        content,
+      })),
     }));
+}
+
+const REPO_SKILLS = [".agents/skills/*/SKILL.md", ".claude/skills/*/SKILL.md"];
+
+async function repoSkills(cwd: string, sandbox: SandboxConnection) {
+  const result = await sandbox.exec(
+    `cd ${shQuote(cwd)} && for f in ${REPO_SKILLS.join(" ")}; do [ -f "$f" ] && printf '\\0%s\\n' "$f" && head -c 4000 "$f"; done; true`,
+    { timeoutMs: 15_000 },
+  );
+  return result.stdout
+    .toString()
+    .split("\0")
+    .map((chunk) => skillHeading(chunk.slice(chunk.indexOf("\n") + 1)))
+    .filter((skill) => skill !== undefined);
+}
+
+export async function nativeSkills(cwd: string, sandbox: SandboxConnection | undefined) {
+  const shared = (await sharedSkills()).map(({ name, description }) => ({
+    name,
+    description,
+  }));
+  const repo = sandbox ? await repoSkills(cwd, sandbox) : [];
+  const names = new Set(shared.map((skill) => skill.name));
+  return [...shared, ...repo.filter((skill) => !names.has(skill.name))];
 }

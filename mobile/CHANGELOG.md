@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.17.0
+
+### Minor Changes
+
+- Typing `/` at the start of a chat message lists the bot's skills. Pick one and the message goes as
+  `/skill-name ...`, which tells the bot to use that skill.
+
 ## 0.16.0
 
 ### Minor Changes

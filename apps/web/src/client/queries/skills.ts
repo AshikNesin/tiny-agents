@@ -11,8 +11,8 @@ import { RESOURCE_MUTATION, useResource } from "./resource";
 const SKILLS_KEY = ["skills", "list"] as const;
 const skillKey = (id: string) => ["skills", "detail", id] as const;
 
-export const useSkills = () =>
-  useResource(SKILLS_KEY, () => skillsApi.list(), "Failed to load skills");
+export const useSkills = (options: { enabled?: boolean } = {}) =>
+  useResource(SKILLS_KEY, () => skillsApi.list(), "Failed to load skills", options);
 
 export const useSkill = (id: string) =>
   useResource(skillKey(id), () => skillsApi.get(id), "Failed to load skill");

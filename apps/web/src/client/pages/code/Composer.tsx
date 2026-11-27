@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import {
   ArrowUp,
   File,
@@ -59,6 +59,14 @@ function tokenAt(
   return undefined;
 }
 
+interface Suggestion {
+  value: string;
+  label: string;
+  detail?: string;
+  dir?: boolean;
+  skill?: boolean;
+}
+
 function quoteRef(path: string): string {
   return /[\s,:()"]/.test(path) ? `"${path.replace(/"/g, '\\"')}"` : path;
 }
@@ -113,11 +121,9 @@ export function Composer({
   );
   const { text, staged: attachments } = draft;
   const [sending, setSending] = useState(false);
-  const [skills, setSkills] = useState<Skill[] | null>(null);
+  const [skillsWanted, setSkillsWanted] = useState(false);
   const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
-  const [suggestions, setSuggestions] = useState<
-    Array<{ value: string; label: string; detail?: string; dir?: boolean }>
-  >([]);
+  const [fileSuggestions, setFileSuggestions] = useState<Suggestion[]>([]);
   const [active, setActive] = useState(0);
   const [token, setToken] = useState<ReturnType<typeof tokenAt>>();
   const [dragging, setDragging] = useState(false);
@@ -145,29 +151,18 @@ export function Composer({
     });
   }, [insert]);
 
-  useEffect(() => {
-    if (!token) {
-      setSuggestions([]);
-      return;
-    }
-    if (token.kind === "/") {
-      setSuggestions(
-        commands
-          .filter((c) => c.command.slice(1).startsWith(token.query))
-          .map((c) => ({
-            value: c.command,
-            label: c.command,
-            detail: c.hint,
-          })),
-      );
-      setActive(0);
-      return;
-    }
-    if (!cwd || !canFind) {
-      setSuggestions([]);
-      return;
-    }
-  }, [token, cwd, canFind, commands]);
+  const skillsQuery = useQuery({
+    queryKey: ["code", "skills", harness.id, cwd, threadId],
+    queryFn: () => codeApi.skills(harness.id, cwd!, threadId),
+    enabled: Boolean(cwd) && canSkills && (skillsWanted || token?.kind === "/"),
+    ...RESOURCE_QUERY,
+  });
+  const skills = useMemo<Skill[] | null>(() => {
+    if (skillsQuery.isError) return [];
+    if (!skillsQuery.data) return null;
+    return Array.isArray(skillsQuery.data) ? skillsQuery.data : [];
+  }, [skillsQuery.isError, skillsQuery.data]);
+
   const fileQuery = token && token.kind !== "/" && cwd && canFind ? token.query : null;
   const files = useQuery({
     queryKey: ["code", "find-files", harness.id, cwd, fileQuery],
@@ -186,18 +181,27 @@ export function Composer({
     ...RESOURCE_QUERY,
   });
   useEffect(() => {
-    if (fileQuery === null || !files.data || files.isPlaceholderData) return;
-    setSuggestions(files.data);
+    if (fileQuery === null) {
+      setFileSuggestions([]);
+      return;
+    }
+    if (!files.data || files.isPlaceholderData) return;
+    setFileSuggestions(files.data);
     setActive(0);
   }, [fileQuery, files.data, files.isPlaceholderData]);
-
-  const loadSkills = useCallback(() => {
-    if (skills || !cwd || !canSkills) return;
-    codeApi
-      .skills(harness.id, cwd, threadId)
-      .then((r) => setSkills(Array.isArray(r) ? r : []))
-      .catch(() => setSkills([]));
-  }, [skills, cwd, canSkills, harness.id, threadId]);
+  const slashQuery = token?.kind === "/" ? token.query : null;
+  const slashSuggestions = useMemo<Suggestion[]>(() => {
+    if (slashQuery === null) return [];
+    return [
+      ...commands
+        .filter((c) => c.command.slice(1).startsWith(slashQuery))
+        .map((c) => ({ value: c.command, label: c.command, detail: c.hint })),
+      ...(skills ?? [])
+        .filter((s) => s.name.startsWith(slashQuery) && !selectedSkills.includes(s.name))
+        .map((s) => ({ value: s.name, label: s.name, detail: s.description, skill: true })),
+    ];
+  }, [slashQuery, commands, skills, selectedSkills]);
+  const suggestions = slashQuery !== null ? slashSuggestions : token ? fileSuggestions : [];
 
   const stagedRef = useRef(attachments);
   useEffect(() => {
@@ -240,6 +244,16 @@ export function Composer({
     const pick = suggestions[index];
     if (!pick || !token) return;
     const cursor = area.current?.selectionStart ?? text.length;
+    if (pick.skill) {
+      setSelectedSkills((prev) => [...prev, pick.value]);
+      setDraft((current) => editText(current, text.slice(cursor).trimStart()));
+      setToken(undefined);
+      requestAnimationFrame(() => {
+        area.current?.setSelectionRange(0, 0);
+        area.current?.focus();
+      });
+      return;
+    }
     const replacement =
       token.kind === "/" ? `${pick.value} ` : `@${quoteRef(pick.value)}${pick.dir ? "" : " "}`;
     const next = text.slice(0, token.start) + replacement + text.slice(cursor);
@@ -289,7 +303,11 @@ export function Composer({
     }
   };
 
-  const updateToken = (value: string, cursor: number) => setToken(tokenAt(value, cursor));
+  const updateToken = (value: string, cursor: number) => {
+    const found = tokenAt(value, cursor);
+    if (found?.kind !== token?.kind || found?.query !== token?.query) setActive(0);
+    setToken(found);
+  };
 
   const showStop = working && !hasContent(draft) && Boolean(onStop);
 
@@ -332,7 +350,9 @@ export function Composer({
                 i === active ? "bg-muted text-foreground" : "text-muted-foreground",
               )}
             >
-              {token?.kind === "@" ? (
+              {s.skill ? (
+                <Sparkles className="size-4 shrink-0" />
+              ) : token?.kind === "@" ? (
                 s.dir ? (
                   <Folder className="size-4 shrink-0" />
                 ) : (
@@ -457,7 +477,7 @@ export function Composer({
         />
         <div className="flex min-w-0 items-center gap-1">
           {(canUpload || canSkills) && (
-            <DropdownMenu onOpenChange={(open) => open && loadSkills()}>
+            <DropdownMenu onOpenChange={(open) => open && setSkillsWanted(true)}>
               <DropdownMenuTrigger
                 render={
                   <Button

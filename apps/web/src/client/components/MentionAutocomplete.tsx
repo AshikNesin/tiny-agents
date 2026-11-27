@@ -6,6 +6,7 @@ import {
   useRef,
   useState,
   type KeyboardEvent,
+  type ReactNode,
   type Ref,
 } from "react";
 import { cn } from "@groot/ui/lib/utils";
@@ -23,6 +24,8 @@ interface MentionAutocompleteProps {
   onSelect: (bot: MentionableBot) => void;
   onClose: () => void;
   ref?: Ref<MentionAutocompleteHandle>;
+  label?: string;
+  icon?: (item: MentionableBot) => ReactNode;
 }
 
 export interface MentionAutocompleteHandle {
@@ -35,6 +38,8 @@ export function MentionAutocomplete({
   onSelect,
   onClose,
   ref,
+  label = "Mention a bot",
+  icon = (bot) => <BotAvatar name={bot.name} className="size-8" />,
 }: MentionAutocompleteProps) {
   const [selected, setSelected] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
@@ -94,7 +99,7 @@ export function MentionAutocomplete({
   return (
     <div
       role="listbox"
-      aria-label="Mention a bot"
+      aria-label={label}
       className="bg-popover text-popover-foreground absolute bottom-full left-0 z-50 mb-2 w-full overflow-hidden rounded-xl border shadow-lg"
     >
       <div ref={listRef} className="max-h-60 overflow-y-auto p-1">
@@ -115,7 +120,7 @@ export function MentionAutocomplete({
                 active ? "bg-muted" : "hover:bg-muted/50",
               )}
             >
-              <BotAvatar name={bot.name} className="size-8" />
+              {icon(bot)}
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm font-medium">{bot.name}</span>
                 {bot.description && (

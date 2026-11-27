@@ -65,13 +65,17 @@ const CAPABILITIES: Capabilities = {
     defaultPermissionMode: DEFAULT_PERMISSION_MODE,
   },
   approvals: { tools: true, questions: true },
-  workspace: { ...NO_CAPABILITIES.workspace, requiresCwd: true },
+  workspace: { ...NO_CAPABILITIES.workspace, skills: true, requiresCwd: true },
   extras: { jobs: false, usageReport: false, commands: true },
 };
 
 const COMMANDS: SlashCommand[] = [
   { command: "/compact", hint: "Summarize the conversation to free context" },
 ];
+
+function withSkills(message: string, skills: string[] = []): string {
+  return skills.length > 0 ? `${skills.map((name) => `/${name}`).join(" ")} ${message}` : message;
+}
 
 const COMPACT = /^\/compact(?:\s+([\s\S]+))?$/;
 
@@ -200,7 +204,11 @@ export function createPiHarness(options: PiHarnessOptions): HarnessInstance {
     const write = live.writes.then(async () => {
       const next = patch(live.row);
       if (!next) return;
-      live.row = await host.index.upsert({ ...next, instanceId, nativeId: live.nativeId });
+      live.row = await host.index.upsert({
+        ...next,
+        instanceId,
+        nativeId: live.nativeId,
+      });
     });
     live.writes = write.catch(logFailure("index write", live.nativeId));
     return write;
@@ -315,7 +323,9 @@ export function createPiHarness(options: PiHarnessOptions): HarnessInstance {
     const stopped = dataOf(live.row).stopped ?? [];
     const fresh = trailingUnanswered(state).filter((id) => !stopped.includes(id));
     if (fresh.length === 0) return;
-    await saveData(live, { stopped: [...stopped, ...fresh].slice(-STOPPED_KEPT) });
+    await saveData(live, {
+      stopped: [...stopped, ...fresh].slice(-STOPPED_KEPT),
+    });
   }
 
   async function sync(live: Live): Promise<void> {
@@ -655,7 +665,7 @@ export function createPiHarness(options: PiHarnessOptions): HarnessInstance {
       try {
         await port.submit(live.ref, {
           requestId: randomUUID(),
-          text: input.message,
+          text: withSkills(input.message, input.skills),
           whenBusy: input.queue ? "followUp" : "steer",
         });
       } catch (error) {
@@ -746,6 +756,7 @@ export function createPiHarness(options: PiHarnessOptions): HarnessInstance {
     },
 
     commands: () => COMMANDS,
+    skills: (cwd) => port.skills(cwd),
   };
   return instance;
 }

@@ -17,6 +17,7 @@ import type { Bot } from "../../../apps/web/src/shared/api/bots";
 import type { CatalogModel } from "../../../apps/web/src/shared/api/models";
 import type { RoutineRunCard } from "@/lib/chat-types";
 import { botStream } from "../fakes/sse";
+import { AppQueryProvider } from "../query-provider";
 
 vi.mock("@/lib/bots-api", () => ({
   botsApi: {
@@ -99,17 +100,31 @@ function renderWith(runs: RoutineRunCard[]) {
   });
   chatSessions.store.setState({ sessions: {} });
   render(
-    <BrowserRouter>
-      <ChatPane bot={BOT} models={[model]} canAnswer onEditBot={() => {}} />
-    </BrowserRouter>,
+    <AppQueryProvider>
+      <BrowserRouter>
+        <ChatPane bot={BOT} models={[model]} canAnswer onEditBot={() => {}} />
+      </BrowserRouter>
+    </AppQueryProvider>,
   );
   botStream("host").send(
     {
       type: "snapshot",
       state: {
         messages: [
-          { id: "u1", role: "user", text: "before the runs", status: "done", createdAt: at(10) },
-          { id: "u2", role: "user", text: "after the runs", status: "done", createdAt: at(50) },
+          {
+            id: "u1",
+            role: "user",
+            text: "before the runs",
+            status: "done",
+            createdAt: at(10),
+          },
+          {
+            id: "u2",
+            role: "user",
+            text: "after the runs",
+            status: "done",
+            createdAt: at(50),
+          },
         ],
         busy: false,
         queued: [],

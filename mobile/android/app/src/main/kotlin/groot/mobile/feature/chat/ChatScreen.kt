@@ -63,6 +63,7 @@ import groot.mobile.data.api.AttachmentRef
 import groot.mobile.data.api.BotListEntry
 import groot.mobile.data.api.ChatMessage
 import groot.mobile.data.api.MessageRole
+import groot.mobile.data.api.Skill
 import groot.mobile.data.api.ToolCall
 import groot.mobile.data.api.ToolStatus
 import groot.mobile.data.chat.ChatHealth
@@ -112,6 +113,8 @@ fun ChatPane(
     val view by viewModel.view.collectAsStateWithLifecycle()
     val draft by viewModel.draft.collectAsStateWithLifecycle()
     val staged by viewModel.staged.collectAsStateWithLifecycle()
+    val skills by viewModel.skills.collectAsStateWithLifecycle()
+    LaunchedEffect(bots.role) { viewModel.loadSkills() }
 
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -172,6 +175,7 @@ fun ChatPane(
         onDraftChange = viewModel::setDraft,
         mentionCandidates = remember(bots.bots, bot.id) { viewModel.mentionCandidates },
         onInsertMention = viewModel::insertMention,
+        skills = skills,
         onAttach = { attachMenu = true },
         onRemoveStaged = viewModel::removeStaged,
         onSend = { whenBusy ->
@@ -263,6 +267,7 @@ fun ChatContent(
     modifier: Modifier = Modifier,
     mentionCandidates: List<MentionCandidate> = emptyList(),
     onInsertMention: ((MentionToken, Int, MentionCandidate) -> MentionInsert)? = null,
+    skills: List<Skill> = emptyList(),
 ) {
     Column(modifier.fillMaxSize().imePadding()) {
         Box(Modifier.weight(1f).fillMaxWidth()) {
@@ -310,6 +315,7 @@ fun ChatContent(
                 modifier = Modifier.widthIn(max = Dims.contentMaxWidth),
                 mentionCandidates = mentionCandidates,
                 onInsertMention = onInsertMention,
+                skills = skills,
             )
         }
     }

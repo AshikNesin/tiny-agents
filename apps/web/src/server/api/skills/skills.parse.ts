@@ -27,6 +27,13 @@ function frontmatter(raw: string): { fields: Record<string, string>; body: strin
   return { fields, body: match[2] };
 }
 
+export function skillHeading(raw: string): { name: string; description: string } | undefined {
+  const { fields } = frontmatter(raw);
+  const name = fields.name?.trim() ?? "";
+  const description = fields.description?.trim() ?? "";
+  return SKILL_NAME.test(name) && description ? { name, description } : undefined;
+}
+
 export function parseSkillMarkdown(raw: string, files: SkillFile[] = []): ParsedSkill {
   const { fields, body } = frontmatter(raw);
   const name = fields.name?.trim() ?? "";

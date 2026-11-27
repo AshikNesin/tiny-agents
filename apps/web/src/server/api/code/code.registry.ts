@@ -28,8 +28,14 @@ import { ownerToolPermissions } from "../bots/tool-permissions";
 import { sharedClaudeWorkerLocator } from "../bots/claude-worker";
 import { agentRuntimeReady, getAgentRuntime } from "../bots/bots.runtime";
 import { sandboxConnection } from "../bots/sandbox-host";
+import type { SandboxConnection } from "@tiny-agents/sandbox";
 import { threadIndex } from "./code.store";
-import { claudeCodeSkills, claudeCodeTools, sharedConnectionToolkits } from "./code.tools";
+import {
+  claudeCodeSkills,
+  claudeCodeTools,
+  nativeSkills,
+  sharedConnectionToolkits,
+} from "./code.tools";
 import { sharedSkills } from "../skills/skills.store";
 
 const SKILLS_TOOLKIT = "skills";
@@ -72,7 +78,10 @@ function claudeCodeHarness(env: AppEnv, host: HarnessHost): HarnessInstance | un
                 detail: "Sign Claude Code in: Settings → Models → Claude plan → Sign in.",
               }
             : account.state === "installing"
-              ? { state: "connecting", detail: "Setting up Claude Code on the sandbox…" }
+              ? {
+                  state: "connecting",
+                  detail: "Setting up Claude Code on the sandbox…",
+                }
               : account.state === "error"
                 ? { state: "reconnecting", detail: account.detail }
                 : undefined;
@@ -158,9 +167,13 @@ function asHarnessError(error: unknown): never {
   throw error;
 }
 
-export function agentRuntimePort(runtime: () => AgentRuntime): PiPort {
+export function agentRuntimePort(
+  runtime: () => AgentRuntime,
+  sandbox: () => SandboxConnection | undefined,
+): PiPort {
   return {
     models: () => nativeModels(runtime()),
+    skills: (cwd) => nativeSkills(cwd, sandbox()),
     create: async (config) =>
       runtime()
         .createConversation(await nativeConfig(config))
@@ -189,7 +202,10 @@ export function agentRuntimePort(runtime: () => AgentRuntime): PiPort {
 
 function nativeHarness(env: AppEnv, host: HarnessHost): HarnessInstance | undefined {
   if (!agentRuntimeReady() || !sandboxConnection(env)) return undefined;
-  return createPiHarness({ host, port: agentRuntimePort(getAgentRuntime) });
+  return createPiHarness({
+    host,
+    port: agentRuntimePort(getAgentRuntime, () => sandboxConnection(env)),
+  });
 }
 
 export function buildHarnesses(options: RegistryOptions = {}): HarnessInstance[] {
