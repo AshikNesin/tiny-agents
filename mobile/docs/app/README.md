@@ -250,7 +250,7 @@ card), a note, a paperclip to add more files, and Send.
   connection, need a step-up token. The app first asks Android's Credential Manager for a passkey (fingerprint or
   face) against `POST /vault/step-up/options`, and falls back to the password when there is none or it is
   cancelled. It calls `POST /vault/step-up`, keeps the token in memory only, and sends it as `X-Vault-Step-Up`.
-  A passkey needs the server's `ANDROID_APP_CERT_SHA256` set (see the mobile app guide) and a passkey for the
+  A passkey needs Android 14 or newer (no Play services shim is bundled), the server's `ANDROID_APP_CERT_SHA256` set (see the mobile app guide) and a passkey for the
   server saved in Google Password Manager. It is used until 10 s before it expires and is cleared on any session change.
 - **Bot avatars.** A bot's avatar is the web app's DiceBear "gaze" face for its name
   (`https://api.dicebear.com/10.x/gaze/png?seed=<name>`, PNG because Android draws no SVG without a library),

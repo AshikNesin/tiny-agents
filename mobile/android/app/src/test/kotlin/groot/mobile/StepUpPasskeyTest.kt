@@ -1,5 +1,6 @@
 package groot.mobile
 
+import androidx.test.ext.junit.runners.AndroidJUnit4
 import groot.mobile.data.StepUp
 import groot.mobile.data.api.ApiClient
 import groot.mobile.data.api.ApiSession
@@ -14,7 +15,9 @@ import okio.Buffer
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Test
+import org.junit.runner.RunWith
 
+@RunWith(AndroidJUnit4::class)
 class StepUpPasskeyTest {
     private val requests = mutableListOf<Pair<String, String>>()
 

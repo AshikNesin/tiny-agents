@@ -49,7 +49,6 @@ okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhtt
 unifiedpush-connector = { group = "org.unifiedpush.android", name = "connector", version.ref = "unifiedpushConnector" }
 unifiedpush-embedded-fcm = { group = "org.unifiedpush.android", name = "embedded-fcm-distributor", version.ref = "unifiedpushEmbeddedFcm" }
 androidx-credentials = { group = "androidx.credentials", name = "credentials", version.ref = "credentials" }
-androidx-credentials-play-services = { group = "androidx.credentials", name = "credentials-play-services-auth", version.ref = "credentials" }
 
 # Test only
 junit = { group = "junit", name = "junit", version.ref = "junit" }
