@@ -36,7 +36,7 @@ import {
   startManifest,
 } from "./code.github";
 import { setFlowCookie } from "./code.webhook";
-import { openProjectChat } from "./code.chat";
+import { makeProjectChat, openProjectChat } from "./code.chat";
 import { threadReview } from "./code.review";
 import { checkpointRange, checkpointsOf, revertTo } from "./code.checkpoints";
 import { codeHub } from "./code.hub";
@@ -174,7 +174,9 @@ const createSchema = z.object({
 
 router.post("/code/projects", async (c) => {
   const body = await parseBody(c, createSchema);
-  return ok<ProjectView>(c, projectView(await createProject(body)), 201);
+  const project = await createProject(body);
+  await makeProjectChat(project.id);
+  return ok<ProjectView>(c, projectView(project), 201);
 });
 
 const scriptsSchema = z.strictObject({

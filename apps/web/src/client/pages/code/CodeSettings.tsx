@@ -29,6 +29,7 @@ import { Spinner } from "../../components/ui/spinner";
 import { Switch } from "@groot/ui/switch";
 import { errorMessage } from "../../lib/errors";
 import { projectsApi, reviewsApi, useProjects } from "../../lib/code/projects";
+import { useBotsStore } from "../../store/bots";
 import { useCodeStore } from "../../store/code";
 import { RESOURCE_QUERY, useResource } from "../../queries/resource";
 import type { HarnessInfo } from "../../lib/code/api";
@@ -340,6 +341,7 @@ function AddProject({ harnesses, onChange }: { harnesses: HarnessInfo[]; onChang
       });
       setRepo("");
       onChange();
+      void useBotsStore.getState().loadBots();
       toast.success("Project ready: the repository is cloned on the sandbox.");
       navigate(projectSettingsPath(created.id));
     } catch (e) {

@@ -35,6 +35,7 @@ Preconditions:
 - **People.** Link `People` → `/settings/people`: `Name`, `Email`, `Password` (exact; the feedback embed has its own `Email (optional)`) → `Add guest`; toast `Guest added`; `guest-row` with the email and `No bots shared`. `Remove <name>` → alertdialog `Remove` → row gone; `GET /api/v1/people` no longer has it.
 - **Phone.** Viewport 390x844, `/tasks`: complementary `Sidebar` out of viewport; `Open menu` → in viewport with links Tasks, Terminal, Computer, Browser and no `Routines`. Link `Terminal` → `/terminal`, drawer closed. `Open menu` → account button → menuitem `Routines` → `/routines`, drawer closed. `/vault/new/login`: no `Open menu`; `Back` (exact) → `/vault`, `Open menu` back. `/settings`: section links `People` and `Account` both open their page (level-1 heading).
 - **Proof.** `ta-verify drive $S/journeys/account-shell.mjs` → `account-shell/account-menu`, `feedback-panel`, `theme-light`, `theme-dark`, `sidebar-rail`, `settings-sections`, `guest-added`, `phone-drawer`, `phone-back`, `phone-settings`.
+- **Phone pages and Settings links.** `ta-verify drive $S/journeys/app-phone.mjs` (iPhone 13): `/vault`, `/memory`, `/routines` and `/skills` each show exactly one `Open menu`; `/settings/notifications` opened directly stays on Notifications instead of falling to Appearance while the role loads → `app-phone/one-menu`, `settings-link`.
 
 ## Gotchas
 

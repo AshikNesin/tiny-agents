@@ -588,8 +588,8 @@ Known limits (register row C7):
 ## Project chat
 
 Each project has one chat, a bot tied to it (`bots.project_id`), opened from
-the top of the Code sidebar and made on first open (`code.chat.ts`, ADR
-0040). On a phone the chat's menu button goes back to the thread list. The
+the top of the Code sidebar and made when the project is added, or on
+first open if no model was set up then (`code.chat.ts`, ADR 0040). On a phone the chat's menu button goes back to the thread list. The
 web Chat side leaves project chats out of the owner's bot list and the
 search palette's Bots, and a `/chats/<id>` link to one opens it here
 (`chatBots` in `store/bots.ts`). Its past chats keep their
