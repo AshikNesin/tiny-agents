@@ -6,15 +6,15 @@ import { Button } from "@groot/ui";
 import { SearchSelect, type SearchSelectOption } from "@groot/ui/search-select";
 import { Spinner } from "../../components/ui/spinner";
 import { errorMessage } from "../../lib/errors";
-import {
-  codeApi,
-  threadPath,
-  type HarnessInfo,
-  type ModelOption,
-  type PermissionMode,
-} from "../../lib/code/api";
+import { codeApi, threadPath, type HarnessInfo, type PermissionMode } from "../../lib/code/api";
 import type { ProjectView } from "../../../shared/api/code";
-import { DEFAULT, ModelPicker, PermissionPicker, composerPermission, loadModels } from "./controls";
+import {
+  DEFAULT,
+  ModelPicker,
+  PermissionPicker,
+  composerPermission,
+  useHarnessModels,
+} from "./controls";
 import { useCodeStore } from "../../store/code";
 import { useUiStore } from "../../store/ui";
 
@@ -38,22 +38,6 @@ function rememberProject(id: string): void {
   } catch {
     storageIsBlockedInPrivateWindows();
   }
-}
-
-function useModels(instanceId: string | undefined): ModelOption[] {
-  const [models, setModels] = useState<ModelOption[]>([]);
-  useEffect(() => {
-    setModels([]);
-    if (!instanceId) return;
-    let live = true;
-    void loadModels(instanceId)
-      .then((list) => live && setModels(list))
-      .catch((error: unknown) => toast.error(errorMessage(error, "Could not load the models.")));
-    return () => {
-      live = false;
-    };
-  }, [instanceId]);
-  return models;
 }
 
 function useProjectOptions(projects: ProjectView[] | null): {
@@ -129,7 +113,7 @@ export function NewThread({
     "";
   const project = projects?.find((p) => p.id === projectId) ?? null;
   const harness = harnesses.find((h) => h.id === instanceId);
-  const models = useModels(harness?.id);
+  const models = useHarnessModels(harness?.id);
 
   useEffect(() => {
     if (focused) box.current?.focus();

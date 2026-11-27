@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Brain, ChevronDown, Cpu, GitMerge, GitPullRequest, ShieldCheck, Zap } from "lucide-react";
 import { toast } from "sonner";
@@ -9,6 +9,7 @@ import {
   type SearchSelectOption,
 } from "@groot/ui/search-select";
 import { errorMessage } from "../../lib/errors";
+import { useResource } from "../../queries/resource";
 import {
   codeApi,
   threadPath,
@@ -17,17 +18,19 @@ import {
   type ThreadSummary,
 } from "../../lib/code/api";
 
-const modelsByHarness = new Map<string, Promise<ModelOption[]>>();
-export function loadModels(instanceId: string): Promise<ModelOption[]> {
-  let promise = modelsByHarness.get(instanceId);
-  if (!promise) {
-    promise = codeApi.models(instanceId).catch((error: unknown) => {
-      modelsByHarness.delete(instanceId);
-      throw error;
-    });
-    modelsByHarness.set(instanceId, promise);
-  }
-  return promise;
+const NO_MODELS: ModelOption[] = [];
+
+export function useHarnessModels(instanceId: string | undefined): ModelOption[] {
+  const { data, loadError } = useResource(
+    ["code", "models", instanceId],
+    () => codeApi.models(instanceId!),
+    "Could not load the models.",
+    { enabled: Boolean(instanceId) },
+  );
+  useEffect(() => {
+    if (loadError) toast.error(loadError);
+  }, [loadError]);
+  return (instanceId && data) || NO_MODELS;
 }
 
 export const DEFAULT = "default";
