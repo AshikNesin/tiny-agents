@@ -40,35 +40,3 @@ export function YoloConfirmDialog({
     </Dialog>
   );
 }
-
-export function NewChatConfirmDialog({
-  botName,
-  open,
-  onOpenChange,
-  onReset,
-}: {
-  botName: string;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  onReset: () => void;
-}) {
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-sm">
-        <DialogHeader>
-          <DialogTitle>Start a new chat?</DialogTitle>
-          <DialogDescription>
-            {botName} gets a fresh, empty conversation. This one moves to Chat history, where you
-            can read or continue it.
-          </DialogDescription>
-        </DialogHeader>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          <Button onClick={onReset}>New chat</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}

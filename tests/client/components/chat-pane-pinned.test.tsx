@@ -311,25 +311,6 @@ describe("ChatPane, pinned", () => {
     pin("left");
   });
 
-  it("the New chat confirmation", async () => {
-    seed();
-    mount();
-    open([done("u1", "user", "hi")]);
-    await settle();
-    await user.click(screen.getByRole("button", { name: "Start a new chat" }));
-    pin();
-  });
-
-  it("the New chat shortcut", async () => {
-    seed();
-    mount();
-    open([done("u1", "user", "hi")]);
-    await settle();
-    fireEvent.keyDown(window, { key: "O", shiftKey: true, ctrlKey: true });
-    await screen.findByRole("dialog");
-    pin();
-  });
-
   it("the YOLO confirmation", async () => {
     seed();
     mount();

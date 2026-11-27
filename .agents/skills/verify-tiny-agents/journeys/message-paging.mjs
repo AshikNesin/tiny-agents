@@ -129,9 +129,6 @@ await journey("message-paging", async ({ page, step, proof, cleanup, api, stamp 
 
   await step("New chat: the long conversation becomes a 120-message past chat", async () => {
     await page.getByRole("button", { name: "Start a new chat" }).click();
-    const confirm = page.getByRole("dialog", { name: "Start a new chat?" });
-    await confirm.getByRole("button", { name: "New chat", exact: true }).click();
-    await expect(confirm).toHaveCount(0);
     await expect(userBubbles).toHaveCount(0);
     const { chats } = await api.get(`/bots/${botId}/chats`);
     expect(chats).toHaveLength(1);

@@ -359,8 +359,9 @@ describe("ChatPane header", () => {
     expect(screen.queryByTestId("yolo-banner")).toBeNull();
   });
 
-  it("disables new chat on an empty conversation and confirms it otherwise", async () => {
+  it("disables new chat on an empty conversation and starts one without asking otherwise", async () => {
     seedStore();
+    resetMock.mockResolvedValueOnce({ ...HOST, conversationId: "c2" });
     renderPane();
     snapshot([]);
     const newChat = screen.getByRole("button", { name: "Start a new chat" });
@@ -372,7 +373,8 @@ describe("ChatPane header", () => {
     });
     expect(newChat).toBeEnabled();
     await user.keyboard("{Control>}{Shift>}o{/Shift}{/Control}");
-    expect(await screen.findByRole("dialog", { name: "Start a new chat?" })).toBeInTheDocument();
+    await waitFor(() => expect(resetMock).toHaveBeenCalledWith("host"));
+    expect(screen.queryByRole("dialog", { name: "Start a new chat?" })).toBeNull();
   });
 
   it("New chat reopens the chat on the bot's fresh conversation, the old transcript gone", async () => {
@@ -395,7 +397,6 @@ describe("ChatPane header", () => {
     const opens = openedPaths.length;
 
     await user.click(screen.getByRole("button", { name: "Start a new chat" }));
-    await user.click(await screen.findByRole("button", { name: "New chat" }));
     await waitFor(() => expect(openedPaths.length).toBe(opens + 1));
     expect(resetMock).toHaveBeenCalledWith("host");
     expect(screen.queryByText("the old conversation")).toBeNull();
