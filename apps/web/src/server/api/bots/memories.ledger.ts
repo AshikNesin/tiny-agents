@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gt, inArray, isNotNull, isNull, lte, or } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, isNotNull, isNull, like, lte, or } from "drizzle-orm";
 import { Boom } from "@groot/core/errors";
 import { bots, db, memories, type AppDatabase } from "../../db";
 import {
@@ -53,6 +53,7 @@ export interface MemoryLedger {
   history(statuses: readonly MemoryStatus[], now?: Date): Promise<MemoryRow[]>;
   promptContext(now?: Date): Promise<PromptContext>;
   advanceWatermark(at: Date): Promise<void>;
+  nameOwner(name: string): Promise<void>;
   consolidate(
     merges: readonly ConsolidateMerge[],
     stale: readonly string[],
@@ -317,6 +318,22 @@ export function memoryLedger(botId: string): MemoryLedger {
     setWatermark(db, at);
   }
 
+  async function nameOwner(name: string): Promise<void> {
+    const rows = await db
+      .select({ id: memories.id, text: memories.text })
+      .from(memories)
+      .where(and(eq(memories.botId, botId), like(memories.text, "%the owner%")));
+    for (const row of rows) {
+      const text = row.text.replace(/\bthe owner\b/gi, name);
+      if (text !== row.text) {
+        await db
+          .update(memories)
+          .set({ text, updatedAt: new Date() })
+          .where(eq(memories.id, row.id));
+      }
+    }
+  }
+
   async function consolidate(
     merges: readonly ConsolidateMerge[],
     stale: readonly string[],
@@ -398,6 +415,7 @@ export function memoryLedger(botId: string): MemoryLedger {
     history,
     promptContext,
     advanceWatermark,
+    nameOwner,
     consolidate,
   };
 }

@@ -11,6 +11,7 @@ import { MEMORY_CAPTURE_CHAR_CAP, MEMORY_TRIVIAL_BYTES } from "./memories.domain
 import { memoryLedger } from "./memories.ledger";
 import { bots, db } from "../../db";
 import { chatOwner } from "./bots.owner";
+import { ownerDisplayName } from "../people/people.service";
 import type { SideCaller } from "./side-call";
 
 const CAPTURE_TIMEOUT_MS = 60_000;
@@ -35,6 +36,7 @@ export function captureWindow(
   messages: ReadonlyArray<CaptureMessage>,
   watermark: Date | null,
   botName: string,
+  ownerName?: string,
 ): CaptureWindow {
   const since = watermark ? watermark.getTime() : 0;
   const entries: { line: string; at: number; ownerBytes?: number }[] = [];
@@ -48,7 +50,7 @@ export function captureWindow(
     if (!text) continue;
     if (m.role === "user") {
       entries.push({
-        line: `Owner: ${text}`,
+        line: `${ownerName ?? "Owner"}: ${text}`,
         at: m.createdAt,
         ownerBytes: Buffer.byteLength(text, "utf8"),
       });
@@ -107,7 +109,9 @@ export async function captureConversation(
     const ledger = memoryLedger(bot.id);
 
     const messages = await deps.readTranscript(conversationId);
-    const window = captureWindow(messages, bot.memoryCapturedThrough, bot.name);
+    const ownerName = await ownerDisplayName();
+    if (ownerName) await ledger.nameOwner(ownerName);
+    const window = captureWindow(messages, bot.memoryCapturedThrough, bot.name, ownerName);
     if (!window.through) return;
     if (window.ownerBytes < MEMORY_TRIVIAL_BYTES) {
       await ledger.advanceWatermark(window.through);
@@ -120,6 +124,7 @@ export async function captureConversation(
       ...(bot.modelId ? { botModelId: bot.modelId } : {}),
       system: buildCapturePrompt({
         botName: bot.name,
+        ownerName,
         transcript: window.lines.join("\n"),
         currentMemories: context.current,
         removedMemories: context.removed,
