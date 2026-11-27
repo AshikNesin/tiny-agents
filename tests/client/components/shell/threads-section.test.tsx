@@ -138,7 +138,7 @@ describe("threads in the chat sidebar", () => {
     expect(regions).toEqual(["Projects", "Threads", "Bots"]);
     const projects = within(screen.getByRole("region", { name: "Projects" }));
     fireEvent.click(projects.getByRole("link", { name: "web" }));
-    expect(screen.getByTestId("where")).toHaveTextContent("/code/p/p1");
+    expect(screen.getByTestId("where")).toHaveTextContent("/chats/b2");
     const bots = within(screen.getByRole("region", { name: "Bots" }));
     expect(bots.queryByText("web")).toBeNull();
     expect(bots.getByText("Ada")).toBeVisible();

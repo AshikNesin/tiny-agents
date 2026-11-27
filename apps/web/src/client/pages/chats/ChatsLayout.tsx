@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useSyncExternalStore } from "react";
-import { Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Bot, Menu } from "lucide-react";
 import { Button } from "@groot/ui/button";
 import { chatBots, useBotsStore } from "../../store/bots";
@@ -10,6 +10,7 @@ import { useFocusParam } from "../../lib/focus-param";
 import { ChatPane } from "../../components/ChatPane";
 import { PastChatPane } from "../../components/PastChatPane";
 import { BotsSection } from "../../components/shell/BotsSection";
+import { ProjectChat } from "../code/ProjectChat";
 
 const DESKTOP_QUERY = "(min-width: 768px)";
 function subscribeDesktop(onChange: () => void) {
@@ -75,7 +76,13 @@ export function ChatWorkspace() {
     navigate(target ? `/chats/${target}` : "/chats", { replace: true });
   }, [loaded, currentId, projectId, desktop, botId, bots, navigate]);
 
-  if (projectId) return <Navigate to={`/code/p/${encodeURIComponent(projectId)}`} replace />;
+  if (projectId) {
+    return (
+      <div className="h-full min-h-0">
+        <ProjectChat projectId={projectId} onOpenMenu={() => setMobileOpen(true)} />
+      </div>
+    );
+  }
 
   return (
     <div className="h-full min-h-0">
