@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import type { CodeSettingsSectionId } from "../settings/sections";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Link,
@@ -180,7 +181,7 @@ export function LegacyCodeSettings() {
   return <Navigate to={`/settings/${target}${search}`} replace />;
 }
 
-export function CodeSettingsSection({ section }: { section: "projects" | "github" | "reviews" }) {
+export function CodeSettingsSection({ section }: { section: CodeSettingsSectionId }) {
   const [searchParams] = useSearchParams();
   const harnessList = useCodeStore((s) => s.harnesses);
   const statuses = useCodeStore((s) => s.statuses);
