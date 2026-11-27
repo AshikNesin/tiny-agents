@@ -144,6 +144,10 @@ async function ownerRow() {
   return owner;
 }
 
+export async function ownerDisplayName(): Promise<string | undefined> {
+  return (await ownerRow())?.name?.trim() || undefined;
+}
+
 export async function ownerUserId(): Promise<number | undefined> {
   return (await ownerRow())?.id;
 }

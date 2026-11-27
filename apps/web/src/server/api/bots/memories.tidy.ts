@@ -8,6 +8,7 @@ import { bots, db, memories } from "../../db";
 import { memoryCategorySchema, memoryTextSchema } from "./memories.domain";
 import { memoryLedger, type MemoryRow } from "./memories.ledger";
 import type { SideCaller } from "./side-call";
+import { ownerDisplayName } from "../people/people.service";
 
 const MEMORY_TIDY_JOB = "memory-tidy";
 const MEMORY_TIDY_CRON = "30 3 * * 0";
@@ -33,7 +34,12 @@ export function setMemoryTidier(next: { sideCaller: SideCaller } | undefined): v
   app().memoryTidier = next;
 }
 
-function buildTidyPrompt(botName: string, rows: readonly MemoryRow[], today: string): string {
+function buildTidyPrompt(
+  botName: string,
+  ownerName: string | undefined,
+  rows: readonly MemoryRow[],
+  today: string,
+): string {
   const lines = rows.map(
     (row, i) =>
       `- m${i + 1} [${row.category}] ${row.text}${row.until ? ` (until ${row.until.toISOString().slice(0, 10)})` : ""}`,
@@ -45,7 +51,7 @@ function buildTidyPrompt(botName: string, rows: readonly MemoryRow[], today: str
     ...lines,
     "",
     "Find only clear problems:",
-    "- merge: two or more memories that say the same thing, or where one refines another. Give their refs and one third-person sentence that keeps every detail.",
+    `- merge: two or more memories that say the same thing, or where one refines another. Give their refs and one third-person sentence that ${ownerName ? `names ${ownerName} and ` : ""}keeps every detail.`,
     "- stale: a memory a newer one contradicts (the older is stale), or a time-bound fact whose time has clearly passed.",
     "Leave everything else alone. When unsure, leave it. Never invent facts.",
     'Return ONLY JSON: {"merge":[{"refs":["m1","m4"],"text":"...","category":"preference|fact|goal|habit"}],"stale":["m7"]}. Return {"merge":[],"stale":[]} when nothing needs tidying.',
@@ -113,7 +119,12 @@ export async function tidyBotMemories(
   const reply = await sideCaller.complete({
     role: "memory_capture",
     ...(bot.modelId ? { botModelId: bot.modelId } : {}),
-    system: buildTidyPrompt(bot.name, rows, now.toISOString().slice(0, 10)),
+    system: buildTidyPrompt(
+      bot.name,
+      await ownerDisplayName(),
+      rows,
+      now.toISOString().slice(0, 10),
+    ),
     user: "Tidy now.",
     timeoutMs: TIDY_TIMEOUT_MS,
     label: "Memory tidy",

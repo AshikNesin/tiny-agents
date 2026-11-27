@@ -7,7 +7,7 @@ import {
   tidyBotMemories,
 } from "../../../../apps/web/src/server/api/bots/memories.tidy";
 import type { SideCaller } from "../../../../apps/web/src/server/api/bots/side-call";
-import { bots, db, memories } from "../../../../apps/web/src/server/db";
+import { bots, db, memories, users } from "../../../../apps/web/src/server/db";
 import { resetAppTables, seedBot } from "../../fixtures";
 import { FIXED_NOW } from "../../../test-clock";
 
@@ -73,6 +73,23 @@ describe("weekly memory tidy", () => {
     const prompt = sideCaller.complete.mock.calls[0]![0].system;
     expect(prompt).toContain("- m1 [fact] The owner prefers TypeScript.");
     expect(prompt).toContain("- m10 [fact] The owner reads before bed.");
+  });
+
+  it("asks merged memories to name the owner when their name is known", async () => {
+    await db
+      .insert(users)
+      .values({ id: 1, email: "ashik@example.com", password: "!", name: "Ashik" })
+      .onConflictDoUpdate({ target: users.id, set: { name: "Ashik" } });
+    try {
+      const botId = await seedMemories();
+      const sideCaller = caller('{"merge":[],"stale":[]}');
+      await tidyBotMemories(botId, sideCaller);
+      expect(sideCaller.complete.mock.calls[0]![0].system).toContain(
+        "one third-person sentence that names Ashik and keeps every detail",
+      );
+    } finally {
+      await db.update(users).set({ name: null }).where(eq(users.id, 1));
+    }
   });
 
   it("does not call the model again until a memory changes", async () => {

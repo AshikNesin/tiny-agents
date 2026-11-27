@@ -12,7 +12,7 @@ import {
 import { memoryStore } from "../../../../apps/web/src/server/api/bots/memories.store";
 import type { SideCaller } from "../../../../apps/web/src/server/api/bots/side-call";
 import type { ConversationOwner } from "../../../../apps/web/src/server/api/bots/bots.owner";
-import { bots, db, memories, routines } from "../../../../apps/web/src/server/db";
+import { bots, db, memories, routines, users } from "../../../../apps/web/src/server/db";
 import { resetAppTables, seedBot as seedBotRow } from "../../fixtures";
 
 const conversationId = () => Math.floor(Math.random() * 1_000_000_000);
@@ -78,6 +78,19 @@ describe("buildCapturePrompt", () => {
     expect(prompt).toContain("- The owner prefers tea.");
     expect(buildCapturePrompt(input)).not.toContain("removed these memories");
   });
+
+  it("asks for memories that name the owner when their name is known", () => {
+    const prompt = buildCapturePrompt({
+      botName: "Scout",
+      ownerName: "Ashik",
+      transcript: "Ashik: hi",
+      currentMemories: null,
+      today: "2026-11-27",
+    });
+    expect(prompt).toContain("Extract durable facts about Ashik worth remembering long-term.");
+    expect(prompt).toContain('"text":"Ashik prefers TypeScript."');
+    expect(prompt).not.toContain("The owner prefers");
+  });
 });
 
 describe("parseExtraction", () => {
@@ -116,6 +129,12 @@ describe("captureWindow", () => {
     expect(w.turns).toBe(1);
     expect(w.lines).toEqual(["Owner: I prefer pnpm"]);
     expect(w.through?.getTime()).toBe(10);
+  });
+
+  it("labels the owner's turns with their name when known", () => {
+    expect(captureWindow(msgs, new Date(2), "Scout", "Ashik").lines).toEqual([
+      "Ashik: I prefer pnpm",
+    ]);
   });
 
   it("returns no watermark when nothing qualifies", () => {
@@ -184,6 +203,37 @@ describe("captureWindow", () => {
 });
 
 describe("captureConversation", () => {
+  it("names the owner in the prompt and rewrites old 'the owner' memories", async () => {
+    await db
+      .insert(users)
+      .values({ id: 1, email: "ashik@example.com", password: "!", name: "Ashik" })
+      .onConflictDoUpdate({ target: users.id, set: { name: "Ashik" } });
+    try {
+      const { botId, conversationId } = await seedBot();
+      await db.insert(memories).values([
+        { botId, text: "The owner's phone is a Pixel.", category: "fact" },
+        { botId, text: "Release builds go through the owner's vault.", category: "fact" },
+      ]);
+      const caller = sideCaller();
+      await captureConversation(conversationId, {
+        sideCaller: caller,
+        readTranscript: ownerSays("I prefer TypeScript, never JavaScript"),
+      });
+      expect(caller.complete.mock.calls[0]![0].system).toContain(
+        "Ashik: I prefer TypeScript, never JavaScript",
+      );
+      const texts = (await db.query.memories.findMany({ where: eq(memories.botId, botId) }))
+        .map((row) => row.text)
+        .sort();
+      expect(texts).toEqual([
+        "Ashik's phone is a Pixel.",
+        "Release builds go through Ashik's vault.",
+      ]);
+    } finally {
+      await db.update(users).set({ name: null }).where(eq(users.id, 1));
+    }
+  });
+
   it("asks the side-caller on the bot's model and lands what it extracts", async () => {
     const { botId, conversationId } = await seedBot();
     const caller = sideCaller(
