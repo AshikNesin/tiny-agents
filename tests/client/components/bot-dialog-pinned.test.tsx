@@ -238,6 +238,8 @@ describe("BotDialog, pinned", () => {
     await user.click(screen.getByRole("tab", { name: "Skills" }));
     await hoverShown();
     await user.click(screen.getByRole("button", { name: "Save changes" }));
+    await screen.findByText("A bot named Chief exists");
+    await waitFor(() => expect(screen.getAllByRole("tabpanel")).toHaveLength(1));
     pin();
   });
 
