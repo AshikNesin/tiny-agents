@@ -86,7 +86,9 @@ export function createFakeOnePassword(): FakeOnePassword {
       const gate = async (op: string, vaultId?: string, write = false) => {
         if (fake.unavailable.calls > 0) {
           fake.unavailable.calls -= 1;
-          throw new Error("error sending request: connection refused");
+          throw new Error(
+            "authentication error: request library compatibility issue, check that the your environment uses compatible versions: reqwest library: error sending request",
+          );
         }
         fake.calls.push({ op, token, ...(vaultId ? { vaultId } : {}) });
         if (vaultId && !grant.vaults.includes(vaultId)) {
