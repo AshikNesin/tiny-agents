@@ -47,7 +47,9 @@ export function ChatWorkspace() {
     setSearchParams(next, { replace: true });
   }, [searchParams, setSearchParams, openCreateBot]);
 
-  const projectId = owner && !chatId ? allBots.find((b) => b.id === botId)?.projectId : null;
+  const adopted = useBotsStore((s) => (botId ? s.fullBots[botId] : undefined));
+  const projectId =
+    owner && !chatId ? (allBots.find((b) => b.id === botId) ?? adopted)?.projectId : null;
   const currentListBot = useMemo(
     () => allBots.find((b) => b.id === botId && (chatId || !owner || !b.projectId)) ?? null,
     [allBots, botId, chatId, owner],

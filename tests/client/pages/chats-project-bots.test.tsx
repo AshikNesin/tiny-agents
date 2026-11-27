@@ -9,7 +9,7 @@ import { ChatWorkspace } from "@/pages/chats/ChatsLayout";
 import { useBotsStore } from "@/store/bots";
 import { usePeopleStore } from "@/store/people";
 import { AppQueryProvider } from "../query-provider";
-import type { BotListEntry } from "../../../apps/web/src/shared/api/bots";
+import type { Bot, BotListEntry } from "../../../apps/web/src/shared/api/bots";
 
 function bot(id: string, name: string, projectId: string | null): BotListEntry {
   return {
@@ -57,7 +57,10 @@ const seed = () =>
   });
 
 describe("Project chats in Chat", () => {
-  beforeEach(() => usePeopleStore.setState({ role: "owner" }));
+  beforeEach(() => {
+    usePeopleStore.setState({ role: "owner" });
+    useBotsStore.setState({ fullBots: {} });
+  });
 
   it("keep their past chats reachable at their history links", () => {
     seed();
@@ -93,6 +96,16 @@ describe("Project chats in Chat", () => {
     });
     renderAt("/chats/b2");
     expect(screen.queryByText("Project chat page")).toBeNull();
+    expect(screen.getByTestId("where")).toHaveTextContent("/chats/b2");
+  });
+
+  it("open from Code's link before the bot list has the new project bot", () => {
+    useBotsStore.setState({
+      bots: [bot("b1", "Helper", null)],
+      fullBots: { b2: bot("b2", "web-project", "p1") as unknown as Bot },
+      loading: false,
+    });
+    renderAt("/chats/b2");
     expect(screen.getByTestId("where")).toHaveTextContent("/chats/b2");
   });
 });
