@@ -8,6 +8,7 @@ import { AppSidebar } from "@/components/shell/AppSidebar";
 import { useCodeStore } from "@/store/code";
 import { useBotsStore } from "@/store/bots";
 import { usePeopleStore } from "@/store/people";
+import { useUiStore } from "@/store/ui";
 import type { HarnessInfo, ThreadSummary } from "@/lib/code/api";
 import { AppQueryProvider } from "../../query-provider";
 
@@ -97,6 +98,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   usePeopleStore.setState(usePeopleStore.getInitialState());
+  useUiStore.setState({ foldedSections: [] });
   window.localStorage.clear();
 });
 
@@ -107,9 +109,20 @@ describe("threads in the chat sidebar", () => {
     expect(section.getAllByRole("link").map((link) => link.textContent)).toEqual([
       "All threads",
       "Thread asksasks you",
-      "Thread fixAda",
-      "Thread leadweb chat",
+      "Thread fix, started by AdaYesterday",
+      "Thread lead, started by web chatYesterday",
     ]);
+  });
+
+  it("folds and unfolds from its heading", () => {
+    renderSidebar();
+    const section = within(screen.getByRole("region", { name: "Threads" }));
+    const heading = section.getByRole("button", { name: "Threads" });
+    fireEvent.click(heading);
+    expect(heading).toHaveAttribute("aria-expanded", "false");
+    expect(section.queryByRole("link", { name: /Thread fix/ })).toBeNull();
+    fireEvent.click(heading);
+    expect(section.getByRole("link", { name: /Thread fix/ })).toBeVisible();
   });
 
   it("opens a thread in Code, and All threads opens the Code list", () => {

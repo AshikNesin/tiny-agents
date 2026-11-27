@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef } from "react";
 import { Link, matchPath, useLocation, useNavigate } from "react-router-dom";
 import {
-  ChevronsUpDown,
   LogOut,
   MessageSquareHeart,
   Search,
@@ -93,6 +92,8 @@ export function AppSidebar() {
   const logout = useAuthStore((s) => s.logout);
   const restricted = useViewerRole() !== "owner";
   const primaryNav = restricted ? guestNav(PRIMARY_NAV) : PRIMARY_NAV;
+  const topNav = primaryNav.filter((item) => item.to === "/tasks");
+  const toolNav = primaryNav.filter((item) => item.to !== "/tasks");
   const secondaryNav = restricted ? [] : SECONDARY_NAV;
 
   const feedbackRequested = useRef(false);
@@ -127,7 +128,7 @@ export function AppSidebar() {
       <aside
         aria-label="Sidebar"
         className={cn(
-          "group/sidebar bg-sidebar text-sidebar-foreground border-sidebar-border fixed inset-y-0 left-0 z-50 flex w-64 shrink-0 flex-col border-r-[0.5px] transition-transform duration-200 ease-out",
+          "group/sidebar sidebar-surface text-sidebar-foreground border-sidebar-border fixed inset-y-0 left-0 z-50 flex w-64 shrink-0 flex-col border-r-[0.5px] transition-transform duration-200 ease-out",
           mobileOpen ? "translate-x-0" : "-translate-x-full",
           "md:static md:z-auto md:translate-x-0 md:transition-none",
           rail ? "md:w-16" : "md:w-68",
@@ -166,44 +167,20 @@ export function AppSidebar() {
               toggleCommandPalette();
             }}
           />
-          {rail ? (
-            primaryNav.map((item) => (
-              <NavRow
-                key={item.to}
-                icon={item.icon}
-                label={item.label}
-                rail={rail}
-                to={item.to}
-                active={isActive(item.to)}
-                onClick={closeDrawer}
-              />
-            ))
-          ) : (
-            <div className="flex items-center gap-0.5 pt-0.5" data-testid="sidebar-tools">
-              {primaryNav.map((item) => {
-                const Icon = item.icon;
-                return (
-                  <Link
-                    key={item.to}
-                    to={item.to}
-                    onClick={closeDrawer}
-                    aria-label={item.label}
-                    title={item.label}
-                    aria-current={isActive(item.to) ? "page" : undefined}
-                    className={cn(
-                      "flex h-8 flex-1 items-center justify-center rounded-lg outline-none focus-visible:ring-1 focus-visible:ring-sidebar-ring",
-                      isActive(item.to) ? "bg-sidebar-accent" : "hover:bg-sidebar-accent",
-                    )}
-                  >
-                    <Icon className="text-muted-foreground size-4" />
-                  </Link>
-                );
-              })}
-            </div>
-          )}
+          {(rail ? primaryNav : topNav).map((item) => (
+            <NavRow
+              key={item.to}
+              icon={item.icon}
+              label={item.label}
+              rail={rail}
+              to={item.to}
+              active={isActive(item.to)}
+              onClick={closeDrawer}
+            />
+          ))}
         </nav>
 
-        <div className={cn("min-h-0 flex-1 overflow-y-auto pt-2", rail && "md:hidden")}>
+        <div className={cn("min-h-0 flex-1 overflow-y-auto pt-3", rail && "md:hidden")}>
           {!restricted && codeAvailable && <ThreadsSection onNavigate={closeDrawer} />}
           <BotsSection bots={bots} activeId={activeBotId} onNavigate={closeDrawer} />
         </div>
@@ -213,18 +190,22 @@ export function AppSidebar() {
           </div>
         )}
 
-        <div className={cn("flex shrink-0 items-center gap-1 p-2.5", rail && "md:justify-center")}>
+        <div
+          className={cn(
+            "flex shrink-0 items-center justify-between gap-1 px-3 py-2.5",
+            rail && "md:justify-center",
+          )}
+        >
           <DropdownMenu>
             <DropdownMenuTrigger
               render={
                 <button
                   type="button"
                   aria-label="Account and navigation"
-                  title={rail ? accountName : undefined}
+                  title={accountName}
                   className={cn(
-                    "flex h-10 min-w-0 flex-1 items-center gap-2 rounded-xl px-1.5 text-left text-sm outline-none focus-visible:ring-1 focus-visible:ring-sidebar-ring",
+                    "flex size-9 shrink-0 items-center justify-center rounded-xl outline-none focus-visible:ring-1 focus-visible:ring-sidebar-ring",
                     inMenuPage ? "bg-sidebar-accent" : "hover:bg-sidebar-accent",
-                    rail && "md:size-10 md:flex-none md:justify-center md:px-0",
                   )}
                 />
               }
@@ -232,12 +213,7 @@ export function AppSidebar() {
               <span className="bg-muted text-muted-foreground flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold">
                 {initial}
               </span>
-              <span className={cn("min-w-0 flex-1 truncate", rail && "md:hidden")}>
-                {accountName}
-              </span>
-              <ChevronsUpDown
-                className={cn("text-muted-foreground size-4 shrink-0", rail && "md:hidden")}
-              />
+              <span className="sr-only">{accountName}</span>
             </DropdownMenuTrigger>
             <DropdownMenuContent
               align="start"
@@ -286,6 +262,23 @@ export function AppSidebar() {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+          {[...toolNav, { label: "Settings", icon: SettingsIcon, to: "/settings" }].map((item) => (
+            <Link
+              key={item.to}
+              to={item.to}
+              onClick={closeDrawer}
+              aria-label={item.label}
+              title={item.label}
+              aria-current={isActive(item.to) ? "page" : undefined}
+              className={cn(
+                "text-muted-foreground hover:text-foreground focus-visible:ring-sidebar-ring flex size-9 items-center justify-center rounded-xl outline-none focus-visible:ring-1",
+                isActive(item.to) ? "bg-sidebar-accent text-foreground" : "hover:bg-sidebar-accent",
+                rail && "md:hidden",
+              )}
+            >
+              <item.icon className="size-[18px]" />
+            </Link>
+          ))}
         </div>
       </aside>
     </>
