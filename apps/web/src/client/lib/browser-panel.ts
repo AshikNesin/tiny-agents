@@ -1,6 +1,7 @@
 import { useCallback, useState } from "react";
 import type { ChatMessage } from "./chat-types";
 import { viewOf } from "./tool-call-view";
+import { readStored, writeStored } from "./browser-storage";
 
 export type LiveLayout = "docked" | "pip";
 
@@ -27,20 +28,14 @@ export function computerInUse(messages: ChatMessage[]): boolean {
 }
 
 function readLayout(): LiveLayout {
-  try {
-    return window.localStorage.getItem(LIVE_LAYOUT_KEY) === "pip" ? "pip" : "docked";
-  } catch {
-    return "docked";
-  }
+  return readStored(LIVE_LAYOUT_KEY) === "pip" ? "pip" : "docked";
 }
 
 export function useLiveLayout() {
   const [layout, setLayoutState] = useState<LiveLayout>(readLayout);
   const setLayout = useCallback((next: LiveLayout) => {
     setLayoutState(next);
-    try {
-      window.localStorage.setItem(LIVE_LAYOUT_KEY, next);
-    } catch {}
+    writeStored(LIVE_LAYOUT_KEY, next);
   }, []);
   return [layout, setLayout] as const;
 }

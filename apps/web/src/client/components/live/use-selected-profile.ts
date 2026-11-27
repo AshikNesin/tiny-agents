@@ -1,18 +1,13 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
+import { readStored, writeStored } from "../../lib/browser-storage";
 
 function readSelected(key: string): string {
-  try {
-    return window.localStorage.getItem(key) ?? "shared";
-  } catch {
-    return "shared";
-  }
+  return readStored(key) ?? "shared";
 }
 
 function storeSelected(key: string, profile: string): void {
-  try {
-    window.localStorage.setItem(key, profile);
-  } catch {}
+  writeStored(key, profile);
 }
 
 export function useSelectedProfile(selectedKey: string, deepLink: boolean) {

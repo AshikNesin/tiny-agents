@@ -25,6 +25,7 @@ import { errorMessage } from "../../lib/errors";
 import { DEFAULT_FONT_SIZE, MAX_FONT_SIZE, MIN_FONT_SIZE } from "../../lib/xterm";
 import { isMac } from "../../lib/clipboard";
 import { useFullScreen } from "../../lib/live-view";
+import { readStored, writeStored } from "../../lib/browser-storage";
 
 const MOD = isMac() ? "⌘" : "Ctrl";
 
@@ -39,33 +40,25 @@ function tabLabel(name: string): string {
 const KEYS_KEY = "tiny-agents:terminal-keys";
 
 function readKeysOpen(): boolean {
-  try {
-    const stored = window.localStorage.getItem(KEYS_KEY);
-    if (stored !== null) return stored === "1";
-  } catch {}
+  const stored = readStored(KEYS_KEY);
+  if (stored !== null) return stored === "1";
   return !window.matchMedia?.("(max-width: 767px)").matches;
 }
 
 function storeKeysOpen(open: boolean): void {
-  try {
-    window.localStorage.setItem(KEYS_KEY, open ? "1" : "0");
-  } catch {}
+  writeStored(KEYS_KEY, open ? "1" : "0");
 }
 
 const FONT_KEY = "tiny-agents:terminal-font-size";
 
 function readFontSize(): number {
-  try {
-    const stored = Number(window.localStorage.getItem(FONT_KEY));
-    if (stored >= MIN_FONT_SIZE && stored <= MAX_FONT_SIZE) return stored;
-  } catch {}
+  const stored = Number(readStored(FONT_KEY));
+  if (stored >= MIN_FONT_SIZE && stored <= MAX_FONT_SIZE) return stored;
   return DEFAULT_FONT_SIZE;
 }
 
 function storeFontSize(px: number): void {
-  try {
-    window.localStorage.setItem(FONT_KEY, String(px));
-  } catch {}
+  writeStored(FONT_KEY, String(px));
 }
 
 const LOCKED_KEYS = ["Escape"];

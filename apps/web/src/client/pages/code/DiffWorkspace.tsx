@@ -64,6 +64,7 @@ import {
   type LineSelection,
   type Row,
 } from "./UnifiedDiff";
+import { readStored, writeStored } from "../../lib/browser-storage";
 
 export type DiffStyle = "split" | "unified";
 
@@ -101,20 +102,14 @@ const STYLE_KEY = "code:diff-style";
 const WIDE = "(min-width: 1024px)";
 
 function readStyle(): DiffStyle {
-  try {
-    return window.localStorage.getItem(STYLE_KEY) === "unified" ? "unified" : "split";
-  } catch {
-    return "split";
-  }
+  return readStored(STYLE_KEY) === "unified" ? "unified" : "split";
 }
 
 function useDiffStyle(): [DiffStyle, (style: DiffStyle) => void] {
   const [style, setStyle] = useState<DiffStyle>(readStyle);
   const change = useCallback((next: DiffStyle) => {
     setStyle(next);
-    try {
-      window.localStorage.setItem(STYLE_KEY, next);
-    } catch {}
+    writeStored(STYLE_KEY, next);
   }, []);
   return [style, change];
 }
