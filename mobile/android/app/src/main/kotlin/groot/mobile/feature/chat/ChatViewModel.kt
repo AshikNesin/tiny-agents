@@ -223,11 +223,11 @@ class ChatViewModel(private val container: AppContainer, val botId: String) : Vi
         container.bots.refresh()
     }
 
-    fun submitCredentials(taskId: Int, values: Map<String, String>, save: Boolean, stepUp: String?, done: () -> Unit) {
+    fun submitCredentials(taskId: Int, values: Map<String, String>, save: Boolean, done: () -> Unit) {
         if (!_fillingCredentials.compareAndSet(false, true)) return
         act("Could not fill the sign-in.") {
             try {
-                container.api.submitCredentials(taskId, values, save, stepUp)
+                container.api.submitCredentials(taskId, values, save)
                 done()
             } finally {
                 _fillingCredentials.value = false

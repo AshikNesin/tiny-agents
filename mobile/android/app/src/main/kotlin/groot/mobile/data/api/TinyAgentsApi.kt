@@ -393,25 +393,31 @@ class TinyAgentsApi(private val client: ApiClient) {
 
     suspend fun vaultItem(handle: String): VaultItemDetail = VaultItemDetail.from(client.getObject("/vault/items/${enc(handle)}"))
 
-    suspend fun stepUp(password: String): StepUpToken {
-        val json = client.postObject("/vault/step-up", jsonOf("password" to password))
+    suspend fun stepUp(password: String): StepUpToken = stepUpWith(jsonOf("password" to password))
+
+    suspend fun stepUpPasskeyOptions(): String = client.postObject("/vault/step-up/options").toString()
+
+    suspend fun stepUpWithPasskey(responseJson: String): StepUpToken = stepUpWith(JSONObject().put("passkey", JSONObject(responseJson)))
+
+    private suspend fun stepUpWith(body: JSONObject): StepUpToken {
+        val json = client.postObject("/vault/step-up", body)
         return StepUpToken(json.string("token"), json.long("expiresAt"))
     }
 
     suspend fun revealVaultValue(handle: String, field: String, stepUp: String, purpose: String = "reveal"): String =
         client.postObject("/vault/items/${enc(handle)}/reveal", jsonOf("field" to field, "purpose" to purpose), stepUpHeader(stepUp)).string("value")
 
-    suspend fun createVaultItem(body: JSONObject, stepUp: String): VaultItem =
-        VaultItem.from(client.postObject("/vault/items", body, stepUpHeader(stepUp)))
+    suspend fun createVaultItem(body: JSONObject): VaultItem =
+        VaultItem.from(client.postObject("/vault/items", body))
 
     suspend fun linkVaultItem(backend: String, externalId: String, policy: JSONObject, stepUp: String): VaultItem =
         VaultItem.from(client.postObject("/vault/links", jsonOf("backend" to backend, "externalId" to externalId, "policy" to policy), stepUpHeader(stepUp)))
 
-    suspend fun moveVaultToOnePassword(stepUp: String): VaultMoveResult =
-        VaultMoveResult.from(client.postObject("/vault/move-to-1password", JSONObject(), stepUpHeader(stepUp)))
+    suspend fun moveVaultToOnePassword(): VaultMoveResult =
+        VaultMoveResult.from(client.postObject("/vault/move-to-1password", JSONObject()))
 
-    suspend fun updateVaultItem(handle: String, body: JSONObject, stepUp: String): VaultItem =
-        VaultItem.from(client.put("/vault/items/${enc(handle)}", body, stepUpHeader(stepUp)) as? JSONObject ?: JSONObject())
+    suspend fun updateVaultItem(handle: String, body: JSONObject, stepUp: String? = null): VaultItem =
+        VaultItem.from(client.put("/vault/items/${enc(handle)}", body, stepUp?.let { stepUpHeader(it) } ?: emptyMap()) as? JSONObject ?: JSONObject())
 
     suspend fun deleteVaultItem(handle: String, purge: Boolean, stepUp: String) {
         client.delete("/vault/items/${enc(handle)}", mapOf("purge" to purge.toString()), stepUpHeader(stepUp))
@@ -420,12 +426,8 @@ class TinyAgentsApi(private val client: ApiClient) {
     suspend fun credentialRequest(taskId: Int): CredentialRequestView =
         CredentialRequestView.from(client.getObject("/vault/requests/$taskId"))
 
-    suspend fun submitCredentials(taskId: Int, values: Map<String, String>, save: Boolean, stepUp: String?) {
-        client.post(
-            "/vault/requests/$taskId/submit",
-            jsonOf("values" to values, "save" to save),
-            stepUp?.let { stepUpHeader(it) } ?: emptyMap(),
-        )
+    suspend fun submitCredentials(taskId: Int, values: Map<String, String>, save: Boolean) {
+        client.post("/vault/requests/$taskId/submit", jsonOf("values" to values, "save" to save))
     }
 
     suspend fun cancelCredentialRequest(taskId: Int) {

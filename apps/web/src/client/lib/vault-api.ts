@@ -90,11 +90,13 @@ export const vaultApi = {
   confirmWithPassword,
   confirmWithPasskey,
   forgetStepUp: () => setStepUp(undefined),
-  create: (input: VaultItemCreateBody) => stepped<VaultItem>("post", "/vault/items", input),
+  create: (input: VaultItemCreateBody) => apiClient.post<VaultItem>("/vault/items", input),
   link: (input: VaultLinkBody) => stepped<VaultItem>("post", "/vault/links", input),
-  moveToOnePassword: () => stepped<VaultMoveResult>("post", "/vault/move-to-1password", {}),
+  moveToOnePassword: () => apiClient.post<VaultMoveResult>("/vault/move-to-1password", {}),
   update: (handle: string, input: VaultItemUpdateBody) =>
-    stepped<VaultItem>("put", `/vault/items/${encodeURIComponent(handle)}`, input),
+    input.urls !== undefined || input.policy !== undefined
+      ? stepped<VaultItem>("put", `/vault/items/${encodeURIComponent(handle)}`, input)
+      : apiClient.put<VaultItem>(`/vault/items/${encodeURIComponent(handle)}`, input),
   remove: (handle: string, purge: boolean) =>
     stepped<Deleted>("delete", `/vault/items/${encodeURIComponent(handle)}?purge=${purge}`),
   reveal: (handle: string, field: ValueField, purpose: "reveal" | "copy") =>
@@ -104,15 +106,10 @@ export const vaultApi = {
     } satisfies VaultRevealBody),
   request: (taskId: number) => apiClient.get<CredentialRequestView>(`/vault/requests/${taskId}`),
   submitRequest: (taskId: number, values: Record<string, string>, save: boolean) =>
-    save
-      ? stepped<CredentialSubmitted>("post", `/vault/requests/${taskId}/submit`, {
-          values,
-          save,
-        } satisfies CredentialSubmitBody)
-      : apiClient.post<CredentialSubmitted>(`/vault/requests/${taskId}/submit`, {
-          values,
-          save,
-        } satisfies CredentialSubmitBody),
+    apiClient.post<CredentialSubmitted>(`/vault/requests/${taskId}/submit`, {
+      values,
+      save,
+    } satisfies CredentialSubmitBody),
   cancelRequest: (taskId: number) =>
     apiClient.post<CredentialCancelled>(`/vault/requests/${taskId}/cancel`),
 };

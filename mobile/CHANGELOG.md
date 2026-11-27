@@ -1,11 +1,19 @@
 # Changelog
 
-## 0.17.3
+## 0.18.1
 
 ### Patch Changes
 
 - **Fill it in** on a bot's sign-in request turns into **Filling…** and can't be tapped again until the page is filled, so a
   second tap no longer fails with "This request is being filled already."
+
+## 0.18.0
+
+### Minor Changes
+
+- **Confirm it's you** uses your fingerprint or face (a passkey) before revealing, copying or deleting a vault
+  item, on Android 14 or newer. The password stays as the fallback. Adding an item, changing a value, and saving a sign-in a bot asked
+  for no longer ask at all.
 
 ## 0.17.2
 

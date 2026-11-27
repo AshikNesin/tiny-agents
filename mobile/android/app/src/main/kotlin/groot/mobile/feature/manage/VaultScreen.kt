@@ -215,7 +215,6 @@ private fun UnlinkedRow(item: UnlinkedVaultItem, onLink: (UnlinkedVaultItem) -> 
 
 @Composable
 private fun BackendCard(container: AppContainer, resource: ResourceViewModel<VaultOverview>, backend: VaultBackend, movable: Int) {
-    val gate = rememberStepUpGate()
     val problem = backend.problem
     AppCard {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -240,18 +239,16 @@ private fun BackendCard(container: AppContainer, resource: ResourceViewModel<Vau
                 "Move $movable local item${if (movable == 1) "" else "s"} here",
                 modifier = Modifier.fillMaxWidth(),
                 onClick = {
-                    gate.run { token ->
-                        resource.act("Couldn't move the items.") {
-                            val result = container.api.moveVaultToOnePassword(token)
-                            val moved = "Moved ${result.moved.size} item${if (result.moved.size == 1) "" else "s"} to 1Password"
-                            container.notices.show(
-                                if (result.failed.isEmpty()) {
-                                    moved
-                                } else {
-                                    "$moved; ${result.failed.size} stayed local: ${result.failed.joinToString(", ") { (handle, reason) -> "$handle ($reason)" }}"
-                                },
-                            )
-                        }
+                    resource.act("Couldn't move the items.") {
+                        val result = container.api.moveVaultToOnePassword()
+                        val moved = "Moved ${result.moved.size} item${if (result.moved.size == 1) "" else "s"} to 1Password"
+                        container.notices.show(
+                            if (result.failed.isEmpty()) {
+                                moved
+                            } else {
+                                "$moved; ${result.failed.size} stayed local: ${result.failed.joinToString(", ") { (handle, reason) -> "$handle ($reason)" }}"
+                            },
+                        )
                     }
                 },
             )

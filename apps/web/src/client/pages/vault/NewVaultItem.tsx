@@ -19,7 +19,6 @@ import {
 import { useVaultMutations } from "../../queries/vault";
 import { defaultPolicy, PolicyForm, suggestHandle } from "../../components/vault/PolicyForm";
 import { SecretInput } from "../../components/vault/SecretInput";
-import { useStepUp } from "../../components/vault/StepUp";
 import { KIND_DEFAULT_TOOLS } from "../../../shared/vault-kinds";
 
 const AUTOCOMPLETE: Partial<Record<ValueField, string>> = {
@@ -80,7 +79,6 @@ export function ValueFieldInput({
 
 export function NewVaultItem({ kind }: { kind: VaultKind }) {
   const navigate = useNavigate();
-  const { run } = useStepUp();
   const { create } = useVaultMutations();
   const [title, setTitle] = useState("");
   const [website, setWebsite] = useState("");
@@ -98,19 +96,15 @@ export function NewVaultItem({ kind }: { kind: VaultKind }) {
         .map((url) => url.trim())
         .filter(Boolean)
         .map((url) => (/^https?:\/\//.test(url) ? url : `https://${url}`));
-      const item = await run(() =>
-        create.mutateAsync({
-          kind,
-          title: title.trim(),
-          urls,
-          values: Object.fromEntries(Object.entries(values).filter(([, v]) => v)),
-          policy,
-        }),
-      );
-      if (item) {
-        toast.success("Saved");
-        void navigate(`/vault/items/${item.handle}`, { replace: true });
-      }
+      const item = await create.mutateAsync({
+        kind,
+        title: title.trim(),
+        urls,
+        values: Object.fromEntries(Object.entries(values).filter(([, v]) => v)),
+        policy,
+      });
+      toast.success("Saved");
+      void navigate(`/vault/items/${item.handle}`, { replace: true });
     } catch (error) {
       toast.error(apiError(error, "Couldn't save the item"));
     } finally {

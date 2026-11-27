@@ -26,7 +26,7 @@ export interface AppConfig {
     runInline: boolean;
   };
   logging: { level: LogLevel };
-  passkey: { rpName: string; rpId: string; origin: string };
+  passkey: { rpName: string; rpId: string; origin: string; appOrigins: string[] };
   rateLimits: {
     auth: RateLimitWindow;
     admin: RateLimitWindow;
@@ -71,7 +71,7 @@ export function defaultConfig(e: Env): AppConfig {
       runInline: true,
     },
     logging: { level: e.LOG_LEVEL ?? (isTest ? "silent" : isProduction ? "info" : "debug") },
-    passkey: { rpName: e.RP_NAME, rpId: e.RP_ID, origin: e.ORIGIN },
+    passkey: { rpName: e.RP_NAME, rpId: e.RP_ID, origin: e.ORIGIN, appOrigins: [] },
     rateLimits: {
       auth: { windowMs: fifteenMinutes, max: 20 },
       admin: { windowMs: fifteenMinutes, max: 10 },

@@ -29,7 +29,6 @@ import groot.mobile.ui.components.ScreenColumn
 import groot.mobile.ui.components.ScreenScaffold
 import groot.mobile.ui.components.SectionLabel
 import groot.mobile.ui.components.rememberResource
-import groot.mobile.ui.components.rememberStepUpGate
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
@@ -37,7 +36,6 @@ import kotlinx.coroutines.launch
 fun VaultNewItemRoute(container: AppContainer, kind: String, onSaved: (String) -> Unit, onBack: () -> Unit) {
     val overview = rememberResource("vault") { container.api.vaultOverview() }
     val bots by container.bots.state.collectAsStateWithLifecycle()
-    val gate = rememberStepUpGate()
     val scope = rememberCoroutineScope()
     var title by remember { mutableStateOf("") }
     var website by remember { mutableStateOf("") }
@@ -94,21 +92,19 @@ fun VaultNewItemRoute(container: AppContainer, kind: String, onSaved: (String) -
                     loading = saving,
                     enabled = data.canCreate && title.isNotBlank() && isValidHandle(policy.handle),
                     onClick = {
-                        gate.run { token ->
-                            saving = true
-                            scope.launch {
-                                try {
-                                    val item = container.api.createVaultItem(vaultCreateBody(kind, title, website, values.toMap(), policy), token)
-                                    container.notices.show("Saved")
-                                    overview.refresh()
-                                    onSaved(item.handle)
-                                } catch (e: CancellationException) {
-                                    throw e
-                                } catch (e: Exception) {
-                                    container.notices.showError(e, "Couldn't save the item.")
-                                } finally {
-                                    saving = false
-                                }
+                        saving = true
+                        scope.launch {
+                            try {
+                                val item = container.api.createVaultItem(vaultCreateBody(kind, title, website, values.toMap(), policy))
+                                container.notices.show("Saved")
+                                overview.refresh()
+                                onSaved(item.handle)
+                            } catch (e: CancellationException) {
+                                throw e
+                            } catch (e: Exception) {
+                                container.notices.showError(e, "Couldn't save the item.")
+                            } finally {
+                                saving = false
                             }
                         }
                     },

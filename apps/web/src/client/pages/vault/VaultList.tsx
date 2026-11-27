@@ -55,12 +55,10 @@ function lastUsed(item: VaultItem): string | undefined {
 }
 
 function MoveLocalItems({ count, onMoved }: { count: number; onMoved: () => void }) {
-  const { run } = useStepUp();
   const { moveToOnePassword } = useVaultMutations();
   const move = async () => {
     try {
-      const result = await run(() => moveToOnePassword.mutateAsync());
-      if (!result) return;
+      const result = await moveToOnePassword.mutateAsync();
       if (result.failed.length === 0) {
         toast.success(
           `Moved ${result.moved.length} item${result.moved.length === 1 ? "" : "s"} to 1Password`,
