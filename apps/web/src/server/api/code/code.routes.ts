@@ -28,7 +28,7 @@ import {
 import { codeChanges } from "./code.changes";
 import { editorSshTarget } from "./code.editor";
 import { codeGitHub } from "./code.github";
-import { noteOwnerInput, onThreadArchived } from "./code.pulls";
+import { archiveCodeThread, noteOwnerInput } from "./code.pulls";
 import { threadReview } from "./code.review";
 import { rewindThread, undoRewind } from "./code.rewind";
 import { startRun, stopRun } from "./code.runs";
@@ -397,14 +397,10 @@ router.post("/code/threads/:id/suggest", async (c) => {
 });
 
 router.post("/code/threads/:id/archive", async (c) => {
-  const { instance, nativeId, id } = thread(c);
+  const { instance, id } = thread(c);
   const { archived } = await parseBody(c, z.object({ archived: z.boolean() }));
-  const result = await run(() => need(instance, "archive", "archive")(nativeId, archived));
-  await db.update(codeThreads).set({ archived }).where(eq(codeThreads.id, id));
-  const moved = result.moved.map((child) => threadKey(instance.id, child));
-  for (const threadId of new Set([id, ...moved])) await onThreadArchived(threadId, archived);
-  void hub().refresh(instance.id);
-  return ok(c, { moved });
+  need(instance, "archive", "archive");
+  return ok(c, { moved: await run(() => archiveCodeThread(id, archived)) });
 });
 
 router.delete("/code/threads/:id", async (c) => {

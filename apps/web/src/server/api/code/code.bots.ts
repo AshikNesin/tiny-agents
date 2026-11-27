@@ -21,7 +21,7 @@ import { createDeliveries, type DeliveryRuntime } from "../bots/bots.delivery";
 import { conversationOwner, type ConversationBot } from "../bots/bots.owner";
 import { codeHub } from "./code.hub";
 import { listProjects, projectSettings, startProjectThread } from "./code.projects";
-import { onThreadArchived } from "./code.pulls";
+import { archiveCodeThread } from "./code.pulls";
 import { startRun } from "./code.runs";
 import {
   askedFrom,
@@ -388,12 +388,7 @@ export const codeStore: CodeStore = {
     if (!bot.projectId || row?.projectId !== bot.projectId) {
       return { error: "Only this project's threads can be resolved here." };
     }
-    if (target.instance.archive && target.instance.capabilities().threads.archive) {
-      await target.instance.archive(target.nativeId, true);
-    }
-    await db.update(codeThreads).set({ archived: true }).where(eq(codeThreads.id, threadId));
-    await onThreadArchived(threadId, true);
-    void codeHub()?.refresh(target.instance.id);
+    await archiveCodeThread(threadId, true);
     return {};
   },
 };
