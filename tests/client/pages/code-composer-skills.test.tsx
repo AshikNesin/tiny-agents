@@ -20,6 +20,7 @@ vi.mock("@groot/shell/lib/api", async (importOriginal) => {
           ? [
               { name: "show-me", description: "Explain it visually" },
               { name: "release-notes", description: "Write release notes" },
+              { name: "v2-notes", description: "Notes for v2" },
             ]
           : null,
     }),
@@ -69,5 +70,22 @@ describe("Code composer slash skills", () => {
     await waitFor(() => expect(onSend).toHaveBeenCalled());
     expect(onSend.mock.calls[0]![0]).toBe("draw the repo");
     expect(onSend.mock.calls[0]![1]).toMatchObject({ skills: ["show-me"] });
+  });
+
+  it("lists a skill whose name has a digit", async () => {
+    const user = userEvent.setup();
+    render(
+      <AppQueryProvider>
+        <Composer draftKey="t2" harness={harness} cwd="/work" threadId="t2" onSend={vi.fn()} />
+      </AppQueryProvider>,
+    );
+
+    await user.type(screen.getByRole("textbox"), "/v2");
+
+    await waitFor(() =>
+      expect(screen.getAllByRole("option").map((o) => o.textContent)).toEqual([
+        "v2-notesNotes for v2",
+      ]),
+    );
   });
 });
