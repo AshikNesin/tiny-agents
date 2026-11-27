@@ -1,10 +1,23 @@
 import React from "react";
 import { act, render, renderHook, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vite-plus/test";
+import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 import { createMemoryRouter, RouterProvider, type RouteObject } from "react-router-dom";
 import { appRoutes } from "@/App";
-import { peopleApi } from "@/lib/people-api";
 import { useViewerRole, usePeopleStore } from "@/store/people";
+import type { PeopleMe } from "../../../apps/web/src/shared/api/people";
+import { ApiFailure, fakeApi } from "../fakes/api";
+
+let api: ReturnType<typeof fakeApi>;
+
+function peopleMeFails() {
+  api.get("/people/me", () => {
+    throw new ApiFailure(503, "network down");
+  });
+}
+
+beforeEach(() => {
+  api = fakeApi();
+});
 
 function gateElement(routes: RouteObject[]): React.ReactNode {
   for (const route of routes) {
@@ -33,14 +46,13 @@ function renderAt(path: string) {
 }
 
 afterEach(() => {
-  vi.restoreAllMocks();
   usePeopleStore.setState({ role: null });
 });
 
 describe("U12: who the shell thinks is signed in", () => {
   it("shows no owner page until /people/me answers, then sends a guest away", async () => {
-    let answer: (value: { guest: boolean }) => void = () => undefined;
-    vi.spyOn(peopleApi, "me").mockReturnValue(new Promise((resolve) => (answer = resolve)));
+    let answer: (value: PeopleMe) => void = () => undefined;
+    api.get("/people/me", () => new Promise<PeopleMe>((resolve) => (answer = resolve)));
     usePeopleStore.setState({ role: null });
     const router = renderAt("/vault");
     const loading = usePeopleStore.getState().load();
@@ -57,7 +69,7 @@ describe("U12: who the shell thinks is signed in", () => {
   });
 
   it("keeps a failed /people/me from opening an owner page, and recovers on the next load", async () => {
-    vi.spyOn(peopleApi, "me").mockRejectedValue(new Error("network down"));
+    peopleMeFails();
     usePeopleStore.setState({ role: null });
     renderAt("/vault");
     await act(() => usePeopleStore.getState().load());
@@ -66,13 +78,13 @@ describe("U12: who the shell thinks is signed in", () => {
     expect(screen.queryByText("Vault page (owner only)")).not.toBeInTheDocument();
     expect(screen.queryByText("Chats page")).not.toBeInTheDocument();
 
-    vi.mocked(peopleApi.me).mockResolvedValue({ guest: false });
+    api.get("/people/me", (): PeopleMe => ({ guest: false }));
     await act(() => usePeopleStore.getState().load());
     expect(await screen.findByText("Vault page (owner only)")).toBeInTheDocument();
   });
 
   it("still opens a guest page for a viewer whose /people/me failed", async () => {
-    vi.spyOn(peopleApi, "me").mockRejectedValue(new Error("network down"));
+    peopleMeFails();
     usePeopleStore.setState({ role: null });
     renderAt("/chats");
     await act(() => usePeopleStore.getState().load());

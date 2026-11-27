@@ -18,17 +18,7 @@ import type { CatalogModel } from "../../../apps/web/src/shared/api/models";
 import type { RoutineRunCard } from "@/lib/chat-types";
 import { botStream } from "../fakes/sse";
 import { AppQueryProvider } from "../query-provider";
-
-vi.mock("@/lib/bots-api", () => ({
-  botsApi: {
-    send: vi.fn(),
-    abort: vi.fn(),
-    reset: vi.fn(),
-    read: vi.fn().mockResolvedValue(undefined),
-    capabilities: vi.fn().mockResolvedValue([]),
-    pastChats: vi.fn().mockResolvedValue([]),
-  },
-}));
+import { chatBackend } from "./chat-backend";
 
 vi.mock("@/lib/sse", async () => (await import("../fakes/sse")).sseModule);
 
@@ -94,6 +84,7 @@ const run = (id: string, minute: number, extra: Partial<RoutineRunCard> = {}): R
 afterEach(cleanup);
 
 function renderWith(runs: RoutineRunCard[]) {
+  chatBackend(BOT);
   useBotsStore.setState({
     bots: [{ ...BOT, unread: false, replying: false, approvals: 0, questions: 0 }],
     canAnswer: true,

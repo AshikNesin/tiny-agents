@@ -1,14 +1,18 @@
 import React from "react";
 import { fireEvent, render, screen, within } from "@testing-library/react";
-import { describe, expect, it, vi } from "vite-plus/test";
+import { beforeEach, describe, expect, it } from "vite-plus/test";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { GrootUIProvider } from "@groot/ui";
 import { TraceDetailPage, TracesPage } from "@/pages/traces";
+import type { CapabilityList } from "../../../apps/web/src/shared/api/bots";
 import type {
+  SideCallList,
   TraceSession,
   TraceSessionDetail,
   TraceSessionList,
+  TraceSummary,
 } from "../../../apps/web/src/shared/api/traces";
+import { fakeApi } from "../fakes/api";
 import { AppQueryProvider } from "../query-provider";
 
 const session: TraceSession = {
@@ -90,14 +94,23 @@ const detail: TraceSessionDetail = {
 
 const list: TraceSessionList = { sessions: [session], next: null };
 
-vi.mock("@/lib/traces-api", () => ({
-  tracesApi: {
-    summary: async () => ({ since: 0, sessions: 1, costUsd: 0.0123, tokens: 10_300, sideCalls: 2 }),
-    sessions: async () => list,
-    session: async () => detail,
-    sideCalls: async () => ({ calls: [], next: null }),
-  },
-}));
+const summary: TraceSummary = {
+  since: 0,
+  sessions: 1,
+  costUsd: 0.0123,
+  tokens: 10_300,
+  sideCalls: 2,
+};
+const sideCalls: SideCallList = { calls: [], next: null };
+
+beforeEach(() => {
+  const api = fakeApi();
+  api.get("/traces/summary", () => summary);
+  api.get("/traces/sessions", () => list);
+  api.get("/traces/sessions/:id", () => detail);
+  api.get("/traces/side-calls", () => sideCalls);
+  api.get("/capabilities", (): CapabilityList => ({ capabilities: [] }));
+});
 
 function renderAt(path: string) {
   return render(

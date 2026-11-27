@@ -7,11 +7,12 @@
  * remembered across chats and reloads.
  */
 import { act, renderHook, waitFor } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import { beforeEach, describe, expect, it } from "vite-plus/test";
 import { useLiveViews } from "@/components/chat-pane/live-views";
-import { botsApi } from "@/lib/bots-api";
 import type { ChatMessage, ChatToolCall } from "@/lib/chat-types";
 import type { Bot } from "../../../apps/web/src/shared/api/bots";
+import type { ComputerStatus } from "../../../apps/web/src/shared/api/live";
+import { fakeApi } from "../fakes/api";
 
 const bot = { id: "b1", name: "Surfer", conversationId: "c1" } as unknown as Bot;
 
@@ -33,9 +34,20 @@ const views = (messages: ChatMessage[]) =>
 
 beforeEach(() => {
   window.localStorage.clear();
-  vi.spyOn(botsApi, "computerStatus").mockResolvedValue({ configured: true } as never);
+  fakeApi().get("/bots/b1/computer", (): ComputerStatus => ({
+    configured: true,
+    setupHint: null,
+    active: false,
+    profile: "shared",
+    driver: null,
+    width: 1280,
+    height: 800,
+    takeover: null,
+    starting: false,
+    phase: null,
+    error: null,
+  }));
 });
-afterEach(() => vi.restoreAllMocks());
 
 describe("useLiveViews", () => {
   it("leaves the browser closed when the bot starts browsing, and lights the toggle", async () => {

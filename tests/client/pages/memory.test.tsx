@@ -1,36 +1,22 @@
 import React from "react";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, beforeEach, expect, it, vi } from "vite-plus/test";
+import { describe, beforeEach, expect, it } from "vite-plus/test";
 import { MemoryRouter } from "react-router-dom";
 import { MemoryPage } from "@/pages/memory/Memory";
 import { GrootUIProvider } from "@groot/ui";
-import type { MemoryRecord } from "../../../apps/web/src/shared/api/memories";
+import type { Bot, BotListEntry } from "../../../apps/web/src/shared/api/bots";
+import type { Deleted } from "../../../apps/web/src/shared/api/common";
+import type {
+  MemoryList,
+  MemoryRecord,
+  MemoryResult,
+} from "../../../apps/web/src/shared/api/memories";
+import { FIXED_NOW } from "../../test-clock";
+import { fakeApi } from "../fakes/api";
 import { AppQueryProvider } from "../query-provider";
 
-const listMock = vi.fn();
-const getMock = vi.fn();
-const listMemoriesMock = vi.fn();
-const createMock = vi.fn();
-const updateMock = vi.fn();
-const updateMemoryMock = vi.fn();
-const deleteMemoryMock = vi.fn();
-
-vi.mock("@/lib/bots-api", async (importOriginal) => {
-  const original = await importOriginal<typeof import("@/lib/bots-api")>();
-  return {
-    ...original,
-    botsApi: {
-      list: (...args: unknown[]) => listMock(...args),
-      get: (...args: unknown[]) => getMock(...args),
-      listMemories: (...args: unknown[]) => listMemoriesMock(...args),
-      createMemory: (...args: unknown[]) => createMock(...args),
-      update: (...args: unknown[]) => updateMock(...args),
-      updateMemory: (...args: unknown[]) => updateMemoryMock(...args),
-      deleteMemory: (...args: unknown[]) => deleteMemoryMock(...args),
-    },
-  };
-});
+let api: ReturnType<typeof fakeApi>;
 
 function memory(partial: Partial<MemoryRecord> & { id: string; botId: string }): MemoryRecord {
   return {
@@ -47,22 +33,69 @@ function memory(partial: Partial<MemoryRecord> & { id: string; botId: string }):
   };
 }
 
-const bots = [
-  { id: "b1", name: "Helper Bot" },
-  { id: "b2", name: "Journal Bot" },
-];
+const NAMES: Record<string, string> = { b1: "Helper Bot", b2: "Journal Bot" };
+
+function bot(id: string): Bot {
+  return {
+    id,
+    name: NAMES[id] ?? id,
+    description: "",
+    systemPrompt: "",
+    modelId: null,
+    conversationId: `c-${id}`,
+    chatStartedAt: FIXED_NOW,
+    lastReadAt: null,
+    lastActivityAt: FIXED_NOW,
+    lastMessagePreview: null,
+    memoryEnabled: true,
+    autoReview: false,
+    yoloByDefault: false,
+    memoryCapturedThrough: null,
+    pinnedAt: null,
+    browserProfile: "shared",
+    projectId: null,
+    createdAt: FIXED_NOW,
+    updatedAt: FIXED_NOW,
+    toolPermissions: {},
+    skillIds: [],
+    connectionIds: [],
+    connectionCapabilities: [],
+    guestIds: [],
+  };
+}
+
+function listed(id: string): BotListEntry {
+  return {
+    id,
+    conversationId: `c-${id}`,
+    name: NAMES[id] ?? id,
+    description: "",
+    modelId: null,
+    lastMessagePreview: null,
+    lastActivityAt: FIXED_NOW,
+    lastReadAt: null,
+    unread: false,
+    replying: false,
+    approvals: 0,
+    questions: 0,
+    pinnedAt: null,
+    projectId: null,
+  };
+}
 
 function loadPage(rows: Record<string, MemoryRecord[]> = {}) {
-  listMock.mockResolvedValue(bots);
-  getMock.mockImplementation(async (id: string) => ({ id, memoryEnabled: true }));
-  listMemoriesMock.mockImplementation(async (id: string) => ({
-    memories: rows[id] ?? [],
+  api.get("/bots", () => [listed("b1"), listed("b2")]);
+  api.get("/bots/:id", ({ params }) => bot(params.id!));
+  api.get("/bots/:id/memories", ({ params }): MemoryList => ({ memories: rows[params.id!] ?? [] }));
+  api.post("/bots/:id/memories", (): MemoryResult => ({
+    memory: memory({ id: "new", botId: "b1" }),
   }));
-  createMock.mockResolvedValue({ memory: memory({ id: "new", botId: "b1" }) });
-  updateMock.mockResolvedValue({ id: "b1" });
-  updateMemoryMock.mockResolvedValue({ memory: memory({ id: "m1", botId: "b1" }) });
-  deleteMemoryMock.mockResolvedValue({ deleted: true });
+  api.patch("/bots/:id", () => ({ ...bot("b1"), memoryEnabled: false }));
+  api.patch("/memories/:id", (): MemoryResult => ({ memory: memory({ id: "m1", botId: "b1" }) }));
+  api.delete("/memories/:id", (): Deleted => ({ deleted: true }));
 }
+
+const edits = () => api.sent("PATCH", "/memories/m1").map((request) => request.body);
 
 function mount() {
   return render(
@@ -80,7 +113,7 @@ function mount() {
 
 describe("Memory page", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    api = fakeApi();
   });
 
   it("groups a bot's memories under category headers with counts", async () => {
@@ -163,8 +196,8 @@ describe("Memory page", () => {
     await user.click(await screen.findByRole("option", { name: "Habits" }));
 
     await user.click(within(dialog).getByRole("button", { name: "Add" }));
-    await waitFor(() => expect(createMock).toHaveBeenCalledTimes(1));
-    expect(createMock).toHaveBeenCalledWith("b1", {
+    await waitFor(() => expect(api.sent("POST", "/bots/b1/memories")).toHaveLength(1));
+    expect(api.sent("POST", "/bots/b1/memories")[0]!.body).toEqual({
       text: "Prefers dark mode",
       category: "habit",
     });
@@ -190,11 +223,8 @@ describe("Memory page", () => {
     await user.type(field, "Prefers TypeScript strictly");
     await user.click(within(dialog).getByRole("button", { name: "Save" }));
 
-    await waitFor(() => expect(updateMemoryMock).toHaveBeenCalledTimes(1));
-    expect(updateMemoryMock).toHaveBeenCalledWith("m1", {
-      text: "Prefers TypeScript strictly",
-      category: "preference",
-    });
+    await waitFor(() => expect(edits()).toHaveLength(1));
+    expect(edits()).toEqual([{ text: "Prefers TypeScript strictly", category: "preference" }]);
   });
 
   it("clears a past expiry when restoring an expired memory", async () => {
@@ -210,12 +240,14 @@ describe("Memory page", () => {
     await user.click(within(dialog).getByRole("button", { name: "Save" }));
 
     await waitFor(() =>
-      expect(updateMemoryMock).toHaveBeenCalledWith("m1", {
-        text: "Prefers TypeScript over JavaScript",
-        category: "preference",
-        restore: true,
-        until: null,
-      }),
+      expect(edits()).toEqual([
+        {
+          text: "Prefers TypeScript over JavaScript",
+          category: "preference",
+          restore: true,
+          until: null,
+        },
+      ]),
     );
   });
 
@@ -232,10 +264,9 @@ describe("Memory page", () => {
     await user.click(within(dialog).getByRole("button", { name: "Save" }));
 
     await waitFor(() =>
-      expect(updateMemoryMock).toHaveBeenCalledWith("m1", {
-        text: "Prefers TypeScript over JavaScript",
-        category: "preference",
-      }),
+      expect(edits()).toEqual([
+        { text: "Prefers TypeScript over JavaScript", category: "preference" },
+      ]),
     );
   });
 
@@ -252,7 +283,7 @@ describe("Memory page", () => {
     expect(await screen.findByText("Delete this memory?")).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "Delete" }));
 
-    await waitFor(() => expect(deleteMemoryMock).toHaveBeenCalledWith("m1"));
+    await waitFor(() => expect(api.sent("DELETE", "/memories/m1")).toHaveLength(1));
   });
 
   it("toggles a bot's memory off through the bots PATCH", async () => {
@@ -263,7 +294,11 @@ describe("Memory page", () => {
     const toggle = await screen.findByRole("switch", { name: /turn off memory for helper bot/i });
     await user.click(toggle);
 
-    await waitFor(() => expect(updateMock).toHaveBeenCalledWith("b1", { memoryEnabled: false }));
+    await waitFor(() =>
+      expect(api.sent("PATCH", "/bots/b1").map((request) => request.body)).toEqual([
+        { memoryEnabled: false },
+      ]),
+    );
     expect(await screen.findByText(/no longer learns from chats/i)).toBeTruthy();
   });
 

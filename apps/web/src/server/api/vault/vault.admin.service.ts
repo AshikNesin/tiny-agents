@@ -1,3 +1,5 @@
+import { parseJson } from "@tiny-agents/std";
+import { z } from "zod";
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { Boom } from "@groot/core/errors";
 import { logger } from "@groot/core/logger";
@@ -99,8 +101,7 @@ async function candidates(force = false) {
 
 function parseList(raw: string | null): string[] {
   try {
-    const value = JSON.parse(raw ?? "[]") as unknown;
-    return Array.isArray(value) ? (value as string[]) : [];
+    return parseJson("A vault item's list", raw ?? "[]", z.array(z.string()));
   } catch {
     return [];
   }

@@ -4,36 +4,31 @@
 import React from "react";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it, vi } from "vite-plus/test";
+import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { Composer } from "@/pages/code/Composer";
-import type { HarnessInfo } from "@/lib/code/api";
+import type { HarnessInfo, Skill, ToolChoice } from "@/lib/code/api";
 import { NO_CAPABILITIES } from "../../../packages/code/src/contracts/capabilities";
+import { fakeApi } from "../fakes/api";
 import { AppQueryProvider } from "../query-provider";
 
-vi.mock("@groot/shell/lib/api", async (importOriginal) => {
-  const original = await importOriginal<typeof import("@groot/shell/lib/api")>();
-  return {
-    ...original,
-    apiClient: Object.assign(Object.create(original.apiClient) as typeof original.apiClient, {
-      get: async (path: string) =>
-        path.endsWith("/tools")
-          ? [
-              {
-                name: "mcp__github__list_issues",
-                label: "List issues",
-                description: "Open issues",
-                connection: { slug: "github", name: "GitHub" },
-              },
-            ]
-          : path.endsWith("/skills")
-            ? [
-                { name: "show-me", description: "Explain it visually" },
-                { name: "release-notes", description: "Write release notes" },
-                { name: "v2-notes", description: "Notes for v2" },
-              ]
-            : null,
-    }),
-  };
+const tools: ToolChoice[] = [
+  {
+    name: "mcp__github__list_issues",
+    label: "List issues",
+    description: "Open issues",
+    connection: { slug: "github", name: "GitHub" },
+  },
+];
+const skills: Skill[] = [
+  { name: "show-me", description: "Explain it visually" },
+  { name: "release-notes", description: "Write release notes" },
+  { name: "v2-notes", description: "Notes for v2" },
+];
+
+beforeEach(() => {
+  const api = fakeApi();
+  api.get("/code/harnesses/:instanceId/tools", () => tools);
+  api.get("/code/harnesses/:instanceId/skills", () => skills);
 });
 
 const harness = {
@@ -53,8 +48,6 @@ const harness = {
   commands: [{ command: "/compact", hint: "Summarize" }],
   ssh: null,
 } as unknown as HarnessInfo;
-
-afterEach(() => vi.unstubAllGlobals());
 
 describe("Code composer slash skills", () => {
   it("lists skills after / and sends the picked one with the message", async () => {

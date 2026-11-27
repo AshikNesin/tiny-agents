@@ -18,31 +18,14 @@ import { ChatPane } from "@/components/ChatPane";
 import { useBotsStore } from "@/store/bots";
 import { chatSessions } from "@/store/chats";
 import { usePeopleStore } from "@/store/people";
-import type { Bot } from "../../../apps/web/src/shared/api/bots";
+import type { Bot, PastChatList, SendMessageBody } from "../../../apps/web/src/shared/api/bots";
 import type { CatalogModel } from "../../../apps/web/src/shared/api/models";
 import type { ChatMessage } from "@/lib/chat-types";
 import { botStream, openedPaths } from "../fakes/sse";
 import { AppQueryProvider } from "../query-provider";
+import { chatBackend } from "./chat-backend";
 
-const sendMock = vi.fn().mockResolvedValue(undefined);
-const readMock = vi.fn().mockResolvedValue(undefined);
-const abortMock = vi.fn().mockResolvedValue(undefined);
-const resetMock = vi.fn();
-const withdrawMock = vi.fn().mockResolvedValue(undefined);
-const pastChatsMock = vi.fn().mockResolvedValue([]);
-
-vi.mock("@/lib/bots-api", () => ({
-  botsApi: {
-    send: (...args: unknown[]) => sendMock(...args),
-    abort: (...args: unknown[]) => abortMock(...args),
-    reset: (...args: unknown[]) => resetMock(...args),
-    withdraw: (...args: unknown[]) => withdrawMock(...args),
-    list: vi.fn().mockResolvedValue([]),
-    read: () => readMock(),
-    capabilities: vi.fn().mockResolvedValue([]),
-    pastChats: (...args: unknown[]) => pastChatsMock(...args),
-  },
-}));
+let api: ReturnType<typeof chatBackend>;
 
 vi.mock("@/lib/sse", async () => (await import("../fakes/sse")).sseModule);
 
@@ -132,14 +115,14 @@ function renderPane(bot: Bot = HOST) {
 }
 
 const user = userEvent.setup();
+const sends = () => api.sent<SendMessageBody>("POST", "/bots/host/messages");
+const resets = () => api.sent("POST", "/bots/host/reset");
+const aborts = () => api.sent("POST", "/bots/host/abort");
+const newConversation = () =>
+  api.post("/bots/host/reset", (): Bot => ({ ...HOST, conversationId: "c2" }));
 
 beforeEach(() => {
-  sendMock.mockClear();
-  pastChatsMock.mockResolvedValue([]);
-  readMock.mockClear();
-  abortMock.mockClear();
-  resetMock.mockReset();
-  withdrawMock.mockClear();
+  api = chatBackend(HOST);
   localStorage.clear();
 });
 
@@ -148,7 +131,7 @@ describe("ChatPane composer — Enter behavior by pointer type", () => {
     seedStore();
     const composer = renderPane();
     await user.type(composer, "hello desktop{Enter}");
-    await waitFor(() => expect(sendMock).toHaveBeenCalledOnce());
+    await waitFor(() => expect(sends()).toHaveLength(1));
     expect(composer.value).toBe("");
   });
 
@@ -175,12 +158,12 @@ describe("ChatPane composer — Enter behavior by pointer type", () => {
     try {
       const composer = renderPane();
       await user.type(composer, "hello mobile{Enter}second line");
-      expect(sendMock).not.toHaveBeenCalled();
+      expect(sends()).toHaveLength(0);
       expect(composer.value).toBe("hello mobile\nsecond line");
 
       await user.click(screen.getByRole("button", { name: "Send message" }));
-      await waitFor(() => expect(sendMock).toHaveBeenCalledOnce());
-      expect(sendMock.mock.calls[0]![2]).toBe("hello mobile\nsecond line");
+      await waitFor(() => expect(sends()).toHaveLength(1));
+      expect(sends()[0]!.body.text).toBe("hello mobile\nsecond line");
     } finally {
       vi.unstubAllGlobals();
     }
@@ -230,14 +213,14 @@ describe("ChatPane transcript", () => {
 
   it("draws an Echo in the transcript and a held message over the composer, with its cancel", async () => {
     seedStore();
-    sendMock.mockReturnValueOnce(new Promise(() => undefined));
+    api.post("/bots/host/messages", () => new Promise(() => undefined));
     const composer = renderPane();
     snapshot([done("u1", "user", "hi", 1_000)], true);
     await user.type(composer, "also this{Enter}");
     expect(await screen.findByText("also this")).toBeInTheDocument();
     expect(screen.queryByTestId("queued-bubble")).toBeNull();
 
-    const requestId = sendMock.mock.calls[0]![1] as string;
+    const requestId = sends()[0]!.body.requestId;
     botStream("host").send({
       type: "queued",
       items: [{ requestId, mode: "steer", text: "also this" }],
@@ -246,7 +229,7 @@ describe("ChatPane transcript", () => {
     expect(row).toHaveAttribute("data-mode", "steer");
     expect(row).toHaveTextContent("Steeringalso this");
     await user.click(screen.getByRole("button", { name: "Cancel this message" }));
-    expect(withdrawMock).toHaveBeenCalledWith("host", requestId);
+    expect(api.sent("DELETE", `/bots/host/messages/${requestId}`)).toHaveLength(1);
   });
 });
 
@@ -278,11 +261,11 @@ describe("ChatPane composer — one action button", () => {
     const composer = renderBusy(true);
     composer.focus();
     await user.keyboard("{Escape}");
-    expect(abortMock).toHaveBeenCalledOnce();
+    expect(aborts()).toHaveLength(1);
     expect(await screen.findByRole("button", { name: "Stopping" })).toBeDisabled();
 
     await user.keyboard("{Escape}");
-    expect(abortMock).toHaveBeenCalledOnce();
+    expect(aborts()).toHaveLength(1);
   });
 
   it("keeps an unsent draft per bot across remounts and clears it on send", async () => {
@@ -305,7 +288,7 @@ describe("ChatPane composer — one action button", () => {
     const again = renderPane();
     expect(again.value).toBe("half-written thought");
     await user.type(again, "{Enter}");
-    await waitFor(() => expect(sendMock).toHaveBeenCalledOnce());
+    await waitFor(() => expect(sends()).toHaveLength(1));
     cleanup();
 
     expect(renderPane().value).toBe("");
@@ -361,7 +344,7 @@ describe("ChatPane header", () => {
 
   it("disables new chat on an empty conversation and starts one without asking otherwise", async () => {
     seedStore();
-    resetMock.mockResolvedValueOnce({ ...HOST, conversationId: "c2" });
+    newConversation();
     renderPane();
     snapshot([]);
     const newChat = screen.getByRole("button", { name: "Start a new chat" });
@@ -373,14 +356,13 @@ describe("ChatPane header", () => {
     });
     expect(newChat).toBeEnabled();
     await user.keyboard("{Control>}{Shift>}o{/Shift}{/Control}");
-    await waitFor(() => expect(resetMock).toHaveBeenCalledWith("host"));
+    await waitFor(() => expect(resets()).toHaveLength(1));
     expect(screen.queryByRole("dialog", { name: "Start a new chat?" })).toBeNull();
   });
 
   it("New chat reopens the chat on the bot's fresh conversation, the old transcript gone", async () => {
     seedStore();
-    const fresh = { ...HOST, conversationId: "c2" };
-    resetMock.mockResolvedValueOnce(fresh);
+    newConversation();
     useBotsStore.setState({ fullBots: { host: HOST } });
     function Live() {
       const bot = useBotsStore((s) => s.fullBots.host) ?? HOST;
@@ -398,7 +380,7 @@ describe("ChatPane header", () => {
 
     await user.click(screen.getByRole("button", { name: "Start a new chat" }));
     await waitFor(() => expect(openedPaths.length).toBe(opens + 1));
-    expect(resetMock).toHaveBeenCalledWith("host");
+    expect(resets()).toHaveLength(1);
     expect(screen.queryByText("the old conversation")).toBeNull();
     snapshot([]);
     expect(await screen.findByText(/say hi/i)).toBeInTheDocument();
@@ -406,50 +388,53 @@ describe("ChatPane header", () => {
 
   it("/new in the composer starts a new chat without the confirm and sends nothing", async () => {
     seedStore();
-    resetMock.mockResolvedValueOnce({ ...HOST, conversationId: "c2" });
+    newConversation();
     const composer = renderPane();
     snapshot([done("u1", "user", "the old conversation", 1_000)]);
 
     await user.type(composer, " /new {Enter}");
-    await waitFor(() => expect(resetMock).toHaveBeenCalledWith("host"));
-    expect(sendMock).not.toHaveBeenCalled();
+    await waitFor(() => expect(resets()).toHaveLength(1));
+    expect(sends()).toHaveLength(0);
     expect(composer.value).toBe("");
     expect(screen.queryByRole("dialog", { name: "Start a new chat?" })).toBeNull();
   });
 
   it("/new keeps the draft until the chat and the account have loaded", async () => {
     seedStore();
+    newConversation();
     usePeopleStore.setState({ role: null });
     const composer = renderPane();
 
     await user.type(composer, "/new{Enter}");
     expect(composer.value).toBe("/new");
-    expect(resetMock).not.toHaveBeenCalled();
-    expect(sendMock).not.toHaveBeenCalled();
+    expect(resets()).toHaveLength(0);
+    expect(sends()).toHaveLength(0);
 
     snapshot([done("u1", "user", "the old conversation", 1_000)]);
     await user.keyboard("{Enter}");
     expect(composer.value).toBe("/new");
-    expect(resetMock).not.toHaveBeenCalled();
+    expect(resets()).toHaveLength(0);
 
     usePeopleStore.setState({ role: "owner" });
     await user.keyboard("{Enter}");
-    await waitFor(() => expect(resetMock).toHaveBeenCalledWith("host"));
+    await waitFor(() => expect(resets()).toHaveLength(1));
     expect(composer.value).toBe("");
   });
 
   it("lists past chats on the bot menu's Chat history page", async () => {
     seedStore();
-    pastChatsMock.mockResolvedValue([
-      {
-        id: "c1",
-        title: "Goa trip",
-        startedAt: "2026-10-12T10:00:00.000Z",
-        endedAt: "2026-10-20T10:00:00.000Z",
-        lastMessagePreview: "Booked the 6:40 flight",
-        messageCount: 34,
-      },
-    ]);
+    api.get("/bots/host/chats", (): PastChatList => ({
+      chats: [
+        {
+          id: "c1",
+          title: "Goa trip",
+          startedAt: "2026-10-12T10:00:00.000Z",
+          endedAt: "2026-10-20T10:00:00.000Z",
+          lastMessagePreview: "Booked the 6:40 flight",
+          messageCount: 34,
+        },
+      ],
+    }));
     renderPane();
     await user.click(screen.getByRole("button", { name: "Host Bot menu" }));
     await user.click(await screen.findByRole("menuitem", { name: "Chat history" }));

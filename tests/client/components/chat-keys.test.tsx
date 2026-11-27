@@ -2,8 +2,8 @@
  * @vitest-environment jsdom
  *
  * Chat keys: the same single-letter commands as the Code workspace. The bot
- * stream is a fake (fakes/sse.ts) and the bots API a mock, so no server is
- * involved.
+ * stream is a fake (fakes/sse.ts) and the server is fakeApi(), so no server
+ * is involved.
  */
 import React from "react";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
@@ -13,32 +13,13 @@ import { ChatPane } from "@/components/ChatPane";
 import { useBotsStore } from "@/store/bots";
 import { chatSessions } from "@/store/chats";
 import { usePeopleStore } from "@/store/people";
-import type { Bot } from "../../../apps/web/src/shared/api/bots";
+import type { Bot, SendMessageBody } from "../../../apps/web/src/shared/api/bots";
 import type { CatalogModel } from "../../../apps/web/src/shared/api/models";
 import { botStream } from "../fakes/sse";
 import { AppQueryProvider } from "../query-provider";
+import { chatBackend } from "./chat-backend";
 
-const sendMock = vi.fn().mockResolvedValue(undefined);
-const readMock = vi.fn().mockResolvedValue(undefined);
-const abortMock = vi.fn().mockResolvedValue(undefined);
-const resetMock = vi.fn();
-const rewindMock = vi.fn();
-const withdrawMock = vi.fn().mockResolvedValue(undefined);
-const pastChatsMock = vi.fn().mockResolvedValue([]);
-
-vi.mock("@/lib/bots-api", () => ({
-  botsApi: {
-    send: (...args: unknown[]) => sendMock(...args),
-    abort: (...args: unknown[]) => abortMock(...args),
-    reset: (...args: unknown[]) => resetMock(...args),
-    rewind: (...args: unknown[]) => rewindMock(...args),
-    withdraw: (...args: unknown[]) => withdrawMock(...args),
-    list: vi.fn().mockResolvedValue([]),
-    read: () => readMock(),
-    capabilities: vi.fn().mockResolvedValue([]),
-    pastChats: (...args: unknown[]) => pastChatsMock(...args),
-  },
-}));
+let api: ReturnType<typeof chatBackend>;
 
 vi.mock("@/lib/sse", async () => (await import("../fakes/sse")).sseModule);
 
@@ -143,14 +124,13 @@ const press = (key: string, init: KeyboardEventInit = {}) =>
   act(() => {
     fireEvent.keyDown(document.body, { key, ...init });
   });
+const sends = () => api.sent<SendMessageBody>("POST", "/bots/host/messages");
 const where = () => screen.getByTestId("where").textContent;
 
 beforeEach(() => {
   seedStore();
-  abortMock.mockClear();
-  sendMock.mockClear();
-  rewindMock.mockReset();
-  rewindMock.mockResolvedValue(HOST);
+  api = chatBackend(HOST);
+  api.post("/bots/host/rewind", () => HOST);
   localStorage.clear();
 });
 
@@ -203,7 +183,7 @@ describe("chat keys", () => {
     });
     composer.blur();
     press("Escape");
-    await waitFor(() => expect(abortMock).toHaveBeenCalledWith("host"));
+    await waitFor(() => expect(api.sent("POST", "/bots/host/abort")).toHaveLength(1));
   });
 });
 
@@ -249,9 +229,11 @@ describe("the last turn", () => {
     composer.blur();
     press("t");
 
-    await waitFor(() => expect(sendMock).toHaveBeenCalled());
-    expect(rewindMock).toHaveBeenCalledWith("host", "e1");
-    expect(sendMock.mock.calls.at(-1)?.[2]).toBe("Find flights");
+    await waitFor(() => expect(sends()).not.toHaveLength(0));
+    expect(api.sent("POST", "/bots/host/rewind").map((request) => request.body)).toEqual([
+      { at: "e1" },
+    ]);
+    expect(sends().at(-1)?.body.text).toBe("Find flights");
   });
 
   it("e puts it in the composer, and sending goes back to before it with the edit", async () => {
@@ -267,9 +249,11 @@ describe("the last turn", () => {
     });
     fireEvent.keyDown(composer, { key: "Enter" });
 
-    await waitFor(() => expect(sendMock).toHaveBeenCalled());
-    expect(rewindMock).toHaveBeenCalledWith("host", "e1");
-    expect(sendMock.mock.calls.at(-1)?.[2]).toBe("Find flights in December");
+    await waitFor(() => expect(sends()).not.toHaveLength(0));
+    expect(api.sent("POST", "/bots/host/rewind").map((request) => request.body)).toEqual([
+      { at: "e1" },
+    ]);
+    expect(sends().at(-1)?.body.text).toBe("Find flights in December");
     expect(screen.queryByText(/Editing your last message/)).not.toBeInTheDocument();
   });
 

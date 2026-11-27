@@ -1,3 +1,5 @@
+import { parseJson } from "@tiny-agents/std";
+import { z } from "zod";
 import { randomBytes } from "node:crypto";
 import { and, count, eq, inArray, isNotNull } from "drizzle-orm";
 import { Boom, HttpError } from "@groot/core/errors";
@@ -74,10 +76,7 @@ const INJECT: Record<Exclude<Kind, "claude-plan">, { name: string; format: strin
 
 const parseObject = (raw: string | null | undefined): Record<string, unknown> => {
   try {
-    const value = JSON.parse(raw ?? "{}") as unknown;
-    return value && typeof value === "object" && !Array.isArray(value)
-      ? (value as Record<string, unknown>)
-      : {};
+    return parseJson("A provider's stored options", raw ?? "{}", z.record(z.string(), z.unknown()));
   } catch {
     return {};
   }

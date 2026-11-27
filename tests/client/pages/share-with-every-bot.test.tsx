@@ -10,58 +10,36 @@ import { SkillDetail } from "@/pages/skills/SkillDetail";
 import { ConnectionDetail } from "@/pages/connections/ConnectionDetail";
 import { StepUpProvider } from "@/components/vault/StepUp";
 import { useBotsStore } from "@/store/bots";
+import type { BotListEntry } from "../../../apps/web/src/shared/api/bots";
 import type { Skill } from "../../../apps/web/src/shared/api/skills";
 import type { Connection } from "../../../apps/web/src/shared/api/connections";
+import { FIXED_NOW } from "../../test-clock";
+import { fakeApi } from "../fakes/api";
 import { AppQueryProvider } from "../query-provider";
 
-const api = vi.hoisted(() => ({
-  botsList: vi.fn(),
-  skillGet: vi.fn(),
-  skillUpdate: vi.fn(),
-  connectionGet: vi.fn(),
-  connectionUpdate: vi.fn(),
-}));
+vi.mock("@/lib/sse", async () => (await import("../fakes/sse")).sseModule);
 
-vi.mock("@/lib/bots-api", async (importOriginal) => {
-  const original = await importOriginal<typeof import("@/lib/bots-api")>();
-  return {
-    ...original,
-    botsApi: { ...original.botsApi, list: (...args: unknown[]) => api.botsList(...args) },
-  };
-});
-vi.mock("@/lib/skills-api", async (importOriginal) => {
-  const original = await importOriginal<typeof import("@/lib/skills-api")>();
-  return {
-    ...original,
-    skillsApi: {
-      get: (...args: unknown[]) => api.skillGet(...args),
-      update: (...args: unknown[]) => api.skillUpdate(...args),
-      remove: vi.fn(),
-      list: vi.fn().mockResolvedValue([]),
-    },
-  };
-});
-vi.mock("@/lib/connections-api", async (importOriginal) => {
-  const original = await importOriginal<typeof import("@/lib/connections-api")>();
-  return {
-    ...original,
-    connectionsApi: {
-      get: (...args: unknown[]) => api.connectionGet(...args),
-      update: (...args: unknown[]) => api.connectionUpdate(...args),
-      updateTool: vi.fn(),
-      reconnect: vi.fn(),
-      remove: vi.fn(),
-    },
-  };
-});
-vi.mock("@/lib/sse", () => ({ subscribeSse: vi.fn(() => ({ close: () => undefined })) }));
+let api: ReturnType<typeof fakeApi>;
 
 const settle = () => act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
 const user = userEvent.setup();
-const BOTS = [
-  { id: "b1", name: "Helper Bot", description: "Helps" },
-  { id: "b2", name: "Journal Bot", description: "" },
-];
+const bot = (id: string, name: string, description: string): BotListEntry => ({
+  id,
+  conversationId: `c-${id}`,
+  name,
+  description,
+  modelId: null,
+  lastMessagePreview: null,
+  lastActivityAt: FIXED_NOW,
+  lastReadAt: null,
+  unread: false,
+  replying: false,
+  approvals: 0,
+  questions: 0,
+  pinnedAt: null,
+  projectId: null,
+});
+const BOTS = [bot("b1", "Helper Bot", "Helps"), bot("b2", "Journal Bot", "")];
 
 const skill: Skill = {
   id: "s1",
@@ -95,14 +73,15 @@ const connection: Connection = {
 };
 
 beforeEach(() => {
-  for (const fn of Object.values(api)) fn.mockReset();
+  api = fakeApi();
+  api.get("/bots", () => BOTS);
 });
 
 describe("sharing with every bot", () => {
   it("turns a skill on for every bot from its page", async () => {
-    api.skillGet.mockResolvedValue(skill);
-    api.botsList.mockResolvedValue(BOTS);
-    api.skillUpdate.mockResolvedValue({ ...skill, allBots: true, botIds: ["b1", "b2"] });
+    api.get("/skills", (): Skill[] => []);
+    api.get("/skills/:id", () => skill);
+    api.patch("/skills/:id", (): Skill => ({ ...skill, allBots: true, botIds: ["b1", "b2"] }));
     const router = createMemoryRouter([{ path: "/skills/:id", element: <SkillDetail id="s1" /> }], {
       initialEntries: ["/skills/s1"],
     });
@@ -118,8 +97,10 @@ describe("sharing with every bot", () => {
     expect(every.getAttribute("aria-checked")).toBe("false");
 
     await user.click(every);
-    expect(api.skillUpdate).toHaveBeenCalledWith("s1", { allBots: true });
     await settle();
+    expect(api.sent("PATCH", "/skills/s1").map((request) => request.body)).toEqual([
+      { allBots: true },
+    ]);
     expect(screen.getByRole("switch", { name: "Every bot" }).getAttribute("aria-checked")).toBe(
       "true",
     );
@@ -131,9 +112,13 @@ describe("sharing with every bot", () => {
   });
 
   it("turns a connection on for every bot from its page", async () => {
-    useBotsStore.setState({ bots: BOTS as never, loading: false });
-    api.connectionGet.mockResolvedValue(connection);
-    api.connectionUpdate.mockResolvedValue({ ...connection, allBots: true, botIds: ["b1", "b2"] });
+    useBotsStore.setState({ bots: BOTS, loading: false });
+    api.get("/connections/:id", () => connection);
+    api.patch("/connections/:id", (): Connection => ({
+      ...connection,
+      allBots: true,
+      botIds: ["b1", "b2"],
+    }));
     render(
       <AppQueryProvider>
         <MemoryRouter>
@@ -148,8 +133,10 @@ describe("sharing with every bot", () => {
     await settle();
     const every = await screen.findByRole("switch", { name: "Every bot" });
     await user.click(every);
-    expect(api.connectionUpdate).toHaveBeenCalledWith("c1", { allBots: true });
     await settle();
+    expect(api.sent("PATCH", "/connections/c1").map((request) => request.body)).toEqual([
+      { allBots: true },
+    ]);
     expect(screen.getByRole("switch", { name: "Every bot" }).getAttribute("aria-checked")).toBe(
       "true",
     );

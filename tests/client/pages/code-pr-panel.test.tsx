@@ -2,8 +2,14 @@ import React from "react";
 import { act, fireEvent, render as renderBare, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { PullPanel } from "@/pages/code/PullPanel";
-import type { CheckLogView, ThreadPullsView } from "../../../apps/web/src/shared/api/code";
+import type {
+  CheckLogView,
+  MergeMethod,
+  ReviewFile,
+  ThreadPullsView,
+} from "../../../apps/web/src/shared/api/code";
 import { notifyManager } from "@tanstack/react-query";
+import { ApiFailure, fakeApi } from "../fakes/api";
 import { AppQueryProvider } from "../query-provider";
 
 notifyManager.setScheduler(queueMicrotask);
@@ -40,73 +46,65 @@ const published: unknown[] = [];
 let yolo: NonNullable<ThreadPullsView["active"]>["yolo"] = null;
 const yoloCalls: unknown[] = [];
 
-vi.mock("@groot/shell/lib/api", async (importOriginal) => {
-  const original = await importOriginal<typeof import("@groot/shell/lib/api")>();
-  return {
-    ...original,
-    apiClient: Object.assign(Object.create(original.apiClient) as typeof original.apiClient, {
-      get: async (path: string) => {
-        const job = /^\/code\/threads\/shelley%3At1\/pr\/checks\/(\d+)\/log$/.exec(path);
-        if (job) {
-          const log = logs.get(Number(job[1]));
-          if (!log) throw new Error("not found");
-          return log;
-        }
-        if (path === "/code/threads/shelley%3At1/review/files") {
-          return changed.map((p) => ({
-            path: p,
-            status: "modified",
-            additions: 1,
-            deletions: 0,
-            isGenerated: false,
-            hash: "h",
-            viewed: false,
-          }));
-        }
-        if (!path.startsWith("/code/threads/shelley%3At1/pr"))
-          throw new Error(`unexpected ${path}`);
-        reads += 1;
-        if (failReads) throw new Error("GitHub is down");
-        return view(checkState);
-      },
-      post: async (path: string, body: { draft: boolean }) => {
-        if (path === "/code/threads/shelley%3At1/push-base") {
-          pushedBase.push(path);
-          landed = "github";
-          return view(checkState);
-        }
-        if (path === "/code/threads/shelley%3At1/pr/yolo") {
-          yoloCalls.push(body);
-          yolo = {
-            method: (body as unknown as { method: "squash" }).method,
-            waiting: "Waiting for Tests to finish.",
-          };
-          return view(checkState);
-        }
-        if (path === "/code/threads/shelley%3At1/publish") {
-          published.push(body);
-          return view(checkState);
-        }
-        if (path !== "/code/threads/shelley%3At1/pr/draft") throw new Error(`unexpected ${path}`);
-        readied.push(body.draft);
-        draft = body.draft;
-        return view(checkState);
-      },
-      delete: async (path: string) => {
-        if (path !== "/code/threads/shelley%3At1/pr/yolo") throw new Error(`unexpected ${path}`);
-        yoloCalls.push("off");
-        yolo = null;
-        return view(checkState);
-      },
-      patch: async (path: string, change: { body?: string }) => {
-        if (path !== "/code/threads/shelley%3At1/pr") throw new Error(`unexpected ${path}`);
-        edits.push(change);
-        if (change.body !== undefined) body = change.body;
-        return view(checkState);
-      },
-    }),
-  };
-});
+const THREAD = "/code/threads/shelley%3At1";
+
+function serve() {
+  const api = fakeApi();
+  api.get(`${THREAD}/pr/checks/:jobId/log`, ({ params }) => {
+    const log = logs.get(Number(params.jobId));
+    if (!log) throw new ApiFailure(404, "not found");
+    return log;
+  });
+  api.get(`${THREAD}/review/files`, (): ReviewFile[] =>
+    changed.map((path) => ({
+      path,
+      status: "modified",
+      additions: 1,
+      deletions: 0,
+      isGenerated: false,
+      hash: "h",
+      viewed: false,
+    })),
+  );
+  api.get(`${THREAD}/pr`, () => {
+    reads += 1;
+    if (failReads) throw new ApiFailure(502, "GitHub is down");
+    return view(checkState);
+  });
+  api.post(`${THREAD}/push-base`, ({ path }) => {
+    pushedBase.push(path);
+    landed = "github";
+    return view(checkState);
+  });
+  api.post(`${THREAD}/pr/yolo`, ({ body: sent }) => {
+    yoloCalls.push(sent);
+    yolo = {
+      method: (sent as { method: MergeMethod }).method,
+      waiting: "Waiting for Tests to finish.",
+    };
+    return view(checkState);
+  });
+  api.post(`${THREAD}/publish`, ({ body: sent }) => {
+    published.push(sent);
+    return view(checkState);
+  });
+  api.post(`${THREAD}/pr/draft`, ({ body: sent }) => {
+    draft = (sent as { draft: boolean }).draft;
+    readied.push(draft);
+    return view(checkState);
+  });
+  api.delete(`${THREAD}/pr/yolo`, () => {
+    yoloCalls.push("off");
+    yolo = null;
+    return view(checkState);
+  });
+  api.patch(`${THREAD}/pr`, ({ body: sent }) => {
+    const change = sent as { body?: string };
+    edits.push(change);
+    if (change.body !== undefined) body = change.body;
+    return view(checkState);
+  });
+}
 
 const project: NonNullable<ThreadPullsView["project"]> = {
   id: "p1",
@@ -227,6 +225,7 @@ beforeEach(() => {
   yolo = null;
   yoloCalls.length = 0;
   visibility = "visible";
+  serve();
   vi.spyOn(document, "visibilityState", "get").mockImplementation(() => visibility);
   vi.useFakeTimers({ toFake: ["setInterval", "clearInterval", "setTimeout", "clearTimeout"] });
 });

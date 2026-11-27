@@ -14,49 +14,35 @@
 import React from "react";
 import { act, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import { beforeEach, describe, expect, it } from "vite-plus/test";
 import { MemoryRouter } from "react-router-dom";
 import { GrootUIProvider } from "@groot/ui";
 import { Routines } from "@/pages/routines/Routines";
-import type { Routine, RoutineRun } from "../../../apps/web/src/shared/api/routines";
+import type { BotListEntry } from "../../../apps/web/src/shared/api/bots";
+import type { Routine, RoutineRun, RoutineRuns } from "../../../apps/web/src/shared/api/routines";
+import { FIXED_NOW } from "../../test-clock";
+import { ApiFailure, fakeApi } from "../fakes/api";
 import { AppQueryProvider } from "../query-provider";
 import { markup, outline } from "../dom-outline";
 
-vi.mock("@/lib/bots-api", () => ({
-  botsApi: {
-    list: vi.fn().mockResolvedValue([
-      { id: "b1", name: "Helper Bot" },
-      { id: "b2", name: "Other Bot" },
-    ]),
-  },
-}));
-
-const api = vi.hoisted(() => ({
-  list: vi.fn(),
-  recentRuns: vi.fn(),
-  create: vi.fn(),
-  update: vi.fn(),
-  runNow: vi.fn(),
-  resume: vi.fn(),
-  remove: vi.fn(),
-}));
-
-vi.mock("@/lib/routines-api", async (importOriginal) => {
-  const original = await importOriginal<typeof import("@/lib/routines-api")>();
-  return {
-    ...original,
-    routinesApi: {
-      list: (...args: unknown[]) => api.list(...args),
-      recentRuns: (...args: unknown[]) => api.recentRuns(...args),
-      create: (...args: unknown[]) => api.create(...args),
-      update: (...args: unknown[]) => api.update(...args),
-      runNow: (...args: unknown[]) => api.runNow(...args),
-      pause: vi.fn(),
-      resume: (...args: unknown[]) => api.resume(...args),
-      remove: (...args: unknown[]) => api.remove(...args),
-    },
-  };
+const bot = (id: string, name: string): BotListEntry => ({
+  id,
+  conversationId: `c-${id}`,
+  name,
+  description: "",
+  modelId: null,
+  lastMessagePreview: null,
+  lastActivityAt: FIXED_NOW,
+  lastReadAt: null,
+  unread: false,
+  replying: false,
+  approvals: 0,
+  questions: 0,
+  pinnedAt: null,
+  projectId: null,
 });
+
+let api: ReturnType<typeof fakeApi>;
 
 const routine = (overrides: Partial<Routine>): Routine => ({
   id: "r1",
@@ -166,8 +152,8 @@ const RUNS: RoutineRun[] = [
 ];
 
 function load(routines: Routine[] = ROUTINES, runs: RoutineRun[] = RUNS) {
-  api.list.mockResolvedValue(routines);
-  api.recentRuns.mockResolvedValue({ runs });
+  api.get("/routines", () => routines);
+  api.get("/routines/runs/recent", (): RoutineRuns => ({ runs }));
 }
 
 async function mount() {
@@ -194,20 +180,23 @@ const settle = () => act(async () => new Promise((resolve) => setTimeout(resolve
 const user = userEvent.setup();
 
 beforeEach(() => {
-  for (const fn of Object.values(api)) fn.mockReset();
+  api = fakeApi();
+  api.get("/bots", () => [bot("b1", "Helper Bot"), bot("b2", "Other Bot")]);
 });
 
 describe("Routines page, pinned", { timeout: 15_000 }, () => {
   it("while loading", async () => {
-    api.list.mockReturnValue(new Promise(() => {}));
-    api.recentRuns.mockReturnValue(new Promise(() => {}));
+    api.get("/routines", () => new Promise(() => {}));
+    api.get("/routines/runs/recent", () => new Promise(() => {}));
     await mount();
     pin();
   });
 
   it("after a failed load", async () => {
-    api.list.mockRejectedValue(new Error("Server down"));
-    api.recentRuns.mockResolvedValue({ runs: [] });
+    api.get("/routines", () => {
+      throw new ApiFailure(500, "Server down");
+    });
+    api.get("/routines/runs/recent", (): RoutineRuns => ({ runs: [] }));
     await mount();
     await screen.findByText("Couldn't load routines");
     pin();
@@ -236,7 +225,7 @@ describe("Routines page, pinned", { timeout: 15_000 }, () => {
 
   it("a card while it runs", async () => {
     load();
-    api.runNow.mockReturnValue(new Promise(() => {}));
+    api.post("/routines/:id/run", () => new Promise(() => {}));
     await mount();
     await screen.findByText("Recent runs");
     await user.click(screen.getAllByRole("button", { name: "Run now" })[0]!);

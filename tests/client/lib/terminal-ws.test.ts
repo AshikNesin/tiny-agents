@@ -2,16 +2,6 @@
  * @vitest-environment jsdom
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
-import { ApiError } from "@groot/shell/lib/api";
-
-const ticketMock = vi.fn();
-
-vi.mock("@/lib/terminal-api", () => ({
-  terminalApi: {
-    ticket: (...args: unknown[]) => ticketMock(...args),
-  },
-}));
-
 import {
   connectTerminal,
   HIGH_WATERMARK,
@@ -20,6 +10,8 @@ import {
   PONG_TIMEOUT_MS,
   type TerminalConnectionState,
 } from "@/lib/terminal-ws";
+import type { TerminalTicket } from "../../../apps/web/src/shared/api/terminal";
+import { ApiFailure, fakeApi } from "../fakes/api";
 
 interface FakeCloseEvent {
   code: number;
@@ -75,6 +67,10 @@ class FakeWebSocket {
 const states: TerminalConnectionState[] = [];
 const data: Uint8Array[] = [];
 let ticketNumber = 0;
+let api: ReturnType<typeof fakeApi>;
+let nextTicketFailure: Error | undefined;
+
+const ticketRequests = () => api.sent("POST", "/terminal/sessions/ta-term-1/ticket");
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -82,9 +78,14 @@ beforeEach(() => {
   ticketNumber = 0;
   states.length = 0;
   data.length = 0;
-  ticketMock.mockImplementation(async () => {
+  nextTicketFailure = undefined;
+  api = fakeApi();
+  api.post("/terminal/sessions/:name/ticket", ({ params }): TerminalTicket => {
+    const failure = nextTicketFailure;
+    nextTicketFailure = undefined;
+    if (failure) throw failure;
     ticketNumber += 1;
-    return { path: `/api/v1/terminal/ws/ta-term-1?ticket=t${ticketNumber}` };
+    return { path: `/api/v1/terminal/ws/${params.name}?ticket=t${ticketNumber}` };
   });
   vi.stubGlobal("WebSocket", FakeWebSocket);
 });
@@ -119,7 +120,7 @@ describe("connectTerminal", () => {
     first.drop();
     await vi.advanceTimersByTimeAsync(1000);
 
-    expect(ticketMock).toHaveBeenCalledTimes(2);
+    expect(ticketRequests()).toHaveLength(2);
     expect(FakeWebSocket.instances[1]!.url).toContain("ticket=t2");
   });
 
@@ -164,22 +165,22 @@ describe("connectTerminal", () => {
 
     FakeWebSocket.instances[0]!.drop();
     await vi.advanceTimersByTimeAsync(999);
-    expect(ticketMock).toHaveBeenCalledTimes(1);
+    expect(ticketRequests()).toHaveLength(1);
     await vi.advanceTimersByTimeAsync(1);
-    expect(ticketMock).toHaveBeenCalledTimes(2);
+    expect(ticketRequests()).toHaveLength(2);
 
     FakeWebSocket.instances[1]!.drop();
     await vi.advanceTimersByTimeAsync(2999);
-    expect(ticketMock).toHaveBeenCalledTimes(2);
+    expect(ticketRequests()).toHaveLength(2);
     await vi.advanceTimersByTimeAsync(1);
-    expect(ticketMock).toHaveBeenCalledTimes(3);
+    expect(ticketRequests()).toHaveLength(3);
 
     FakeWebSocket.instances[2]!.open();
     FakeWebSocket.instances[2]!.drop();
     await vi.advanceTimersByTimeAsync(999);
-    expect(ticketMock).toHaveBeenCalledTimes(3);
+    expect(ticketRequests()).toHaveLength(3);
     await vi.advanceTimersByTimeAsync(1);
-    expect(ticketMock).toHaveBeenCalledTimes(4);
+    expect(ticketRequests()).toHaveLength(4);
     expect(states).toContain("live");
   });
 
@@ -191,27 +192,25 @@ describe("connectTerminal", () => {
     FakeWebSocket.instances[0]!.drop(1000);
     await vi.advanceTimersByTimeAsync(60_000);
 
-    expect(ticketMock).toHaveBeenCalledTimes(1);
+    expect(ticketRequests()).toHaveLength(1);
     expect(states.at(-1)).toBe("closed");
   });
 
   it("stops reconnecting when the tab is gone (404/409 on the ticket)", async () => {
-    ticketMock.mockRejectedValueOnce(
-      new ApiError({ status: 404, code: "NOT_FOUND", message: "gone", url: "/terminal" }),
-    );
+    nextTicketFailure = new ApiFailure(404, "gone", "NOT_FOUND");
     connect();
     await vi.advanceTimersByTimeAsync(60_000);
 
-    expect(ticketMock).toHaveBeenCalledTimes(1);
+    expect(ticketRequests()).toHaveLength(1);
     expect(states).toEqual(["connecting", "closed"]);
   });
 
   it("retries when the ticket request fails transiently", async () => {
-    ticketMock.mockRejectedValueOnce(new Error("network"));
+    nextTicketFailure = new TypeError("Failed to fetch");
     connect();
     await vi.advanceTimersByTimeAsync(1000);
 
-    expect(ticketMock).toHaveBeenCalledTimes(2);
+    expect(ticketRequests()).toHaveLength(2);
     expect(states).toEqual(["connecting", "reconnecting", "reconnecting"]);
   });
 
@@ -227,7 +226,7 @@ describe("connectTerminal", () => {
     await vi.advanceTimersByTimeAsync(60_000);
 
     expect(ws.closeCalled).toBe(true);
-    expect(ticketMock).toHaveBeenCalledTimes(1);
+    expect(ticketRequests()).toHaveLength(1);
     expect(states.at(-1)).toBe("closed");
   });
 

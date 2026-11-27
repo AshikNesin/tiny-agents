@@ -1,3 +1,5 @@
+import { parseJson } from "@tiny-agents/std";
+import { z } from "zod";
 import { createHash } from "node:crypto";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { Boom } from "@groot/core/errors";
@@ -180,6 +182,21 @@ function toRef(row: {
   };
 }
 
+const uploadMetaSchema: z.ZodType<UploadMeta> = z.looseObject({
+  format: z.enum(["text", "pdf", "document", "spreadsheet", "slides", "archive"]),
+  pages: z.number().optional(),
+  sheets: z.number().optional(),
+  lines: z.number().optional(),
+  entries: z.number().optional(),
+  chars: z.number(),
+  truncated: z.boolean().optional(),
+  title: z.string().optional(),
+  author: z.string().optional(),
+  valid: z.boolean().optional(),
+  imagePages: z.number().optional(),
+  suspicious: z.string().optional(),
+});
+
 export async function uploadStatus(id: string): Promise<UploadStatus> {
   const found = await findUpload(id);
   if (!found) throw Boom.notFound("Unknown upload");
@@ -188,7 +205,9 @@ export async function uploadStatus(id: string): Promise<UploadStatus> {
     ref: toRef(row),
     status: row.extractStatus,
     ...(row.extractError ? { error: row.extractError } : {}),
-    ...(row.extractMeta ? { meta: JSON.parse(row.extractMeta) as UploadMeta } : {}),
+    ...(row.extractMeta
+      ? { meta: parseJson("An upload's extraction details", row.extractMeta, uploadMetaSchema) }
+      : {}),
   };
 }
 

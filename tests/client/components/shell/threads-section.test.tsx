@@ -20,17 +20,6 @@ vi.mock("sonner", () => ({
   toast: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn(), message: vi.fn() }),
 }));
 
-vi.mock("@groot/shell/lib/api", async (importOriginal) => {
-  const original = await importOriginal<typeof import("@groot/shell/lib/api")>();
-  return {
-    ...original,
-    apiClient: Object.assign(Object.create(original.apiClient) as typeof original.apiClient, {
-      get: async () => [],
-      post: async () => ({}),
-    }),
-  };
-});
-
 const agent: HarnessInfo = {
   id: "demo",
   kind: "demo",

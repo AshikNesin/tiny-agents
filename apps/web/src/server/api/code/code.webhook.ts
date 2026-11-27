@@ -1,3 +1,4 @@
+import { parseJson } from "@tiny-agents/std";
 import { routes } from "../routes";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { z } from "zod";
@@ -15,14 +16,25 @@ import { armReconcile } from "./code.pulls";
 
 const HINT_DELAY_MS = 5_000;
 
-interface Payload {
-  repository?: { full_name?: string };
-  pull_request?: { number?: number };
-  issue?: { number?: number; pull_request?: unknown };
-  check_run?: { head_sha?: string; pull_requests?: Array<{ number?: number }> };
-  check_suite?: { head_sha?: string; pull_requests?: Array<{ number?: number }> };
-  sha?: string;
-}
+const numberedSchema = z.looseObject({ number: z.number().nullish() });
+
+const checkedSchema = z.looseObject({
+  head_sha: z.string().nullish(),
+  pull_requests: z.array(numberedSchema).nullish(),
+});
+
+const payloadSchema = z.looseObject({
+  repository: z.looseObject({ full_name: z.string().nullish() }).nullish(),
+  pull_request: numberedSchema.nullish(),
+  issue: z
+    .looseObject({ number: z.number().nullish(), pull_request: z.unknown().optional() })
+    .nullish(),
+  check_run: checkedSchema.nullish(),
+  check_suite: checkedSchema.nullish(),
+  sha: z.string().nullish(),
+});
+
+type Payload = z.infer<typeof payloadSchema>;
 
 async function pullsOf(payload: Payload): Promise<CodePullRow[]> {
   const [owner, name] = (payload.repository?.full_name ?? "").split("/");
@@ -115,7 +127,7 @@ router.post(
       throw Boom.badRequest("Not a GitHub delivery");
     let payload: Payload;
     try {
-      payload = JSON.parse(body) as Payload;
+      payload = parseJson("A GitHub webhook payload", body, payloadSchema);
     } catch {
       throw Boom.badRequest("The payload is not JSON");
     }

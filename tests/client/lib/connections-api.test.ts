@@ -1,17 +1,41 @@
-import { afterEach, describe, expect, it, vi } from "vite-plus/test";
-import { apiClient } from "@groot/shell/lib/api";
+import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 import { connectionsApi } from "@/lib/connections-api";
 import { StepUpRequiredError, vaultApi } from "@/lib/vault-api";
+import type { Deleted } from "../../../apps/web/src/shared/api/common";
+import type { Connection } from "../../../apps/web/src/shared/api/connections";
+import type { StepUpToken } from "../../../apps/web/src/shared/api/vault";
+import { FIXED_NOW } from "../../test-clock";
+import { fakeApi } from "../fakes/api";
+
+const connection: Connection = {
+  id: "c1",
+  name: "X",
+  slug: "x",
+  url: "https://mcp.example.com",
+  transport: "streamable-http",
+  authType: "header",
+  headerName: null,
+  hasSecret: false,
+  secretRef: null,
+  tools: [],
+  allBots: false,
+  botIds: [],
+  status: "connected",
+  createdAt: FIXED_NOW,
+};
+
+let api: ReturnType<typeof fakeApi>;
+
+beforeEach(() => {
+  api = fakeApi();
+});
 
 afterEach(() => {
-  vi.restoreAllMocks();
   vaultApi.forgetStepUp();
 });
 
 describe("connectionsApi and step-up", () => {
   it("asks for step-up before adding, re-pointing or deleting, and sends nothing", async () => {
-    const request = vi.spyOn(apiClient, "request");
-    const patch = vi.spyOn(apiClient, "patch");
     await expect(
       connectionsApi.create({ name: "X", url: "https://mcp.example.com" }),
     ).rejects.toBeInstanceOf(StepUpRequiredError);
@@ -22,27 +46,31 @@ describe("connectionsApi and step-up", () => {
       StepUpRequiredError,
     );
     await expect(connectionsApi.remove("c1")).rejects.toBeInstanceOf(StepUpRequiredError);
-    expect(request).not.toHaveBeenCalled();
-    expect(patch).not.toHaveBeenCalled();
+    expect(api.requests).toEqual([]);
   });
 
   it("changes bot links, names and keys without step-up", async () => {
-    const patch = vi.spyOn(apiClient, "patch").mockResolvedValue({ id: "c1" } as never);
-    await connectionsApi.update("c1", { botIds: ["b1"] });
+    api.patch("/connections/:id", () => connection);
+    await expect(connectionsApi.update("c1", { botIds: ["b1"] })).resolves.toEqual(connection);
     await connectionsApi.update("c1", { name: "Renamed" });
     await connectionsApi.update("c1", { headerName: "x-key", secret: "s" });
-    expect(patch).toHaveBeenCalledTimes(3);
+    expect(api.sent("PATCH", "/connections/c1").map((request) => request.body)).toEqual([
+      { botIds: ["b1"] },
+      { name: "Renamed" },
+      { headerName: "x-key", secret: "s" },
+    ]);
   });
 
   it("sends the step-up token once the owner confirmed", async () => {
-    vi.spyOn(apiClient, "post").mockResolvedValue({ token: "tok", expiresAt: Date.now() + 60_000 });
+    api.post("/vault/step-up", (): StepUpToken => ({
+      token: "tok",
+      expiresAt: Date.now() + 60_000,
+    }));
+    api.delete("/connections/:id", (): Deleted => ({ deleted: true }));
     await vaultApi.confirmWithPassword("pw");
-    const request = vi.spyOn(apiClient, "request").mockResolvedValue(undefined as never);
-    await connectionsApi.remove("c1");
-    expect(request).toHaveBeenCalledWith("delete", "/connections/c1", {
-      body: undefined,
-      headers: { "X-Vault-Step-Up": "tok" },
-      emptyOk: true,
-    });
+    await expect(connectionsApi.remove("c1")).resolves.toEqual({ deleted: true });
+    const [removal] = api.sent("DELETE", "/connections/c1");
+    expect(removal!.headers.get("X-Vault-Step-Up")).toBe("tok");
+    expect(removal!.body).toBeUndefined();
   });
 });

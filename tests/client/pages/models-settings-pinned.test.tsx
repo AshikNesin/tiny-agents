@@ -9,46 +9,33 @@
  * the edit dialog for each kind of account, and the move-and-delete dialog
  * a model in use asks with. Recorded on the one-file page before it was
  * split (docs/rewrite/PLAN.md row 5.6), so the split must render each the
- * same. The Claude plan's status panel is a stand-in (it is not split).
+ * same.
  */
 import React from "react";
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
-import { ApiError } from "@groot/shell/lib/api";
+import { MemoryRouter } from "react-router-dom";
 import { ConfirmProvider } from "@groot/ui/primitives";
 import { ModelsSettings } from "@/pages/settings/models/ModelsSettings";
+import { vaultApi } from "@/lib/vault-api";
+import type { ClaudeCodeAccount, ClaudeCodeStatus } from "../../../apps/web/src/shared/api/bots";
 import type {
   Account,
+  AccountList,
   AccountModel,
+  DiscoveredModels,
+  ModelsResponse,
   ProviderTemplate,
+  Roles,
+  RolesResponse,
 } from "../../../apps/web/src/shared/api/models";
+import type { StepUpToken } from "../../../apps/web/src/shared/api/vault";
+import { FIXED_NOW } from "../../test-clock";
+import { ApiFailure, fakeApi } from "../fakes/api";
 import { AppQueryProvider } from "../query-provider";
 import { markup, outline } from "../dom-outline";
 
-const api = vi.hoisted(() => ({
-  accounts: vi.fn(),
-  roles: vi.fn(),
-  available: vi.fn(),
-  removeModel: vi.fn(),
-  patch: vi.fn(),
-}));
-
-vi.mock("@/lib/models-api", () => ({ modelsApi: api }));
-vi.mock("@/lib/vault-api", async (importOriginal) => ({
-  ...(await importOriginal<object>()),
-  hasStepUp: () => true,
-  apiError: (_error: unknown, fallback: string) => fallback,
-  StepUpRequiredError: class extends Error {},
-  vaultApi: { confirmWithPassword: vi.fn(), confirmWithPasskey: vi.fn() },
-}));
-vi.mock("@/store/bots", () => ({
-  useBotsStore: (select: (s: { loadModels: () => Promise<void> }) => unknown) =>
-    select({ loadModels: async () => undefined }),
-}));
-vi.mock("@/components/ClaudePlanStatus", () => ({
-  ClaudePlanStatus: () => <div data-stand-in="claude-plan-status" />,
-}));
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() }, Toaster: () => null }));
 
 const TEMPLATES: ProviderTemplate[] = [
@@ -62,11 +49,53 @@ const TEMPLATES: ProviderTemplate[] = [
   },
 ];
 
-const ROLES = Object.fromEntries(
-  ["bot_default", "code_default", "memory_capture", "chat_title", "vision", "classifier"].map(
-    (role) => [role, { modelId: null, fallback: true }],
-  ),
-);
+const unset = { modelId: null, fallback: true };
+const ROLES: Roles = {
+  bot_default: unset,
+  code_default: unset,
+  memory_capture: unset,
+  chat_title: unset,
+  vision: unset,
+  classifier: unset,
+};
+const CATALOG: ModelsResponse = {
+  models: [],
+  defaultModelId: null,
+  canAnswer: false,
+  providers: [],
+};
+const STEP_UP: StepUpToken = {
+  token: "step-up-token",
+  expiresAt: Date.parse(FIXED_NOW) + 10 * 60_000,
+};
+const ENGINE: ClaudeCodeStatus = {
+  enabled: true,
+  fallback: "gateway",
+  configured: true,
+  mode: "sandbox",
+  workerHost: "sandbox.test",
+};
+const CLAUDE_ACCOUNT: ClaudeCodeAccount = {
+  state: "ready",
+  loggedIn: true,
+  subscription: true,
+  plan: "max",
+};
+const AVAILABLE: DiscoveredModels = {
+  models: [
+    {
+      upstreamId: "claude-c",
+      name: "Claude C",
+      type: "chat",
+      contextWindow: 100_000,
+      maxOutputTokens: 8_000,
+      imageInput: false,
+      reasoning: false,
+      compat: null,
+      known: true,
+    },
+  ],
+};
 
 const model = (id: string, overrides: Partial<AccountModel> = {}): AccountModel => ({
   id,
@@ -155,16 +184,20 @@ const ACCOUNTS: Account[] = [
   account({ id: "faux", name: "Faux", kind: "faux", baseUrl: null, credential: null }),
 ];
 
-function load(accounts: Account[] = ACCOUNTS, roles: Record<string, unknown> = ROLES) {
-  api.accounts.mockResolvedValue({ accounts, templates: TEMPLATES });
-  api.roles.mockResolvedValue({ roles });
+let api: ReturnType<typeof fakeApi>;
+
+function load(accounts: Account[] = ACCOUNTS, roles: Roles = ROLES) {
+  api.get("/models/providers", (): AccountList => ({ accounts, templates: TEMPLATES }));
+  api.get("/models/roles", (): RolesResponse => ({ roles }));
 }
 
 async function mount() {
   const result = render(
     <AppQueryProvider>
       <ConfirmProvider>
-        <ModelsSettings />
+        <MemoryRouter>
+          <ModelsSettings />
+        </MemoryRouter>
       </ConfirmProvider>
     </AppQueryProvider>,
   );
@@ -181,22 +214,14 @@ const settle = () => act(async () => new Promise((resolve) => setTimeout(resolve
 
 const user = userEvent.setup();
 
-beforeEach(() => {
-  for (const fn of Object.values(api)) fn.mockReset();
-  api.available.mockResolvedValue({
-    models: [
-      {
-        upstreamId: "claude-c",
-        name: "Claude C",
-        type: "chat",
-        contextWindow: 100_000,
-        maxOutputTokens: 8_000,
-        imageInput: false,
-        reasoning: false,
-        known: true,
-      },
-    ],
-  });
+beforeEach(async () => {
+  api = fakeApi();
+  api.get("/models", () => CATALOG);
+  api.get("/models/providers/:id/available", () => AVAILABLE);
+  api.get("/claude-code/status", () => ENGINE);
+  api.get("/claude-code/account", () => CLAUDE_ACCOUNT);
+  api.post("/vault/step-up", () => STEP_UP);
+  await vaultApi.confirmWithPassword("correct horse");
 });
 
 const dialogShown = () =>
@@ -210,8 +235,8 @@ const dialogShown = () =>
 
 describe("Settings → Models, pinned", () => {
   it("while loading", async () => {
-    api.accounts.mockReturnValue(new Promise(() => {}));
-    api.roles.mockReturnValue(new Promise(() => {}));
+    api.get("/models/providers", () => new Promise(() => {}));
+    api.get("/models/roles", () => new Promise(() => {}));
     await mount();
     pin();
   });
@@ -250,7 +275,9 @@ describe("Settings → Models, pinned", () => {
       await mount();
       await screen.findByText("Default models");
       await user.click(screen.getByRole("button", { name }));
-      await waitFor(() => expect(api.available).toHaveBeenCalled());
+      await waitFor(() =>
+        expect(api.requests.some((request) => request.path.endsWith("/available"))).toBe(true),
+      );
       await settle();
       pin();
     },
@@ -270,9 +297,13 @@ describe("Settings → Models, pinned", () => {
         a.id === "plan" ? { ...a, settings: { ...a.settings, maxTurns: "unlimited" } } : a,
       ),
     );
-    api.patch.mockResolvedValue({});
+    api.patch("/models/providers/:id", () => ({
+      ...ACCOUNTS[3]!,
+      settings: { ...ACCOUNTS[3]!.settings, maxTurns: "unlimited" },
+    }));
     await user.click(screen.getByRole("checkbox", { name: "No limit" }));
     await waitFor(() => expect(screen.getByLabelText("Max turns")).toBeDisabled());
+    expect(api.sent("PATCH", "/models/providers/plan")[0]!.body).toEqual({ maxTurns: "unlimited" });
     pin("unlimited");
   });
 
@@ -294,15 +325,11 @@ describe("Settings → Models, pinned", () => {
 
   it("deleting a model in use asks which takes over", async () => {
     load();
-    api.removeModel.mockRejectedValue(
-      new ApiError({
-        status: 409,
-        code: "CONFLICT",
-        message: "in use",
-        url: "/models",
-        details: { in_use: { bots: [{ name: "Ada" }, { name: "Bo" }], roles: ["vision"] } },
-      }),
-    );
+    api.delete("/models/:id", () => {
+      throw new ApiFailure(409, "in use", "CONFLICT", {
+        in_use: { bots: [{ name: "Ada" }, { name: "Bo" }], roles: ["vision"] },
+      });
+    });
     await mount();
     await screen.findByText("Default models");
     await user.click(screen.getByRole("button", { name: "Anthropic" }));

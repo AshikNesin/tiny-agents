@@ -1,3 +1,5 @@
+import { parseJson } from "@tiny-agents/std";
+import { z } from "zod";
 import { logger } from "@groot/core/logger";
 import { notificationService } from "@groot/core/notification/notification.service";
 import type { HarnessInstance, TurnOutcome } from "@tiny-agents/code/server";
@@ -37,6 +39,18 @@ interface ReportEntry {
   reason?: string;
 }
 
+const reportSchema = z.looseObject({
+  items: z.array(
+    z.looseObject({
+      id: z.string(),
+      status: z.enum(["fixed", "declined"]),
+      reason: z.unknown().optional(),
+    }),
+  ),
+});
+
+const passItemsSchema = z.array(z.looseObject({ id: z.string(), kind: z.string() })).nullable();
+
 function parseReport(text: string): ReportEntry[] | undefined {
   const blocks = [
     ...text.matchAll(new RegExp("```" + REPORT_FENCE + "\\s*\\n([\\s\\S]*?)```", "g")),
@@ -44,19 +58,11 @@ function parseReport(text: string): ReportEntry[] | undefined {
   const last = blocks.at(-1)?.[1];
   if (!last) return undefined;
   try {
-    const value = JSON.parse(last) as { items?: unknown };
-    if (!Array.isArray(value.items)) return undefined;
-    const entries: ReportEntry[] = [];
-    for (const raw of value.items as Array<Record<string, unknown>>) {
-      if (typeof raw?.id !== "string") return undefined;
-      if (raw.status !== "fixed" && raw.status !== "declined") return undefined;
-      entries.push({
-        id: raw.id,
-        status: raw.status,
-        ...(typeof raw.reason === "string" ? { reason: raw.reason.slice(0, 2000) } : {}),
-      });
-    }
-    return entries;
+    return parseJson("An Auto-fix report", last, reportSchema).items.map((raw) => ({
+      id: raw.id,
+      status: raw.status,
+      ...(typeof raw.reason === "string" ? { reason: raw.reason.slice(0, 2000) } : {}),
+    }));
   } catch {
     return undefined;
   }
@@ -305,7 +311,7 @@ export async function finishPass(pass: CodeAutofixPass, outcome?: TurnOutcome): 
   }
 
   const github = await services.client(ctx.project);
-  const items = (JSON.parse(pass.items) as Array<{ id: string; kind: string }>) ?? [];
+  const items = parseJson("An Auto-fix pass's items", pass.items, passItemsSchema) ?? [];
   const report = parseReport(await lastAnswer(ctx, outcome));
   const short = pushed.slice(0, 7);
   try {

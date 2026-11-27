@@ -8,10 +8,11 @@
 import React from "react";
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
-import { describe, expect, it, vi } from "vite-plus/test";
+import { describe, expect, it } from "vite-plus/test";
 import { CredentialRequestSheet } from "@/pages/vault/CredentialRequestSheet";
 import type { CredentialRequestView } from "../../../apps/web/src/shared/api/vault";
 import { FIXED_NOW } from "../../test-clock";
+import { fakeApi } from "../fakes/api";
 import { AppQueryProvider } from "../query-provider";
 
 const REQUEST: CredentialRequestView = {
@@ -27,11 +28,6 @@ const REQUEST: CredentialRequestView = {
   liveOrigin: "https://www.amazon.in",
 };
 
-vi.mock("@/lib/vault-api", () => ({
-  apiError: (_error: unknown, fallback: string) => fallback,
-  vaultApi: { request: vi.fn(async () => REQUEST) },
-}));
-
 function Where() {
   const location = useLocation();
   return <p>at {location.pathname + location.search}</p>;
@@ -39,6 +35,7 @@ function Where() {
 
 describe("credential request link", () => {
   it("opens the bot's chat on the sign-in card", async () => {
+    fakeApi().get("/vault/requests/:taskId", () => REQUEST);
     render(
       <AppQueryProvider>
         <MemoryRouter initialEntries={["/vault/requests/7"]}>

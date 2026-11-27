@@ -5,20 +5,10 @@ import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { GrootUIProvider } from "@groot/ui";
 import { CreateSkillDialog } from "@/components/skills/CreateSkillDialog";
 import type { Skill } from "../../../../apps/web/src/shared/api/skills";
+import { fakeApi } from "../../fakes/api";
 import { AppQueryProvider } from "../../query-provider";
 
-const createMock = vi.fn();
-
-vi.mock("@/lib/skills-api", async (importOriginal) => {
-  const original = await importOriginal<typeof import("@/lib/skills-api")>();
-  return {
-    ...original,
-    skillsApi: {
-      ...original.skillsApi,
-      create: (...args: unknown[]) => createMock(...args),
-    },
-  };
-});
+let api: ReturnType<typeof fakeApi>;
 
 function skill(partial: Partial<Skill> = {}): Skill {
   return {
@@ -49,7 +39,7 @@ function mount() {
 
 describe("CreateSkillDialog validation (issue #122)", () => {
   beforeEach(() => {
-    createMock.mockReset();
+    api = fakeApi();
   });
 
   it("shows the name error after blur when the name has invalid characters", async () => {
@@ -76,18 +66,16 @@ describe("CreateSkillDialog validation (issue #122)", () => {
   });
 
   it("creates the skill when the form is valid", async () => {
-    createMock.mockResolvedValue(skill());
+    api.post("/skills", () => skill());
     const user = userEvent.setup();
     mount();
     await user.type(screen.getByLabelText("Name"), "pdf-fill");
     await user.type(screen.getByLabelText("Description"), "Fills PDFs");
     await user.click(screen.getByRole("button", { name: "Create skill" }));
     await vi.waitFor(() =>
-      expect(createMock).toHaveBeenCalledWith({
-        name: "pdf-fill",
-        description: "Fills PDFs",
-        body: "",
-      }),
+      expect(api.sent("POST", "/skills").map((request) => request.body)).toEqual([
+        { name: "pdf-fill", description: "Fills PDFs", body: "" },
+      ]),
     );
   });
 });

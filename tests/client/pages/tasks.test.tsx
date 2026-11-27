@@ -5,22 +5,16 @@ import { describe, beforeEach, expect, it, vi } from "vite-plus/test";
 import { MemoryRouter } from "react-router-dom";
 import { GrootUIProvider } from "@groot/ui";
 import { Tasks } from "@/pages/tasks/Tasks";
-import type { Task } from "../../../apps/web/src/shared/api/tasks";
+import type { Task, TaskCreateBody } from "../../../apps/web/src/shared/api/tasks";
+import { fakeApi } from "../fakes/api";
 import { AppQueryProvider } from "../query-provider";
 
-const listMock = vi.fn();
-const createMock = vi.fn();
-const updateMock = vi.fn();
 const toastSuccess = vi.fn();
+let api: ReturnType<typeof fakeApi>;
 
-vi.mock("@/lib/tasks-api", () => ({
-  tasksApi: {
-    list: (...args: unknown[]) => listMock(...args),
-    create: (...args: unknown[]) => createMock(...args),
-    update: (...args: unknown[]) => updateMock(...args),
-    remove: vi.fn(),
-  },
-}));
+const tasksAre = (tasks: Task[]) => api.get("/tasks", () => tasks);
+const created = () => api.sent<TaskCreateBody>("POST", "/tasks").map((request) => request.body);
+const updates = () => api.sent("PATCH", "/tasks/t1").map((request) => request.body);
 
 vi.mock("sonner", async (importOriginal) => ({
   ...(await importOriginal<typeof import("sonner")>()),
@@ -66,27 +60,27 @@ function mount() {
 
 describe("Tasks page", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
-    createMock.mockResolvedValue(task({}));
-    updateMock.mockResolvedValue(task({}));
+    api = fakeApi();
+    api.post("/tasks", () => task({}));
+    api.patch("/tasks/:id", () => task({}));
   });
 
   it("files a task added on Today as due today, so it stays on Today", async () => {
-    listMock.mockResolvedValue([]);
+    tasksAre([]);
     const user = userEvent.setup();
     mount();
 
     await user.type(await screen.findByLabelText("New task title"), "Call mom{Enter}");
 
-    await waitFor(() => expect(createMock).toHaveBeenCalledTimes(1));
-    const { title, dueAt } = createMock.mock.calls[0][0] as { title: string; dueAt: string };
+    await waitFor(() => expect(created()).toHaveLength(1));
+    const { title, dueAt } = created()[0]!;
     expect(title).toBe("Call mom");
-    expect(new Date(dueAt).getTime()).toBe(endOfDay(0).getTime());
+    expect(new Date(dueAt!).getTime()).toBe(endOfDay(0).getTime());
   });
 
   it("says where a task went when quick-add files it under another tab, and shows it there", async () => {
     const tomorrow = task({ id: "t2", title: "Call mom", dueAt: endOfDay(1).toISOString() });
-    listMock.mockResolvedValueOnce([]).mockResolvedValue([tomorrow]);
+    api.get("/tasks", () => (created().length === 0 ? [] : [tomorrow]));
     const user = userEvent.setup();
     mount();
 
@@ -107,7 +101,7 @@ describe("Tasks page", () => {
   });
 
   it("reads a day and priority typed in quick-add (#97)", async () => {
-    listMock.mockResolvedValue([]);
+    tasksAre([]);
     const user = userEvent.setup();
     mount();
 
@@ -115,17 +109,17 @@ describe("Tasks page", () => {
     expect(screen.getByText(/"Call mom" · due .* · high priority/)).toBeTruthy();
     await user.keyboard("{Enter}");
 
-    await waitFor(() => expect(createMock).toHaveBeenCalledTimes(1));
-    const input = createMock.mock.calls[0][0] as { title: string; dueAt: string; priority: string };
+    await waitFor(() => expect(created()).toHaveLength(1));
+    const input = created()[0]!;
     expect(input.title).toBe("Call mom");
     expect(input.priority).toBe("high");
-    const due = new Date(input.dueAt);
+    const due = new Date(input.dueAt!);
     expect(due.getHours()).toBe(17);
     expect(due.getDate()).toBe(endOfDay(1).getDate());
   });
 
   it("lists undated tasks last in Upcoming, under No date (#97)", async () => {
-    listMock.mockResolvedValue([
+    tasksAre([
       task({ id: "t1", title: "Plan Goa trip", dueAt: null }),
       task({ id: "t2", title: "Send invoice", dueAt: endOfDay(3).toISOString() }),
     ]);
@@ -142,10 +136,7 @@ describe("Tasks page", () => {
   });
 
   it("shows end-of-day due dates as a day, without a clock time", async () => {
-    listMock.mockResolvedValue([
-      task({}),
-      task({ id: "t2", title: "Pay rent", dueAt: endOfDay(1).toISOString() }),
-    ]);
+    tasksAre([task({}), task({ id: "t2", title: "Pay rent", dueAt: endOfDay(1).toISOString() })]);
     const user = userEvent.setup();
     mount();
 
@@ -156,22 +147,20 @@ describe("Tasks page", () => {
   });
 
   it("offers an undo that restores the task after completing it", async () => {
-    listMock.mockResolvedValue([task({ status: "in_progress" })]);
+    tasksAre([task({ status: "in_progress" })]);
     const user = userEvent.setup();
     mount();
 
     await user.click(await screen.findByRole("button", { name: 'Complete "Water the plants"' }));
 
     await waitFor(() => expect(toastSuccess).toHaveBeenCalled());
-    expect(updateMock).toHaveBeenCalledWith("t1", { status: "done" });
+    expect(updates()).toEqual([{ status: "done" }]);
     const [, options] = toastSuccess.mock.calls[0] as [
       string,
       { action: { label: string; onClick: () => void } },
     ];
     expect(options.action.label).toBe("Undo");
     options.action.onClick();
-    await waitFor(() =>
-      expect(updateMock).toHaveBeenLastCalledWith("t1", { status: "in_progress" }),
-    );
+    await waitFor(() => expect(updates()).toEqual([{ status: "done" }, { status: "in_progress" }]));
   });
 });

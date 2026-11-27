@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { afterAll, beforeAll, describe, expect, it } from "vite-plus/test";
-import { boundaryOverrides } from "../../../scripts/lint/boundaries";
+import { boundaryOverrides, enforcedRuleIds } from "../../../scripts/lint/boundaries";
 
 const repoRoot = process.cwd();
 const vitePlus = createRequire(path.join(repoRoot, "package.json")).resolve(
@@ -802,6 +802,26 @@ const FIXTURES: Record<string, Fixture> = {
     source: "let open = false;\nexport const toggle = () => (open = !open);\n",
     rules: [],
   },
+  "tests/client/r21-fail.test.tsx": {
+    source:
+      'import { vi } from "vite-plus/test";\nvi.mock("@/lib/bots-api", () => ({ botsApi: { list: vi.fn() } }));\nvi.mock("@groot/shell/lib/api");\nvi.mock("@tiny-agents/agent");\nvi.mock("../../apps/web/src/client/store/bots");\nvi.doMock("@/components/BrowserPanel", () => ({ BrowserPanel: () => null }));\n',
+    rules: ["R21", "R21", "R21", "R21", "R21"],
+    mentions: "fakeApi() from tests/client/fakes/api.ts",
+  },
+  "tests/client/pages/r21-transport-pass.test.tsx": {
+    source:
+      'import { vi } from "vite-plus/test";\nvi.mock("@/lib/sse", async () => (await import("../fakes/sse")).sseModule);\nvi.mock("../../../apps/web/src/client/lib/sse");\nvi.mock("@/lib/novnc");\nvi.mock("@/lib/xterm");\nvi.mock("@/lib/terminal-ws");\n',
+    rules: [],
+  },
+  "tests/client/r21-third-party-pass.test.tsx": {
+    source:
+      'import { vi } from "vite-plus/test";\nconst specifier = "@/lib/bots-api";\nvi.mock("sonner", () => ({ toast: { error: vi.fn() } }));\nvi.mock("streamdown");\nvi.mock(specifier);\nvi.stubGlobal("fetch", vi.fn());\n',
+    rules: [],
+  },
+  "tests/server/r21-elsewhere-pass.test.ts": {
+    source: 'import { vi } from "vite-plus/test";\nvi.mock("@/lib/bots-api");\n',
+    rules: [],
+  },
 };
 
 type Diagnostic = { filename: string; message: string; help?: string };
@@ -836,7 +856,8 @@ describe("boundary lint rules", () => {
   it.each(Object.entries(FIXTURES))("%s", (file, { rules, mentions }) => {
     const texts = findings.get(file) ?? [];
     const fired = texts.map((t) => /\b(R\d+[a-z]?): /.exec(t)?.[1]).toSorted();
-    expect(fired, texts.join("\n")).toEqual(rules);
-    if (mentions) expect(texts.join("\n")).toContain(mentions);
+    const enforced = rules.filter((id) => enforcedRuleIds.has(id));
+    expect(fired, texts.join("\n")).toEqual(enforced);
+    if (mentions && enforced.length > 0) expect(texts.join("\n")).toContain(mentions);
   });
 });

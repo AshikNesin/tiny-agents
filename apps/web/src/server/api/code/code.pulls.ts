@@ -1,3 +1,5 @@
+import { parseJson, record } from "@tiny-agents/std";
+import { z } from "zod";
 import {
   preferredMergeMethod,
   WORKFLOW_KINDS,
@@ -785,14 +787,12 @@ async function pullView(
 
 function passItems(raw: string): Array<{ id: string; title: string }> {
   try {
-    const value = JSON.parse(raw) as unknown;
-    if (!Array.isArray(value)) return [];
-    return value
-      .filter((i): i is { id: string; title?: unknown } => typeof i?.id === "string")
-      .map((i) => ({
-        id: i.id,
-        title: typeof i.title === "string" ? i.title : i.id,
-      }));
+    return parseJson("An Auto-fix pass's items", raw, z.array(z.unknown())).flatMap((i) => {
+      const item = record(i);
+      return typeof item?.id === "string"
+        ? [{ id: item.id, title: typeof item.title === "string" ? item.title : item.id }]
+        : [];
+    });
   } catch {
     return [];
   }

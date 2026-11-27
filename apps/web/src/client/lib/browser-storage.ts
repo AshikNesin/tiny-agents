@@ -1,3 +1,5 @@
+import { parseJson } from "@tiny-agents/std";
+import { z } from "zod";
 function storageIsBlockedInPrivateWindows(): null {
   return null;
 }
@@ -27,7 +29,7 @@ export function readStoredJson(key: string): unknown {
   const raw = readStored(key);
   if (raw === null) return null;
   try {
-    return JSON.parse(raw) as unknown;
+    return parseJson("A stored browser value", raw, z.unknown());
   } catch {
     return storedJsonIsUnreadable();
   }

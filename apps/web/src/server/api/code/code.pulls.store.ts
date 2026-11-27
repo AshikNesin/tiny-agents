@@ -1,3 +1,5 @@
+import { parseJson } from "@tiny-agents/std";
+import { z } from "zod";
 import { and, desc, eq, inArray, isNull, ne } from "drizzle-orm";
 import { Boom } from "@groot/core/errors";
 import type { PullSnapshot } from "@tiny-agents/github";
@@ -117,10 +119,80 @@ export async function cacheSnapshot(
   return row;
 }
 
+const authorSchema = z.object({
+  login: z.string(),
+  type: z.enum(["user", "bot"]),
+  association: z.string(),
+});
+
+const commentSchema = z.object({
+  id: z.string(),
+  databaseId: z.number(),
+  author: authorSchema,
+  body: z.string(),
+  createdAt: z.string(),
+});
+
+const snapshotSchema: z.ZodType<PullSnapshot> = z.object({
+  id: z.string(),
+  number: z.number(),
+  url: z.string(),
+  title: z.string(),
+  body: z.string(),
+  state: z.enum(["open", "closed", "merged"]),
+  draft: z.boolean(),
+  headRef: z.string(),
+  headSha: z.string(),
+  baseRef: z.string(),
+  fromFork: z.boolean(),
+  headRepo: z.object({ owner: z.string(), name: z.string() }).nullable(),
+  maintainerCanModify: z.boolean(),
+  mergeable: z.enum(["mergeable", "conflicting", "unknown"]),
+  mergeMethods: z.array(z.enum(["merge", "squash", "rebase"])),
+  inMergeQueue: z.boolean(),
+  queueRemovals: z.array(z.object({ id: z.string(), at: z.string(), reason: z.string() })),
+  author: z.string().nullable(),
+  checks: z.array(
+    z.object({
+      name: z.string(),
+      state: z.enum(["pending", "success", "failure", "neutral"]),
+      startedAt: z.string().nullable(),
+      completedAt: z.string().nullable(),
+      url: z.string().nullable(),
+      jobId: z.number().nullable(),
+    }),
+  ),
+  reviews: z.array(
+    z.object({
+      id: z.string(),
+      author: authorSchema,
+      state: z.enum(["APPROVED", "CHANGES_REQUESTED", "COMMENTED", "DISMISSED", "PENDING"]),
+      body: z.string(),
+      submittedAt: z.string(),
+      commit: z.string().nullish(),
+    }),
+  ),
+  threads: z.array(
+    z.object({
+      id: z.string(),
+      path: z.string(),
+      line: z.number().nullable(),
+      startLine: z.number().nullish(),
+      side: z.enum(["LEFT", "RIGHT"]).optional(),
+      resolved: z.boolean(),
+      outdated: z.boolean(),
+      comments: z.array(commentSchema),
+    }),
+  ),
+  comments: z.array(commentSchema),
+});
+
+const passItemIdsSchema = z.array(z.looseObject({ id: z.string() }));
+
 export function cachedSnapshot(row: CodePullRow): PullSnapshot | null {
   if (!row.snapshot) return null;
   try {
-    return JSON.parse(row.snapshot) as PullSnapshot;
+    return parseJson("A pull request's cached snapshot", row.snapshot, snapshotSchema);
   } catch {
     return null;
   }
@@ -206,7 +278,7 @@ export async function passesOf(pullId: string): Promise<CodeAutofixPass[]> {
 export function passRecord(row: CodeAutofixPass): PassRecord {
   let items: string[] = [];
   try {
-    items = (JSON.parse(row.items) as Array<{ id: string }>).map((i) => i.id);
+    items = parseJson("An Auto-fix pass's items", row.items, passItemIdsSchema).map((i) => i.id);
   } catch {
     items = [];
   }

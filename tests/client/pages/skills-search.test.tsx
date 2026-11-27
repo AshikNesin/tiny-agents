@@ -1,25 +1,13 @@
 import React from "react";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, beforeEach, expect, it, vi } from "vite-plus/test";
+import { describe, expect, it } from "vite-plus/test";
 import { MemoryRouter } from "react-router-dom";
 import { GrootUIProvider } from "@groot/ui";
 import { SkillsPage } from "@/pages/skills/Skills";
 import type { Skill } from "../../../apps/web/src/shared/api/skills";
+import { fakeApi } from "../fakes/api";
 import { AppQueryProvider } from "../query-provider";
-
-const listMock = vi.fn();
-
-vi.mock("@/lib/skills-api", async (importOriginal) => {
-  const original = await importOriginal<typeof import("@/lib/skills-api")>();
-  return {
-    ...original,
-    skillsApi: {
-      ...original.skillsApi,
-      list: (...args: unknown[]) => listMock(...args),
-    },
-  };
-});
 
 function skill(partial: Partial<Skill> = {}): Skill {
   return {
@@ -39,7 +27,7 @@ function skill(partial: Partial<Skill> = {}): Skill {
 }
 
 function mount(skills: Skill[]) {
-  listMock.mockResolvedValue(skills);
+  fakeApi().get("/skills", () => skills);
   return render(
     <AppQueryProvider>
       <MemoryRouter>
@@ -52,10 +40,6 @@ function mount(skills: Skill[]) {
 }
 
 describe("skills search", () => {
-  beforeEach(() => {
-    listMock.mockReset();
-  });
-
   it("matches a skill's name case-insensitively", async () => {
     mount([skill()]);
     const search = await screen.findByLabelText("Search skills");

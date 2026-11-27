@@ -25,62 +25,16 @@ import { SkillDetail } from "@/pages/skills/SkillDetail";
 import { ConnectionDetail } from "@/pages/connections/ConnectionDetail";
 import { StepUpProvider } from "@/components/vault/StepUp";
 import { useBotsStore } from "@/store/bots";
-import type { MemoryRecord } from "../../../apps/web/src/shared/api/memories";
+import type { Bot, BotListEntry } from "../../../apps/web/src/shared/api/bots";
+import type { MemoryList, MemoryRecord } from "../../../apps/web/src/shared/api/memories";
 import type { Skill } from "../../../apps/web/src/shared/api/skills";
 import type { Connection } from "../../../apps/web/src/shared/api/connections";
+import { FIXED_NOW } from "../../test-clock";
+import { ApiFailure, fakeApi } from "../fakes/api";
 import { AppQueryProvider } from "../query-provider";
 import { markup, outline } from "../dom-outline";
 
-const api = vi.hoisted(() => ({
-  botsList: vi.fn(),
-  botsGet: vi.fn(),
-  listMemories: vi.fn(),
-  skillGet: vi.fn(),
-  skillUpdate: vi.fn(),
-  connectionGet: vi.fn(),
-}));
-
-vi.mock("@/lib/bots-api", async (importOriginal) => {
-  const original = await importOriginal<typeof import("@/lib/bots-api")>();
-  return {
-    ...original,
-    botsApi: {
-      list: (...args: unknown[]) => api.botsList(...args),
-      get: (...args: unknown[]) => api.botsGet(...args),
-      listMemories: (...args: unknown[]) => api.listMemories(...args),
-      createMemory: vi.fn(),
-      update: vi.fn(),
-      updateMemory: vi.fn(),
-      deleteMemory: vi.fn(),
-    },
-  };
-});
-vi.mock("@/lib/skills-api", async (importOriginal) => {
-  const original = await importOriginal<typeof import("@/lib/skills-api")>();
-  return {
-    ...original,
-    skillsApi: {
-      get: (...args: unknown[]) => api.skillGet(...args),
-      update: (...args: unknown[]) => api.skillUpdate(...args),
-      remove: vi.fn(),
-      list: vi.fn().mockResolvedValue([]),
-    },
-  };
-});
-vi.mock("@/lib/connections-api", async (importOriginal) => {
-  const original = await importOriginal<typeof import("@/lib/connections-api")>();
-  return {
-    ...original,
-    connectionsApi: {
-      get: (...args: unknown[]) => api.connectionGet(...args),
-      update: vi.fn(),
-      updateTool: vi.fn(),
-      reconnect: vi.fn(),
-      remove: vi.fn(),
-    },
-  };
-});
-vi.mock("@/lib/sse", () => ({ subscribeSse: vi.fn(() => ({ close: () => undefined })) }));
+vi.mock("@/lib/sse", async () => (await import("../fakes/sse")).sseModule);
 vi.mock("streamdown", () => ({
   Streamdown: ({ children }: { children?: React.ReactNode }) => (
     <div data-stand-in="streamdown">{children}</div>
@@ -105,9 +59,64 @@ const hoverShown = () =>
 const user = userEvent.setup();
 const DAY = 24 * 60 * 60_000;
 
+let api: ReturnType<typeof fakeApi>;
+const pending = () => new Promise(() => {});
+const failing = (status: number, message: string) => () => {
+  throw new ApiFailure(status, message);
+};
+
 beforeEach(() => {
-  for (const fn of Object.values(api)) fn.mockReset();
+  api = fakeApi();
+  api.get("/skills", (): Skill[] => []);
 });
+
+function listed(id: string, name: string, description = ""): BotListEntry {
+  return {
+    id,
+    conversationId: `c-${id}`,
+    name,
+    description,
+    modelId: null,
+    lastMessagePreview: null,
+    lastActivityAt: FIXED_NOW,
+    lastReadAt: null,
+    unread: false,
+    replying: false,
+    approvals: 0,
+    questions: 0,
+    pinnedAt: null,
+    projectId: null,
+  };
+}
+
+function bot(entry: BotListEntry, memoryEnabled: boolean): Bot {
+  return {
+    id: entry.id,
+    name: entry.name,
+    description: entry.description,
+    systemPrompt: "",
+    modelId: null,
+    conversationId: entry.conversationId,
+    chatStartedAt: FIXED_NOW,
+    lastReadAt: null,
+    lastActivityAt: FIXED_NOW,
+    lastMessagePreview: null,
+    memoryEnabled,
+    autoReview: false,
+    yoloByDefault: false,
+    memoryCapturedThrough: null,
+    pinnedAt: null,
+    browserProfile: "shared",
+    projectId: null,
+    createdAt: FIXED_NOW,
+    updatedAt: FIXED_NOW,
+    toolPermissions: {},
+    skillIds: [],
+    connectionIds: [],
+    connectionCapabilities: [],
+    guestIds: [],
+  };
+}
 
 function memory(partial: Partial<MemoryRecord> & { id: string; botId: string }): MemoryRecord {
   return {
@@ -125,10 +134,10 @@ function memory(partial: Partial<MemoryRecord> & { id: string; botId: string }):
 }
 
 const MEMORY_BOTS = [
-  { id: "b1", name: "Helper Bot" },
-  { id: "b2", name: "Journal Bot" },
-  { id: "b3", name: "Quiet Bot" },
-  { id: "b4", name: "Off Bot" },
+  listed("b1", "Helper Bot"),
+  listed("b2", "Journal Bot"),
+  listed("b3", "Quiet Bot"),
+  listed("b4", "Off Bot"),
 ];
 
 const MEMORIES: Record<string, MemoryRecord[]> = {
@@ -159,9 +168,14 @@ const MEMORIES: Record<string, MemoryRecord[]> = {
 };
 
 function loadMemory(rows: Record<string, MemoryRecord[]> = MEMORIES, bots = MEMORY_BOTS) {
-  api.botsList.mockResolvedValue(bots);
-  api.botsGet.mockImplementation(async (id: string) => ({ id, memoryEnabled: id !== "b4" }));
-  api.listMemories.mockImplementation(async (id: string) => ({ memories: rows[id] ?? [] }));
+  api.get("/bots", () => bots);
+  api.get("/bots/:id", ({ params }) =>
+    bot(
+      bots.find((entry) => entry.id === params.id)!,
+      params.id !== "b4",
+    ),
+  );
+  api.get("/bots/:id/memories", ({ params }): MemoryList => ({ memories: rows[params.id!] ?? [] }));
 }
 
 async function mountMemory() {
@@ -180,26 +194,26 @@ async function mountMemory() {
 
 async function memoryLoaded() {
   await screen.findByText("Journals every night");
-  const bots = (await api.botsList.mock.results[0]?.value) as unknown[];
   await waitFor(() => {
-    expect(api.botsGet).toHaveBeenCalledTimes(bots.length);
-    expect(api.listMemories).toHaveBeenCalledTimes(bots.length);
+    for (const { id } of MEMORY_BOTS) {
+      expect(api.sent("GET", `/bots/${id}`)).toHaveLength(1);
+      expect(api.sent("GET", `/bots/${id}/memories`)).toHaveLength(1);
+    }
   });
-  await Promise.all(api.botsGet.mock.results.map((r) => r.value));
-  await Promise.all(api.listMemories.mock.results.map((r) => r.value));
+  await settle();
   await settle();
   await settle();
 }
 
 describe("Memory, pinned", () => {
   it("while loading", async () => {
-    api.botsList.mockReturnValue(new Promise(() => {}));
+    api.get("/bots", pending);
     await mountMemory();
     pin();
   });
 
   it("after a failed load", async () => {
-    api.botsList.mockRejectedValue(new Error("Server down"));
+    api.get("/bots", failing(500, "Server down"));
     await mountMemory();
     await screen.findByText("Couldn't load memories");
     pin();
@@ -263,10 +277,7 @@ const skill = (partial: Partial<Skill> = {}): Skill => ({
   ...partial,
 });
 
-const SKILL_BOTS = [
-  { id: "b1", name: "Helper Bot", description: "Helps" },
-  { id: "b2", name: "Journal Bot", description: "" },
-];
+const SKILL_BOTS = [listed("b1", "Helper Bot", "Helps"), listed("b2", "Journal Bot")];
 
 async function mountSkill() {
   const router = createMemoryRouter(
@@ -289,37 +300,37 @@ async function mountSkill() {
 
 describe("SkillDetail, pinned", () => {
   it("while loading", async () => {
-    api.skillGet.mockReturnValue(new Promise(() => {}));
-    api.botsList.mockReturnValue(new Promise(() => {}));
+    api.get("/skills/:id", pending);
+    api.get("/bots", pending);
     await mountSkill();
     pin();
   });
 
   it("after a failed load", async () => {
-    api.skillGet.mockRejectedValue(new Error("Gone"));
-    api.botsList.mockResolvedValue(SKILL_BOTS);
+    api.get("/skills/:id", failing(404, "Gone"));
+    api.get("/bots", () => SKILL_BOTS);
     await mountSkill();
     await screen.findByText("Couldn't load skill");
     pin();
   });
 
   it("used by one bot, bots still loading", async () => {
-    api.skillGet.mockResolvedValue(skill());
-    api.botsList.mockReturnValue(new Promise(() => {}));
+    api.get("/skills/:id", () => skill());
+    api.get("/bots", pending);
     await mountSkill();
     pin();
   });
 
   it("used by one bot", async () => {
-    api.skillGet.mockResolvedValue(skill());
-    api.botsList.mockResolvedValue(SKILL_BOTS);
+    api.get("/skills/:id", () => skill());
+    api.get("/bots", () => SKILL_BOTS);
     await mountSkill();
     pin();
   });
 
   it("used by none", async () => {
-    api.skillGet.mockResolvedValue(skill({ botIds: [], files: [], body: "" }));
-    api.botsList.mockResolvedValue(SKILL_BOTS);
+    api.get("/skills/:id", () => skill({ botIds: [], files: [], body: "" }));
+    api.get("/bots", () => SKILL_BOTS);
     await mountSkill();
     pin("edit");
     await user.click(screen.getByRole("tab", { name: "Preview" }));
@@ -328,15 +339,15 @@ describe("SkillDetail, pinned", () => {
   });
 
   it("no bots", async () => {
-    api.skillGet.mockResolvedValue(skill({ botIds: [] }));
-    api.botsList.mockResolvedValue([]);
+    api.get("/skills/:id", () => skill({ botIds: [] }));
+    api.get("/bots", () => []);
     await mountSkill();
     pin();
   });
 
   it("edited, previewed, then asked to delete", async () => {
-    api.skillGet.mockResolvedValue(skill({ botIds: ["b1", "b2"] }));
-    api.botsList.mockResolvedValue(SKILL_BOTS);
+    api.get("/skills/:id", () => skill({ botIds: ["b1", "b2"] }));
+    api.get("/bots", () => SKILL_BOTS);
     await mountSkill();
     await user.type(screen.getByLabelText("Description"), " now");
     pin("dirty");
@@ -384,14 +395,11 @@ const connection = (partial: Partial<Connection> = {}): Connection => ({
   ...partial,
 });
 
-const CONNECTION_BOTS = [
-  { id: "b1", name: "Helper Bot", description: "Helps" },
-  { id: "b2", name: "Journal Bot", description: "" },
-];
+const CONNECTION_BOTS = SKILL_BOTS;
 
-function seedBots(bots: unknown[] | null) {
+function seedBots(bots: BotListEntry[] | null) {
   useBotsStore.setState({
-    bots: (bots ?? []) as never,
+    bots: bots ?? [],
     loading: bots === null,
   });
 }
@@ -415,14 +423,14 @@ async function mountConnection() {
 describe("ConnectionDetail, pinned", () => {
   it("while loading", async () => {
     seedBots(CONNECTION_BOTS);
-    api.connectionGet.mockReturnValue(new Promise(() => {}));
+    api.get("/connections/:id", pending);
     await mountConnection();
     pin();
   });
 
   it("after a failed load", async () => {
     seedBots(CONNECTION_BOTS);
-    api.connectionGet.mockRejectedValue(new Error("Gone"));
+    api.get("/connections/:id", failing(404, "Gone"));
     await mountConnection();
     await screen.findByText("Couldn't load connection");
     pin();
@@ -430,7 +438,7 @@ describe("ConnectionDetail, pinned", () => {
 
   it("connected, with tools and bots", async () => {
     seedBots(CONNECTION_BOTS);
-    api.connectionGet.mockResolvedValue(connection());
+    api.get("/connections/:id", () => connection());
     await mountConnection();
     pin();
   });
@@ -439,7 +447,7 @@ describe("ConnectionDetail, pinned", () => {
     "%s, without tools, bots loading",
     async (status) => {
       seedBots(null);
-      api.connectionGet.mockResolvedValue(
+      api.get("/connections/:id", () =>
         connection({
           status,
           tools: [],
@@ -454,7 +462,7 @@ describe("ConnectionDetail, pinned", () => {
 
   it("no bots", async () => {
     seedBots([]);
-    api.connectionGet.mockResolvedValue(connection({ botIds: [] }));
+    api.get("/connections/:id", () => connection({ botIds: [] }));
     await mountConnection();
     pin();
   });
@@ -465,7 +473,7 @@ describe("ConnectionDetail, pinned", () => {
     ["several", ["b1", "b2"]],
   ])("the remove prompt for %s", async (_name, botIds) => {
     seedBots(CONNECTION_BOTS);
-    api.connectionGet.mockResolvedValue(connection({ botIds }));
+    api.get("/connections/:id", () => connection({ botIds }));
     await mountConnection();
     await user.click(screen.getByRole("button", { name: "Remove" }));
     const dialog = await screen.findByRole("dialog");

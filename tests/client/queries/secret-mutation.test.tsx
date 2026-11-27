@@ -1,15 +1,21 @@
 import React from "react";
 import { act, render, screen, waitFor } from "@testing-library/react";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
-import { describe, expect, it, vi } from "vite-plus/test";
+import { describe, expect, it } from "vite-plus/test";
 import { useSecretMutation } from "@/queries/resource";
 import { useVaultOverview } from "@/queries/vault";
+import type { VaultOverview } from "../../../apps/web/src/shared/api/vault";
+import { fakeApi } from "../fakes/api";
 import { AppQueryProvider } from "../query-provider";
 
-const overviewMock = vi.fn();
-vi.mock("@/lib/vault-api", () => ({
-  vaultApi: { overview: (...args: unknown[]) => overviewMock(...args) },
-}));
+const emptyVault: VaultOverview = {
+  backends: [],
+  primaryBackend: "local",
+  items: [],
+  unlinked: [],
+  kindDefaults: { login: [], card: [], identity: [], api_key: [] },
+  movableToOnePassword: 0,
+};
 
 let client!: QueryClient;
 let write!: (secret: string) => Promise<string>;
@@ -58,7 +64,8 @@ function OverviewProbe() {
 
 describe("useVaultOverview", () => {
   it("reads the backends again only on reload(true)", async () => {
-    overviewMock.mockResolvedValue({ items: [] });
+    const api = fakeApi();
+    api.get("/vault", () => emptyVault);
     render(
       <AppQueryProvider>
         <OverviewProbe />
@@ -67,6 +74,10 @@ describe("useVaultOverview", () => {
     expect(await screen.findByText("loaded")).toBeTruthy();
     await act(() => reload(true));
     await act(() => reload());
-    expect(overviewMock.mock.calls).toEqual([[false], [true], [false]]);
+    expect(api.sent("GET", "/vault").map((request) => request.query.toString())).toEqual([
+      "",
+      "refresh=1",
+      "",
+    ]);
   });
 });

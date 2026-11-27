@@ -1,3 +1,5 @@
+import { parseJson } from "@tiny-agents/std";
+import { z } from "zod";
 import { GitHubError, graphQlData, type GitHubApi, type GraphQlBody } from "./api";
 
 export interface ExecResult {
@@ -15,11 +17,24 @@ const SAFE_PATH = /^\/[A-Za-z0-9/_.%~-]+$/;
 
 const GH_TIMEOUT_MS = 60_000;
 
+const failureBodySchema = z.looseObject({ message: z.unknown().optional() });
+
+const graphQlBodySchema = z.looseObject({
+  data: z.unknown().optional(),
+  errors: z
+    .array(z.looseObject({ message: z.string().optional(), type: z.string().optional() }))
+    .optional(),
+});
+
+function graphQlBody<T>(text: string): GraphQlBody<T> {
+  return parseJson("GitHub's GraphQL answer", text, graphQlBodySchema) as GraphQlBody<T>;
+}
+
 function failure(result: ExecResult): GitHubError {
   const status = /\(HTTP (\d{3})\)/.exec(result.stderr)?.[1];
   let message = result.stderr.trim().replace(/^gh: /, "");
   try {
-    const body = JSON.parse(result.stdout) as { message?: string; errors?: unknown };
+    const body = parseJson("gh's error answer", result.stdout, failureBodySchema);
     if (typeof body.message === "string") message = body.message;
   } catch {}
   if (result.exitCode === 127) message = "gh is not installed on the sandbox.";
@@ -38,7 +53,7 @@ export function createGhTransport(exec: ExecPort): GitHubApi {
     if (result.exitCode !== 0) {
       if (args.startsWith("graphql")) {
         try {
-          graphQlData(JSON.parse(result.stdout) as GraphQlBody<unknown>);
+          graphQlData(graphQlBody<unknown>(result.stdout));
         } catch (error) {
           if (error instanceof GitHubError) throw error;
         }
@@ -52,7 +67,7 @@ export function createGhTransport(exec: ExecPort): GitHubApi {
     kind: "gh",
     async graphql<T>(query: string, variables: Record<string, unknown> = {}) {
       const out = await run("graphql --input -", JSON.stringify({ query, variables }));
-      return graphQlData(JSON.parse(out) as GraphQlBody<T>);
+      return graphQlData(graphQlBody<T>(out));
     },
     async rest<T>(method: string, path: string, options: { body?: unknown; text?: boolean } = {}) {
       if (!SAFE_PATH.test(path)) throw new GitHubError(`Invalid path ${path}`);

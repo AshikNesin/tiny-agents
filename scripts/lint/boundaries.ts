@@ -425,6 +425,14 @@ const BOUNDARY_RULES: BoundaryRule[] = [
     except: ["**/*.test.ts"],
     enabled: true,
   },
+  {
+    id: "R21",
+    kind: "plugin",
+    scope: "tests/client/**",
+    rule: "repo/no-first-party-mock",
+    options: { allow: ["@/lib/sse", "@/lib/novnc", "@/lib/xterm", "@/lib/terminal-ws"] },
+    enabled: false,
+  },
 ];
 
 export const enforcedRuleIds = new Set(BOUNDARY_RULES.filter((r) => r.enabled).map((r) => r.id));

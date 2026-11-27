@@ -12,50 +12,30 @@ import { useBotsStore } from "@/store/bots";
 import { useCodeStore } from "@/store/code";
 import { usePeopleStore } from "@/store/people";
 import type { HarnessInfo } from "@/lib/code/api";
-import type { GitHubStatus, ProjectView } from "../../../apps/web/src/shared/api/code";
+import type { Bot, BotListEntry } from "../../../apps/web/src/shared/api/bots";
+import type {
+  GitHubStatus,
+  InboxPullView,
+  ProjectView,
+  PullReviewView,
+  ReviewInboxSettings,
+} from "../../../apps/web/src/shared/api/code";
+import { FIXED_NOW } from "../../test-clock";
+import { fakeApi } from "../fakes/api";
 import { AppQueryProvider } from "../query-provider";
 
 const render = (ui: Parameters<typeof renderBare>[0]) =>
   renderBare(ui, { wrapper: AppQueryProvider });
 
-const patches: Array<[string, unknown]> = [];
-const posts: string[] = [];
-const puts: Array<[string, unknown]> = [];
-
 vi.mock("sonner", () => ({
   toast: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn(), message: vi.fn() }),
 }));
 
-vi.mock("@groot/shell/lib/api", async (importOriginal) => {
-  const original = await importOriginal<typeof import("@groot/shell/lib/api")>();
-  const reads: Record<string, () => unknown> = {
-    "/code/projects": () => [project],
-    "/code/github": () => github,
-    "/code/github/app/repositories": () => [],
-    "/code/reviews/settings": () => inbox,
-  };
-  return {
-    ...original,
-    apiClient: Object.assign(Object.create(original.apiClient) as typeof original.apiClient, {
-      get: async (path: string) => reads[path]?.() ?? [],
-      post: async (path: string) => {
-        posts.push(path);
-        if (path === "/code/projects") return { ...project, id: "p2" };
-        if (path === "/code/projects/p2/chat") return { id: "b2", name: "web", projectId: "p2" };
-        return {};
-      },
-      put: async (path: string, body: unknown) => {
-        puts.push([path, body]);
-        return path === "/code/reviews/settings" ? { ...inbox, ...(body as object) } : github;
-      },
-      delete: async () => ({}),
-      patch: async (path: string, body: unknown) => {
-        patches.push([path, body]);
-        return project;
-      },
-    }),
-  };
-});
+let api: ReturnType<typeof fakeApi>;
+const patches = () => api.sent("PATCH", "/code/projects/p1").map((request) => request.body);
+const puts = () => api.sent("PUT", "/code/reviews/settings").map((request) => request.body);
+const posts = () =>
+  api.requests.filter((request) => request.method === "POST").map((request) => request.path);
 
 const project: ProjectView = {
   id: "p1",
@@ -87,13 +67,40 @@ const project: ProjectView = {
   createdAt: "2026-11-01T10:00:00Z",
 };
 
-const inbox = {
+const inbox: ReviewInboxSettings = {
   repos: "all",
   direct: true,
   drafts: false,
   bots: false,
-  mute: [] as string[],
+  mute: [],
   limit: 10,
+};
+
+const projectChat: Bot = {
+  id: "b2",
+  name: "web",
+  description: "",
+  systemPrompt: "",
+  modelId: "m1",
+  conversationId: "c-b2",
+  chatStartedAt: FIXED_NOW,
+  lastReadAt: null,
+  lastActivityAt: FIXED_NOW,
+  lastMessagePreview: null,
+  memoryEnabled: true,
+  autoReview: false,
+  yoloByDefault: false,
+  memoryCapturedThrough: null,
+  pinnedAt: null,
+  browserProfile: "shared",
+  projectId: "p2",
+  createdAt: FIXED_NOW,
+  updatedAt: FIXED_NOW,
+  toolPermissions: {},
+  skillIds: [],
+  connectionIds: [],
+  connectionCapabilities: [],
+  guestIds: [],
 };
 
 const github: GitHubStatus = {
@@ -144,8 +151,21 @@ function renderAt(path: string) {
 
 beforeEach(() => {
   usePeopleStore.setState({ role: "owner" });
-  patches.length = 0;
-  puts.length = 0;
+  api = fakeApi();
+  api.get("/code/projects", () => [project]);
+  api.get("/code/github", () => github);
+  api.get("/code/github/app/repositories", () => []);
+  api.get("/code/reviews/settings", () => inbox);
+  api.get("/code/reviews/inbox", (): InboxPullView[] => []);
+  api.get("/code/reviews", (): PullReviewView[] => []);
+  api.get("/bots", (): BotListEntry[] => []);
+  api.post("/code/projects", (): ProjectView => ({ ...project, id: "p2" }));
+  api.post("/code/projects/p2/chat", () => projectChat);
+  api.patch("/code/projects/:id", () => project);
+  api.put("/code/reviews/settings", ({ body }): ReviewInboxSettings => ({
+    ...inbox,
+    ...(body as Partial<ReviewInboxSettings>),
+  }));
   useCodeStore.setState({ harnesses: [shelley], statuses: {}, threads: [] });
 });
 
@@ -191,9 +211,9 @@ describe("Code settings", () => {
     await userEvent.click(viaApp);
     await userEvent.type(await screen.findByPlaceholderText(/owner\/repository/), "acme/web");
     await userEvent.click(screen.getByRole("button", { name: "Add" }));
-    await waitFor(() => expect(posts).toContain("/code/projects/p2/chat"));
-    expect(useBotsStore.getState().fullBots.b2?.projectId).toBe("p2");
-    expect(posts).toEqual(["/code/projects", "/code/projects/p2/chat"]);
+    await waitFor(() => expect(posts()).toContain("/code/projects/p2/chat"));
+    await waitFor(() => expect(useBotsStore.getState().fullBots.b2?.projectId).toBe("p2"));
+    expect(posts()).toEqual(["/code/projects", "/code/projects/p2/chat"]);
   });
 
   it("starts Add a project with the repository the Reviews screen asked for (#386)", async () => {
@@ -210,36 +230,25 @@ describe("Code settings", () => {
     await userEvent.clear(branch);
     await userEvent.type(branch, "develop");
     await userEvent.tab();
-    await waitFor(() =>
-      expect(patches).toContainEqual(["/code/projects/p1", { baseBranch: "develop" }]),
-    );
+    await waitFor(() => expect(patches()).toContainEqual({ baseBranch: "develop" }));
 
     const prefix = screen.getByRole("textbox", { name: "Branch prefix" });
     expect(prefix).toHaveValue("ta/");
     await userEvent.clear(prefix);
     await userEvent.type(prefix, "ashik/");
     await userEvent.tab();
-    await waitFor(() =>
-      expect(patches.at(-1)).toEqual([
-        "/code/projects/p1",
-        { settings: { branchPrefix: "ashik/" } },
-      ]),
-    );
+    await waitFor(() => expect(patches().at(-1)).toEqual({ settings: { branchPrefix: "ashik/" } }));
 
     await userEvent.type(screen.getByRole("textbox", { name: "Setup script" }), "pnpm install");
     await userEvent.tab();
     await waitFor(() =>
-      expect(patches.at(-1)).toEqual([
-        "/code/projects/p1",
-        { settings: { scripts: { setup: "pnpm install" } } },
-      ]),
+      expect(patches().at(-1)).toEqual({ settings: { scripts: { setup: "pnpm install" } } }),
     );
     await userEvent.click(screen.getByRole("switch", { name: "Resolve conflicts" }));
     await waitFor(() =>
-      expect(patches.at(-1)).toEqual([
-        "/code/projects/p1",
-        { settings: { autofix: { triggers: { conflicts: false } } } },
-      ]),
+      expect(patches().at(-1)).toEqual({
+        settings: { autofix: { triggers: { conflicts: false } } },
+      }),
     );
     await userEvent.type(
       screen.getByRole("textbox", { name: "Instructions for every workflow" }),
@@ -247,17 +256,14 @@ describe("Code settings", () => {
     );
     await userEvent.tab();
     await waitFor(() =>
-      expect(patches.at(-1)).toEqual([
-        "/code/projects/p1",
-        { settings: { workflowInstructions: "Run the tests first" } },
-      ]),
+      expect(patches().at(-1)).toEqual({
+        settings: { workflowInstructions: "Run the tests first" },
+      }),
     );
     const drafts = screen.getByRole("switch", { name: "Open new PRs as drafts" });
     expect(drafts).toBeChecked();
     await userEvent.click(drafts);
-    await waitFor(() =>
-      expect(patches.at(-1)).toEqual(["/code/projects/p1", { settings: { draftPulls: false } }]),
-    );
+    await waitFor(() => expect(patches().at(-1)).toEqual({ settings: { draftPulls: false } }));
   });
 
   it("returns from GitHub's App setup to the GitHub settings page", async () => {
@@ -281,22 +287,15 @@ describe("Review list settings", () => {
     const direct = await screen.findByRole("switch", { name: "Only requests to you" });
     expect(direct).toBeChecked();
     await userEvent.click(direct);
-    await waitFor(() => expect(puts.at(-1)).toEqual(["/code/reviews/settings", { direct: false }]));
+    await waitFor(() => expect(puts().at(-1)).toEqual({ direct: false }));
 
     await userEvent.click(screen.getByRole("switch", { name: "Only project repositories" }));
-    await waitFor(() =>
-      expect(puts.at(-1)).toEqual(["/code/reviews/settings", { repos: "projects" }]),
-    );
+    await waitFor(() => expect(puts().at(-1)).toEqual({ repos: "projects" }));
 
     await userEvent.type(
       screen.getByRole("textbox", { name: "Hide PRs matching" }),
       "back-merge, @release-bot{Enter}",
     );
-    await waitFor(() =>
-      expect(puts.at(-1)).toEqual([
-        "/code/reviews/settings",
-        { mute: ["back-merge", "@release-bot"] },
-      ]),
-    );
+    await waitFor(() => expect(puts().at(-1)).toEqual({ mute: ["back-merge", "@release-bot"] }));
   });
 });

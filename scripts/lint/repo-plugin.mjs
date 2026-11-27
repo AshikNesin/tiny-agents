@@ -289,6 +289,22 @@ const isCollection = (node) => {
 
 const FUNCTIONS = new Set(["FunctionDeclaration", "FunctionExpression", "ArrowFunctionExpression"]);
 
+const FIRST_PARTY_MOCK_MESSAGE =
+  "R21: fake the network with fakeApi() from tests/client/fakes/api.ts and render the real module; a mocked first-party module skips the envelope, the error mapping and the real `*-api.ts`, store or component, so the test passes whether or not they work (docs/guides/testing.md). Only a third-party package, or a transport jsdom cannot run that R21's allow in scripts/lint/boundaries.ts lists, is mocked.";
+
+const FIRST_PARTY_SPECIFIER = /^(@\/|@groot\/|@tiny-agents\/|\.)/;
+const CLIENT_ALIAS = "@/";
+const CLIENT_ROOT = "/apps/web/src/client/";
+
+const mockAllowed = (specifier, allow) =>
+  allow.some(
+    (entry) =>
+      specifier === entry ||
+      (specifier.startsWith(".") &&
+        entry.startsWith(CLIENT_ALIAS) &&
+        specifier.endsWith(CLIENT_ROOT + entry.slice(CLIENT_ALIAS.length))),
+  );
+
 export default {
   meta: { name: "repo" },
   rules: {
@@ -307,6 +323,31 @@ export default {
               restricted.test(String(source.value))
             )
               context.report({ node, message });
+          },
+        };
+      },
+    },
+    "no-first-party-mock": {
+      meta: { schema: [{ type: "object" }] },
+      create(context) {
+        const allow = context.options[0]?.allow ?? [];
+        return {
+          CallExpression(node) {
+            const { callee } = node;
+            const [source] = node.arguments;
+            if (
+              callee.type !== "MemberExpression" ||
+              callee.object.type !== "Identifier" ||
+              callee.object.name !== "vi" ||
+              callee.property.type !== "Identifier" ||
+              (callee.property.name !== "mock" && callee.property.name !== "doMock") ||
+              source?.type !== "Literal" ||
+              typeof source.value !== "string" ||
+              !FIRST_PARTY_SPECIFIER.test(source.value) ||
+              mockAllowed(source.value, allow)
+            )
+              return;
+            context.report({ node, message: FIRST_PARTY_MOCK_MESSAGE });
           },
         };
       },

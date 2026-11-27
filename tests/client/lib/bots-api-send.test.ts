@@ -1,16 +1,18 @@
-import { describe, expect, it, vi } from "vite-plus/test";
-
-const postMock = vi.fn().mockResolvedValue(undefined);
-vi.mock("@groot/shell/lib/api", () => ({
-  apiClient: { post: (...args: unknown[]) => postMock(...args) },
-}));
-
+import { beforeEach, describe, expect, it } from "vite-plus/test";
 import { botsApi } from "@/lib/bots-api";
+import { fakeApi } from "../fakes/api";
+
+let api: ReturnType<typeof fakeApi>;
+
+beforeEach(() => {
+  api = fakeApi();
+  api.post("/bots/:id/messages", () => ({ submitted: true }));
+});
 
 describe("botsApi.send", () => {
   it("posts requestId, text and mentions", async () => {
-    await botsApi.send("b1", "r1", "@Ada hi", ["b2"]);
-    expect(postMock).toHaveBeenCalledWith("/bots/b1/messages", {
+    await expect(botsApi.send("b1", "r1", "@Ada hi", ["b2"])).resolves.toEqual({ submitted: true });
+    expect(api.sent("POST", "/bots/b1/messages")[0]!.body).toEqual({
       requestId: "r1",
       text: "@Ada hi",
       mentions: ["b2"],
@@ -19,10 +21,9 @@ describe("botsApi.send", () => {
 
   it("keeps the legacy two-field body when nothing is mentioned", async () => {
     await botsApi.send("b1", "r1", "plain hi", undefined);
-    expect(postMock).toHaveBeenCalledWith("/bots/b1/messages", {
+    expect(api.sent("POST", "/bots/b1/messages")[0]!.body).toEqual({
       requestId: "r1",
       text: "plain hi",
-      mentions: undefined,
     });
   });
 });

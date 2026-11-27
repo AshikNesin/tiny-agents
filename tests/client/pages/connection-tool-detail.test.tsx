@@ -5,28 +5,18 @@ import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { MemoryRouter } from "react-router-dom";
 import { GrootUIProvider } from "@groot/ui";
 import { ConnectionToolDetail } from "@/pages/connections/ConnectionToolDetail";
-import type { ConnectionToolDetail as ToolDetail } from "../../../apps/web/src/shared/api/connections";
+import type {
+  ConnectionToolDetail as ToolDetail,
+  ToolCallResult,
+} from "../../../apps/web/src/shared/api/connections";
+import { ApiFailure, fakeApi } from "../fakes/api";
 import { AppQueryProvider } from "../query-provider";
 
-const getToolMock = vi.fn();
-const updateToolMock = vi.fn();
-const callToolMock = vi.fn();
+vi.mock("@/lib/sse", async () => (await import("../fakes/sse")).sseModule);
 
-vi.mock("@/lib/connections-api", async (importOriginal) => {
-  const original = await importOriginal<typeof import("@/lib/connections-api")>();
-  return {
-    ...original,
-    connectionsApi: {
-      getTool: (...args: unknown[]) => getToolMock(...args),
-      updateTool: (...args: unknown[]) => updateToolMock(...args),
-      callTool: (...args: unknown[]) => callToolMock(...args),
-    },
-  };
-});
-
-vi.mock("@/lib/sse", () => ({
-  subscribeSse: vi.fn(() => ({ close: () => undefined })),
-}));
+const TOOL = "/connections/c1/tools/save_file";
+let api: ReturnType<typeof fakeApi>;
+const calls = () => api.sent("POST", `${TOOL}/call`).map((request) => request.body);
 
 function tool(partial: Partial<ToolDetail> = {}): ToolDetail {
   return {
@@ -68,12 +58,13 @@ function mount() {
 
 describe("ConnectionToolDetail", () => {
   beforeEach(() => {
-    getToolMock.mockReset().mockResolvedValue(tool());
-    updateToolMock.mockReset().mockResolvedValue(tool({ enabled: false }));
-    callToolMock.mockReset().mockResolvedValue({
+    api = fakeApi();
+    api.get(TOOL, () => tool());
+    api.patch(TOOL, () => tool({ enabled: false }));
+    api.post(`${TOOL}/call`, (): ToolCallResult => ({
       result: { content: [{ type: "text", text: '{"saved":true}' }] },
       durationMs: 42,
-    });
+    }));
   });
 
   it("shows the tool's schema and turns it off for bots", async () => {
@@ -86,7 +77,7 @@ describe("ConnectionToolDetail", () => {
 
     await user.click(screen.getByRole("switch", { name: "Available to bots" }));
     await waitFor(() =>
-      expect(updateToolMock).toHaveBeenCalledWith("c1", "save_file", { enabled: false }),
+      expect(api.sent("PATCH", TOOL).map((request) => request.body)).toEqual([{ enabled: false }]),
     );
     expect(await screen.findByText("Off for every bot")).toBeTruthy();
   });
@@ -98,29 +89,27 @@ describe("ConnectionToolDetail", () => {
 
     await user.click(screen.getByRole("button", { name: "Run tool" }));
     expect(await screen.findByText("Required")).toBeTruthy();
-    expect(callToolMock).not.toHaveBeenCalled();
+    expect(calls()).toEqual([]);
 
     await user.type(screen.getByLabelText(/^name/), "notes.md");
     await user.click(screen.getByRole("button", { name: "Run tool" }));
     await user.click(await screen.findByRole("button", { name: "Run" }));
-    await waitFor(() =>
-      expect(callToolMock).toHaveBeenCalledWith("c1", "save_file", { name: "notes.md" }),
-    );
+    await waitFor(() => expect(calls()).toEqual([{ arguments: { name: "notes.md" } }]));
     expect(await screen.findByText("Success")).toBeTruthy();
     expect(screen.getByText("42 ms")).toBeTruthy();
     expect(screen.getByText(/"saved": true/)).toBeTruthy();
   });
 
   it("runs a read-only tool without asking and shows call errors", async () => {
-    getToolMock.mockResolvedValue(
-      tool({ readOnly: true, inputSchema: { type: "object", properties: {} } }),
-    );
-    callToolMock.mockRejectedValue(new Error("Call failed: boom"));
+    api.get(TOOL, () => tool({ readOnly: true, inputSchema: { type: "object", properties: {} } }));
+    api.post(`${TOOL}/call`, () => {
+      throw new ApiFailure(502, "Call failed: boom");
+    });
     const user = userEvent.setup();
     mount();
     await screen.findByRole("heading", { name: "Save a file" });
     await user.click(screen.getByRole("button", { name: "Run tool" }));
     expect(await screen.findByText("Call failed: boom")).toBeTruthy();
-    expect(callToolMock).toHaveBeenCalledWith("c1", "save_file", {});
+    expect(calls()).toEqual([{ arguments: {} }]);
   });
 });

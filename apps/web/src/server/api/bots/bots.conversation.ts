@@ -1,3 +1,5 @@
+import { parseJson } from "@tiny-agents/std";
+import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { Boom } from "@groot/core/errors";
 import {
@@ -63,11 +65,16 @@ const withLinks = {
   guests: { columns: { userId: true } },
 } as const;
 
-function parseJson<T>(raw: string, fallback: T): T {
+const toolPermissionsSchema: z.ZodType<Record<string, ToolPermission>> = z.record(
+  z.string(),
+  z.enum(["allow", "ask", "off"]),
+);
+
+function storedToolPermissions(raw: string): Record<string, ToolPermission> {
   try {
-    return JSON.parse(raw) as T;
+    return parseJson("A bot's tool permissions", raw, toolPermissionsSchema);
   } catch {
-    return fallback;
+    return {};
   }
 }
 
@@ -75,7 +82,7 @@ export function toBot(row: BotWithLinks): Bot {
   const { skills, connections, guests, ...bot } = row;
   return {
     ...bot,
-    toolPermissions: parseJson<Record<string, ToolPermission>>(row.toolPermissions, {}),
+    toolPermissions: storedToolPermissions(row.toolPermissions),
     skillIds: skills?.map((link) => link.skillId) ?? [],
     connectionIds: connections?.map((link) => link.connectionId) ?? [],
     connectionCapabilities:

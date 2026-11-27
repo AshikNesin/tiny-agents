@@ -1,3 +1,5 @@
+import { parseJson } from "@tiny-agents/std";
+import { z } from "zod";
 import { asc, eq } from "drizzle-orm";
 import { logger } from "@groot/core/logger";
 import { VaultError, type AgentRuntime } from "@tiny-agents/agent";
@@ -17,10 +19,7 @@ import { app } from "../../app-root";
 const parseObject = (raw: string | null | undefined): Record<string, unknown> => {
   if (!raw) return {};
   try {
-    const value = JSON.parse(raw) as unknown;
-    return value && typeof value === "object" && !Array.isArray(value)
-      ? (value as Record<string, unknown>)
-      : {};
+    return parseJson("A provider's stored options", raw, z.record(z.string(), z.unknown()));
   } catch {
     return {};
   }

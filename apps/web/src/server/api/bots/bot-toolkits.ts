@@ -1,3 +1,5 @@
+import { parseJson } from "@tiny-agents/std";
+import { z } from "zod";
 import type { McpToolInfo } from "@tiny-agents/agent";
 import type { ModelCatalog } from "@tiny-agents/models";
 
@@ -47,12 +49,26 @@ export interface ConnectionToolColumns {
   disabledTools: string;
 }
 
+const jsonSchemaSchema = z.record(z.string(), z.unknown());
+
+const cachedToolSchema = z.object({
+  name: z.string(),
+  title: z.string().optional(),
+  description: z.string().optional(),
+  inputSchema: jsonSchemaSchema.optional(),
+  outputSchema: jsonSchemaSchema.optional(),
+  readOnly: z.boolean().optional(),
+  idempotent: z.boolean().optional(),
+  destructive: z.boolean().optional(),
+  openWorld: z.boolean().optional(),
+});
+
 export function parseTools(raw: string): McpToolInfo[] {
   try {
-    const tools = JSON.parse(raw) as unknown;
-    return Array.isArray(tools)
-      ? (tools.filter((tool) => typeof tool === "object" && tool !== null) as McpToolInfo[])
-      : [];
+    return parseJson("A connection's cached tools", raw, z.array(z.unknown())).flatMap((tool) => {
+      const fits = cachedToolSchema.safeParse(tool);
+      return fits.success ? [fits.data as McpToolInfo] : [];
+    });
   } catch {
     return [];
   }
@@ -60,8 +76,8 @@ export function parseTools(raw: string): McpToolInfo[] {
 
 export function parseDisabledTools(raw: string): Set<string> {
   try {
-    const names = JSON.parse(raw) as unknown;
-    return new Set(Array.isArray(names) ? names.filter((n) => typeof n === "string") : []);
+    const names = parseJson("A connection's disabled tools", raw, z.array(z.unknown()));
+    return new Set(names.filter((n) => typeof n === "string"));
   } catch {
     return new Set();
   }

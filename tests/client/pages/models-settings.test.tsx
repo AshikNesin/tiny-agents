@@ -8,37 +8,25 @@
 import React from "react";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import { beforeEach, describe, expect, it } from "vite-plus/test";
 import { ModelsSettings } from "@/pages/settings/models/ModelsSettings";
+import { vaultApi } from "@/lib/vault-api";
 import { ConfirmProvider } from "@groot/ui/primitives";
+import type { Deleted } from "../../../apps/web/src/shared/api/common";
 import type {
   Account,
+  AccountList,
   AccountModel,
+  DiscoveredModel,
+  DiscoveredModels,
+  ModelsResponse,
   ProviderTemplate,
+  RolesResponse,
 } from "../../../apps/web/src/shared/api/models";
+import type { StepUpToken } from "../../../apps/web/src/shared/api/vault";
+import { FIXED_NOW } from "../../test-clock";
+import { fakeApi } from "../fakes/api";
 import { AppQueryProvider } from "../query-provider";
-
-const api = vi.hoisted(() => ({
-  accounts: vi.fn(),
-  roles: vi.fn(),
-  discover: vi.fn(),
-  available: vi.fn(),
-  create: vi.fn(),
-  removeModel: vi.fn(),
-}));
-
-vi.mock("@/lib/models-api", () => ({ modelsApi: api }));
-vi.mock("@/lib/vault-api", async (importOriginal) => ({
-  ...(await importOriginal<object>()),
-  hasStepUp: () => true,
-  apiError: (_error: unknown, fallback: string) => fallback,
-  StepUpRequiredError: class extends Error {},
-  vaultApi: { confirmWithPassword: vi.fn(), confirmWithPasskey: vi.fn() },
-}));
-vi.mock("@/store/bots", () => ({
-  useBotsStore: (select: (s: { loadModels: () => Promise<void> }) => unknown) =>
-    select({ loadModels: async () => undefined }),
-}));
 
 const TEMPLATES: ProviderTemplate[] = [
   { id: "anthropic", label: "Anthropic", kind: "anthropic", baseUrl: "https://api.anthropic.com" },
@@ -51,13 +39,29 @@ const TEMPLATES: ProviderTemplate[] = [
   },
 ];
 
-const ROLES = Object.fromEntries(
-  ["bot_default", "code_default", "memory_capture", "chat_title", "vision", "classifier"].map(
-    (role) => [role, { modelId: null, fallback: true }],
-  ),
-);
+const unset = { modelId: null, fallback: true };
+const ROLES: RolesResponse = {
+  roles: {
+    bot_default: unset,
+    code_default: unset,
+    memory_capture: unset,
+    chat_title: unset,
+    vision: unset,
+    classifier: unset,
+  },
+};
+const CATALOG: ModelsResponse = {
+  models: [],
+  defaultModelId: null,
+  canAnswer: false,
+  providers: [],
+};
+const STEP_UP: StepUpToken = {
+  token: "step-up-token",
+  expiresAt: Date.parse(FIXED_NOW) + 10 * 60_000,
+};
 
-const found = (upstreamId: string, name: string) => ({
+const found = (upstreamId: string, name: string): DiscoveredModel => ({
   upstreamId,
   name,
   type: "chat",
@@ -65,25 +69,35 @@ const found = (upstreamId: string, name: string) => ({
   maxOutputTokens: 32_000,
   imageInput: true,
   reasoning: true,
+  compat: null,
   known: true,
 });
 
-beforeEach(() => {
-  for (const fn of Object.values(api)) fn.mockReset();
-  api.accounts.mockResolvedValue({ accounts: [] as Account[], templates: TEMPLATES });
-  api.roles.mockResolvedValue({ roles: ROLES });
-  api.available.mockResolvedValue({ models: [] });
+let api: ReturnType<typeof fakeApi>;
+
+const accountsAre = (accounts: Account[]) =>
+  api.get("/models/providers", (): AccountList => ({ accounts, templates: TEMPLATES }));
+const discovers = (models: DiscoveredModel[]) =>
+  api.post("/models/discover", (): DiscoveredModels => ({ models }));
+const deletions = () => api.requests.filter((request) => request.method === "DELETE");
+
+beforeEach(async () => {
+  api = fakeApi();
+  accountsAre([]);
+  api.get("/models/roles", () => ROLES);
+  api.get("/models", () => CATALOG);
+  api.get("/models/providers/:id/available", (): DiscoveredModels => ({ models: [] }));
+  api.post("/vault/step-up", () => STEP_UP);
+  await vaultApi.confirmWithPassword("correct horse");
 });
 
 describe("Settings → Models", () => {
   it("offers templates when nothing is set up, then connects the models the owner keeps", async () => {
-    api.discover.mockResolvedValue({
-      models: [
-        found("claude-sonnet-4-6", "Claude Sonnet 4.6"),
-        found("claude-haiku-4-5", "Claude Haiku 4.5"),
-      ],
-    });
-    api.create.mockResolvedValue({ id: "a1", name: "Anthropic" });
+    discovers([
+      found("claude-sonnet-4-6", "Claude Sonnet 4.6"),
+      found("claude-haiku-4-5", "Claude Haiku 4.5"),
+    ]);
+    api.post("/models/providers", () => ({ ...account([]), id: "a1" }));
     const user = userEvent.setup();
     render(
       <AppQueryProvider>
@@ -98,31 +112,30 @@ describe("Settings → Models", () => {
     await user.type(within(dialog).getByLabelText("API key"), "sk-ant-api-test");
     await user.click(within(dialog).getByRole("button", { name: "Check models" }));
 
-    expect(api.discover).toHaveBeenCalledWith(
+    await user.click(await within(dialog).findByRole("checkbox", { name: "Claude Haiku 4.5" }));
+    expect(api.sent("POST", "/models/discover")[0]!.body).toEqual(
       expect.objectContaining({
         kind: "anthropic",
         baseUrl: "https://api.anthropic.com",
         apiKey: "sk-ant-api-test",
       }),
     );
-    await user.click(await within(dialog).findByRole("checkbox", { name: "Claude Haiku 4.5" }));
     await user.click(within(dialog).getByRole("button", { name: "Connect" }));
-    await waitFor(() =>
-      expect(api.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          kind: "anthropic",
-          name: "Anthropic",
-          discovery: "auto",
-          models: ["claude-sonnet-4-6"],
-        }),
-      ),
+    await waitFor(() => expect(api.sent("POST", "/models/providers")).toHaveLength(1));
+    const created = api.sent("POST", "/models/providers")[0]!;
+    expect(created.body).toEqual(
+      expect.objectContaining({
+        kind: "anthropic",
+        name: "Anthropic",
+        discovery: "auto",
+        models: ["claude-sonnet-4-6"],
+      }),
     );
+    expect(created.headers.get("X-Vault-Step-Up")).toBe(STEP_UP.token);
   });
 
   it("starts an aggregator's list with nothing checked", async () => {
-    api.discover.mockResolvedValue({
-      models: [found("a/one", "One"), found("b/two", "Two")],
-    });
+    discovers([found("a/one", "One"), found("b/two", "Two")]);
     const user = userEvent.setup();
     render(
       <AppQueryProvider>
@@ -138,52 +151,51 @@ describe("Settings → Models", () => {
   });
 });
 
-const account = (models: Partial<AccountModel>[]): Account => ({
-  id: "acc1",
-  name: "Anthropic",
-  kind: "anthropic",
-  baseUrl: "https://api.anthropic.com",
-  viaProviderId: null,
-  settings: {},
-  discovery: "auto",
-  allowPrivateNetwork: false,
-  enabled: true,
-  status: "ok",
-  statusDetail: null,
-  checkedAt: "2026-11-08T10:00:00.000Z",
-  version: 1,
-  credential: { hint: "sk-…a1B2", backend: "local" },
-  models: models.map((model, index) => ({
-    id: `m${index + 1}`,
-    upstreamId: `claude-${index + 1}`,
-    name: `Claude ${index + 1}`,
-    type: "chat",
-    source: "discovered",
+function account(models: Partial<AccountModel>[]): Account {
+  return {
+    id: "acc1",
+    name: "Anthropic",
+    kind: "anthropic",
+    baseUrl: "https://api.anthropic.com",
+    viaProviderId: null,
+    settings: {},
+    discovery: "auto",
+    allowPrivateNetwork: false,
     enabled: true,
-    contextWindow: 200_000,
-    maxOutputTokens: 32_000,
-    imageInput: true,
-    reasoning: true,
-    overrides: {},
-    compat: null,
-    missing: false,
-    usedBy: 0,
-    ...model,
-  })),
-});
+    status: "ok",
+    statusDetail: null,
+    checkedAt: "2026-11-08T10:00:00.000Z",
+    version: 1,
+    credential: { hint: "sk-…a1B2", backend: "local" },
+    models: models.map((model, index) => ({
+      id: `m${index + 1}`,
+      upstreamId: `claude-${index + 1}`,
+      name: `Claude ${index + 1}`,
+      type: "chat",
+      source: "discovered",
+      enabled: true,
+      contextWindow: 200_000,
+      maxOutputTokens: 32_000,
+      imageInput: true,
+      reasoning: true,
+      overrides: {},
+      compat: null,
+      missing: false,
+      usedBy: 0,
+      ...model,
+    })),
+  };
+}
 
 describe("Settings → Models · delete", () => {
   beforeEach(() => {
-    api.accounts.mockResolvedValue({
-      accounts: [
-        account([
-          { id: "m1", upstreamId: "claude-haiku-5-5", name: "Claude Haiku 5.5" },
-          { id: "m2", upstreamId: "claude-sonnet-5-5", name: "Claude Sonnet 5.5" },
-        ]),
-      ],
-      templates: TEMPLATES,
-    });
-    api.removeModel.mockResolvedValue({ deleted: true });
+    accountsAre([
+      account([
+        { id: "m1", upstreamId: "claude-haiku-5-5", name: "Claude Haiku 5.5" },
+        { id: "m2", upstreamId: "claude-sonnet-5-5", name: "Claude Sonnet 5.5" },
+      ]),
+    ]);
+    api.delete("/models/:id", (): Deleted => ({ deleted: true }));
   });
 
   const openModels = async (user: ReturnType<typeof userEvent.setup>) => {
@@ -204,10 +216,11 @@ describe("Settings → Models · delete", () => {
 
     const dialog = await screen.findByRole("alertdialog");
     expect(within(dialog).getByText("Delete Claude Haiku 5.5?")).toBeInTheDocument();
-    expect(api.removeModel).not.toHaveBeenCalled();
+    expect(deletions()).toEqual([]);
 
     await user.click(within(dialog).getByRole("button", { name: "Delete" }));
-    await waitFor(() => expect(api.removeModel).toHaveBeenCalledWith("m1", undefined));
+    await waitFor(() => expect(api.sent("DELETE", "/models/m1")).toHaveLength(1));
+    expect(api.sent("DELETE", "/models/m1")[0]!.query.has("moveTo")).toBe(false);
   });
 
   it("keeps the model when the owner cancels", async () => {
@@ -217,19 +230,16 @@ describe("Settings → Models · delete", () => {
 
     await user.click(await screen.findByRole("button", { name: "Cancel" }));
     await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
-    expect(api.removeModel).not.toHaveBeenCalled();
+    expect(deletions()).toEqual([]);
   });
 
   it("warns which bots use a model before deleting it", async () => {
-    api.accounts.mockResolvedValue({
-      accounts: [
-        account([
-          { id: "m1", upstreamId: "claude-haiku-5-5", name: "Claude Haiku 5.5", usedBy: 2 },
-          { id: "m2", upstreamId: "claude-sonnet-5-5", name: "Claude Sonnet 5.5" },
-        ]),
-      ],
-      templates: TEMPLATES,
-    });
+    accountsAre([
+      account([
+        { id: "m1", upstreamId: "claude-haiku-5-5", name: "Claude Haiku 5.5", usedBy: 2 },
+        { id: "m2", upstreamId: "claude-sonnet-5-5", name: "Claude Sonnet 5.5" },
+      ]),
+    ]);
     const user = userEvent.setup();
     await openModels(user);
     await user.click(await screen.findByRole("button", { name: "Delete Claude Haiku 5.5" }));
@@ -237,16 +247,13 @@ describe("Settings → Models · delete", () => {
     const dialog = await screen.findByRole("alertdialog");
     expect(within(dialog).getByText(/^2 bots use it\./)).toBeInTheDocument();
     await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
-    expect(api.removeModel).not.toHaveBeenCalled();
+    expect(deletions()).toEqual([]);
   });
 });
 
 describe("Settings → Models · account summary", () => {
   it("says when the account was last checked as a relative time", async () => {
-    api.accounts.mockResolvedValue({
-      accounts: [{ ...account([{}]), checkedAt: "2026-11-06T05:30:00.000Z" }],
-      templates: TEMPLATES,
-    });
+    accountsAre([{ ...account([{}]), checkedAt: "2026-11-06T05:30:00.000Z" }]);
     render(
       <AppQueryProvider>
         <ConfirmProvider>
@@ -263,16 +270,13 @@ describe("Settings → Models · account summary", () => {
   });
 
   it("names 1Password as the key's vault", async () => {
-    api.accounts.mockResolvedValue({
-      accounts: [
-        {
-          ...account([{}]),
-          checkedAt: "2026-11-06T05:30:00.000Z",
-          credential: { hint: "sk-…a1B2", backend: "onepassword" },
-        },
-      ],
-      templates: TEMPLATES,
-    });
+    accountsAre([
+      {
+        ...account([{}]),
+        checkedAt: "2026-11-06T05:30:00.000Z",
+        credential: { hint: "sk-…a1B2", backend: "onepassword" },
+      },
+    ]);
     render(
       <AppQueryProvider>
         <ConfirmProvider>

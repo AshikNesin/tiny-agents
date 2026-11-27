@@ -1,33 +1,34 @@
-import { describe, expect, it, vi } from "vite-plus/test";
+import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { render as renderPlain, screen, waitFor } from "@testing-library/react";
 import { AppQueryProvider } from "../query-provider";
 import userEvent from "@testing-library/user-event";
 import React from "react";
-import { ApiError } from "@groot/shell/lib/api";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter } from "react-router-dom";
 import { BotDialog } from "@/components/BotDialog";
-import type { Bot } from "../../../apps/web/src/shared/api/bots";
+import type {
+  Bot,
+  CapabilityList,
+  ToolPermissionsData,
+} from "../../../apps/web/src/shared/api/bots";
+import type { Connection } from "../../../apps/web/src/shared/api/connections";
+import type { GuestList } from "../../../apps/web/src/shared/api/people";
+import type { Skill } from "../../../apps/web/src/shared/api/skills";
+import { ApiFailure, fakeApi } from "../fakes/api";
 import type { CatalogModel } from "../../../apps/web/src/shared/api/models";
 
 const render = (ui: React.ReactElement) => renderPlain(ui, { wrapper: AppQueryProvider });
 
-const removeMock = vi.fn().mockResolvedValue(undefined);
-const createMock = vi.fn();
+let api: ReturnType<typeof fakeApi>;
 
-vi.mock("@/lib/bots-api", () => ({
-  botsApi: {
-    capabilities: vi.fn().mockResolvedValue([]),
-    create: (...args: unknown[]) => createMock(...args),
-    remove: (...args: unknown[]) => removeMock(...args),
-  },
-}));
-vi.mock("@/lib/skills-api", () => ({
-  skillsApi: { list: vi.fn().mockResolvedValue([]) },
-}));
-vi.mock("@/lib/connections-api", () => ({
-  connectionsApi: { list: vi.fn().mockResolvedValue([]) },
-}));
+beforeEach(() => {
+  api = fakeApi();
+  api.get("/capabilities", (): CapabilityList => ({ capabilities: [] }));
+  api.get("/tool-permissions", (): ToolPermissionsData => ({ permissions: {} }));
+  api.get("/skills", (): Skill[] => []);
+  api.get("/connections", (): Connection[] => []);
+  api.get("/people", (): GuestList => ({ guests: [] }));
+});
 
 const models: CatalogModel[] = [
   {
@@ -84,6 +85,7 @@ describe("BotDialog", () => {
       skillIds: [],
       connectionIds: [],
     } as unknown as Bot;
+    api.delete("/bots/b1", () => undefined);
     const onDeleted = vi.fn();
     const onOpenChange = vi.fn();
     render(
@@ -101,11 +103,11 @@ describe("BotDialog", () => {
     expect(offers).toHaveLength(2);
     await user.click(offers[1]);
     expect(screen.getByText("Delete Ada? This cannot be undone.")).toBeTruthy();
-    expect(removeMock).not.toHaveBeenCalled();
+    expect(api.sent("DELETE", "/bots/b1")).toHaveLength(0);
 
     await user.click(screen.getAllByRole("button", { name: "Delete bot" }).at(-1)!);
     await waitFor(() => expect(onDeleted).toHaveBeenCalledWith(bot));
-    expect(removeMock).toHaveBeenCalledWith("b1");
+    expect(api.sent("DELETE", "/bots/b1")).toHaveLength(1);
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 
@@ -179,9 +181,9 @@ describe("BotDialog", () => {
 
   it("shows a taken name under the Name field, in the server's words (issue #80)", async () => {
     const message = 'A bot named "Echo" already exists';
-    createMock.mockRejectedValueOnce(
-      new ApiError({ status: 409, code: "CONFLICT", message, url: "/bots" }),
-    );
+    api.post("/bots", () => {
+      throw new ApiFailure(409, message, "CONFLICT");
+    });
     const onOpenChange = vi.fn();
     render(
       <BotDialog
@@ -199,7 +201,9 @@ describe("BotDialog", () => {
     await user.click(screen.getByRole("button", { name: /create bot/i }));
 
     await waitFor(() => expect(screen.getByText(message)).toBeTruthy());
-    expect(createMock).toHaveBeenCalledWith(expect.objectContaining({ name: "echo" }));
+    expect(api.sent("POST", "/bots").map((request) => request.body)).toEqual([
+      expect.objectContaining({ name: "echo" }),
+    ]);
     expect(name.getAttribute("aria-invalid")).toBe("true");
     expect(onOpenChange).not.toHaveBeenCalledWith(false);
 

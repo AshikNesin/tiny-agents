@@ -1,3 +1,5 @@
+import { parseJson } from "@tiny-agents/std";
+import { z } from "zod";
 import { createNamespaceKv } from "@groot/core/kv";
 import { logger } from "@groot/core/logger";
 import { generateVapidKeys, type VapidKeys } from "@groot/core/notification/webpush.crypto";
@@ -19,11 +21,16 @@ function sealed(privateJwk: JsonWebKey): string {
   return hasSecretsKey() ? seal(json, BINDING) : json;
 }
 
+const jwkSchema: z.ZodType<JsonWebKey> = z.looseObject({ kty: z.string() });
+
 function opened(stored: StoredVapid): VapidKeys {
   const plain = stored.privateJwk.startsWith("{")
     ? stored.privateJwk
     : open(stored.privateJwk, BINDING);
-  return { publicKey: stored.publicKey, privateJwk: JSON.parse(plain) as JsonWebKey };
+  return {
+    publicKey: stored.publicKey,
+    privateJwk: parseJson("The Web Push private key", plain, jwkSchema),
+  };
 }
 
 export async function vapidKeys(onReplaced?: () => Promise<void>): Promise<VapidKeys> {

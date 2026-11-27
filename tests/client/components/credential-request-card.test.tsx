@@ -9,12 +9,16 @@ import React from "react";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
-import { describe, expect, it, vi } from "vite-plus/test";
+import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { ChatMessageView } from "@/components/ChatMessageView";
 import type { ChatMessage, ChatToolCall } from "@/lib/chat-types";
 import { OwnerActionsProvider, type OwnerActions } from "@/lib/owner-actions";
-import type { CredentialRequestView } from "../../../apps/web/src/shared/api/vault";
+import type {
+  CredentialRequestView,
+  CredentialSubmitted,
+} from "../../../apps/web/src/shared/api/vault";
 import { FIXED_NOW } from "../../test-clock";
+import { fakeApi } from "../fakes/api";
 import { AppQueryProvider } from "../query-provider";
 
 vi.mock("streamdown", () => ({
@@ -44,16 +48,15 @@ const REQUEST: CredentialRequestView = {
   liveOrigin: "https://www.amazon.in",
 };
 
-const api = vi.hoisted(() => ({
-  request: vi.fn(),
-  submitRequest: vi.fn(),
-  cancelRequest: vi.fn(),
-}));
-vi.mock("@/lib/vault-api", () => ({
-  apiError: (_error: unknown, fallback: string) => fallback,
-  hasStepUp: () => true,
-  vaultApi: api,
-}));
+let api: ReturnType<typeof fakeApi>;
+
+beforeEach(() => {
+  api = fakeApi();
+});
+
+function serve(request: CredentialRequestView) {
+  api.get("/vault/requests/7", () => request);
+}
 
 const actions: OwnerActions = { decideApproval: vi.fn(), answerQuestions: vi.fn() };
 
@@ -83,12 +86,12 @@ function chat(): ChatMessage {
 
 describe("credential request in the chat", () => {
   it("fills the sign-in from the chat card, saving to the vault", async () => {
-    api.request.mockResolvedValue(REQUEST);
-    api.submitRequest.mockResolvedValue({
+    serve(REQUEST);
+    api.post("/vault/requests/7/submit", (): CredentialSubmitted => ({
       filled: ["email", "password"],
       savedHandle: "amazon-in",
       saveFailed: false,
-    });
+    }));
     render(
       <AppQueryProvider>
         <MemoryRouter>
@@ -105,16 +108,14 @@ describe("credential request in the chat", () => {
     expect(screen.queryByRole("link", { name: "Open" })).toBeNull();
     await userEvent.click(screen.getByRole("button", { name: "Continue" }));
     await waitFor(() =>
-      expect(api.submitRequest).toHaveBeenCalledWith(
-        7,
-        { email: "ana@example.com", password: "canary-pw" },
-        true,
-      ),
+      expect(api.sent("POST", "/vault/requests/7/submit").map((request) => request.body)).toEqual([
+        { values: { email: "ana@example.com", password: "canary-pw" }, save: true },
+      ]),
     );
   });
 
   it("offers to save a mobile-number sign-in to the vault", async () => {
-    api.request.mockResolvedValue({
+    serve({
       ...REQUEST,
       fields: [
         {
@@ -141,7 +142,7 @@ describe("credential request in the chat", () => {
   });
 
   it("names the other site's sign-in frame it fills in (#302)", async () => {
-    api.request.mockResolvedValue({
+    serve({
       ...REQUEST,
       origin: "https://www.thehindu.com",
       frameOrigin: "https://id.tinypass.com",

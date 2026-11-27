@@ -3,19 +3,8 @@ import { act, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vite-plus/test";
 import { NextSteps } from "@/pages/code/NextSteps";
 import type { ThreadPullsView } from "../../../apps/web/src/shared/api/code";
+import { fakeApi } from "../fakes/api";
 import { AppQueryProvider } from "../query-provider";
-
-let view: ThreadPullsView;
-
-vi.mock("@groot/shell/lib/api", async (importOriginal) => {
-  const original = await importOriginal<typeof import("@groot/shell/lib/api")>();
-  return {
-    ...original,
-    apiClient: Object.assign(Object.create(original.apiClient) as typeof original.apiClient, {
-      get: async () => view,
-    }),
-  };
-});
 
 const project = {
   id: "p1",
@@ -25,7 +14,7 @@ const project = {
 } as unknown as ThreadPullsView["project"];
 
 function show(next: Partial<ThreadPullsView>) {
-  view = {
+  const view: ThreadPullsView = {
     project,
     branch: "ta/fix",
     active: null,
@@ -35,6 +24,7 @@ function show(next: Partial<ThreadPullsView>) {
     landed: null,
     ...next,
   };
+  fakeApi().get("/code/threads/t1/pr", () => view);
   const onStep = vi.fn();
   render(
     <AppQueryProvider>

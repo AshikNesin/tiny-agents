@@ -3859,9 +3859,68 @@ exports[`Settings → Models, pinned > max turns: invalid, then no limit > inval
           class="px-(--card-spacing) space-y-4"
           data-slot="card-content"
         >
-          <div
-            data-stand-in="claude-plan-status"
-          />
+          <section
+            aria-label="Claude plan engine"
+            class="space-y-3 rounded-md border p-4"
+          >
+            <p>
+              <span
+                class="text-xs text-muted-foreground"
+              >
+                Experimental. Bots answer on your Claude Pro or Max subscription through Claude Code, which tiny-agents installs and runs on your sandbox. tiny-agents never sees the login.
+              </span>
+            </p>
+            <p>
+              <span
+                class="text-foreground text-sm"
+              >
+                The engine is on. Bots on a “uses your Claude plan” model answer through Claude Code.
+              </span>
+            </p>
+            <p>
+              <span
+                class="text-foreground text-sm"
+                data-testid="claude-plan-account"
+              >
+                Signed in to Claude (max). Ready to use.
+              </span>
+            </p>
+            <div
+              class="flex flex-wrap gap-2"
+            >
+              <button
+                class="group/button inline-flex shrink-0 items-center justify-center rounded-xl border bg-clip-padding font-medium whitespace-nowrap transition-transform duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:scale-[0.97] motion-reduce:transition-none disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 border-border bg-transparent hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50 h-7 gap-1 px-2.5 text-[0.8rem] in-data-[slot=button-group]:rounded-lg has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3.5"
+                data-size="sm"
+                data-slot="button"
+                data-testid="claude-plan-sign-in"
+                data-variant="outline"
+              >
+                Sign in again
+              </button>
+              <button
+                class="group/button inline-flex shrink-0 items-center justify-center rounded-xl border border-transparent bg-clip-padding font-medium whitespace-nowrap transition-transform duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:scale-[0.97] motion-reduce:transition-none disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50 h-7 gap-1 px-2.5 text-[0.8rem] in-data-[slot=button-group]:rounded-lg has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3.5"
+                data-size="sm"
+                data-slot="button"
+                data-variant="ghost"
+              >
+                Check again
+              </button>
+            </div>
+            <p>
+              <span
+                class="text-xs text-muted-foreground"
+              >
+                Worker on sandbox.test. When the engine is off or Claude Code can't answer, turns move to its fallback model.
+              </span>
+            </p>
+            <p>
+              <span
+                class="text-xs text-muted-foreground"
+              >
+                Sign in opens a terminal tab running claude auth login: follow its link, then paste the code back into the tab. Never paste a Claude token into tiny-agents.
+              </span>
+            </p>
+          </section>
           <div
             class="space-y-1.5"
           >
@@ -4707,6 +4766,17 @@ button "Check Claude plan again"
   icon lucide-refresh-cw
 button "Delete Claude plan"
   icon lucide-trash lucide-trash-2
+region "Claude plan engine"
+  "Experimental. Bots answer on your Claude Pro or Max subscription through Claude Code, which tiny-agents installs and runs on your sandbox. tiny-agents never sees the login."
+  "The engine is on. Bots on a “uses your Claude plan” model answer through Claude Code."
+  span [testid=claude-plan-account]
+    "Signed in to Claude (max). Ready to use."
+  button "Sign in again" [testid=claude-plan-sign-in]
+    "Sign in again"
+  button "Check again"
+    "Check again"
+  "Worker on sandbox.test. When the engine is off or Claude Code can't answer, turns move to its fallback model."
+  "Sign in opens a terminal tab running claude auth login: follow its link, then paste the code back into the tab. Never paste a Claude token into tiny-agents."
 "Fallback model"
 button "Fallback model" [title="Fallback model", aria-expanded=false, aria-haspopup=dialog]
   "Anthropic / CLAUDE-A"
@@ -5315,9 +5385,68 @@ exports[`Settings → Models, pinned > max turns: invalid, then no limit > unlim
           class="px-(--card-spacing) space-y-4"
           data-slot="card-content"
         >
-          <div
-            data-stand-in="claude-plan-status"
-          />
+          <section
+            aria-label="Claude plan engine"
+            class="space-y-3 rounded-md border p-4"
+          >
+            <p>
+              <span
+                class="text-xs text-muted-foreground"
+              >
+                Experimental. Bots answer on your Claude Pro or Max subscription through Claude Code, which tiny-agents installs and runs on your sandbox. tiny-agents never sees the login.
+              </span>
+            </p>
+            <p>
+              <span
+                class="text-foreground text-sm"
+              >
+                The engine is on. Bots on a “uses your Claude plan” model answer through Claude Code.
+              </span>
+            </p>
+            <p>
+              <span
+                class="text-foreground text-sm"
+                data-testid="claude-plan-account"
+              >
+                Signed in to Claude (max). Ready to use.
+              </span>
+            </p>
+            <div
+              class="flex flex-wrap gap-2"
+            >
+              <button
+                class="group/button inline-flex shrink-0 items-center justify-center rounded-xl border bg-clip-padding font-medium whitespace-nowrap transition-transform duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:scale-[0.97] motion-reduce:transition-none disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 border-border bg-transparent hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50 h-7 gap-1 px-2.5 text-[0.8rem] in-data-[slot=button-group]:rounded-lg has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3.5"
+                data-size="sm"
+                data-slot="button"
+                data-testid="claude-plan-sign-in"
+                data-variant="outline"
+              >
+                Sign in again
+              </button>
+              <button
+                class="group/button inline-flex shrink-0 items-center justify-center rounded-xl border border-transparent bg-clip-padding font-medium whitespace-nowrap transition-transform duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:scale-[0.97] motion-reduce:transition-none disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50 h-7 gap-1 px-2.5 text-[0.8rem] in-data-[slot=button-group]:rounded-lg has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3.5"
+                data-size="sm"
+                data-slot="button"
+                data-variant="ghost"
+              >
+                Check again
+              </button>
+            </div>
+            <p>
+              <span
+                class="text-xs text-muted-foreground"
+              >
+                Worker on sandbox.test. When the engine is off or Claude Code can't answer, turns move to its fallback model.
+              </span>
+            </p>
+            <p>
+              <span
+                class="text-xs text-muted-foreground"
+              >
+                Sign in opens a terminal tab running claude auth login: follow its link, then paste the code back into the tab. Never paste a Claude token into tiny-agents.
+              </span>
+            </p>
+          </section>
           <div
             class="space-y-1.5"
           >
@@ -6181,6 +6310,17 @@ button "Check Claude plan again"
   icon lucide-refresh-cw
 button "Delete Claude plan"
   icon lucide-trash lucide-trash-2
+region "Claude plan engine"
+  "Experimental. Bots answer on your Claude Pro or Max subscription through Claude Code, which tiny-agents installs and runs on your sandbox. tiny-agents never sees the login."
+  "The engine is on. Bots on a “uses your Claude plan” model answer through Claude Code."
+  span [testid=claude-plan-account]
+    "Signed in to Claude (max). Ready to use."
+  button "Sign in again" [testid=claude-plan-sign-in]
+    "Sign in again"
+  button "Check again"
+    "Check again"
+  "Worker on sandbox.test. When the engine is off or Claude Code can't answer, turns move to its fallback model."
+  "Sign in opens a terminal tab running claude auth login: follow its link, then paste the code back into the tab. Never paste a Claude token into tiny-agents."
 "Fallback model"
 button "Fallback model" [title="Fallback model", aria-expanded=false, aria-haspopup=dialog]
   "Anthropic / CLAUDE-A"
@@ -8303,9 +8443,68 @@ exports[`Settings → Models, pinned > the Claude plan card open > markup 1`] = 
           class="px-(--card-spacing) space-y-4"
           data-slot="card-content"
         >
-          <div
-            data-stand-in="claude-plan-status"
-          />
+          <section
+            aria-label="Claude plan engine"
+            class="space-y-3 rounded-md border p-4"
+          >
+            <p>
+              <span
+                class="text-xs text-muted-foreground"
+              >
+                Experimental. Bots answer on your Claude Pro or Max subscription through Claude Code, which tiny-agents installs and runs on your sandbox. tiny-agents never sees the login.
+              </span>
+            </p>
+            <p>
+              <span
+                class="text-foreground text-sm"
+              >
+                The engine is on. Bots on a “uses your Claude plan” model answer through Claude Code.
+              </span>
+            </p>
+            <p>
+              <span
+                class="text-foreground text-sm"
+                data-testid="claude-plan-account"
+              >
+                Signed in to Claude (max). Ready to use.
+              </span>
+            </p>
+            <div
+              class="flex flex-wrap gap-2"
+            >
+              <button
+                class="group/button inline-flex shrink-0 items-center justify-center rounded-xl border bg-clip-padding font-medium whitespace-nowrap transition-transform duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:scale-[0.97] motion-reduce:transition-none disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 border-border bg-transparent hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50 h-7 gap-1 px-2.5 text-[0.8rem] in-data-[slot=button-group]:rounded-lg has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3.5"
+                data-size="sm"
+                data-slot="button"
+                data-testid="claude-plan-sign-in"
+                data-variant="outline"
+              >
+                Sign in again
+              </button>
+              <button
+                class="group/button inline-flex shrink-0 items-center justify-center rounded-xl border border-transparent bg-clip-padding font-medium whitespace-nowrap transition-transform duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:scale-[0.97] motion-reduce:transition-none disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50 h-7 gap-1 px-2.5 text-[0.8rem] in-data-[slot=button-group]:rounded-lg has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3.5"
+                data-size="sm"
+                data-slot="button"
+                data-variant="ghost"
+              >
+                Check again
+              </button>
+            </div>
+            <p>
+              <span
+                class="text-xs text-muted-foreground"
+              >
+                Worker on sandbox.test. When the engine is off or Claude Code can't answer, turns move to its fallback model.
+              </span>
+            </p>
+            <p>
+              <span
+                class="text-xs text-muted-foreground"
+              >
+                Sign in opens a terminal tab running claude auth login: follow its link, then paste the code back into the tab. Never paste a Claude token into tiny-agents.
+              </span>
+            </p>
+          </section>
           <div
             class="space-y-1.5"
           >
@@ -9147,6 +9346,17 @@ button "Check Claude plan again"
   icon lucide-refresh-cw
 button "Delete Claude plan"
   icon lucide-trash lucide-trash-2
+region "Claude plan engine"
+  "Experimental. Bots answer on your Claude Pro or Max subscription through Claude Code, which tiny-agents installs and runs on your sandbox. tiny-agents never sees the login."
+  "The engine is on. Bots on a “uses your Claude plan” model answer through Claude Code."
+  span [testid=claude-plan-account]
+    "Signed in to Claude (max). Ready to use."
+  button "Sign in again" [testid=claude-plan-sign-in]
+    "Sign in again"
+  button "Check again"
+    "Check again"
+  "Worker on sandbox.test. When the engine is off or Claude Code can't answer, turns move to its fallback model."
+  "Sign in opens a terminal tab running claude auth login: follow its link, then paste the code back into the tab. Never paste a Claude token into tiny-agents."
 "Fallback model"
 button "Fallback model" [title="Fallback model", aria-expanded=false, aria-haspopup=dialog]
   "Anthropic / CLAUDE-A"

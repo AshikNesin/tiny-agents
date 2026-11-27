@@ -1,3 +1,5 @@
+import { parseJson } from "@tiny-agents/std";
+import { z } from "zod";
 import type { Api, ClassifierApi, ClassifierModel, Model } from "@earendil-works/pi-ai";
 import { ANTHROPIC_MODELS } from "@earendil-works/pi-ai/providers/anthropic.models";
 import { CLOUDFLARE_AI_GATEWAY_MODELS } from "@earendil-works/pi-ai/providers/cloudflare-ai-gateway.models";
@@ -162,12 +164,9 @@ export function resolveCapabilities(
   };
 }
 
-function parseJson(body: string, what: string): Record<string, unknown> {
+function modelListBody(body: string, what: string): Record<string, unknown> {
   try {
-    const value = JSON.parse(body) as unknown;
-    if (value && typeof value === "object" && !Array.isArray(value)) {
-      return value as Record<string, unknown>;
-    }
+    return parseJson("A model list", body, z.record(z.string(), z.unknown()));
   } catch {}
   throw new DiscoveryError("invalid", `${what} did not answer with a model list.`);
 }
@@ -184,7 +183,7 @@ async function getJson(
   if (status < 200 || status >= 300) {
     throw new DiscoveryError("unreachable", `The endpoint answered HTTP ${status}.`);
   }
-  return parseJson(body, "The endpoint");
+  return modelListBody(body, "The endpoint");
 }
 
 const trim = (url: string) => url.replace(/\/+$/, "");

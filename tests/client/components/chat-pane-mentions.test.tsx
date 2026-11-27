@@ -13,26 +13,15 @@ import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { BrowserRouter } from "react-router-dom";
 import { ChatPane } from "@/components/ChatPane";
 import { useBotsStore } from "@/store/bots";
-import type { Bot } from "../../../apps/web/src/shared/api/bots";
+import type { Bot, SendMessageBody } from "../../../apps/web/src/shared/api/bots";
 import type { CatalogModel } from "../../../apps/web/src/shared/api/models";
 import { AppQueryProvider } from "../query-provider";
+import { chatBackend } from "./chat-backend";
 
-const sendMock = vi.fn().mockResolvedValue(undefined);
+vi.mock("@/lib/sse", async () => (await import("../fakes/sse")).sseModule);
 
-vi.mock("@/lib/bots-api", () => ({
-  botsApi: {
-    send: (...args: unknown[]) => sendMock(...args),
-    abort: vi.fn(),
-    reset: vi.fn(),
-    read: vi.fn(),
-    capabilities: vi.fn().mockResolvedValue([]),
-    pastChats: vi.fn().mockResolvedValue([]),
-  },
-}));
-
-vi.mock("@/lib/sse", () => ({
-  subscribeSse: vi.fn(() => ({ close: () => undefined })),
-}));
+let api: ReturnType<typeof chatBackend>;
+const sends = () => api.sent<SendMessageBody>("POST", "/bots/host/messages");
 
 const model: CatalogModel = {
   id: "test-model",
@@ -112,7 +101,7 @@ function renderPane() {
 const user = userEvent.setup();
 
 beforeEach(() => {
-  sendMock.mockClear();
+  api = chatBackend(HOST);
   localStorage.clear();
 });
 
@@ -164,10 +153,9 @@ describe("ChatPane mention wiring", () => {
     expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
     await user.type(composer, "{Enter}");
 
-    await waitFor(() => expect(sendMock).toHaveBeenCalled());
-    expect(sendMock.mock.calls[0]![0]).toBe("host");
-    expect(sendMock.mock.calls[0]![2]).toBe("@Ada ask @Grace too");
-    expect(sendMock.mock.calls[0]![3]).toEqual(["b1", "b2"]);
+    await waitFor(() => expect(sends()).toHaveLength(1));
+    expect(sends()[0]!.body.text).toBe("@Ada ask @Grace too");
+    expect(sends()[0]!.body.mentions).toEqual(["b1", "b2"]);
   });
 
   const twins = [
@@ -182,9 +170,9 @@ describe("ChatPane mention wiring", () => {
     await user.click(screen.getByRole("option", { name: /Echoes back/ }));
     await user.type(composer, "ping{Enter}");
 
-    await waitFor(() => expect(sendMock).toHaveBeenCalled());
-    expect(sendMock.mock.calls[0]![2]).toBe("@Echo ping");
-    expect(sendMock.mock.calls[0]![3]).toEqual(["e2"]);
+    await waitFor(() => expect(sends()).toHaveLength(1));
+    expect(sends()[0]!.body.text).toBe("@Echo ping");
+    expect(sends()[0]!.body.mentions).toEqual(["e2"]);
   });
 
   it("holds a typed name several bots share and asks to pick one", async () => {
@@ -195,7 +183,7 @@ describe("ChatPane mention wiring", () => {
     expect(screen.getByRole("alert")).toHaveTextContent(
       'More than one bot is named "Echo". Type @ and pick the one you mean from the list.',
     );
-    expect(sendMock).not.toHaveBeenCalled();
+    expect(sends()).toHaveLength(0);
     expect(composer.value).toBe("@Echo ping");
   });
 });

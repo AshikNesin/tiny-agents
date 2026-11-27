@@ -1,3 +1,5 @@
+import { parseJson } from "@tiny-agents/std";
+import { z } from "zod";
 import { Boom } from "@groot/core/errors";
 import { shQuote } from "@tiny-agents/sandbox";
 import type { ExecPort, ExecResult, RepoRef } from "@tiny-agents/github";
@@ -718,10 +720,10 @@ export function createWorkspace(options: WorkspaceOptions): Workspace {
 
 function parseScripts(raw: string): ProjectScripts {
   try {
-    const value = JSON.parse(raw) as Record<string, unknown>;
+    const value = parseJson("A project's scripts", raw, z.record(z.string(), z.unknown()));
     const out: ProjectScripts = {};
     for (const key of ["setup", "check", "archive"] as const) {
-      const script = value?.[key];
+      const script = value[key];
       if (typeof script === "string" && script.trim()) out[key] = script.trim();
     }
     return out;

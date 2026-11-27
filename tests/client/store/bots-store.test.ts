@@ -1,16 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 const listeners = new Map<string, (event: unknown) => void>();
-
-vi.mock("../../../apps/web/src/client/lib/bots-api", () => ({
-  botsApi: {
-    list: vi.fn().mockResolvedValue([]),
-    get: vi.fn(),
-    read: vi.fn().mockResolvedValue(undefined),
-    models: vi.fn().mockResolvedValue({ models: [], defaultModel: undefined, canAnswer: true }),
-    send: vi.fn().mockResolvedValue(undefined),
-  },
-}));
 
 vi.mock("../../../apps/web/src/client/lib/sse", () => ({
   subscribeSse: vi.fn((path: string, onEvent: (e: unknown) => void) => {
@@ -22,8 +12,9 @@ vi.mock("../../../apps/web/src/client/lib/sse", () => ({
 import { onConnectionChange, useBotsStore } from "../../../apps/web/src/client/store/bots";
 import { chatSessions } from "../../../apps/web/src/client/store/chats";
 import type { Bot, BotListEntry } from "../../../apps/web/src/shared/api/bots";
-import { botsApi } from "../../../apps/web/src/client/lib/bots-api";
 import type { EventsFeedEvent } from "../../../apps/web/src/client/lib/chat-types";
+import { FIXED_NOW } from "../../test-clock";
+import { ApiFailure, fakeApi } from "../fakes/api";
 
 function listEntry(id: string, conversationId: string, overrides: Partial<BotListEntry> = {}) {
   return {
@@ -45,21 +36,79 @@ function listEntry(id: string, conversationId: string, overrides: Partial<BotLis
   } satisfies BotListEntry;
 }
 
+function bot(conversationId: string, overrides: Partial<Bot> = {}): Bot {
+  return {
+    id: "b1",
+    name: "Bot",
+    description: "",
+    systemPrompt: "",
+    modelId: "m",
+    conversationId,
+    chatStartedAt: FIXED_NOW,
+    lastReadAt: null,
+    lastActivityAt: FIXED_NOW,
+    lastMessagePreview: null,
+    memoryEnabled: true,
+    autoReview: false,
+    yoloByDefault: false,
+    memoryCapturedThrough: null,
+    pinnedAt: null,
+    browserProfile: "shared",
+    projectId: null,
+    createdAt: FIXED_NOW,
+    updatedAt: FIXED_NOW,
+    toolPermissions: {},
+    skillIds: [],
+    connectionIds: [],
+    connectionCapabilities: [],
+    guestIds: [],
+    ...overrides,
+  };
+}
+
+type ListReply = () => BotListEntry[] | Promise<BotListEntry[]>;
+
+let api: ReturnType<typeof fakeApi>;
+let listReplies: ListReply[] = [];
+
+const listRequests = () => api.sent("GET", "/bots");
+
+function nextListAnswers(bots: BotListEntry[]) {
+  listReplies.push(() => bots);
+}
+
+function nextListFails(message: string) {
+  listReplies.push(() => {
+    throw new ApiFailure(503, message);
+  });
+}
+
 function deferredList() {
   let resolve!: (bots: BotListEntry[]) => void;
   const promise = new Promise<BotListEntry[]>((r) => {
     resolve = r;
   });
-  vi.mocked(botsApi.list).mockReturnValueOnce(promise);
+  listReplies.push(() => promise);
   return resolve;
 }
+
+const listsLanded = () => vi.waitFor(() => expect(useBotsStore.getState().loading).toBe(false));
+
+const answersProcessed = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+beforeEach(() => {
+  api = fakeApi();
+  listReplies = [];
+  api.get("/bots", () => (listReplies.shift() ?? (() => []))());
+  api.post("/bots/:id/read", () => bot("7"));
+});
+
+afterEach(listsLanded);
 
 describe("bots store — activity feed", () => {
   beforeEach(() => {
     listeners.clear();
     useBotsStore.getState().disconnectActivity();
-    vi.mocked(botsApi.list).mockReset();
-    vi.mocked(botsApi.list).mockResolvedValue([]);
     useBotsStore.setState({ bots: [listEntry("b1", "7")], loading: false });
   });
 
@@ -101,7 +150,7 @@ describe("bots store — activity feed", () => {
       approvals: 1,
       lastMessagePreview: "newer preview",
     });
-    vi.mocked(botsApi.list).mockResolvedValueOnce([listEntry("b1", "7")]);
+    nextListAnswers([listEntry("b1", "7")]);
     await useBotsStore.getState().loadBots();
     expect(useBotsStore.getState().bots[0]).toMatchObject({ replying: false, approvals: 0 });
   });
@@ -124,12 +173,12 @@ describe("bots store — activity feed", () => {
       expect(useBotsStore.getState().bots[0]!.replying).toBe(true);
       onEvent(activity("42", false));
       await vi.advanceTimersByTimeAsync(1000);
-      expect(botsApi.list).not.toHaveBeenCalled();
+      expect(listRequests()).toHaveLength(0);
       onEvent(activity("7", false));
       onEvent(activity("7", false));
       expect(useBotsStore.getState().bots[0]!.replying).toBe(false);
       await vi.advanceTimersByTimeAsync(1000);
-      expect(botsApi.list).toHaveBeenCalledTimes(1);
+      expect(listRequests()).toHaveLength(1);
     } finally {
       vi.useRealTimers();
     }
@@ -163,13 +212,9 @@ describe("bots store — full bots", () => {
   beforeEach(() => {
     useBotsStore.setState({ fullBots: {}, bots: [listEntry("b1", "7")] });
     chatSessions.store.setState({ sessions: {} });
-    vi.mocked(botsApi.get).mockReset();
-    vi.mocked(botsApi.list).mockReset();
-    vi.mocked(botsApi.list).mockResolvedValue([]);
   });
 
-  const row = (conversationId: string) =>
-    ({ id: "b1", name: "Bot", conversationId }) as unknown as Bot;
+  const row = (conversationId: string) => bot(conversationId);
 
   function openChat(text: string) {
     chatSessions.open("b1", null);
@@ -184,44 +229,48 @@ describe("bots store — full bots", () => {
   }
 
   it("loads a full bot once and serves it from the cache until asked for a fresh one", async () => {
-    vi.mocked(botsApi.get).mockResolvedValue(row("7"));
+    api.get("/bots/:id", () => row("7"));
     const first = await useBotsStore.getState().loadBot("b1");
+    expect(first).toEqual(row("7"));
     expect(await useBotsStore.getState().loadBot("b1")).toBe(first);
-    expect(botsApi.get).toHaveBeenCalledTimes(1);
+    expect(api.sent("GET", "/bots/b1")).toHaveLength(1);
     await useBotsStore.getState().loadBot("b1", { fresh: true });
-    expect(botsApi.get).toHaveBeenCalledTimes(2);
+    expect(api.sent("GET", "/bots/b1")).toHaveLength(2);
     const saved = { ...row("7"), name: "Renamed" };
     useBotsStore.getState().adoptBot(saved);
     expect(await useBotsStore.getState().loadBot("b1")).toBe(saved);
   });
 
-  it("adopting a row keeps the chat on the same conversation and refreshes the list", () => {
+  it("adopting a row keeps the chat on the same conversation and refreshes the list", async () => {
     useBotsStore.getState().adoptBot(row("7"));
     openChat("still here");
     useBotsStore.getState().adoptBot({ ...row("7"), name: "Renamed" });
     expect(chatSessions.store.getState().sessions.b1!.messages).toHaveLength(1);
     expect(listeners.has("/api/v1/bots/b1/stream")).toBe(true);
-    expect(botsApi.list).toHaveBeenCalledTimes(2);
+    await listsLanded();
+    expect(listRequests()).toHaveLength(2);
   });
 
-  it("adopting a bot on a new conversation drops the cached transcript first", () => {
+  it("adopting a bot on a new conversation drops the cached transcript first", async () => {
     useBotsStore.getState().adoptBot(row("7"));
     openChat("old conversation");
     useBotsStore.getState().adoptBot(row("8"));
     expect(chatSessions.store.getState().sessions.b1).toBeUndefined();
     expect(listeners.has("/api/v1/bots/b1/stream")).toBe(false);
     expect(useBotsStore.getState().fullBots.b1!.conversationId).toBe("8");
-    expect(botsApi.list).toHaveBeenCalledTimes(2);
+    await listsLanded();
+    expect(listRequests()).toHaveLength(2);
   });
 
-  it("forgets a bot that is gone: its rows, its chat, and the list refreshes", () => {
+  it("forgets a bot that is gone: its rows, its chat, and the list refreshes", async () => {
     useBotsStore.getState().adoptBot(row("7"));
     openChat("bye");
     useBotsStore.getState().forgetBot("b1");
     expect(useBotsStore.getState().fullBots).toEqual({});
     expect(useBotsStore.getState().bots).toEqual([]);
     expect(chatSessions.store.getState().sessions.b1).toBeUndefined();
-    expect(botsApi.list).toHaveBeenCalledTimes(2);
+    await listsLanded();
+    expect(listRequests()).toHaveLength(2);
   });
 });
 
@@ -229,14 +278,12 @@ describe("bots store — loadBots resolves with the landed list (issue #119)", (
   beforeEach(() => {
     listeners.clear();
     useBotsStore.getState().disconnectActivity();
-    vi.mocked(botsApi.list).mockReset();
-    vi.mocked(botsApi.list).mockResolvedValue([]);
     useBotsStore.setState({ bots: [], loading: false });
   });
 
   it("resolves an unopposed load with its own list", async () => {
     const own = [listEntry("b1", "7")];
-    vi.mocked(botsApi.list).mockResolvedValueOnce(own);
+    nextListAnswers(own);
     const list = await useBotsStore.getState().loadBots();
     expect(list).toEqual(own);
   });
@@ -245,7 +292,7 @@ describe("bots store — loadBots resolves with the landed list (issue #119)", (
     const answerFirst = deferredList();
     const pageLoad = useBotsStore.getState().loadBots();
     const newest = [listEntry("b1", "7")];
-    vi.mocked(botsApi.list).mockResolvedValueOnce(newest);
+    nextListAnswers(newest);
     await useBotsStore.getState().loadBots();
     answerFirst([]);
     await expect(pageLoad).resolves.toEqual(newest);
@@ -254,11 +301,8 @@ describe("bots store — loadBots resolves with the landed list (issue #119)", (
   it("rejects a superseded load when the newest request fails", async () => {
     const answerFirst = deferredList();
     const pageLoad = useBotsStore.getState().loadBots();
-    vi.mocked(botsApi.list).mockRejectedValueOnce(new Error("network down"));
-    await useBotsStore
-      .getState()
-      .loadBots()
-      .catch(() => undefined);
+    nextListFails("network down");
+    await expect(useBotsStore.getState().loadBots()).rejects.toThrow("network down");
     answerFirst([]);
     await expect(pageLoad).rejects.toThrow("network down");
   });
@@ -269,9 +313,9 @@ describe("bots store — loadBots resolves with the landed list (issue #119)", (
     const pageLoad = useBotsStore.getState().loadBots();
     const middleLoad = useBotsStore.getState().loadBots();
     answerGen1([]);
-    await Promise.resolve();
+    await answersProcessed();
     const newest = [listEntry("b1", "7")];
-    vi.mocked(botsApi.list).mockResolvedValueOnce(newest);
+    nextListAnswers(newest);
     await useBotsStore.getState().loadBots();
     answerGen2([]);
     await expect(middleLoad).resolves.toEqual(newest);

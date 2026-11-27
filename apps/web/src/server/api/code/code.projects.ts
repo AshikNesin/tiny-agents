@@ -1,3 +1,5 @@
+import { parseJson } from "@tiny-agents/std";
+import { z } from "zod";
 import { withToolPicks } from "../../../shared/tool-picks";
 import { randomBytes } from "node:crypto";
 import { and, desc, eq } from "drizzle-orm";
@@ -58,11 +60,38 @@ const DEFAULT_PROJECT_SETTINGS: ProjectSettings = {
   },
 };
 
+const storedSettingsSchema = z.object({
+  scripts: z
+    .object({ setup: z.string(), check: z.string(), archive: z.string() })
+    .partial()
+    .optional()
+    .catch(undefined),
+  archiveOnMerge: z.boolean().optional().catch(undefined),
+  draftPulls: z.boolean().optional().catch(undefined),
+  branchPrefix: z.string().optional().catch(undefined),
+  protectedPaths: z.array(z.string()).optional().catch(undefined),
+  workflowInstructions: z.string().optional().catch(undefined),
+  instructions: z.string().optional().catch(undefined),
+  autofix: z
+    .object({
+      triggers: z
+        .object({ checks: z.boolean(), reviews: z.boolean(), conflicts: z.boolean() })
+        .partial(),
+      trustedBots: z.array(z.string()),
+      hourlyLimit: z.number(),
+      noOwnerLimit: z.number(),
+      passMinutes: z.number(),
+      onByDefault: z.boolean(),
+    })
+    .partial()
+    .optional()
+    .catch(undefined),
+});
+
 export function projectSettings(raw: string): ProjectSettings {
-  let value: Partial<ProjectSettings> = {};
+  let value: z.infer<typeof storedSettingsSchema> = {};
   try {
-    const parsed = JSON.parse(raw) as unknown;
-    if (parsed && typeof parsed === "object") value = parsed as Partial<ProjectSettings>;
+    value = parseJson("A project's settings", raw, storedSettingsSchema);
   } catch {}
   const d = DEFAULT_PROJECT_SETTINGS;
   return {

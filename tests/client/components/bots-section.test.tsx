@@ -7,22 +7,45 @@
 import React from "react";
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, onTestFinished, vi } from "vite-plus/test";
+import { beforeEach, describe, expect, it } from "vite-plus/test";
 import { MemoryRouter } from "react-router-dom";
 import { BotRail, BotsSection } from "@/components/shell/BotsSection";
 import { useBotsStore } from "@/store/bots";
-import { peopleApi } from "@/lib/people-api";
 import { usePeopleStore } from "@/store/people";
-import type { BotListEntry } from "../../../apps/web/src/shared/api/bots";
+import type { Bot, BotListEntry } from "../../../apps/web/src/shared/api/bots";
+import type { PeopleMe } from "../../../apps/web/src/shared/api/people";
+import { ApiFailure, fakeApi } from "../fakes/api";
 
-const pinMock = vi.fn();
+let api: ReturnType<typeof fakeApi>;
 
-vi.mock("@/lib/bots-api", () => ({
-  botsApi: {
-    pin: (...args: unknown[]) => pinMock(...args),
-    get: vi.fn(),
-  },
-}));
+function stored(id: string, pinnedAt: string | null): Bot {
+  return {
+    id,
+    conversationId: id,
+    name: `Bot ${id}`,
+    description: "",
+    systemPrompt: "",
+    modelId: "m",
+    chatStartedAt: "2026-01-01T00:00:00.000Z",
+    lastReadAt: null,
+    lastActivityAt: "2026-01-01T00:00:00.000Z",
+    lastMessagePreview: null,
+    memoryEnabled: true,
+    autoReview: false,
+    yoloByDefault: false,
+    memoryCapturedThrough: null,
+    pinnedAt,
+    browserProfile: "shared",
+    projectId: null,
+    createdAt: "2026-01-01T00:00:00.000Z",
+    updatedAt: "2026-01-01T00:00:00.000Z",
+    toolPermissions: {},
+    skillIds: [],
+    connectionIds: [],
+    connectionCapabilities: [],
+    guestIds: [],
+  };
+}
 
 function bot(id: string, overrides: Partial<BotListEntry> = {}): BotListEntry {
   return {
@@ -61,7 +84,7 @@ function renderSection(bots: BotListEntry[], activeId: string | null = null) {
 const user = userEvent.setup();
 
 beforeEach(() => {
-  pinMock.mockReset();
+  api = fakeApi();
   usePeopleStore.setState({ role: "owner" });
 });
 
@@ -116,11 +139,15 @@ describe("BotsSection", () => {
   });
 
   it("pins a bot from the row menu", async () => {
-    pinMock.mockResolvedValue({ pinnedAt: "2026-01-05T00:00:00.000Z" });
+    api.post("/bots/a/pin", () => stored("a", "2026-01-05T00:00:00.000Z"));
     renderSection([bot("a")]);
     await user.click(screen.getByRole("button", { name: "Bot a actions" }));
     await user.click(await screen.findByRole("menuitem", { name: "Pin" }));
-    await waitFor(() => expect(pinMock).toHaveBeenCalledWith("a", true));
+    await waitFor(() =>
+      expect(api.sent("POST", "/bots/a/pin").map((request) => request.body)).toEqual([
+        { pinned: true },
+      ]),
+    );
     await waitFor(() =>
       expect(useBotsStore.getState().bots[0].pinnedAt).toBe("2026-01-05T00:00:00.000Z"),
     );
@@ -130,22 +157,21 @@ describe("BotsSection", () => {
   });
 
   it("rolls the pin back when the server refuses", async () => {
-    pinMock.mockRejectedValue(new Error("nope"));
+    api.post("/bots/a/pin", () => {
+      throw new ApiFailure(403, "nope");
+    });
     renderSection([bot("a")]);
     await user.click(screen.getByRole("button", { name: "Bot a actions" }));
     await user.click(await screen.findByRole("menuitem", { name: "Pin" }));
-    await waitFor(() => expect(pinMock).toHaveBeenCalled());
+    await waitFor(() => expect(api.sent("POST", "/bots/a/pin")).toHaveLength(1));
     await waitFor(() => expect(useBotsStore.getState().bots[0].pinnedAt).toBeNull());
   });
 });
 
 describe("BotsSection while /people/me is unanswered", () => {
   it("hides New bot until the viewer is known to be the owner", async () => {
-    let answer: (value: { guest: boolean }) => void = () => undefined;
-    const me = vi
-      .spyOn(peopleApi, "me")
-      .mockReturnValue(new Promise((resolve) => (answer = resolve)));
-    onTestFinished(() => me.mockRestore());
+    let answer: (value: PeopleMe) => void = () => undefined;
+    api.get("/people/me", () => new Promise<PeopleMe>((resolve) => (answer = resolve)));
     usePeopleStore.setState(usePeopleStore.getInitialState());
     const loading = usePeopleStore.getState().load();
     renderSection([bot("a")]);

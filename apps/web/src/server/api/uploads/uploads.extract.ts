@@ -1,3 +1,5 @@
+import { parseJson } from "@tiny-agents/std";
+import { z } from "zod";
 import { load as loadYaml } from "js-yaml";
 import type { AttachmentContent } from "@tiny-agents/agent";
 import { listGzip, listTar, listTgz, listZip, type ArchiveListing } from "./uploads.archive";
@@ -351,7 +353,7 @@ export async function extract(input: ExtractInput, mime = ""): Promise<ExtractRe
       case "json": {
         const text = decodeText(input.bytes);
         try {
-          const parsed = JSON.parse(text) as unknown;
+          const parsed = parseJson("An uploaded JSON file", text, z.unknown());
           return textResult(
             text.length < 1_000_000 ? JSON.stringify(parsed, null, 2) : text,
             "text",

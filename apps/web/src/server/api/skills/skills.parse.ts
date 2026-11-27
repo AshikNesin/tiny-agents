@@ -1,3 +1,5 @@
+import { parseJson } from "@tiny-agents/std";
+import { z } from "zod";
 import { SKILL_NAME } from "@tiny-agents/agent";
 import { Boom } from "@groot/core/errors";
 import type { ParsedSkill, SkillFile } from "../../../shared/api/skills";
@@ -5,10 +7,13 @@ import type { ParsedSkill, SkillFile } from "../../../shared/api/skills";
 export const MAX_FILES = 50;
 export const MAX_FILE_BYTES = 200_000;
 const MAX_TOTAL_BYTES = 1_000_000;
+const skillFilesSchema: z.ZodType<SkillFile[]> = z.array(
+  z.object({ path: z.string(), content: z.string() }),
+);
+
 export function skillFiles(raw: string): SkillFile[] {
   try {
-    const parsed = JSON.parse(raw) as unknown;
-    return Array.isArray(parsed) ? (parsed as SkillFile[]) : [];
+    return parseJson("A skill's stored files", raw, skillFilesSchema);
   } catch {
     return [];
   }
