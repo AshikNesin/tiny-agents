@@ -122,4 +122,26 @@ describe("credential request form gating", () => {
     });
     expect(api.gateRuns.count).toBe(1);
   });
+
+  it("accepts a plain username in a field the bot typed as email", async () => {
+    mount({
+      ...REQUEST,
+      fields: [
+        {
+          key: "login",
+          label: "Username (or Email)",
+          type: "email",
+          required: true,
+          autocomplete: "username",
+        },
+        REQUEST.fields[1]!,
+      ],
+    });
+    fireEvent.change(await screen.findByLabelText("Username (or Email)*"), {
+      target: { value: "AshikNesin" },
+    });
+    fireEvent.change(screen.getByLabelText("Password*"), { target: { value: "pw" } });
+    const form = screen.getByRole("button", { name: "Continue" }).closest("form")!;
+    expect(form.checkValidity()).toBe(true);
+  });
 });
