@@ -83,7 +83,7 @@ export const projectsApi = {
     apiClient.patch<ThreadPullsView>(`${thread(id)}/pr`, change),
   setDraft: (id: string, draft: boolean) =>
     apiClient.post<ThreadPullsView>(`${thread(id)}/pr/draft`, { draft }),
-  merge: (id: string, method: MergeMethod) =>
+  merge: (id: string, method?: MergeMethod) =>
     apiClient.post<ThreadPullsView>(`${thread(id)}/pr/merge`, { method }),
   yoloMerge: (id: string, method: MergeMethod) =>
     apiClient.post<ThreadPullsView>(`${thread(id)}/pr/yolo`, { method }),

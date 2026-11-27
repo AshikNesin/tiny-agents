@@ -1,6 +1,6 @@
-import type { WorkflowName } from "../../../shared/code-status";
+import { preferredMergeMethod, type WorkflowName } from "../../../shared/code-status";
 import { Kbd } from "../../components/keys";
-import { useCallback, useState } from "react";
+import { useState } from "react";
 import {
   Archive,
   ExternalLink,
@@ -32,7 +32,7 @@ import { Switch } from "@groot/ui/switch";
 import { errorMessage } from "../../lib/errors";
 import { Markdown } from "../../lib/markdown";
 import { projectsApi } from "../../lib/code/projects";
-import { useThreadPulls } from "../../lib/code/use-thread-pulls";
+import { usePullActions, useThreadPulls } from "../../lib/code/use-thread-pulls";
 import { pullStage } from "../../lib/code/pull-stage";
 import type { MergeMethod, PullView, ThreadPullsView } from "../../../shared/api/code";
 import { PullChecks } from "./PullChecks";
@@ -89,25 +89,11 @@ export function PullPanel({
     refreshKey,
     live: true,
   });
-  const [busy, setBusy] = useState<string | null>(null);
   const [linkNumber, setLinkNumber] = useState("");
   const [linking, setLinking] = useState(false);
   const [title, setTitle] = useState("");
 
-  const act = useCallback(
-    async (what: string, work: () => Promise<ThreadPullsView | void>) => {
-      setBusy(what);
-      try {
-        const next = await work();
-        if (next) setView(next);
-      } catch (e) {
-        toast.error(errorMessage(e, `Could not ${what}.`));
-      } finally {
-        setBusy(null);
-      }
-    },
-    [setView],
-  );
+  const { busy, act } = usePullActions(threadId);
 
   const pr = view?.active ?? null;
   const snap = pr?.snapshot ?? null;
@@ -544,7 +530,7 @@ function ActivePull({
           ? "Merge opens once the conflict is resolved."
           : null;
 
-  const yoloMethod: MergeMethod | undefined = methods.includes("squash") ? "squash" : methods[0];
+  const yoloMethod = preferredMergeMethod(methods);
 
   return (
     <>
