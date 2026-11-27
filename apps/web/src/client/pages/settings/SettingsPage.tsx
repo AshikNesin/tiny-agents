@@ -14,9 +14,9 @@ import { useViewerRole } from "../../store/people";
 import { useCodeStore } from "../../store/code";
 import { CodeSettingsSection } from "../code/CodeSettings";
 import { ModelsSettings } from "./models/ModelsSettings";
-import { settingsSectionsFor } from "./sections";
+import { settingsSectionsFor, type SettingsSectionId } from "./sections";
 
-const ELEMENTS: Record<string, ReactNode> = {
+const ELEMENTS: Record<SettingsSectionId, ReactNode> = {
   account: <AccountSettings />,
   appearance: <ThemeSettings />,
   security: <PasskeyManager />,
