@@ -15,52 +15,53 @@ that the code alone cannot show.
 
 ## Index
 
-| #    | Title                                                                                                                | Status                                              |
-| ---- | -------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
-| 0001 | [Own the DLS on the shadcn stack, Kumo as reference](0001-own-dls-on-shadcn-stack.md)                                | accepted (reinstated by 0003)                       |
-| 0002 | [Adopt @cloudflare/kumo directly](0002-adopt-kumo-directly.md)                                                       | reverted by 0003                                    |
-| 0003 | [Revert Kumo adoption; reinstate own DLS](0003-revert-kumo-adoption.md)                                              | accepted                                            |
-| 0004 | [Every bot has every built-in toolkit](0004-every-bot-has-every-toolkit.md)                                          | accepted                                            |
-| 0005 | [Secrets bots use live outside the app](0005-secrets-live-outside-the-app.md)                                        | accepted (amended by 0015, 0017)                    |
-| 0006 | [The computer is a desktop on the sandbox VM](0006-computer-is-a-desktop-on-the-sandbox-vm.md)                       | accepted                                            |
-| 0007 | [A local sandbox container for machines off the tailnet](0007-local-sandbox-container.md)                            | accepted                                            |
-| 0008 | [Claude subscription inference goes through Claude Code](0008-claude-code-engine.md)                                 | accepted (amended by 0010, 0014, 0016, 0018)        |
-| 0009 | [Coding goes to Shelley; tiny-agents is a client of its API](0009-shelley-is-the-coding-agent.md)                    | accepted (generalized by 0011)                      |
-| 0010 | [The Claude worker runs on the sandbox, set up by the app](0010-claude-worker-runs-on-the-sandbox.md)                | accepted (amends 0008; amended by 0013)             |
-| 0011 | [The Code page talks to coding agents through harness adapters](0011-code-harness-adapters.md)                       | accepted (generalizes 0009)                         |
-| 0012 | [Claude Code's coding mode on the sandbox worker](0012-claude-code-coding-mode.md)                                   | accepted (amends 0008)                              |
-| 0013 | [One sandbox connection](0013-one-sandbox-connection.md)                                                             | accepted (amends 0010)                              |
-| 0014 | [One Tool gate for both engines, behind a real AgentEngine seam](0014-tool-gate-and-engine-seam.md)                  | accepted (amends 0008; amended by 0016, 0018)       |
-| 0015 | [One secrets subsystem: the vault holds the app's own credentials too](0015-one-secrets-subsystem.md)                | accepted (amends 0005; amended by 0019)             |
-| 0016 | [Models are owner data](0016-models-are-owner-data.md)                                                               | accepted (amends 0008, 0014)                        |
-| 0017 | [Local is the only vault backend](0017-local-is-the-only-vault-backend.md)                                           | accepted (amends 0005; amended by 0019, 0027)       |
-| 0018 | [Claude plan transcripts are durable entries](0018-claude-plan-transcripts-are-durable-entries.md)                   | accepted (amends 0008, 0014)                        |
-| 0019 | [Vault values live in a table, opened under their row's policy](0019-vault-values-table.md)                          | accepted (amends 0015, 0017)                        |
-| 0020 | [A native Code harness on the agent runtime](0020-native-code-harness.md)                                            | accepted                                            |
-| 0021 | [Code projects: a repository on the sandbox, a worktree per thread](0021-code-projects-and-worktrees.md)             | accepted (amends 0012; amended by 0025)             |
-| 0022 | [GitHub through `gh` or a vault token; the app publishes](0022-github-through-gh-or-a-token.md)                      | accepted (amends 0015)                              |
-| 0023 | [Auto-fix: a pure decision, claimed passes, explicit trust and limits](0023-auto-fix.md)                             | accepted                                            |
-| 0024 | [The GitHub App transport, auto-merge, checkpoints and the rest of phase 6](0024-code-github-app-and-checkpoints.md) | accepted (amends 0021, 0022, 0023; amended by 0025) |
-| 0025 | [Steady diffs: one git reader, plumbing reads, pushed change versions](0025-steady-code-diffs.md)                    | accepted (amends 0021, 0024)                        |
-| 0026 | [Web Push is the push transport; the server holds no provider credentials](0026-web-push-transport.md)               | accepted                                            |
-| 0027 | [1Password Connect comes back, and runs inside the app's container](0027-1password-connect-runs-inside-the-app.md)   | accepted (amends 0005, 0017)                        |
-| 0028 | [Code carries no comments; decisions live in ADRs](0028-code-carries-no-comments.md)                                 | accepted                                            |
-| 0029 | [Decisions recorded from code comments: client components](0029-decisions-from-comments-client-components.md)        | accepted                                            |
-| 0030 | [Decisions recorded from code comments: web client](0030-decisions-from-comments-client.md)                          | accepted                                            |
-| 0031 | [Decisions recorded from code comments: server API](0031-decisions-from-comments-server-api.md)                      | accepted                                            |
-| 0032 | [Decisions recorded from code comments: server and scripts](0032-decisions-from-comments-server-and-scripts.md)      | accepted                                            |
-| 0033 | [Decisions recorded from code comments: agent packages](0033-decisions-from-comments-agent.md)                       | accepted                                            |
-| 0034 | [Decisions recorded from code comments: other packages](0034-decisions-from-comments-packages.md)                    | accepted                                            |
-| 0036 | [Decisions recorded from code comments: Android app](0036-decisions-from-comments-android.md)                        | accepted                                            |
-| 0037 | [Owner waits park the tool call](0037-owner-waits-park-the-tool-call.md)                                             | accepted                                            |
-| 0038 | [Browser traffic goes through a pinning proxy](0038-browser-traffic-goes-through-a-pinning-proxy.md)                 | accepted (amends 0034)                              |
-| 0039 | [Code threads own their id, belong to a project, and record runs](0039-code-threads-and-runs.md)                     | accepted                                            |
-| 0040 | [A project chat is a bot tied to one Code project](0040-project-chat-is-a-bot.md)                                    | accepted                                            |
-| 0041 | [Bots share what the owner sets up, guests included](0041-bots-share-what-the-owner-sets-up.md)                      | accepted (extends 0004)                             |
-| 0042 | [Code threads use the owner's shared connections and skills](0042-code-threads-use-shared-connections.md)            | accepted (extends 0041)                             |
-| 0043 | [Bot avatars load from DiceBear](0043-bot-avatars-from-dicebear.md)                                                  | accepted                                            |
-| 0044 | [Base UI replaces Radix as the one primitive layer](0044-base-ui-replaces-radix.md)                                  | accepted (amends 0001, 0003)                        |
-| G4   | [Hono + Drizzle on SQLite, for Node and Cloudflare Workers](0004-hono-drizzle-sqlite-workers.md)                     | accepted (groot)                                    |
+| #    | Title                                                                                                                | Status                                                         |
+| ---- | -------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| 0001 | [Own the DLS on the shadcn stack, Kumo as reference](0001-own-dls-on-shadcn-stack.md)                                | accepted (reinstated by 0003)                                  |
+| 0002 | [Adopt @cloudflare/kumo directly](0002-adopt-kumo-directly.md)                                                       | reverted by 0003                                               |
+| 0003 | [Revert Kumo adoption; reinstate own DLS](0003-revert-kumo-adoption.md)                                              | accepted                                                       |
+| 0004 | [Every bot has every built-in toolkit](0004-every-bot-has-every-toolkit.md)                                          | accepted                                                       |
+| 0005 | [Secrets bots use live outside the app](0005-secrets-live-outside-the-app.md)                                        | accepted (amended by 0015, 0017, 0027, 0045)                   |
+| 0006 | [The computer is a desktop on the sandbox VM](0006-computer-is-a-desktop-on-the-sandbox-vm.md)                       | accepted                                                       |
+| 0007 | [A local sandbox container for machines off the tailnet](0007-local-sandbox-container.md)                            | accepted                                                       |
+| 0008 | [Claude subscription inference goes through Claude Code](0008-claude-code-engine.md)                                 | accepted (amended by 0010, 0014, 0016, 0018)                   |
+| 0009 | [Coding goes to Shelley; tiny-agents is a client of its API](0009-shelley-is-the-coding-agent.md)                    | accepted (generalized by 0011)                                 |
+| 0010 | [The Claude worker runs on the sandbox, set up by the app](0010-claude-worker-runs-on-the-sandbox.md)                | accepted (amends 0008; amended by 0013)                        |
+| 0011 | [The Code page talks to coding agents through harness adapters](0011-code-harness-adapters.md)                       | accepted (generalizes 0009)                                    |
+| 0012 | [Claude Code's coding mode on the sandbox worker](0012-claude-code-coding-mode.md)                                   | accepted (amends 0008)                                         |
+| 0013 | [One sandbox connection](0013-one-sandbox-connection.md)                                                             | accepted (amends 0010)                                         |
+| 0014 | [One Tool gate for both engines, behind a real AgentEngine seam](0014-tool-gate-and-engine-seam.md)                  | accepted (amends 0008; amended by 0016, 0018)                  |
+| 0015 | [One secrets subsystem: the vault holds the app's own credentials too](0015-one-secrets-subsystem.md)                | accepted (amends 0005; amended by 0019)                        |
+| 0016 | [Models are owner data](0016-models-are-owner-data.md)                                                               | accepted (amends 0008, 0014)                                   |
+| 0017 | [Local is the only vault backend](0017-local-is-the-only-vault-backend.md)                                           | accepted (amends 0005; amended by 0019, 0027)                  |
+| 0018 | [Claude plan transcripts are durable entries](0018-claude-plan-transcripts-are-durable-entries.md)                   | accepted (amends 0008, 0014)                                   |
+| 0019 | [Vault values live in a table, opened under their row's policy](0019-vault-values-table.md)                          | accepted (amends 0015, 0017)                                   |
+| 0020 | [A native Code harness on the agent runtime](0020-native-code-harness.md)                                            | accepted                                                       |
+| 0021 | [Code projects: a repository on the sandbox, a worktree per thread](0021-code-projects-and-worktrees.md)             | accepted (amends 0012; amended by 0025)                        |
+| 0022 | [GitHub through `gh` or a vault token; the app publishes](0022-github-through-gh-or-a-token.md)                      | accepted (amends 0015)                                         |
+| 0023 | [Auto-fix: a pure decision, claimed passes, explicit trust and limits](0023-auto-fix.md)                             | accepted                                                       |
+| 0024 | [The GitHub App transport, auto-merge, checkpoints and the rest of phase 6](0024-code-github-app-and-checkpoints.md) | accepted (amends 0021, 0022, 0023; amended by 0025)            |
+| 0025 | [Steady diffs: one git reader, plumbing reads, pushed change versions](0025-steady-code-diffs.md)                    | accepted (amends 0021, 0024)                                   |
+| 0026 | [Web Push is the push transport; the server holds no provider credentials](0026-web-push-transport.md)               | accepted                                                       |
+| 0027 | [1Password Connect comes back, and runs inside the app's container](0027-1password-connect-runs-inside-the-app.md)   | accepted (amends 0005, 0017; Connect parts superseded by 0045) |
+| 0028 | [Code carries no comments; decisions live in ADRs](0028-code-carries-no-comments.md)                                 | accepted                                                       |
+| 0029 | [Decisions recorded from code comments: client components](0029-decisions-from-comments-client-components.md)        | accepted                                                       |
+| 0030 | [Decisions recorded from code comments: web client](0030-decisions-from-comments-client.md)                          | accepted                                                       |
+| 0031 | [Decisions recorded from code comments: server API](0031-decisions-from-comments-server-api.md)                      | accepted                                                       |
+| 0032 | [Decisions recorded from code comments: server and scripts](0032-decisions-from-comments-server-and-scripts.md)      | accepted                                                       |
+| 0033 | [Decisions recorded from code comments: agent packages](0033-decisions-from-comments-agent.md)                       | accepted                                                       |
+| 0034 | [Decisions recorded from code comments: other packages](0034-decisions-from-comments-packages.md)                    | accepted                                                       |
+| 0036 | [Decisions recorded from code comments: Android app](0036-decisions-from-comments-android.md)                        | accepted                                                       |
+| 0037 | [Owner waits park the tool call](0037-owner-waits-park-the-tool-call.md)                                             | accepted                                                       |
+| 0038 | [Browser traffic goes through a pinning proxy](0038-browser-traffic-goes-through-a-pinning-proxy.md)                 | accepted (amends 0034)                                         |
+| 0039 | [Code threads own their id, belong to a project, and record runs](0039-code-threads-and-runs.md)                     | accepted                                                       |
+| 0040 | [A project chat is a bot tied to one Code project](0040-project-chat-is-a-bot.md)                                    | accepted                                                       |
+| 0041 | [Bots share what the owner sets up, guests included](0041-bots-share-what-the-owner-sets-up.md)                      | accepted (extends 0004)                                        |
+| 0042 | [Code threads use the owner's shared connections and skills](0042-code-threads-use-shared-connections.md)            | accepted (extends 0041)                                        |
+| 0043 | [Bot avatars load from DiceBear](0043-bot-avatars-from-dicebear.md)                                                  | accepted                                                       |
+| 0044 | [Base UI replaces Radix as the one primitive layer](0044-base-ui-replaces-radix.md)                                  | accepted (amends 0001, 0003)                                   |
+| 0045 | [1Password through service accounts; Connect is removed](0045-1password-through-service-accounts.md)                 | accepted (supersedes 0027's Connect parts, amends 0005)        |
+| G4   | [Hono + Drizzle on SQLite, for Node and Cloudflare Workers](0004-hono-drizzle-sqlite-workers.md)                     | accepted (groot)                                               |
 
 `G4` is groot's ADR 0004, synced from the boilerplate; tiny-agents' own 0004
 predates it. tiny-agents runs on Node only (Chromium, ssh2, the agent store),

@@ -1,13 +1,11 @@
+import { app } from "../../../app-root";
 import { appEnv } from "../../../env";
-import { BUNDLED_CONNECT_HOST, bundledConnectWanted } from "../connect/bundled-connect";
-import { createConnectBackend } from "./onepassword-connect";
+import { createOnePasswordBackend, type OnePasswordConnector } from "./onepassword";
 import { createLocalBackend } from "./local";
 import type { BackendName, VaultBackend } from "./types";
 
-export interface ConnectConfig {
-  host: string;
+export interface OnePasswordConfig {
   vaultId?: string;
-  bundled: boolean;
   readToken?: string;
   adminToken?: string;
 }
@@ -18,17 +16,13 @@ const unquote = (value: string | undefined) =>
     .replace(/^(['"])([\s\S]*)\1$/, "$2")
     .trim() || undefined;
 
-export function connectConfig(): ConnectConfig | undefined {
+export function onePasswordConfig(): OnePasswordConfig | undefined {
   const env = appEnv();
-  const bundled = bundledConnectWanted();
-  const host = bundled ? BUNDLED_CONNECT_HOST : unquote(env.OP_CONNECT_HOST);
-  const readToken = unquote(env.OP_CONNECT_TOKEN);
-  const adminToken = unquote(env.OP_CONNECT_ADMIN_TOKEN);
-  if (!host || (!readToken && !adminToken)) return undefined;
-  const vaultId = unquote(env.OP_CONNECT_VAULT_ID);
+  const readToken = unquote(env.OP_SERVICE_ACCOUNT_TOKEN);
+  const adminToken = unquote(env.OP_SERVICE_ACCOUNT_ADMIN_TOKEN);
+  if (!readToken && !adminToken) return undefined;
+  const vaultId = unquote(env.OP_VAULT_ID);
   return {
-    host,
-    bundled,
     ...(vaultId ? { vaultId } : {}),
     ...(readToken ? { readToken } : {}),
     ...(adminToken ? { adminToken } : {}),
@@ -37,19 +31,28 @@ export function connectConfig(): ConnectConfig | undefined {
 
 let backends: Map<BackendName, VaultBackend> | undefined;
 
+export function onePasswordBackend(
+  config: OnePasswordConfig,
+  token: string,
+  writable: boolean,
+): VaultBackend {
+  const connector = app().vault.onePasswordConnector;
+  return createOnePasswordBackend({
+    token,
+    writable,
+    ...(config.vaultId ? { vaultId: config.vaultId } : {}),
+    ...(connector ? { connect: connector } : {}),
+  });
+}
+
 export function readBackends(): Map<BackendName, VaultBackend> {
   if (backends) return backends;
   const map = new Map<BackendName, VaultBackend>([["local", createLocalBackend()]]);
-  const connect = connectConfig();
-  if (connect) {
+  const onePassword = onePasswordConfig();
+  if (onePassword) {
     map.set(
-      "onepassword-connect",
-      createConnectBackend({
-        host: connect.host,
-        vaultId: connect.vaultId,
-        token: connect.readToken ?? connect.adminToken ?? "",
-        writable: false,
-      }),
+      "onepassword",
+      onePasswordBackend(onePassword, onePassword.readToken ?? onePassword.adminToken ?? "", false),
     );
   }
   backends = map;
@@ -57,9 +60,13 @@ export function readBackends(): Map<BackendName, VaultBackend> {
 }
 
 export function primaryBackend(): BackendName {
-  return connectConfig()?.adminToken ? "onepassword-connect" : "local";
+  return onePasswordConfig()?.adminToken ? "onepassword" : "local";
 }
 
 export function setReadBackendsForTests(map: Map<BackendName, VaultBackend> | undefined): void {
   backends = map;
+}
+
+export function setOnePasswordConnectorForTests(fake: OnePasswordConnector | undefined): void {
+  app().vault.onePasswordConnector = fake;
 }

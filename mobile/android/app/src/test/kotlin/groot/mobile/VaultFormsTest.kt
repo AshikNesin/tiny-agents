@@ -70,19 +70,19 @@ class VaultFormsTest {
 
     @Test
     fun `new items wait until the primary backend can write`() {
-        val starting = VaultOverview.from(
+        val unreachable = VaultOverview.from(
             JSONObject(
-                """{"primaryBackend":"onepassword-connect","items":[],"unlinked":[],"kindDefaults":{"login":["browser_fill_secret"]},
+                """{"primaryBackend":"onepassword","items":[],"unlinked":[],"kindDefaults":{"login":["browser_fill_secret"]},
                    "movableToOnePassword":2,"backends":[
-                     {"name":"onepassword-connect","configured":true,"read":{"state":"ready"},
-                      "write":{"state":"error","code":"starting","detail":"1Password is starting"},
+                     {"name":"onepassword","configured":true,"read":{"state":"ready"},
+                      "write":{"state":"error","code":"unreachable","detail":"1Password is unreachable"},
                       "capabilities":{"create":true,"update":true,"delete":true,"reveal":true}},
                      {"name":"local","configured":true,"read":{"state":"ready"},"capabilities":{"create":true}}]}""",
             ),
         )
-        assertFalse(starting.canCreate)
-        assertEquals("1Password is starting", starting.createBlockedWhy)
-        assertEquals(listOf("browser_fill_secret"), starting.kindDefaults["login"])
+        assertFalse(unreachable.canCreate)
+        assertEquals("1Password is unreachable", unreachable.createBlockedWhy)
+        assertEquals(listOf("browser_fill_secret"), unreachable.kindDefaults["login"])
 
         val ready = VaultOverview.from(
             JSONObject("""{"primaryBackend":"local","backends":[{"name":"local","configured":true,"read":{"state":"ready"},"capabilities":{"create":true}}]}"""),

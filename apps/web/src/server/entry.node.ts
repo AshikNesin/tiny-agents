@@ -41,10 +41,6 @@ import { startSettledPipeline } from "./api/bots/bots.settled";
 import { sweepBotReleases } from "./api/bots/bot-resources";
 import { setVaultAlertSink } from "./api/vault/vault.alerts";
 import { importStoredSecrets } from "./api/vault/vault.import";
-import {
-  startBundledConnectFromEnv,
-  stopBundledConnect,
-} from "./api/vault/connect/bundled-connect";
 import { setChatTitler } from "./api/bots/chats.title";
 import { setCodeBranchNamer } from "./api/code/code.naming";
 import { createSideCaller, type SideCaller } from "./api/bots/side-call";
@@ -145,12 +141,6 @@ async function main(): Promise<void> {
         logger.error({ error }, "Moving stored secrets into the vault failed");
       }
     },
-  });
-
-  add({
-    name: "1password connect",
-    start: () => startBundledConnectFromEnv(),
-    stop: () => stopBundledConnect(),
   });
 
   let runtime!: AgentRuntime;

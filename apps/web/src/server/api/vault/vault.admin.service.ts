@@ -6,14 +6,12 @@ import { secretRedactor, type VaultApproval, type VaultKind } from "@tiny-agents
 import { KIND_DEFAULT_TOOLS } from "../../../shared/vault-kinds";
 import { connections, db, vaultAuditEvents, vaultItems } from "../../db";
 import { app } from "../../app-root";
-import { connectConfig, primaryBackend, readBackends } from "./backends";
+import { onePasswordBackend, onePasswordConfig, primaryBackend, readBackends } from "./backends";
 import { createLocalBackend, deleteLocalItem, readLocalDraft } from "./backends/local";
-import { createConnectBackend } from "./backends/onepassword-connect";
 import {
   BackendError,
   type BackendItemSummary,
   type BackendName,
-  type BackendStatus,
   type DbTx,
   type ItemDraft,
   type ValueField,
@@ -47,16 +45,15 @@ let adminBackends: Map<BackendName, VaultBackend> | undefined;
 function writeBackends(): Map<BackendName, VaultBackend> {
   if (adminBackends) return adminBackends;
   const map = new Map<BackendName, VaultBackend>([["local", createLocalBackend()]]);
-  const connect = connectConfig();
-  if (connect) {
+  const onePassword = onePasswordConfig();
+  if (onePassword) {
     map.set(
-      "onepassword-connect",
-      createConnectBackend({
-        host: connect.host,
-        vaultId: connect.vaultId,
-        token: connect.adminToken ?? connect.readToken ?? "",
-        writable: Boolean(connect.adminToken),
-      }),
+      "onepassword",
+      onePasswordBackend(
+        onePassword,
+        onePassword.adminToken ?? onePassword.readToken ?? "",
+        Boolean(onePassword.adminToken),
+      ),
     );
   }
   adminBackends = map;
@@ -165,25 +162,14 @@ function itemView(row: VaultItemRow): VaultItemData {
   };
 }
 
-function withBundledState(name: BackendName, status: BackendStatus): BackendStatus {
-  const bundled = name === "onepassword-connect" ? app().bundledConnect?.state() : undefined;
-  if (!bundled || status.state === "ready" || status.code !== "unreachable") return status;
-  return {
-    ...status,
-    ...(bundled.state === "starting" ? { code: "starting" } : {}),
-    detail: bundled.detail,
-  };
-}
-
 async function backendsView(): Promise<VaultBackendView[]> {
   const views: VaultBackendView[] = [];
-  for (const name of ["onepassword-connect", "local"] as BackendName[]) {
+  for (const name of ["onepassword", "local"] as BackendName[]) {
     const read = readBackends().get(name);
     if (!read) continue;
     const write = writeBackends().get(name);
-    const readStatus = withBundledState(name, await backendStatus(name));
-    const writeStatus =
-      name === "local" || !write ? readStatus : withBundledState(name, await write.status());
+    const readStatus = await backendStatus(name);
+    const writeStatus = name === "local" || !write ? readStatus : await write.status();
     views.push({
       name,
       configured: true,
@@ -222,7 +208,7 @@ export async function overview(options: { refresh?: boolean } = {}): Promise<Vau
     items: rows.map(itemView),
     unlinked,
     kindDefaults: KIND_DEFAULT_TOOLS,
-    movableToOnePassword: writeBackends().get("onepassword-connect")?.create
+    movableToOnePassword: writeBackends().get("onepassword")?.create
       ? (await movableLocalRows()).length
       : 0,
   };
@@ -596,9 +582,9 @@ async function movableLocalRows(): Promise<VaultItemRow[]> {
 }
 
 export async function moveLocalItemsToOnePassword(): Promise<VaultMoveResult> {
-  const target = writeBackends().get("onepassword-connect");
+  const target = writeBackends().get("onepassword");
   if (!target?.create) {
-    throw Boom.badRequest("Set OP_CONNECT_ADMIN_TOKEN so the vault can write to 1Password");
+    throw Boom.badRequest("Set OP_SERVICE_ACCOUNT_ADMIN_TOKEN so the vault can write to 1Password");
   }
   const result: VaultMoveResult = { moved: [], failed: [] };
   for (const row of await movableLocalRows()) {
@@ -608,7 +594,7 @@ export async function moveLocalItemsToOnePassword(): Promise<VaultMoveResult> {
       db.transaction((tx) => {
         const moved = tx
           .update(vaultItems)
-          .set({ backend: "onepassword-connect", externalId, updatedAt: new Date() })
+          .set({ backend: "onepassword", externalId, updatedAt: new Date() })
           .where(
             and(
               eq(vaultItems.id, row.id),
@@ -625,7 +611,7 @@ export async function moveLocalItemsToOnePassword(): Promise<VaultMoveResult> {
         item: row,
         handle: row.handle,
         tool: "vault_ui",
-        target: "onepassword-connect",
+        target: "onepassword",
         outcome: "updated",
         reason: "moved from local to 1Password",
       });

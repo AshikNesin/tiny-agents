@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.17.1
+
+### Patch Changes
+
+- The Vault screen reads the server's new 1Password backend name (`onepassword`, for 1Password service
+  accounts), so the 1Password card keeps its label and its **Move N local items here** button. The
+  **Starting** badge is gone with the bundled Connect server it described.
+
 ## 0.17.0
 
 ### Minor Changes

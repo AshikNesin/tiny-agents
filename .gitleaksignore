@@ -9,3 +9,7 @@
 # 1Password's API_CREDENTIAL item category name (onepassword-mapping.ts), not a
 # secret; the line carries gitleaks:allow now.
 9b40d1067a9455143c17dccee25c83b923a464cd:apps/web/src/server/api/vault/backends/onepassword-mapping.ts:generic-secret-assignment:48
+
+# The Vault page's label for the onepassword backend (vault-api.ts), not a
+# secret; the line carries gitleaks:allow now.
+574a3c29a37f650736b818765c27c90d7b00a547:apps/web/src/client/lib/vault-api.ts:generic-password-assignment:121

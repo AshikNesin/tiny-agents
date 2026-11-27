@@ -124,7 +124,7 @@ private fun VaultList(
     ScreenColumn {
         SectionLabel("Backends")
         for (backend in data.backends) {
-            BackendCard(container, resource, backend, movable = if (backend.name == "onepassword-connect") data.movableToOnePassword else 0)
+            BackendCard(container, resource, backend, movable = if (backend.name == "onepassword") data.movableToOnePassword else 0)
         }
         if (data.items.isEmpty()) {
             EmptyState(
@@ -217,19 +217,17 @@ private fun UnlinkedRow(item: UnlinkedVaultItem, onLink: (UnlinkedVaultItem) -> 
 private fun BackendCard(container: AppContainer, resource: ResourceViewModel<VaultOverview>, backend: VaultBackend, movable: Int) {
     val gate = rememberStepUpGate()
     val problem = backend.problem
-    val starting = problem?.code == "starting"
     AppCard {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text(VaultKinds.backendLabel(backend.name), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
             Text(
                 when {
                     !backend.configured -> "Not set up"
-                    starting -> "Starting"
                     problem != null -> "Error"
                     else -> "Ready"
                 },
                 style = MaterialTheme.typography.labelMedium,
-                color = if (backend.configured && problem != null && !starting) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                color = if (backend.configured && problem != null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
         if (backend.configured) {

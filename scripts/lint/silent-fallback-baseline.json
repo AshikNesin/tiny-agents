@@ -197,13 +197,6 @@
   "apps/web/src/server/api/uploads/uploads.sniff.ts": {
     "catch {}": 1
   },
-  "apps/web/src/server/api/vault/connect/bundled-connect.ts": {
-    "catch {}": 1
-  },
-  "apps/web/src/server/api/vault/connect/connect-image.ts": {
-    ".catch(() => [] as string[])": 1,
-    ".then(() => false)": 1
-  },
   "apps/web/src/server/api/vault/vault.import.ts": {
     "catch {}": 1
   },

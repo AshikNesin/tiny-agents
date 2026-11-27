@@ -1,10 +1,10 @@
 # Vault
 
-A user keeps the secrets bots may use (logins, cards, contacts, API keys) on `/vault`. Bots only ever see a handle. The page shows the backends (Local, encrypted with `SECRETS_KEY`; 1Password only when `OP_CONNECT_*` is set), lists items by kind, and creates, edits, reveals, copies, unlinks, re-links and deletes them. Every write or reveal first asks the owner to confirm their password (step-up, valid 5 minutes, held in page memory only). Values stay masked unless revealed and never appear in page HTML, list or detail API reads, or the server log.
+A user keeps the secrets bots may use (logins, cards, contacts, API keys) on `/vault`. Bots only ever see a handle. The page shows the backends (Local, encrypted with `SECRETS_KEY`; 1Password only when `OP_SERVICE_ACCOUNT_TOKEN` or `OP_SERVICE_ACCOUNT_ADMIN_TOKEN` is set), lists items by kind, and creates, edits, reveals, copies, unlinks, re-links and deletes them. Every write or reveal first asks the owner to confirm their password (step-up, valid 5 minutes, held in page memory only). Values stay masked unless revealed and never appear in page HTML, list or detail API reads, or the server log.
 
 ## Sub-features
 
-- `vault-backends`: card `Local` (Ready, `Encrypted with SECRETS_KEY`). A `1Password` card shows only with Connect configured (`Starting` while the bundled server comes up).
+- `vault-backends`: card `Local` (Ready, `Encrypted with SECRETS_KEY`). A `1Password` card shows only with a service account token set.
 - `vault-new` (`New item` → dialog `New item`, `Saved in Local` → `Login` / `Card` / `Contact` / `API key` → `/vault/new/<kind>`, heading `New <kind>`): Name, kind fields (secret ones masked with `Show`, passwords with `Generate a password`), handle suggested from the name, policy (`Fills only on` / `Sent only to`, `Approval`, `Use in routines`, `Bots`, `Tools`, `When to use`).
 - `vault-step-up`: dialog `Confirm it's you` (Password or `Use a passkey`) before the first write/reveal; a full page load forgets it.
 - `vault-detail` (`/vault/items/<handle>`): Values (secrets `••••••••••`, username and card expiry in clear), `Reveal`/`Hide` (auto-hides after 30 s), `Copy` (clipboard, cleared after 30 s), `Edit` → dialog `<Field>` → `New value`, `+ <Field>` for empty fields, Activity trail (`created · vault_ui`, `updated`, `revealed`, …).
@@ -46,4 +46,4 @@ Preconditions:
 - Step-up calls count toward the auth rate limit like logins (20 per 15 min by default; `up` raises it to 1000 with `AUTH_RATE_LIMIT_MAX`).
 - Toasts stack (`Saved`, `Key saved`, `Key copied…`); assert the stored state rather than a toast that may be hidden under newer ones.
 - The contact form has two `Name` fields (item name and the contact's name) and the feedback widget has its own `Email (optional)`; use `exact` names / `first()`.
-- A real credential request needs a bot calling `request_credentials` on a live browser page (sandbox VM, `up --sandbox`, plus a model that calls the tool): unreachable with the faux model. Bot use of a vault item (`browser_fill_secret`, `http_request`, `vault_list`, approval cards) needs a real model too. 1Password needs a Connect credentials file and token: unreachable (server tests drive it against a fake Connect). Passkey step-up needs a registered passkey: not driven.
+- A real credential request needs a bot calling `request_credentials` on a live browser page (sandbox VM, `up --sandbox`, plus a model that calls the tool): unreachable with the faux model. Bot use of a vault item (`browser_fill_secret`, `http_request`, `vault_list`, approval cards) needs a real model too. 1Password needs a real service account token: unreachable (server tests drive it against a fake SDK client). Passkey step-up needs a registered passkey: not driven.

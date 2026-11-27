@@ -20,10 +20,10 @@ import type { CodeReviewRow } from "./db";
 import type { ConnectionManager } from "./api/connections/connections.manager";
 import type { HeldLiveAccess } from "./api/people/live-access";
 import type { VaultAlertSink } from "./api/vault/vault.alerts";
-import type { BundledConnect } from "./api/vault/connect/bundled-connect";
 import type { SupervisorChannel } from "./api/system/updates.service";
 import type { VapidKeys } from "@groot/core/notification/webpush.crypto";
 import type { BackendItemSummary, BackendName } from "./api/vault/backends/types";
+import type { OnePasswordConnector } from "./api/vault/backends/onepassword";
 import type { BackendStatus } from "../shared/api/vault";
 
 export interface App {
@@ -60,8 +60,8 @@ export interface App {
     backendStatus: Map<BackendName, { at: number; status: BackendStatus }>;
     appValues: Map<string, { at: number; value: string }>;
     candidates?: { at: number; items: (BackendItemSummary & { backend: BackendName })[] };
+    onePasswordConnector?: OnePasswordConnector;
   };
-  bundledConnect?: BundledConnect;
   submittingRequests: Set<number>;
   modelRuntime?: Pick<AgentRuntime, "applyModelConfig">;
   modelListeners: Set<() => void>;
