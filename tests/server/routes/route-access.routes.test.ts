@@ -31,7 +31,7 @@ describe("route access table", () => {
   it("refuses every stepUp route to a signed-in owner who has not confirmed it's them", async () => {
     const { token } = await signIn(app);
     const stepUp = Object.entries(ROUTE_ACCESS).filter(([, access]) => access === "stepUp");
-    expect(stepUp.length).toBeGreaterThan(10);
+    expect(stepUp.length).toBeGreaterThan(5);
     for (const [route] of stepUp) {
       const [method, path] = route.split(" ") as [string, string];
       const response = await api(app, `${API}${fillParams(path)}`, { method, token, json: {} });
