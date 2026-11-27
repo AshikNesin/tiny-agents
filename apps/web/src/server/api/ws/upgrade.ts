@@ -6,6 +6,7 @@ import { config } from "@groot/core/config";
 import { env } from "@groot/core/env";
 import { logger } from "@groot/core/logger";
 import { holdLiveAccess, type LiveGrant } from "../people/live-access";
+import { app } from "../../app-root";
 
 export const TICKET_TTL_MS = 60_000;
 
@@ -99,16 +100,14 @@ export interface UpgradeMatch {
   params: string[];
 }
 
-const upgradePatterns = new WeakMap<Server, RegExp[]>();
-
 export function onUpgrade(
   httpServer: Server,
   pattern: RegExp,
   originAllowed: (req: IncomingMessage) => boolean,
   handle: (match: UpgradeMatch) => void,
 ): void {
-  const patterns = upgradePatterns.get(httpServer) ?? [];
-  upgradePatterns.set(httpServer, patterns);
+  const patterns = app().upgradePatterns.get(httpServer) ?? [];
+  app().upgradePatterns.set(httpServer, patterns);
   patterns.push(pattern);
   httpServer.on("upgrade", (req, socket, head) => {
     let url: URL;
@@ -120,7 +119,7 @@ export function onUpgrade(
     try {
       const match = pattern.exec(url.pathname);
       if (!match) {
-        const ours = upgradePatterns.get(httpServer) ?? [];
+        const ours = app().upgradePatterns.get(httpServer) ?? [];
         const foreign = httpServer.listenerCount("upgrade") - ours.length;
         if (foreign <= 0 && !ours.some((p) => p.test(url.pathname))) socket.destroy();
         return;

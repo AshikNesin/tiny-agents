@@ -3,6 +3,7 @@ import { storageService } from "@groot/core/storage";
 import { logger } from "@groot/core/logger";
 import type { AttachmentContent } from "@tiny-agents/agent";
 import { db, uploads, type Upload } from "../../db";
+import { app } from "../../app-root";
 import { extractionMachine, type ExtractStatus } from "../../../shared/machines/extraction";
 import { extract } from "./uploads.extract";
 import { defaultRunner, type ExtractRunner } from "./uploads.extract-runner";
@@ -21,20 +22,25 @@ interface Job {
   settle: () => void;
 }
 
-let runner: ExtractRunner = defaultRunner;
-const queue: string[] = [];
-const jobs = new Map<string, Job>();
-const cancelled = new Set<string>();
-let active = 0;
-let idle: Promise<void> = Promise.resolve();
-let markIdle: (() => void) | undefined;
+export interface ExtractionState {
+  runner?: ExtractRunner;
+  queue: string[];
+  jobs: Map<string, Job>;
+  cancelled: Set<string>;
+  active: number;
+  idle: Promise<void>;
+  markIdle?: () => void;
+  cache: Map<string, AttachmentContent>;
+}
+
+const state = () => app().uploadExtraction;
 
 export function setExtractRunner(next: ExtractRunner): void {
-  runner = next;
+  state().runner = next;
 }
 
 export function extractionIdle(): Promise<void> {
-  return idle;
+  return state().idle;
 }
 
 export async function initialExtraction(
@@ -79,7 +85,7 @@ export async function ensureExtracting<T extends UploadRow>(row: T): Promise<T> 
 export async function waitUntilSettled(rows: UploadRow[], waitMs: number): Promise<UploadRow[]> {
   const pending = rows.filter((row) => row.kind === "file" && row.extractStatus === "pending");
   if (pending.length === 0) return rows;
-  const settling = pending.map((row) => jobs.get(row.id)?.done ?? queueExtraction(row.id));
+  const settling = pending.map((row) => state().jobs.get(row.id)?.done ?? queueExtraction(row.id));
   await Promise.race([Promise.all(settling), sleep(waitMs)]);
   const fresh = await db
     .select()
@@ -95,24 +101,25 @@ export async function waitUntilSettled(rows: UploadRow[], waitMs: number): Promi
 }
 
 export function cancelExtraction(uploadId: string): void {
-  const job = jobs.get(uploadId);
+  const job = state().jobs.get(uploadId);
   if (!job) return;
-  cancelled.add(uploadId);
-  const queuedAt = queue.indexOf(uploadId);
+  state().cancelled.add(uploadId);
+  const queuedAt = state().queue.indexOf(uploadId);
   if (queuedAt !== -1) {
-    queue.splice(queuedAt, 1);
+    state().queue.splice(queuedAt, 1);
     retire(uploadId);
   }
 }
 
 export function queueExtraction(uploadId: string, kind?: ExtractKind): Promise<void> {
-  const existing = jobs.get(uploadId);
+  const existing = state().jobs.get(uploadId);
   if (existing) return existing.done;
-  if (jobs.size === 0) idle = new Promise((resolve) => (markIdle = resolve));
+  if (state().jobs.size === 0)
+    state().idle = new Promise((resolve) => (state().markIdle = resolve));
   let settle!: () => void;
   const done = new Promise<void>((resolve) => (settle = resolve));
-  jobs.set(uploadId, { kind, done, settle });
-  queue.push(uploadId);
+  state().jobs.set(uploadId, { kind, done, settle });
+  state().queue.push(uploadId);
   pump();
   return done;
 }
@@ -120,23 +127,23 @@ export function queueExtraction(uploadId: string, kind?: ExtractKind): Promise<v
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms).unref?.());
 
 function retire(uploadId: string): void {
-  const job = jobs.get(uploadId);
-  jobs.delete(uploadId);
-  cancelled.delete(uploadId);
+  const job = state().jobs.get(uploadId);
+  state().jobs.delete(uploadId);
+  state().cancelled.delete(uploadId);
   job?.settle();
-  if (jobs.size === 0) markIdle?.();
+  if (state().jobs.size === 0) state().markIdle?.();
 }
 
 function pump(): void {
-  while (active < CONCURRENCY && queue.length > 0) {
-    const uploadId = queue.shift()!;
-    const job = jobs.get(uploadId);
+  while (state().active < CONCURRENCY && state().queue.length > 0) {
+    const uploadId = state().queue.shift()!;
+    const job = state().jobs.get(uploadId);
     if (!job) continue;
-    active += 1;
+    state().active += 1;
     void extractOne(uploadId, job.kind)
       .catch((error: unknown) => logger.warn({ error, uploadId }, "upload.extract.failed"))
       .finally(() => {
-        active -= 1;
+        state().active -= 1;
         retire(uploadId);
         pump();
       });
@@ -151,7 +158,7 @@ function extensionOf(name: string): string {
 async function extractOne(uploadId: string, kindHint: ExtractKind | undefined): Promise<void> {
   const row = await db.query.uploads.findFirst({ where: eq(uploads.id, uploadId) });
   if (!row || row.kind !== "file" || row.extractStatus !== "pending") return;
-  if (cancelled.has(uploadId)) return;
+  if (state().cancelled.has(uploadId)) return;
   const started = Date.now();
   let bytes: Uint8Array;
   try {
@@ -172,8 +179,11 @@ async function extractOne(uploadId: string, kindHint: ExtractKind | undefined): 
       return;
     }
   }
-  const result = await runner({ bytes: new Uint8Array(bytes), kind, name: row.name }, row.mimeType);
-  if (cancelled.has(uploadId)) return;
+  const result = await (state().runner ?? defaultRunner)(
+    { bytes: new Uint8Array(bytes), kind, name: row.name },
+    row.mimeType,
+  );
+  if (state().cancelled.has(uploadId)) return;
   if (result.status !== "ready") {
     await finish(uploadId, { extractStatus: result.status, extractError: result.error });
     logger.info(
@@ -216,7 +226,7 @@ async function finish(
     extractMeta?: string;
   },
 ): Promise<void> {
-  const updated = cancelled.has(uploadId)
+  const updated = state().cancelled.has(uploadId)
     ? []
     : await db
         .update(uploads)
@@ -243,20 +253,18 @@ export async function extractionSweep(): Promise<number> {
   return rows.length;
 }
 
-const cache = new Map<string, AttachmentContent>();
-
 export async function loadContent(uploadId: string): Promise<AttachmentContent | undefined> {
-  const hit = cache.get(uploadId);
+  const hit = state().cache.get(uploadId);
   if (hit) {
-    cache.delete(uploadId);
-    cache.set(uploadId, hit);
+    state().cache.delete(uploadId);
+    state().cache.set(uploadId, hit);
     return hit;
   }
   try {
     const file = await storageService.downloadFile({ filePath: extractKey(uploadId) });
     const content = JSON.parse(new TextDecoder().decode(file.bytes)) as AttachmentContent;
-    cache.set(uploadId, content);
-    if (cache.size > CACHE_SIZE) cache.delete(cache.keys().next().value!);
+    state().cache.set(uploadId, content);
+    if (state().cache.size > CACHE_SIZE) state().cache.delete(state().cache.keys().next().value!);
     return content;
   } catch {
     return undefined;
@@ -264,5 +272,5 @@ export async function loadContent(uploadId: string): Promise<AttachmentContent |
 }
 
 export function forgetContent(uploadId: string): void {
-  cache.delete(uploadId);
+  state().cache.delete(uploadId);
 }

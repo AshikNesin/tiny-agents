@@ -6,7 +6,7 @@ export interface RfbViewOnlyFilter {
   push(chunk: Buffer): Buffer;
 }
 
-const FORWARD = new Set([0, 2, 3, 150, 248]);
+const FORWARD: ReadonlySet<number> = new Set([0, 2, 3, 150, 248]);
 
 const MAX_MESSAGE_BYTES = 8 * 1024 * 1024;
 

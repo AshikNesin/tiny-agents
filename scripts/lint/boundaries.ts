@@ -55,27 +55,6 @@ const DRIVER_HOMES = [
 ];
 
 const SERVER = "apps/web/src/server";
-const R12_ALLOWED = [
-  "crypto/secret-box.ts:derived",
-  "api/uploads/uploads.extraction.ts:cache",
-  "api/uploads/uploads.prepare.ts:processor",
-  "api/bots/sandbox-host.ts:keyFiles",
-  "api/ws/upgrade.ts:upgradePatterns",
-  "db/index.ts:connections",
-  "api/uploads/uploads.extraction.ts:runner",
-  "api/uploads/uploads.extraction.ts:jobs",
-  "api/uploads/uploads.extraction.ts:cancelled",
-  "api/uploads/uploads.extraction.ts:active",
-  "api/uploads/uploads.extraction.ts:idle",
-  "api/uploads/uploads.extraction.ts:markIdle",
-  "entry.node.ts:captureException",
-  "api/bots/rfb-view-only.ts:FORWARD",
-  "api/bots/memories.store.ts:GENERIC_WORDS",
-  "api/uploads/uploads.sniff.ts:TEXT_EXTENSIONS",
-  "api/uploads/uploads.service.ts:ALLOWED_EXTENSIONS",
-  "api/routines/routines.runs.ts:CREDENTIAL_TOOLS",
-].map((entry) => `${SERVER}/${entry}`);
-
 const BOUNDARY_RULES: BoundaryRule[] = [
   {
     id: "R1",
@@ -443,7 +422,6 @@ const BOUNDARY_RULES: BoundaryRule[] = [
     kind: "plugin",
     scope: `${SERVER}/**/*.ts`,
     rule: "repo/no-module-state",
-    options: { allow: R12_ALLOWED },
     except: ["**/*.test.ts"],
     enabled: true,
   },

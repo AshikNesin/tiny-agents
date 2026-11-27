@@ -13,7 +13,6 @@ import { redactSecretPath } from "@groot/core/utils/redact-path";
 import { markShuttingDown } from "@groot/core/app";
 import { memoryRateLimitStore } from "@groot/core/rate-limit/store";
 import { peerClientAddress } from "@groot/core/utils/client-ip";
-import type { ErrorReporter } from "@groot/core/errors";
 import { localStorage, uploadsRoot } from "@groot/core/storage/node";
 import { notificationService } from "@groot/core/notification/notification.service";
 import { startWorkers, stopWorkers } from "@groot/jobs/server/worker";
@@ -23,6 +22,7 @@ import { closeAllComputerSessions } from "@tiny-agents/sandbox/computer";
 import { appConfig } from "./config";
 import { agentDbPath, fauxMode } from "./env";
 import { createWebApp, registerJobHandlers } from "./app";
+import { app as appRoot } from "./app-root";
 import { applyDatabaseDefaults, openNodeAppDatabase } from "./db/open";
 import { createLifecycle } from "./lifecycle";
 import { startNotifications, notifyVaultAlert } from "./api/notifications/notifications.wiring";
@@ -64,14 +64,12 @@ const isProduction = process.env.NODE_ENV === "production";
 
 applyDatabaseDefaults();
 
-let captureException: ErrorReporter | undefined;
-
 bootstrap({
   env: process.env,
   config: appConfig,
   db: (validated) => openNodeAppDatabase(validated, { besideBundle: here }),
   storage: (validated) => localStorage(uploadsRoot(validated)),
-  reportError: (error, context) => captureException?.(error, context),
+  reportError: (error, context) => appRoot().errorReporter?.(error, context),
 });
 
 if (config.sentry.dsn) {
@@ -88,7 +86,7 @@ if (config.sentry.dsn) {
     },
     beforeBreadcrumb: (breadcrumb) => scrubValue(breadcrumb),
   });
-  captureException = (error, extra) => Sentry.captureException(error, { extra });
+  appRoot().errorReporter = (error, extra) => Sentry.captureException(error, { extra });
 }
 
 registerJobHandlers();

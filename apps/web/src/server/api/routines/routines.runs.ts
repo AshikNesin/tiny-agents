@@ -251,7 +251,7 @@ const RUN_CAP_REASON =
   `Made ${RUN_TOOL_CALL_LIMIT} tool calls, the most one run may make, so it was stopped early. ` +
   `Split the routine or ask for less per run.`;
 
-const CREDENTIAL_TOOLS = new Set(["request_credentials"]);
+const CREDENTIAL_TOOLS: ReadonlySet<string> = new Set(["request_credentials"]);
 
 export function refusalReason(tools: string[], askOnly: ReadonlySet<string>): string {
   const signIn = tools.filter((tool) => CREDENTIAL_TOOLS.has(tool));

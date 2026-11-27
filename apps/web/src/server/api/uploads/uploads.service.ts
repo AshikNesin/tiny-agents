@@ -20,7 +20,7 @@ import type { StoredUpload, UploadMeta, UploadStatus } from "../../../shared/api
 const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
 const MAX_FILE_BYTES = 25 * 1024 * 1024;
 
-const ALLOWED_EXTENSIONS = new Set([
+const ALLOWED_EXTENSIONS: ReadonlySet<string> = new Set([
   "png",
   "jpg",
   "jpeg",

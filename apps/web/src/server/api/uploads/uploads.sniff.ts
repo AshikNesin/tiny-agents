@@ -15,7 +15,7 @@ export class SniffError extends Error {}
 
 const IMAGE_EXTENSIONS = ["png", "jpg", "jpeg", "webp", "gif"];
 
-export const TEXT_EXTENSIONS = new Set([
+export const TEXT_EXTENSIONS: ReadonlySet<string> = new Set([
   "txt",
   "md",
   "log",

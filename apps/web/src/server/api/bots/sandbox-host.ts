@@ -41,13 +41,12 @@ function sandboxHostKeys(): HostKeyStore {
   return root.sandboxHostKeys;
 }
 
-const keyFiles = new Map<string, string>();
-
 export function sandboxPrivateKey(env: AppEnv = appEnv()): string | undefined {
   const inline = unquoteEnv(env.SANDBOX_SSH_KEY);
   if (inline) return `${inline.replaceAll("\\n", "\n").trim()}\n`;
   const path = unquoteEnv(env.SANDBOX_SSH_KEY_FILE);
   if (!path) return undefined;
+  const keyFiles = app().sandboxKeyFiles;
   if (keyFiles.has(path)) return keyFiles.get(path) || undefined;
   let key = "";
   try {
@@ -96,6 +95,6 @@ export function closeSandboxConnections(): void {
 
 export function resetSandboxHostKeysForTests(): void {
   app().sandboxHostKeys = undefined;
-  keyFiles.clear();
+  app().sandboxKeyFiles.clear();
   closeSandboxConnections();
 }

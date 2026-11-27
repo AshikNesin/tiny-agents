@@ -7,6 +7,7 @@ import {
   randomBytes,
 } from "node:crypto";
 import { appEnv } from "../env";
+import { app } from "../app-root";
 
 export type SecretPurpose = "vault-local" | "connection" | "push";
 
@@ -31,12 +32,10 @@ const VERSION = "v2";
 const SALT = Buffer.from("tiny-agents/secret-box");
 const MIN_KEY_BYTES = 32;
 
-interface DerivedKey {
+export interface DerivedKey {
   key: Buffer;
   kid: string;
 }
-
-const derived = new Map<string, DerivedKey>();
 
 function keyMaterialBytes(value: string): number {
   const hex = /^[0-9a-f]+$/i.exec(value);
@@ -63,12 +62,12 @@ export function secretKeyProblem(value: string | undefined): string | undefined 
 
 function derive(ikm: string, purpose: SecretPurpose): DerivedKey {
   const cacheKey = `${purpose}\0${ikm}`;
-  let entry = derived.get(cacheKey);
+  let entry = app().derivedKeys.get(cacheKey);
   if (!entry) {
     const key = Buffer.from(hkdfSync("sha256", ikm, SALT, `tiny-agents/${purpose}/v2`, 32));
     const kid = createHmac("sha256", key).update("kid").digest("base64url").slice(0, 11);
     entry = { key, kid };
-    derived.set(cacheKey, entry);
+    app().derivedKeys.set(cacheKey, entry);
   }
   return entry;
 }

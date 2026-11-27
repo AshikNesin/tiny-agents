@@ -742,7 +742,7 @@ const FIXTURES: Record<string, Fixture> = {
   "apps/web/src/server/r12-export-let-fail.ts": {
     source: "export let current: string | undefined;\nexport let a = 1,\n  b = 2;\n",
     rules: ["R12", "R12", "R12"],
-    mentions: "docs/rewrite/DECISIONS.md D8",
+    mentions: "ReadonlySet<T>",
   },
   "apps/web/src/server/api/vault/r12-collections-fail.ts": {
     source:
@@ -754,19 +754,10 @@ const FIXTURES: Record<string, Fixture> = {
       "const LIMIT = 3;\nconst LIST = [1, 2];\nconst seen = [...new Set(LIST)];\nexport const counter = () => {\n  let n = 0;\n  const hits = new Map<number, number>();\n  return () => hits.set((n += LIMIT), seen.length);\n};\nfor (let i = 0; i < 1; i++) void i;\n",
     rules: [],
   },
-  "apps/web/src/server/crypto/secret-box.ts": {
+  "apps/web/src/server/api/r12-readonly-pass.ts": {
     source:
-      "const derived = new Map<string, string>();\nlet other = 0;\nexport const keys = () => [derived, other++];\n",
-    rules: ["R12"],
-  },
-  "apps/web/src/server/api/uploads/uploads.prepare.ts": {
-    source:
-      "let processor: Promise<number> | undefined;\nexport const load = () => (processor ??= Promise.resolve(1));\n",
+      'const WORDS: ReadonlySet<string> = new Set(["a"]);\nconst BY_NAME: ReadonlyMap<string, number> = new Map([["a", 1]]);\nexport const has = (word: string) => WORDS.has(word) || BY_NAME.has(word);\n',
     rules: [],
-  },
-  "apps/web/src/server/api/vault/r12-allowlisted-name-elsewhere-fail.ts": {
-    source: "const derived = new Map<string, string>();\nexport const d = derived;\n",
-    rules: ["R12"],
   },
   "apps/web/src/client/lib/r13-declarations-api.ts": {
     source:

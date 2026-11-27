@@ -9,7 +9,7 @@ function order(category: string): number {
   return index === -1 ? CATEGORY_ORDER.length : index;
 }
 
-const GENERIC_WORDS = new Set(
+const GENERIC_WORDS: ReadonlySet<string> = new Set(
   "a an and are as at about be for i in is it me my of on or owner owner's owners that the this to was with".split(
     " ",
   ),

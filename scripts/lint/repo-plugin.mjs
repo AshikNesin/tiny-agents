@@ -255,9 +255,13 @@ const insertTable = (node) =>
 const MODULE_SCOPES = new Set(["module", "global"]);
 
 const MODULE_STATE_MESSAGE =
-  "R12: module state belongs in the App root (apps/web/src/server/app-root.ts); see docs/rewrite/DECISIONS.md D8";
+  "R12: module state belongs in the App root (apps/web/src/server/app-root.ts): add a field to App and read it through app(). A constant lookup is declared `const NAME: ReadonlySet<T> = new Set([...])` (or ReadonlyMap).";
 
 const COLLECTIONS = new Set(["Map", "Set", "WeakMap", "WeakSet"]);
+const READONLY_COLLECTIONS = new Set(["ReadonlySet", "ReadonlyMap"]);
+
+const declaredReadonly = (id) =>
+  READONLY_COLLECTIONS.has(id?.typeAnnotation?.typeAnnotation?.typeName?.name);
 
 const API_TYPE_EXPORT_MESSAGE =
   "R13: an API's request and response types live once, in apps/web/src/shared/api/<area>.ts, where the server's handlers use them too (docs/rewrite/README.md §4.5). Declare the type there and import it here; its other readers import it from there as well.";
@@ -281,25 +285,6 @@ const isCollection = (node) => {
     target.callee.type === "Identifier" &&
     COLLECTIONS.has(target.callee.name)
   );
-};
-
-const boundNames = (pattern) => {
-  switch (pattern?.type) {
-    case "Identifier":
-      return [pattern.name];
-    case "ObjectPattern":
-      return pattern.properties.flatMap((p) =>
-        boundNames(p.type === "RestElement" ? p.argument : p.value),
-      );
-    case "ArrayPattern":
-      return pattern.elements.flatMap(boundNames);
-    case "RestElement":
-      return boundNames(pattern.argument);
-    case "AssignmentPattern":
-      return boundNames(pattern.left);
-    default:
-      return [];
-  }
 };
 
 const FUNCTIONS = new Set(["FunctionDeclaration", "FunctionExpression", "ArrowFunctionExpression"]);
@@ -327,17 +312,7 @@ export default {
       },
     },
     "no-module-state": {
-      meta: { schema: [{ type: "object" }] },
       create(context) {
-        const file = context.filename.replaceAll("\\", "/");
-        const allowed = new Set(
-          (context.options[0]?.allow ?? []).flatMap((entry) => {
-            const at = entry.lastIndexOf(":");
-            return file === entry.slice(0, at) || file.endsWith(`/${entry.slice(0, at)}`)
-              ? [entry.slice(at + 1)]
-              : [];
-          }),
-        );
         return {
           VariableDeclaration(node) {
             const parent =
@@ -345,7 +320,7 @@ export default {
             if (parent.type !== "Program") return;
             for (const declarator of node.declarations) {
               if (node.kind === "const" && !isCollection(declarator.init)) continue;
-              if (boundNames(declarator.id).every((name) => allowed.has(name))) continue;
+              if (node.kind === "const" && declaredReadonly(declarator.id)) continue;
               context.report({ node: declarator, message: MODULE_STATE_MESSAGE });
             }
           },
