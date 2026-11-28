@@ -5,7 +5,7 @@ import { Button } from "@groot/ui/button";
 import { useConfirm } from "@groot/ui/primitives";
 import type { PushDevice } from "../../shared/api/push";
 import { pushSubscriptionLabels } from "../../shared/machines/push-subscription";
-import { StatusBadge } from "./StatusBadge";
+import { MachineStatusBadge } from "./MachineStatusBadge";
 import { errorMessage } from "../lib/errors";
 import { usePushDeviceMutations, usePushDevices } from "../queries/push";
 
@@ -74,7 +74,7 @@ export function PhoneNotificationSettings() {
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <span className="font-medium">{device.label || "Phone"}</span>
-              <StatusBadge status={device.status} labels={pushSubscriptionLabels} />
+              <MachineStatusBadge status={device.status} labels={pushSubscriptionLabels} />
             </div>
             <p className="text-muted-foreground text-xs">
               Via {via(device)}

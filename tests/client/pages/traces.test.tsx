@@ -136,7 +136,7 @@ describe("Traces", () => {
     expect(row).toHaveTextContent("$0.01");
     expect(row).toHaveAttribute("href", "/traces/7");
     expect(screen.getByTestId("traces-summary")).toHaveTextContent(
-      "Last 7 days · $0.01 · 10.3K tokens · 1 session · 2 side-calls",
+      "Last 7 days · $0.01 · 10K tokens · 1 session · 2 side-calls",
     );
   });
 
@@ -151,7 +151,7 @@ describe("Traces", () => {
     );
 
     const tool = screen.getByTestId("trace-tool");
-    expect(tool).toHaveTextContent("web fetch “https://news.example”failed850 ms");
+    expect(tool).toHaveTextContent("web fetch “https://news.example”failed850ms");
     fireEvent.click(within(tool).getByRole("button"));
     expect(within(tool).getByText('"url": "https://news.example"', { exact: false })).toBeVisible();
     expect(within(tool).getByText("403 Forbidden")).toHaveClass("text-destructive");

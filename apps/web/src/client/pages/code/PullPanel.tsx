@@ -39,7 +39,7 @@ import { PullChecks } from "./PullChecks";
 import { PullComments } from "./PullComments";
 import { autofixLabels } from "../../../shared/machines/autofix";
 import type { StatusLabels } from "../../../shared/machines/status-label";
-import { StatusBadge } from "../../components/StatusBadge";
+import { MachineStatusBadge } from "../../components/MachineStatusBadge";
 
 const OUTCOME_LABEL: Record<string, string> = {
   pushed: "Pushed",
@@ -476,7 +476,7 @@ function StateBadge({ pr }: { pr: PullView }) {
       : pr.state === "open" && pr.draft
         ? "draft"
         : pr.state;
-  return <StatusBadge status={state} labels={PULL_STATE_LABELS} />;
+  return <MachineStatusBadge status={state} labels={PULL_STATE_LABELS} />;
 }
 
 function ActivePull({
@@ -625,7 +625,7 @@ function ActivePull({
           >
             <span className="min-w-0 flex-1 font-medium">Auto-fix</span>
             {pr.autofix && (
-              <StatusBadge
+              <MachineStatusBadge
                 plain
                 status={pr.loop.status}
                 labels={autofixLabels}

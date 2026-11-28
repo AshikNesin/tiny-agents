@@ -13,7 +13,7 @@ import { useResource } from "../../queries/resource";
 import { autofixLabels, autofixMachine } from "../../../shared/machines/autofix";
 import type { StatusLabel } from "../../../shared/machines/status-label";
 import { formatTokens } from "../../lib/format";
-import { STATUS_TONE } from "../../lib/status-tone";
+import { statusTextClass } from "../../components/MachineStatusBadge";
 import {
   codeApi,
   threadPath,
@@ -323,7 +323,7 @@ export function PullChip({
       title={`Pull request #${pr.number}${state ? ` (${state})` : ""}`}
       className={cn(
         "bg-muted inline-flex h-5 shrink-0 items-center gap-0.5 rounded-md px-1 text-[11px] font-medium tabular-nums",
-        STATUS_TONE[pullState(pr.loop)?.tone ?? "neutral"].text,
+        statusTextClass(pullState(pr.loop)?.tone ?? "neutral"),
         className,
       )}
     >

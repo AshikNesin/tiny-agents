@@ -1,6 +1,6 @@
 import type { Connection, ConnectionStatus } from "../../../shared/api/connections";
 import type { StatusLabels } from "../../../shared/machines/status-label";
-import { StatusBadge } from "../StatusBadge";
+import { MachineStatusBadge } from "../MachineStatusBadge";
 
 const CONNECTION_STATUS_LABELS: StatusLabels<ConnectionStatus> = {
   connected: { label: "Connected", tone: "success" },
@@ -10,7 +10,7 @@ const CONNECTION_STATUS_LABELS: StatusLabels<ConnectionStatus> = {
 };
 
 export function ConnectionStatusBadge({ status }: { status: ConnectionStatus }) {
-  return <StatusBadge status={status} labels={CONNECTION_STATUS_LABELS} />;
+  return <MachineStatusBadge status={status} labels={CONNECTION_STATUS_LABELS} />;
 }
 
 export function needsAttention(status: ConnectionStatus): boolean {

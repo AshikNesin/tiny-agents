@@ -244,7 +244,7 @@ describe("Code PR tab", () => {
     panel();
     await wait(0);
     expect(screen.getByLabelText("Status")).toHaveTextContent("ta/fix-1a2b → main");
-    expect(screen.getByText("open")).toBeInTheDocument();
+    expect(screen.getByText("Open")).toBeInTheDocument();
     const bar = screen.getByRole("img", { name: "1 passed, 0 failed, 0 pending" });
     expect(bar).toBeInTheDocument();
   });

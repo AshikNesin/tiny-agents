@@ -6,7 +6,7 @@ import { cn } from "@groot/ui/lib/utils";
 import { Section } from "@groot/shell/components/layout/Section";
 import type { Routine, RoutineRun } from "../../../shared/api/routines";
 import { routineRunLabels } from "../../../shared/machines/routine-run";
-import { StatusBadge } from "../../components/StatusBadge";
+import { MachineStatusBadge } from "../../components/MachineStatusBadge";
 import { formatDuration, formatTokens } from "../../lib/format";
 import { markdownToPlainText } from "../../lib/plain-text";
 import { formatIst } from "../../../shared/routines-schedule";
@@ -48,7 +48,7 @@ export function RecentRuns({ runs }: { runs: RoutineRun[] }) {
           {runs.map((run) => (
             <li key={run.id} className={cn(listRowClass, "flex-col items-start")}>
               <div className="flex w-full items-center gap-3">
-                <StatusBadge status={run.status} labels={routineRunLabels} />
+                <MachineStatusBadge status={run.status} labels={routineRunLabels} />
                 <span className="min-w-0 flex-1 truncate text-sm">
                   {run.routineName ?? "Routine"}
                 </span>

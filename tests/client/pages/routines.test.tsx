@@ -206,7 +206,7 @@ describe("Routines page", { timeout: 15_000 }, () => {
   it("shows what a run spent in tokens beside how long it took", async () => {
     loadPage([routine], [{ ...run, tokens: 42_300 }]);
     mount();
-    expect(await screen.findByText(/took 1m 4s · 42k tokens/)).toBeTruthy();
+    expect(await screen.findByText(/took 1m 4s · 42K tokens/)).toBeTruthy();
   });
 
   it("creates a routine with the compiled interval schedule", async () => {

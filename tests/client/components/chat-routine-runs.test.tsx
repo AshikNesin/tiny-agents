@@ -169,6 +169,6 @@ describe("ChatPane — routine runs", () => {
   it("shows a single run as its name, status and time", async () => {
     renderWith([run("only", 20)]);
     const line = await screen.findByTestId("routine-runs");
-    expect(within(line).getByRole("button")).toHaveTextContent(/^Process emails·done·08:50$/);
+    expect(within(line).getByRole("button")).toHaveTextContent(/^Process emails·succeeded·08:50$/);
   });
 });
