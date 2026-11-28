@@ -29,6 +29,15 @@ replaced `scripts/gates.mjs` once stopped 13 gates from running. A gate or
 lint rule groot adds later is ported by hand. Files under
 `packages/{core,jobs,shell,ui}` are never moved, renamed or deleted here.
 
+## End-to-end journeys
+
+CI does not run Playwright. At the end of the refactor, the headless run
+(`pnpm exec playwright test --config playwright.headless.config.ts`) passes
+25 of 32 journeys. The 6 that fail also fail on the commit the refactor
+started from (`522fc04`), so they predate it: `browser-panel` on mobile,
+`chats` new chat and past chats, `terminal` sidebar and palette,
+`tool-permission-toggle`, and `yolo`.
+
 ## Debt left on purpose
 
 - Server interval timers are unchanged. Each is tied to a connection or an
@@ -50,5 +59,9 @@ lint rule groot adds later is ported by hand. Files under
 - `/code/settings/projects` still redirects to `/settings/projects`, because
   the Android app opens it (`NewCodeThreadScreen.kt`). Remove it once the app
   links to the new page.
+- `@tiny-agents/agent` still exports the `sandbox`, `terminal`, `browser`
+  and `computer` subpaths as deprecated re-exports (`scripts/old-modules.json`
+  records keeping them for outside importers until a major version). Nothing
+  in this repo may import them, and the package is private.
 - A GitHub pull snapshot fails whole on a malformed element on purpose: it
   drives Auto-fix and merge decisions.
