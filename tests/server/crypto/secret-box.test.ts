@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 import { eq } from "drizzle-orm";
+import { z } from "zod";
 import { connections, db, vaultValues } from "../../../apps/web/src/server/db";
 import {
   hasSecretsKey,
@@ -181,7 +182,7 @@ describe("secrets:rotate", () => {
     delete process.env.SECRETS_KEY_PREVIOUS;
     expect((await backend.resolve(itemId, "value")).reveal()).toBe("v-1");
     const after = await db.query.connections.findFirst({ where: eq(connections.id, row!.id) });
-    expect(openOAuthState(row!.id, after!.oauthEnc!)).toEqual({ verifier: "h-1" });
+    expect(openOAuthState(row!.id, after!.oauthEnc!, z.unknown())).toEqual({ verifier: "h-1" });
   });
 
   it("names the items it couldn't re-seal, so SECRETS_KEY_PREVIOUS stays", async () => {

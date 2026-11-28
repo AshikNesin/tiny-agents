@@ -1,4 +1,5 @@
-import { GitHubError, graphQlData, type GitHubApi, type GraphQlBody } from "./api";
+import type { z } from "zod";
+import { GitHubError, graphQlData, restData, type GitHubApi } from "./api";
 
 export interface HttpsTransportOptions {
   token(): Promise<string>;
@@ -35,16 +36,23 @@ export function createHttpsTransport(options: HttpsTransportOptions): GitHubApi 
 
   return {
     kind: "https",
-    async graphql<T>(query: string, variables: Record<string, unknown> = {}) {
+    async graphql<T>(schema: z.ZodType<T>, query: string, variables: Record<string, unknown> = {}) {
       const response = await request("POST", "/graphql", { query, variables });
-      return graphQlData((await response.json()) as GraphQlBody<T>);
+      return graphQlData(await response.text(), schema);
     },
-    async rest<T>(method: string, path: string, opts: { body?: unknown; text?: boolean } = {}) {
+    async rest<T>(
+      schema: z.ZodType<T>,
+      method: string,
+      path: string,
+      opts: { body?: unknown } = {},
+    ) {
       if (!path.startsWith("/")) throw new GitHubError(`Invalid path ${path}`);
       const response = await request(method, path, opts.body);
-      if (opts.text) return (await response.text()) as T;
-      const raw = await response.text();
-      return (raw.trim() ? JSON.parse(raw) : undefined) as T;
+      return restData(`GitHub's answer to ${method} ${path}`, await response.text(), schema);
+    },
+    async text(method: string, path: string) {
+      if (!path.startsWith("/")) throw new GitHubError(`Invalid path ${path}`);
+      return (await request(method, path)).text();
     },
   };
 }

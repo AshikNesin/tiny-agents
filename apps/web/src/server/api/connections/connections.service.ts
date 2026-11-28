@@ -1,12 +1,7 @@
 import { asc, eq } from "drizzle-orm";
 import { env } from "@groot/core/env";
 import { Boom } from "@groot/core/errors";
-import {
-  connectMcp,
-  mcpToolName,
-  type McpToolInfo,
-  type McpTransportKind,
-} from "@tiny-agents/agent";
+import { connectMcp, mcpToolName, type McpTransportKind } from "@tiny-agents/agent";
 import { checkPublicUrl } from "@tiny-agents/sandbox";
 import { connections, db, vaultItems, type Connection } from "../../db";
 import { itemBotIds, setItemReach } from "../bots/bot-reach";
@@ -19,7 +14,7 @@ import type {
   ConnectionToolDetail,
   ToolCallResult,
 } from "../../../shared/api/connections";
-import { parseDisabledTools, parseTools } from "../bots/bot-toolkits";
+import { parseDisabledTools, parseTools, type CachedTool } from "../bots/bot-toolkits";
 import { createId } from "@groot/core/utils/id.utils";
 import { appEnv } from "../../env";
 import { hasSecretsKey, secretKeyProblem } from "../../crypto/secret-box";
@@ -37,7 +32,7 @@ type Row = Connection & { botIds: string[] };
 
 type ConnectionRow = Pick<Row, "slug" | "disabledTools">;
 
-function toToolDTO(row: ConnectionRow, tool: McpToolInfo, disabled: Set<string>): ConnectionTool {
+function toToolDTO(row: ConnectionRow, tool: CachedTool, disabled: Set<string>): ConnectionTool {
   return {
     name: mcpToolName(row.slug, tool.name),
     serverName: tool.name,

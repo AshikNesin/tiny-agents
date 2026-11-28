@@ -87,6 +87,12 @@ describe("a connection's tools", () => {
     ).toEqual(["c"]);
   });
 
+  it("drops a cached tool that has no name or a schema that is not an object", () => {
+    expect(
+      parseTools('[{"title":"nameless"},{"name":"a","inputSchema":"x"},{"name":"b"}]'),
+    ).toEqual([{ name: "b" }]);
+  });
+
   it("reads unreadable columns as no tools and nothing turned off", () => {
     expect(parseTools("not json")).toEqual([]);
     expect(parseTools('{"name":"a"}')).toEqual([]);

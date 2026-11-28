@@ -1,3 +1,5 @@
+import { parseJson } from "@tiny-agents/std";
+import { z } from "zod";
 import { and, eq, inArray } from "drizzle-orm";
 import { storageService } from "@groot/core/storage";
 import { logger } from "@groot/core/logger";
@@ -254,6 +256,35 @@ export async function extractionSweep(): Promise<number> {
   return rows.length;
 }
 
+const contentSchema: z.ZodType<AttachmentContent> = z.object({
+  format: z.enum(["text", "pdf", "document", "spreadsheet", "slides", "archive"]),
+  pages: z.array(z.object({ label: z.string(), text: z.string() })),
+  outline: z.array(z.string()).optional(),
+  sheets: z
+    .array(
+      z.object({
+        name: z.string(),
+        hidden: z.boolean().optional(),
+        rows: z.array(z.array(z.string())),
+        totalRows: z.number(),
+        totalColumns: z.number(),
+        truncated: z.boolean().optional(),
+      }),
+    )
+    .optional(),
+  entries: z
+    .array(
+      z.object({
+        path: z.string(),
+        size: z.number(),
+        compressedSize: z.number().optional(),
+        dir: z.boolean().optional(),
+        flag: z.string().optional(),
+      }),
+    )
+    .optional(),
+});
+
 export async function loadContent(uploadId: string): Promise<AttachmentContent | undefined> {
   const hit = state().cache.get(uploadId);
   if (hit) {
@@ -263,7 +294,11 @@ export async function loadContent(uploadId: string): Promise<AttachmentContent |
   }
   try {
     const file = await storageService.downloadFile({ filePath: extractKey(uploadId) });
-    const content = JSON.parse(new TextDecoder().decode(file.bytes)) as AttachmentContent;
+    const content = parseJson(
+      "An upload's extracted content",
+      new TextDecoder().decode(file.bytes),
+      contentSchema,
+    );
     state().cache.set(uploadId, content);
     if (state().cache.size > CACHE_SIZE) state().cache.delete(state().cache.keys().next().value!);
     return content;

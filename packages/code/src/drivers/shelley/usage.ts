@@ -1,7 +1,7 @@
 import { parseJson } from "@tiny-agents/std";
 import { z } from "zod";
 import type { UsageBand, UsageReport, UsageRow } from "../../contracts";
-import type { ModelCost, ShelleyMessage, SubagentModelUsage } from "./wire";
+import { opt, type ModelCost, type ShelleyMessage, type SubagentModelUsage } from "./wire";
 
 export interface UsageEntry {
   input_tokens: number;
@@ -13,12 +13,8 @@ export interface UsageEntry {
   url?: string;
 }
 
-const optionalNumber = z.number().nullish().transform(orAbsent);
-const optionalText = z.string().nullish().transform(orAbsent);
-
-function orAbsent<T>(value: T | null | undefined): T | undefined {
-  return value ?? undefined;
-}
+const optionalNumber = opt(z.number());
+const optionalText = opt(z.string());
 
 const usageEntrySchema = z.object({
   input_tokens: optionalNumber,

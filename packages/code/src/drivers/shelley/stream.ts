@@ -1,6 +1,7 @@
 import type { HarnessLogger, InstanceStatus } from "../../contracts";
 import { readSseFrames, shelleyFetch, shelleyJson, type ShelleyDeps } from "./client";
-import { isWorking, type ShelleyFrame, type ShelleyRow } from "./wire";
+import { z } from "zod";
+import { isWorking, listOf, rowSchema, type ShelleyFrame, type ShelleyRow } from "./wire";
 
 interface TurnEnd {
   conversationId: string;
@@ -30,6 +31,11 @@ export interface ShelleyStream {
 
 export function createShelleyStream(options: StreamOptions): ShelleyStream {
   const { deps, logger } = options;
+  const snapshotSchema = z.looseObject({
+    conversations: listOf("a Shelley conversation", rowSchema, (what, problem) =>
+      logger.warn(`Skipped ${what} that does not fit its shape`, { problem }),
+    ),
+  });
   const listDebounceMs = options.listDebounceMs ?? 300;
   const minBackoff = options.minBackoffMs ?? 1500;
   const maxBackoff = options.maxBackoffMs ?? 30_000;
@@ -70,12 +76,8 @@ export function createShelleyStream(options: StreamOptions): ShelleyStream {
   }
 
   async function readSnapshot(): Promise<void> {
-    const snapshot = await shelleyJson<{ conversations?: ShelleyRow[] }>(
-      "/conversations/snapshot",
-      {},
-      deps,
-    );
-    rows = Array.isArray(snapshot.conversations) ? snapshot.conversations : [];
+    const snapshot = await shelleyJson("/conversations/snapshot", {}, deps, snapshotSchema);
+    rows = snapshot.conversations;
     for (const row of rows) {
       if (!working.has(row.conversation_id)) working.set(row.conversation_id, isWorking(row));
     }

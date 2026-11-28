@@ -1,6 +1,6 @@
 import { parseJson } from "@tiny-agents/std";
 import { z } from "zod";
-import { GitHubError, graphQlData, type GitHubApi, type GraphQlBody } from "./api";
+import { GitHubError, graphQlData, restData, type GitHubApi } from "./api";
 
 export interface ExecResult {
   stdout: string;
@@ -18,17 +18,6 @@ const SAFE_PATH = /^\/[A-Za-z0-9/_.%~-]+$/;
 const GH_TIMEOUT_MS = 60_000;
 
 const failureBodySchema = z.looseObject({ message: z.unknown().optional() });
-
-const graphQlBodySchema = z.looseObject({
-  data: z.unknown().optional(),
-  errors: z
-    .array(z.looseObject({ message: z.string().optional(), type: z.string().optional() }))
-    .optional(),
-});
-
-function graphQlBody<T>(text: string): GraphQlBody<T> {
-  return parseJson("GitHub's GraphQL answer", text, graphQlBodySchema) as GraphQlBody<T>;
-}
 
 function failure(result: ExecResult): GitHubError {
   const status = /\(HTTP (\d{3})\)/.exec(result.stderr)?.[1];
@@ -53,7 +42,7 @@ export function createGhTransport(exec: ExecPort): GitHubApi {
     if (result.exitCode !== 0) {
       if (args.startsWith("graphql")) {
         try {
-          graphQlData(graphQlBody<unknown>(result.stdout));
+          graphQlData(result.stdout, z.unknown());
         } catch (error) {
           if (error instanceof GitHubError) throw error;
         }
@@ -65,19 +54,27 @@ export function createGhTransport(exec: ExecPort): GitHubApi {
 
   return {
     kind: "gh",
-    async graphql<T>(query: string, variables: Record<string, unknown> = {}) {
+    async graphql<T>(schema: z.ZodType<T>, query: string, variables: Record<string, unknown> = {}) {
       const out = await run("graphql --input -", JSON.stringify({ query, variables }));
-      return graphQlData(graphQlBody<T>(out));
+      return graphQlData(out, schema);
     },
-    async rest<T>(method: string, path: string, options: { body?: unknown; text?: boolean } = {}) {
+    async rest<T>(
+      schema: z.ZodType<T>,
+      method: string,
+      path: string,
+      options: { body?: unknown } = {},
+    ) {
       if (!SAFE_PATH.test(path)) throw new GitHubError(`Invalid path ${path}`);
       const input = options.body === undefined ? "" : " --input -";
       const out = await run(
         `--method ${method} ${path}${input}`,
         options.body === undefined ? undefined : JSON.stringify(options.body),
       );
-      if (options.text) return out as T;
-      return (out.trim() ? JSON.parse(out) : undefined) as T;
+      return restData(`GitHub's answer to ${method} ${path}`, out, schema);
+    },
+    async text(method: string, path: string) {
+      if (!SAFE_PATH.test(path)) throw new GitHubError(`Invalid path ${path}`);
+      return run(`--method ${method} ${path}`);
     },
   };
 }

@@ -1,4 +1,4 @@
-import { parseJson } from "@tiny-agents/std";
+import { parseEach, parseJson } from "@tiny-agents/std";
 import { z } from "zod";
 import {
   threadIdOf,
@@ -9,7 +9,7 @@ import {
   type TranscriptItem,
 } from "../../contracts";
 import { firstLine, isImageFile, pick as pickFrom, record } from "../../server/items";
-import type { ShelleyMessage, ShelleyRow } from "./wire";
+import { opt, type ReportInvalid, type ShelleyMessage, type ShelleyRow } from "./wire";
 
 const TEXT = 2;
 const THINKING = 3;
@@ -45,13 +45,9 @@ export interface LiveState {
   progress?: Record<string, string>;
 }
 
-function orAbsent<T>(value: T | null | undefined): T | undefined {
-  return value ?? undefined;
-}
-
-const optionalText = z.string().nullish().transform(orAbsent);
-const optionalFlag = z.boolean().nullish().transform(orAbsent);
-const optionalNumber = z.number().nullish().transform(orAbsent);
+const optionalText = opt(z.string());
+const optionalFlag = opt(z.boolean());
+const optionalNumber = opt(z.number());
 
 const blockSchema: z.ZodType<Block> = z.object({
   ID: optionalText,
@@ -63,10 +59,7 @@ const blockSchema: z.ZodType<Block> = z.object({
   ToolInput: z.unknown().optional(),
   ToolUseID: optionalText,
   ToolError: optionalFlag,
-  ToolResult: z
-    .lazy(() => z.array(blockSchema))
-    .nullish()
-    .transform(orAbsent),
+  ToolResult: opt(z.lazy(() => z.array(blockSchema))),
   ToolUseStartTime: z.string().nullish(),
   ToolUseEndTime: z.string().nullish(),
   Display: z.unknown().optional(),
@@ -74,7 +67,7 @@ const blockSchema: z.ZodType<Block> = z.object({
 });
 
 const llmDataSchema: z.ZodType<LlmData> = z.object({
-  Content: z.array(blockSchema).nullish().transform(orAbsent),
+  Content: opt(z.array(blockSchema)),
   EndOfTurn: optionalFlag,
   ErrorType: optionalText,
   ErrorRetryable: optionalFlag,
@@ -82,21 +75,16 @@ const llmDataSchema: z.ZodType<LlmData> = z.object({
 
 const costSchema = z.looseObject({ cost_usd: z.number().optional() });
 
-const queuedSchema = z.array(
-  z.looseObject({
-    id: z.string(),
-    created_at: optionalText,
-    llm: z
-      .looseObject({
-        Content: z
-          .array(z.looseObject({ Type: optionalNumber, Text: optionalText }))
-          .nullish()
-          .transform(orAbsent),
-      })
-      .nullish(),
-    user_data: z.looseObject({ sender_slug: optionalText }).nullish(),
-  }),
-);
+const queuedSchema = z.looseObject({
+  id: z.string(),
+  created_at: optionalText,
+  llm: z
+    .looseObject({
+      Content: opt(z.array(z.looseObject({ Type: optionalNumber, Text: optionalText }))),
+    })
+    .nullish(),
+  user_data: z.looseObject({ sender_slug: optionalText }).nullish(),
+});
 
 function parse<T>(
   what: string,
@@ -418,10 +406,15 @@ export function totalCost(messages: Iterable<ShelleyMessage>): number {
 
 export function queuedMessages(
   row: Pick<ShelleyRow, "queued_messages"> | undefined,
+  report: ReportInvalid,
 ): QueuedMessage[] {
   if (!row?.queued_messages) return [];
   try {
-    const items = parseJson("Shelley's queued messages", row.queued_messages, queuedSchema);
+    const items = parseEach(
+      parseJson("Shelley's queued messages", row.queued_messages, z.array(z.unknown())),
+      queuedSchema,
+      (_value, problem) => report("a queued Shelley message", problem),
+    );
     return items.map((item): QueuedMessage => ({
       id: item.id,
       text: (item.llm?.Content ?? [])

@@ -17,3 +17,17 @@ export function parseJson<T>(what: string, text: string, schema: z.ZodType<T>): 
   }
   return parsed.data;
 }
+
+export function parseEach<T>(
+  values: readonly unknown[],
+  schema: z.ZodType<T>,
+  onInvalid: (value: unknown, problem: string) => void,
+): T[] {
+  const kept: T[] = [];
+  for (const value of values) {
+    const parsed = schema.safeParse(value);
+    if (parsed.success) kept.push(parsed.data);
+    else onInvalid(value, z.prettifyError(parsed.error));
+  }
+  return kept;
+}

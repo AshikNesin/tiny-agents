@@ -1,3 +1,5 @@
+import { parseJson } from "@tiny-agents/std";
+import type { z } from "zod";
 import { badGateway, HarnessError } from "../../server/errors";
 
 interface ShelleyConfig {
@@ -68,16 +70,16 @@ export async function shelleyFetch(
   return response;
 }
 
-export async function shelleyJson<T = unknown>(
+export async function shelleyJson<T>(
   path: string,
   init: ShelleyRequest,
   deps: ShelleyDeps,
+  schema: z.ZodType<T>,
 ): Promise<T> {
   const response = await shelleyFetch(path, init, deps);
   const text = await response.text();
-  if (!text) return {} as T;
   try {
-    return JSON.parse(text) as T;
+    return parseJson(`Shelley's answer to ${path.split("?")[0]}`, text || "{}", schema);
   } catch {
     throw badGateway("Shelley returned something that is not JSON");
   }

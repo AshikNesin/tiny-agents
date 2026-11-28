@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { GitHubError, type GitHubApi } from "./api";
 
 export interface RepoRef {
@@ -104,10 +105,21 @@ interface JobProgress {
   steps: JobStep[];
 }
 
-interface RawJob {
-  status: string;
-  steps?: Array<{ number: number; name: string; status: string; conclusion: string | null }>;
-}
+const rawJobSchema = z.looseObject({
+  status: z.string(),
+  steps: z
+    .array(
+      z.looseObject({
+        number: z.number(),
+        name: z.string(),
+        status: z.string(),
+        conclusion: z.string().nullable(),
+      }),
+    )
+    .optional(),
+});
+
+type RawJob = z.infer<typeof rawJobSchema>;
 
 function stepState(step: NonNullable<RawJob["steps"]>[number]): JobStep["state"] {
   if (step.status === "in_progress") return "running";
@@ -203,18 +215,76 @@ function inboxSearches(filter: InboxFilter): Record<keyof typeof INBOX_SEARCHES,
   return out;
 }
 
-interface RawInboxPull {
-  number: number;
-  title: string;
-  url: string;
-  isDraft: boolean;
-  updatedAt: string;
-  headRefOid: string;
-  reviewDecision: "APPROVED" | "CHANGES_REQUESTED" | "REVIEW_REQUIRED" | null;
-  repository: { owner: { login: string }; name: string };
-  author: { login: string; __typename?: string } | null;
-  reviews: { nodes: Array<{ submittedAt: string | null; commit: { oid: string } | null }> };
-}
+const viewerSchema = z.looseObject({ viewer: z.looseObject({ login: z.string() }) });
+
+const rawInboxPullSchema = z.looseObject({
+  number: z.number(),
+  title: z.string(),
+  url: z.string(),
+  isDraft: z.boolean(),
+  updatedAt: z.string(),
+  headRefOid: z.string(),
+  reviewDecision: z.enum(["APPROVED", "CHANGES_REQUESTED", "REVIEW_REQUIRED"]).nullable(),
+  repository: z.looseObject({ owner: z.looseObject({ login: z.string() }), name: z.string() }),
+  author: z.looseObject({ login: z.string(), __typename: z.string().optional() }).nullable(),
+  reviews: z.looseObject({
+    nodes: z.array(
+      z.looseObject({
+        submittedAt: z.string().nullable(),
+        commit: z.looseObject({ oid: z.string() }).nullable(),
+      }),
+    ),
+  }),
+});
+
+const notAPull = (): null => null;
+
+const inboxNodesSchema = z.looseObject({
+  nodes: z.array(z.union([rawInboxPullSchema, z.strictObject({}).transform(notAPull)])),
+});
+
+const inboxSchema = z.looseObject({
+  requested: inboxNodesSchema,
+  reviewed: inboxNodesSchema,
+  authored: inboxNodesSchema,
+});
+
+const repositorySchema = z.looseObject({
+  repository: z
+    .looseObject({
+      defaultBranchRef: z.looseObject({ name: z.string() }).nullable(),
+      isPrivate: z.boolean(),
+    })
+    .nullable(),
+});
+
+const openPullsSchema = z.looseObject({
+  repository: z
+    .looseObject({
+      pullRequests: z.looseObject({
+        nodes: z.array(z.looseObject({ number: z.number(), url: z.string() })),
+      }),
+    })
+    .nullable(),
+});
+
+const createdPullSchema = z.looseObject({ number: z.number(), html_url: z.string() });
+
+const threadReplySchema = z.looseObject({
+  addPullRequestReviewThreadReply: z.looseObject({
+    comment: z.looseObject({ databaseId: z.number().nullable() }).nullable(),
+  }),
+});
+
+const issueSchema = z.looseObject({
+  title: z.string().optional(),
+  body: z.string().nullish(),
+  user: z.looseObject({ login: z.string().optional() }).nullish(),
+});
+
+const createdCommentSchema = z.looseObject({ id: z.number() });
+
+const createdReviewSchema = z.looseObject({ html_url: z.string() });
 
 export interface GitHubClient {
   readonly transport: GitHubApi["kind"];
@@ -295,93 +365,129 @@ const SNAPSHOT_QUERY = `query PullSnapshot($owner: String!, $name: String!, $num
   }
 }`;
 
-interface RawAuthor {
-  login?: string;
-  __typename?: string;
-}
+const rawAuthorSchema = z
+  .looseObject({ login: z.string().optional(), __typename: z.string().optional() })
+  .nullable();
 
-interface RawComment {
-  id: string;
-  databaseId: number;
-  body: string;
-  createdAt: string;
-  authorAssociation: string;
-  author: RawAuthor | null;
-}
+type RawAuthor = z.infer<typeof rawAuthorSchema>;
 
-interface RawContext {
-  __typename: "CheckRun" | "StatusContext";
-  name?: string;
-  status?: string;
-  conclusion?: string | null;
-  startedAt?: string | null;
-  completedAt?: string | null;
-  detailsUrl?: string | null;
-  databaseId?: number | null;
-  context?: string;
-  state?: string;
-  createdAt?: string;
-  targetUrl?: string | null;
-}
+const rawCommentSchema = z.looseObject({
+  id: z.string(),
+  databaseId: z.number(),
+  body: z.string(),
+  createdAt: z.string(),
+  authorAssociation: z.string(),
+  author: rawAuthorSchema,
+});
 
-interface RawSnapshot {
-  repository: {
-    mergeCommitAllowed: boolean;
-    squashMergeAllowed: boolean;
-    rebaseMergeAllowed: boolean;
-    pullRequest: {
-      id: string;
-      number: number;
-      url: string;
-      title: string;
-      body: string;
-      state: "OPEN" | "CLOSED" | "MERGED";
-      isDraft: boolean;
-      merged: boolean;
-      mergeable: "MERGEABLE" | "CONFLICTING" | "UNKNOWN";
-      headRefName: string;
-      headRefOid: string;
-      baseRefName: string;
-      isCrossRepository: boolean;
-      maintainerCanModify?: boolean;
-      headRepository?: { name: string; owner: { login: string } } | null;
-      isInMergeQueue?: boolean;
-      timelineItems?: { nodes: Array<{ id?: string; createdAt?: string; reason?: string | null }> };
-      author: RawAuthor | null;
-      reviews: {
-        nodes: Array<{
-          id: string;
-          state: Review["state"];
-          body: string;
-          submittedAt: string;
-          authorAssociation: string;
-          author: RawAuthor | null;
-          commit?: { oid: string } | null;
-        }>;
-      };
-      reviewThreads: {
-        nodes: Array<{
-          id: string;
-          path: string;
-          line: number | null;
-          startLine?: number | null;
-          diffSide?: "LEFT" | "RIGHT";
-          isResolved: boolean;
-          isOutdated: boolean;
-          comments: { nodes: RawComment[] };
-        }>;
-      };
-      comments: { nodes: RawComment[] };
-      commits: {
-        nodes: Array<{
-          commit: { oid: string; statusCheckRollup: { contexts: { nodes: RawContext[] } } | null };
-        }>;
-      };
-    } | null;
-  } | null;
-}
+type RawComment = z.infer<typeof rawCommentSchema>;
 
-function author(raw: RawAuthor | null, association: string): Author {
+const rawCommentsSchema = z.looseObject({ nodes: z.array(rawCommentSchema) });
+
+const rawContextSchema = z.looseObject({
+  __typename: z.enum(["CheckRun", "StatusContext"]),
+  name: z.string().optional(),
+  status: z.string().optional(),
+  conclusion: z.string().nullish(),
+  startedAt: z.string().nullish(),
+  completedAt: z.string().nullish(),
+  detailsUrl: z.string().nullish(),
+  databaseId: z.number().nullish(),
+  context: z.string().optional(),
+  state: z.string().optional(),
+  createdAt: z.string().optional(),
+  targetUrl: z.string().nullish(),
+});
+
+type RawContext = z.infer<typeof rawContextSchema>;
+
+const rawPullSchema = z.looseObject({
+  id: z.string(),
+  number: z.number(),
+  url: z.string(),
+  title: z.string(),
+  body: z.string(),
+  state: z.enum(["OPEN", "CLOSED", "MERGED"]),
+  isDraft: z.boolean(),
+  merged: z.boolean(),
+  mergeable: z.enum(["MERGEABLE", "CONFLICTING", "UNKNOWN"]),
+  headRefName: z.string(),
+  headRefOid: z.string(),
+  baseRefName: z.string(),
+  isCrossRepository: z.boolean(),
+  maintainerCanModify: z.boolean().optional(),
+  headRepository: z
+    .looseObject({ name: z.string(), owner: z.looseObject({ login: z.string() }) })
+    .nullish(),
+  isInMergeQueue: z.boolean().optional(),
+  timelineItems: z
+    .looseObject({
+      nodes: z.array(
+        z.looseObject({
+          id: z.string().optional(),
+          createdAt: z.string().optional(),
+          reason: z.string().nullish(),
+        }),
+      ),
+    })
+    .optional(),
+  author: rawAuthorSchema,
+  reviews: z.looseObject({
+    nodes: z.array(
+      z.looseObject({
+        id: z.string(),
+        state: z.enum(["APPROVED", "CHANGES_REQUESTED", "COMMENTED", "DISMISSED", "PENDING"]),
+        body: z.string(),
+        submittedAt: z.string().nullable(),
+        authorAssociation: z.string(),
+        author: rawAuthorSchema,
+        commit: z.looseObject({ oid: z.string() }).nullish(),
+      }),
+    ),
+  }),
+  reviewThreads: z.looseObject({
+    nodes: z.array(
+      z.looseObject({
+        id: z.string(),
+        path: z.string(),
+        line: z.number().nullable(),
+        startLine: z.number().nullish(),
+        diffSide: z.enum(["LEFT", "RIGHT"]).optional(),
+        isResolved: z.boolean(),
+        isOutdated: z.boolean(),
+        comments: rawCommentsSchema,
+      }),
+    ),
+  }),
+  comments: rawCommentsSchema,
+  commits: z.looseObject({
+    nodes: z.array(
+      z.looseObject({
+        commit: z.looseObject({
+          oid: z.string(),
+          statusCheckRollup: z
+            .looseObject({ contexts: z.looseObject({ nodes: z.array(rawContextSchema) }) })
+            .nullable(),
+        }),
+      }),
+    ),
+  }),
+});
+
+const rawSnapshotSchema = z.looseObject({
+  repository: z
+    .looseObject({
+      mergeCommitAllowed: z.boolean(),
+      squashMergeAllowed: z.boolean(),
+      rebaseMergeAllowed: z.boolean(),
+      pullRequest: rawPullSchema.nullable(),
+    })
+    .nullable(),
+});
+
+type RawSnapshot = z.infer<typeof rawSnapshotSchema>;
+
+function author(raw: RawAuthor, association: string): Author {
   return {
     login: raw?.login ?? "ghost",
     type: raw?.__typename === "Bot" ? "bot" : "user",
@@ -496,7 +602,7 @@ export function toSnapshot(raw: RawSnapshot): PullSnapshot {
       author: author(r.author, r.authorAssociation),
       state: r.state,
       body: r.body,
-      submittedAt: r.submittedAt,
+      submittedAt: r.submittedAt ?? "",
       commit: r.commit?.oid ?? null,
     })),
     threads: pr.reviewThreads.nodes.map((t) => ({
@@ -524,20 +630,16 @@ export function createGitHubClient(api: GitHubApi): GitHubClient {
   return {
     transport: api.kind,
     async viewer() {
-      const data = await api.graphql<{ viewer: { login: string } }>(`query { viewer { login } }`);
+      const data = await api.graphql(viewerSchema, `query { viewer { login } }`);
       return { login: data.viewer.login };
     },
     async reviewInbox(filter = {}) {
-      const { viewer } = await api.graphql<{ viewer: { login: string } }>(
-        `query { viewer { login } }`,
-      );
+      const { viewer } = await api.graphql(viewerSchema, `query { viewer { login } }`);
       const login = viewer.login;
-      const data = await api.graphql<
-        Record<
-          "requested" | "reviewed" | "authored",
-          { nodes: Array<RawInboxPull | Record<string, never>> }
-        >
-      >(INBOX_QUERY, { login, ...inboxSearches(filter) });
+      const data = await api.graphql(inboxSchema, INBOX_QUERY, {
+        login,
+        ...inboxSearches(filter),
+      });
       const keep = filter.repos?.length
         ? new Set(filter.repos.map((r) => repoSlug(r).toLowerCase()))
         : null;
@@ -545,7 +647,7 @@ export function createGitHubClient(api: GitHubApi): GitHubClient {
       const out: InboxPull[] = [];
       for (const reason of ["requested", "reviewed", "authored"] as const) {
         for (const node of data[reason].nodes) {
-          if (!("number" in node)) continue;
+          if (!node) continue;
           const slug = `${node.repository.owner.login}/${node.repository.name}`;
           if (keep && !keep.has(slug.toLowerCase())) continue;
           const key = `${slug}#${node.number}`;
@@ -575,9 +677,8 @@ export function createGitHubClient(api: GitHubApi): GitHubClient {
       return out;
     },
     async repository(repo) {
-      const data = await api.graphql<{
-        repository: { defaultBranchRef: { name: string } | null; isPrivate: boolean } | null;
-      }>(
+      const data = await api.graphql(
+        repositorySchema,
         `query($owner: String!, $name: String!) { repository(owner: $owner, name: $name) { isPrivate defaultBranchRef { name } } }`,
         { owner: repo.owner, name: repo.name },
       );
@@ -588,25 +689,22 @@ export function createGitHubClient(api: GitHubApi): GitHubClient {
       };
     },
     async openPullForBranch(repo, branch) {
-      const data = await api.graphql<{
-        repository: { pullRequests: { nodes: Array<{ number: number; url: string }> } } | null;
-      }>(
+      const data = await api.graphql(
+        openPullsSchema,
         `query($owner: String!, $name: String!, $head: String!) { repository(owner: $owner, name: $name) { pullRequests(headRefName: $head, states: [OPEN], first: 1) { nodes { number url } } } }`,
         { owner: repo.owner, name: repo.name, head: branch },
       );
       return data.repository?.pullRequests.nodes[0];
     },
     async createPull(repo, input) {
-      const pr = await api.rest<{ number: number; html_url: string }>(
-        "POST",
-        `${repoPath(repo)}/pulls`,
-        { body: input },
-      );
+      const pr = await api.rest(createdPullSchema, "POST", `${repoPath(repo)}/pulls`, {
+        body: input,
+      });
       return { number: pr.number, url: pr.html_url };
     },
     async snapshot(repo, number) {
       return toSnapshot(
-        await api.graphql<RawSnapshot>(SNAPSHOT_QUERY, {
+        await api.graphql(rawSnapshotSchema, SNAPSHOT_QUERY, {
           owner: repo.owner,
           name: repo.name,
           number,
@@ -614,7 +712,7 @@ export function createGitHubClient(api: GitHubApi): GitHubClient {
       );
     },
     async job(repo, jobId) {
-      const job = await api.rest<RawJob>("GET", `${repoPath(repo)}/actions/jobs/${jobId}`);
+      const job = await api.rest(rawJobSchema, "GET", `${repoPath(repo)}/actions/jobs/${jobId}`);
       return {
         completed: job.status === "completed",
         steps: (job.steps ?? []).map((step) => ({
@@ -625,15 +723,12 @@ export function createGitHubClient(api: GitHubApi): GitHubClient {
       };
     },
     async jobLogTail(repo, jobId, maxChars) {
-      const log = await api.rest<string>("GET", `${repoPath(repo)}/actions/jobs/${jobId}/logs`, {
-        text: true,
-      });
+      const log = await api.text("GET", `${repoPath(repo)}/actions/jobs/${jobId}/logs`);
       return log.length > maxChars ? log.slice(-maxChars) : log;
     },
     async replyToThread(threadId, body) {
-      const data = await api.graphql<{
-        addPullRequestReviewThreadReply: { comment: { databaseId: number | null } | null };
-      }>(
+      const data = await api.graphql(
+        threadReplySchema,
         `mutation($thread: ID!, $body: String!) { addPullRequestReviewThreadReply(input: { pullRequestReviewThreadId: $thread, body: $body }) { comment { databaseId } } }`,
         { thread: threadId, body },
       );
@@ -641,16 +736,13 @@ export function createGitHubClient(api: GitHubApi): GitHubClient {
     },
     async resolveThread(threadId) {
       await api.graphql(
+        z.unknown(),
         `mutation($thread: ID!) { resolveReviewThread(input: { threadId: $thread }) { thread { id } } }`,
         { thread: threadId },
       );
     },
     async issue(repo, number) {
-      const found = await api.rest<{
-        title?: string;
-        body?: string | null;
-        user?: { login?: string } | null;
-      }>("GET", `${repoPath(repo)}/issues/${number}`);
+      const found = await api.rest(issueSchema, "GET", `${repoPath(repo)}/issues/${number}`);
       return {
         title: found.title ?? "",
         body: found.body ?? "",
@@ -658,7 +750,8 @@ export function createGitHubClient(api: GitHubApi): GitHubClient {
       };
     },
     async comment(repo, number, body) {
-      const created = await api.rest<{ id: number }>(
+      const created = await api.rest(
+        createdCommentSchema,
         "POST",
         `${repoPath(repo)}/issues/${number}/comments`,
         { body: { body } },
@@ -666,7 +759,8 @@ export function createGitHubClient(api: GitHubApi): GitHubClient {
       return { databaseId: created.id };
     },
     async submitReview(repo, number, review) {
-      const created = await api.rest<{ html_url: string }>(
+      const created = await api.rest(
+        createdReviewSchema,
         "POST",
         `${repoPath(repo)}/pulls/${number}/reviews`,
         {
@@ -689,21 +783,23 @@ export function createGitHubClient(api: GitHubApi): GitHubClient {
       return { url: created.html_url };
     },
     async merge(repo, number, method) {
-      await api.rest("PUT", `${repoPath(repo)}/pulls/${number}/merge`, {
+      await api.rest(z.unknown(), "PUT", `${repoPath(repo)}/pulls/${number}/merge`, {
         body: { merge_method: method },
       });
     },
     async updatePull(repo, number, change) {
-      await api.rest("PATCH", `${repoPath(repo)}/pulls/${number}`, { body: change });
+      await api.rest(z.unknown(), "PATCH", `${repoPath(repo)}/pulls/${number}`, { body: change });
     },
     async markReady(pullId) {
       await api.graphql(
+        z.unknown(),
         `mutation($pr: ID!) { markPullRequestReadyForReview(input: { pullRequestId: $pr }) { clientMutationId } }`,
         { pr: pullId },
       );
     },
     async convertToDraft(pullId) {
       await api.graphql(
+        z.unknown(),
         `mutation($pr: ID!) { convertPullRequestToDraft(input: { pullRequestId: $pr }) { clientMutationId } }`,
         { pr: pullId },
       );

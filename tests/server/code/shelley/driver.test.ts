@@ -279,7 +279,14 @@ describe("Shelley harness", () => {
       row("cBare", { tags: undefined }),
       row("cTheirKid", { parent_conversation_id: "cTheirs", tags: "[]" }),
     );
-    shelley.archived.push({ conversation_id: "cGone", slug: "gone", archived: true, tags: "[]" });
+    shelley.archived.push({
+      conversation_id: "cGone",
+      slug: "gone",
+      archived: true,
+      tags: "[]",
+      updated_at: "2026-11-05T00:00:00Z",
+      created_at: "2026-11-05T00:00:00Z",
+    });
     harness.start();
     await shelley.waitForStreams(1);
     const active = await harness.listThreads("active");
@@ -295,7 +302,14 @@ describe("Shelley harness", () => {
     await host.index.upsert({ instanceId: "shelley", nativeId: "cOurs" });
     await host.index.upsert({ instanceId: "shelley", nativeId: "cShelved" });
     shelley.rows.push(row("cOurs", { tags: '["wip"]' }), row("cTheirs", { tags: "[]" }));
-    shelley.archived.push({ conversation_id: "cShelved", slug: "s", archived: true, tags: "[]" });
+    shelley.archived.push({
+      conversation_id: "cShelved",
+      slug: "s",
+      archived: true,
+      tags: "[]",
+      updated_at: "2026-11-05T00:00:00Z",
+      created_at: "2026-11-05T00:00:00Z",
+    });
     harness.stop();
     harness = createShelleyHarness({
       url: shelley.url,

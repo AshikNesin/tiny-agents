@@ -1,3 +1,5 @@
+import { parseJson, record } from "@tiny-agents/std";
+import { z } from "zod";
 import { and, desc, eq } from "drizzle-orm";
 import { Boom } from "@groot/core/errors";
 import { createId } from "@groot/core/utils/id.utils";
@@ -8,10 +10,7 @@ import { threadWorktree } from "./code.projects";
 import { runsOf, startRun } from "./code.runs";
 
 function parsed(data: string): Record<string, unknown> {
-  const value: unknown = JSON.parse(data);
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : {};
+  return record(parseJson("A code thread's stored data", data, z.unknown())) ?? {};
 }
 
 export interface RewindInput {

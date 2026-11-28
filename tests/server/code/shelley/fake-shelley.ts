@@ -27,7 +27,14 @@ export async function startFakeShelley(): Promise<FakeShelley> {
   const streams = new Set<ServerResponse>();
   const rows: Array<Record<string, unknown>> = [];
   const archived: Array<Record<string, unknown>> = [
-    { conversation_id: "cOld", slug: "old", archived: true, tags: '["tiny-agents"]' },
+    {
+      conversation_id: "cOld",
+      slug: "old",
+      archived: true,
+      tags: '["tiny-agents"]',
+      updated_at: "2026-11-05T00:00:00Z",
+      created_at: "2026-11-05T00:00:00Z",
+    },
   ];
   const conversations = new Map<
     string,

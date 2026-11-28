@@ -1,3 +1,5 @@
+import { parseJson } from "@tiny-agents/std";
+import { z } from "zod";
 import {
   createCipheriv,
   createHash,
@@ -159,11 +161,13 @@ export function sealJson(value: unknown, binding: SecretBinding): string {
 }
 
 export function openJson<T>(
+  what: string,
   stored: string | null | undefined,
   binding: SecretBinding,
+  schema: z.ZodType<T>,
 ): T | undefined {
   if (!stored) return undefined;
-  return JSON.parse(open(stored, binding)) as T;
+  return parseJson(what, open(stored, binding), schema);
 }
 
 export function policyDigest(policy: Record<string, unknown>): string {

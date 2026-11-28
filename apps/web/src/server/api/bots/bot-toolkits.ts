@@ -63,15 +63,21 @@ const cachedToolSchema = z.object({
   openWorld: z.boolean().optional(),
 });
 
-export function parseTools(raw: string): McpToolInfo[] {
+export type CachedTool = z.infer<typeof cachedToolSchema>;
+
+export function parseTools(raw: string): CachedTool[] {
   try {
     return parseJson("A connection's cached tools", raw, z.array(z.unknown())).flatMap((tool) => {
       const fits = cachedToolSchema.safeParse(tool);
-      return fits.success ? [fits.data as McpToolInfo] : [];
+      return fits.success ? [fits.data] : [];
     });
   } catch {
     return [];
   }
+}
+
+export function installableTool(tool: CachedTool): McpToolInfo {
+  return { ...tool, inputSchema: tool.inputSchema ?? {} };
 }
 
 export function parseDisabledTools(raw: string): Set<string> {
@@ -83,10 +89,15 @@ export function parseDisabledTools(raw: string): Set<string> {
   }
 }
 
+export function connectionTools(connection: ConnectionToolColumns): CachedTool[];
+export function connectionTools<T extends { name: string }>(
+  connection: ConnectionToolColumns,
+  tools: T[],
+): T[];
 export function connectionTools(
   connection: ConnectionToolColumns,
-  tools: McpToolInfo[] = parseTools(connection.toolsCache),
-): McpToolInfo[] {
+  tools: Array<{ name: string }> = parseTools(connection.toolsCache),
+): Array<{ name: string }> {
   const disabled = parseDisabledTools(connection.disabledTools);
   return tools.filter((tool) => !disabled.has(tool.name));
 }

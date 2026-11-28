@@ -14,7 +14,13 @@ import {
 import { connections, db, type Connection } from "../../db";
 import { itemBotIds } from "../bots/bot-reach";
 import { reconcileBotConversation } from "../bots/bots.conversation";
-import { connectionCapabilityId, connectionTools, parseTools } from "../bots/bot-toolkits";
+import {
+  connectionCapabilityId,
+  connectionTools,
+  installableTool,
+  parseTools,
+  type CachedTool,
+} from "../bots/bot-toolkits";
 import {
   clearOAuthState,
   connectionForState,
@@ -233,8 +239,8 @@ export class ConnectionManager {
     if (changed) await this.#reconcileLinked(id);
   }
 
-  #install(row: ConnectionRow, allTools: McpToolInfo[]): void {
-    const tools = connectionTools(row, allTools);
+  #install(row: ConnectionRow, allTools: CachedTool[]): void {
+    const tools = connectionTools(row, allTools).map(installableTool);
     this.#runtime?.installCapability(
       createMcpCapability({
         slug: row.slug,
