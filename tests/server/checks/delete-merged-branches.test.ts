@@ -16,18 +16,27 @@ const git = (cwd: string, ...args: string[]) =>
     .toString()
     .trim();
 
-function branch(name: string) {
-  git(work, "checkout", "-q", "-B", "scratch", "main");
-  git(work, ...ID, "commit", "-q", "--allow-empty", "-m", `work on ${name}`);
-  git(work, "checkout", "-q", "main");
-  git(work, "push", "-q", "origin", `scratch:refs/heads/${name}`);
+function branches(...names: string[]) {
+  const refspecs = names.map((name) => {
+    const tip = git(
+      work,
+      ...ID,
+      "commit-tree",
+      "main^{tree}",
+      "-p",
+      "main",
+      "-m",
+      `work on ${name}`,
+    );
+    return `${tip}:refs/heads/${name}`;
+  });
+  git(work, "push", "-q", "origin", ...refspecs);
 }
 
-function mergeIntoMain(name: string) {
+function mergeIntoMain(...names: string[]) {
   git(work, "fetch", "-q", "origin");
-  git(work, "checkout", "-q", "main");
-
-  git(work, ...ID, "merge", "-q", "--no-ff", "-m", `Merge ${name}`, `origin/${name}`);
+  for (const name of names)
+    git(work, ...ID, "merge", "-q", "--no-ff", "-m", `Merge ${name}`, `origin/${name}`);
   git(work, "push", "-q", "origin", "main");
 }
 
@@ -70,8 +79,7 @@ afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
 describe("delete-merged-branches.sh", () => {
   it("deletes a merged branch and keeps an unmerged one", () => {
-    branch("merged");
-    branch("in-progress");
+    branches("merged", "in-progress");
     mergeIntoMain("merged");
 
     const result = run();
@@ -81,7 +89,7 @@ describe("delete-merged-branches.sh", () => {
   });
 
   it("deletes a branch whose name starts with a dash, which git would otherwise read as an option", () => {
-    branch("-lead");
+    branches("-lead");
     mergeIntoMain("-lead");
 
     expect(run()).toEqual({
@@ -100,8 +108,8 @@ describe("delete-merged-branches.sh", () => {
       "2fa",
       "dependabot/npm_and_yarn/x-1.2.3",
     ];
-    for (const name of names) branch(name);
-    for (const name of names) mergeIntoMain(name);
+    branches(...names);
+    mergeIntoMain(...names);
 
     const result = run();
     expect(result.ok).toBe(true);
@@ -112,9 +120,9 @@ describe("delete-merged-branches.sh", () => {
   });
 
   it("keeps the default branch, the built-in protected names and extra ones given as arguments", () => {
-    for (const name of ["master", "develop", "staging", "release-1.0", "plain"]) branch(name);
-    for (const name of ["master", "develop", "staging", "release-1.0", "plain"])
-      mergeIntoMain(name);
+    const names = ["master", "develop", "staging", "release-1.0", "plain"];
+    branches(...names);
+    mergeIntoMain(...names);
 
     const result = run("release-1.0");
 
