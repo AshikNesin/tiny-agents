@@ -83,7 +83,8 @@ the vault guide's [1Password section](../features/vault.md#1password)).
 The server refuses to start in production with the development fallbacks or
 with any of the required variables missing, and lists what is wrong.
 tiny-agents' own variables (sandbox, models' vault key, browser, computer) are listed in
-`.env.example`.
+`.env.example`. To run the sandbox on an AWS Lambda MicroVM instead of a VM of
+your own, see [the MicroVM sandbox guide](./microvm-sandbox.md).
 
 ## Upgrading from the Prisma build
 

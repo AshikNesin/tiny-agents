@@ -9,14 +9,20 @@
     "./terminal": "./src/subpaths/terminal.ts",
     "./browser": "./src/subpaths/browser.ts",
     "./computer": "./src/subpaths/computer.ts",
-    "./testing": "./src/testing-ssh-server.ts"
+    "./testing": "./src/testing-ssh-server.ts",
+    "./microvm": "./src/subpaths/microvm.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-lambda-microvms": "3.1178.0",
+    "@tiny-agents/std": "workspace:*",
     "playwright-core": "1.64.1",
-    "ssh2": "1.17.0"
+    "ssh2": "1.17.0",
+    "ws": "8.22.0",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",
-    "@types/ssh2": "1.15.6"
+    "@types/ssh2": "1.15.6",
+    "@types/ws": "8.18.2"
   }
 }

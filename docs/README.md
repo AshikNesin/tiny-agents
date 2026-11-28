@@ -27,6 +27,7 @@ How to work on and ship the app.
 | [`guides/precommit-hooks.md`](./guides/precommit-hooks.md)         | gitleaks secret detection + Vite+ staged lint/format             |
 | [`guides/deploy.md`](./guides/deploy.md)                           | Node deploy with Railpack (Coolify/Railway), volume, env vars    |
 | [`guides/local-sandbox.md`](./guides/local-sandbox.md)             | The sandbox VM as a Docker container, for machines off Tailscale |
+| [`guides/microvm-sandbox.md`](./guides/microvm-sandbox.md)         | The sandbox on an AWS Lambda MicroVM, signed in with OIDC        |
 | [`guides/local-updates.md`](./guides/local-updates.md)             | `pnpm local`: run on your machine, update from Settings          |
 | [`guides/sentry-source-maps.md`](./guides/sentry-source-maps.md)   | Source map uploads for readable Sentry traces                    |
 | [`guides/sync.md`](./guides/sync.md)                               | Keeping child projects in sync with the boilerplate              |

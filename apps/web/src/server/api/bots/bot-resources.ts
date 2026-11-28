@@ -32,7 +32,7 @@ import { getBrowserSessions } from "./browser.sessions";
 import { browserTargetForBot, ownBrowserProfile, SHARED_BROWSER_PROFILE } from "./browser.targets";
 import { retireConversation } from "./chats.history";
 import { computerProfileForBot, computerSetupHint, getComputerSessions } from "./computer.sessions";
-import { sandboxEndpoint } from "../sandbox/sandbox-host";
+import { sandboxConfigured } from "../sandbox/sandbox-host";
 import { app } from "../../app-root";
 
 interface ReleaseContext {
@@ -158,7 +158,7 @@ export const BOT_RESOURCES = {
     release: async (botId) => {
       const computer = getComputerSessions();
       if (computer) return computer.close(ownBrowserProfile(botId), { wipe: true });
-      if (sandboxEndpoint()) throw new Error(`Desktop not wiped: ${computerSetupHint()}`);
+      if (sandboxConfigured()) throw new Error(`Desktop not wiped: ${computerSetupHint()}`);
     },
   }),
   vaultGrants: released({

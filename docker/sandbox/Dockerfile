@@ -14,7 +14,7 @@
 # Bun's binaries need). Debian rather than Ubuntu because Debian ships
 # Chromium as a .deb for arm64, where Google Chrome has no Linux build.
 ARG BASE_IMAGE=debian:trixie
-FROM ${BASE_IMAGE}
+FROM ${BASE_IMAGE} AS sandbox
 
 # Debian packages to preinstall besides the desktop (e.g. "libreoffice-calc gimp").
 ARG EXTRA_PACKAGES=""
@@ -175,3 +175,12 @@ COPY --chmod=755 entrypoint.sh /usr/local/bin/sandbox-entrypoint
 EXPOSE 22 9000
 # tini reaps the browsers and desktops the app starts with setsid/nohup.
 ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/sandbox-entrypoint"]
+
+# The AWS Lambda MicroVM image (`pnpm sandbox:microvm:image`): the same
+# sandbox plus the bridge, which carries SSH over the VM's HTTPS endpoint and
+# answers its lifecycle hooks on port 8080. The VM's key arrives in the run
+# hook, so the entrypoint starts without one. Local compose builds `sandbox`.
+FROM sandbox AS microvm
+COPY --chmod=644 microvm-bridge.mjs /usr/local/lib/tiny-agents/microvm-bridge.mjs
+ENV SANDBOX_MICROVM=1
+EXPOSE 8080

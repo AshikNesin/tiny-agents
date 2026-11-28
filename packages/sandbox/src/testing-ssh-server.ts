@@ -97,10 +97,17 @@ interface BoundFakePty extends FakePty {
   serverStream?: PtyServerStream;
 }
 
+export interface FakeSandboxServerOptions {
+  authorizedKey?: string;
+}
+
 export function startFakeSandboxServer(
   exec: ExecHandler = () => ({ stdout: "" }),
   pty: PtyHandler = null,
+  options: FakeSandboxServerOptions = {},
 ): Promise<FakeSandboxServer> {
+  const allowed = options.authorizedKey ? ssh2.utils.parseKey(options.authorizedKey) : undefined;
+  if (allowed instanceof Error) throw allowed;
   const root = mkdtempSync(join(tmpdir(), "ta-sandbox-test-"));
   const hostKey = generateKeyPairSync("ec", { namedCurve: "prime256v1" }).privateKey.export({
     format: "pem",
@@ -117,9 +124,18 @@ export function startFakeSandboxServer(
     connections++;
     client.on("close", () => clients.delete(client));
     client.on("error", () => {});
-    client.on("authentication", (ctx) =>
-      ctx.method === "none" ? ctx.accept() : ctx.reject(["none"]),
-    );
+    client.on("authentication", (ctx) => {
+      if (!allowed) return ctx.method === "none" ? ctx.accept() : ctx.reject(["none"]);
+      const matches =
+        ctx.method === "publickey" &&
+        ctx.key.algo === allowed.type &&
+        ctx.key.data.equals(allowed.getPublicSSH());
+      if (!matches) return ctx.reject(["publickey"]);
+      if (ctx.signature && allowed.verify(ctx.blob!, ctx.signature, ctx.hashAlgo) !== true) {
+        return ctx.reject(["publickey"]);
+      }
+      return ctx.accept();
+    });
     client.on("session", (accept) => {
       const session = accept();
       let sessionPty: PtyRequestInfo | null = null;

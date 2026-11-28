@@ -60,7 +60,7 @@ function stillOpen(open: Opened): string[] {
 }
 
 const INSTALLED_ON_IMPORT =
-  /^(Symbol\()?(__[a-zA-Z]+|pdfjsLib|pdfjsWorker|_pdfjsTestingUtils|DOMMatrix|Path2D|ImageData|openai\.node\.[a-zA-Z0-9.]+)\)?$/;
+  /^(Symbol\()?(__[a-zA-Z]+|awslambda|pdfjsLib|pdfjsWorker|_pdfjsTestingUtils|DOMMatrix|Path2D|ImageData|openai\.node\.[a-zA-Z0-9.]+)\)?$/;
 
 type Snapshot = {
   env: Record<string, string | undefined>;
