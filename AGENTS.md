@@ -115,5 +115,13 @@ tests run with `pnpm test:client`. `pnpm test:all` runs both. Use
 `pnpm test:e2e` for a journey those two cannot see. CI does not run
 Playwright.
 
+After a change, prefer `pnpm test -- --since-last-run` and
+`pnpm test:client -- --since-last-run` to run only tests whose loaded
+files changed since their last run (no Git needed; the first such run
+is a full suite that records those files). Use `pnpm test -- --changed`
+for uncommitted work, or `pnpm test -- --changed origin/main` for
+everything on the branch since main (same flags on `pnpm test:client`).
+Before you finish, run `pnpm test:all` once for the whole suite.
+
 Dates come from `FIXED_NOW` in `tests/test-clock.ts`. Do not call
 `vi.useRealTimers()` to leave that frozen clock.
