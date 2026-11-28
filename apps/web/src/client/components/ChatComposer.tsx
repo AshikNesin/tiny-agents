@@ -42,15 +42,15 @@ import type { AttachmentRef } from "../lib/chat-types";
 import { botsApi } from "../lib/bots-api";
 import {
   canSend as draftCanSend,
+  composerTextSchema,
   editText,
-  emptyDraft,
+  EMPTY_TEXT,
   insertMention as draftInsertMention,
   activeSkillToken,
   isNewChatCommand,
   outgoing,
   restoreRefused,
   startMention as draftStartMention,
-  withStaged,
   type ComposerDraft,
 } from "../lib/composer-draft";
 import {
@@ -58,11 +58,16 @@ import {
   markMentionTipSeen,
   mentionTipSeen as readMentionTipSeen,
   prefersCoarsePointer,
-  readStoredDraft,
-  writeStoredDraft,
 } from "../lib/composer-browser";
+import { useDraft } from "../lib/use-draft";
 import { activeMentionToken, mentionableBots, resolveMentions } from "../lib/mentions";
-import { canStageMore, stageUploads, unstageUpload, type Staging } from "../lib/staged-uploads";
+import {
+  canStageMore,
+  stageUploads,
+  unstageUpload,
+  type StagedUpload,
+  type Staging,
+} from "../lib/staged-uploads";
 import { useBotsStore } from "../store/bots";
 import type { OwnerSendOutcome, OwnerSubmission } from "../store/chats";
 import { StagedAttachment, type StagedItem } from "./Attachments";
@@ -214,10 +219,14 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
   },
   ref,
 ) {
-  const [draft, setDraft] = useState<ComposerDraft<AttachmentRef>>(() =>
-    emptyDraft(readStoredDraft(chatDraftKey(bot.id))),
-  );
-  const { text, staged } = draft;
+  const stored = useDraft(chatDraftKey(bot.id), composerTextSchema, EMPTY_TEXT);
+  const [staged, setStaged] = useState<StagedUpload<AttachmentRef>[]>([]);
+  const draft: ComposerDraft<AttachmentRef> = { ...stored.value, staged };
+  const { text } = draft;
+  const clearDraft = () => {
+    stored.clear();
+    setStaged([]);
+  };
   const [mentionHint, setMentionHint] = useState<string | null>(null);
   const [caret, setCaret] = useState(0);
   const [mentionClosed, setMentionClosed] = useState(false);
@@ -282,8 +291,6 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
   const showStop = busy && !canSend;
   const stopping = stopRequested && busy;
 
-  useEffect(() => writeStoredDraft(chatDraftKey(bot.id), text), [bot.id, text]);
-
   const stagedRef = useRef(staged);
   useEffect(() => {
     stagedRef.current = staged;
@@ -305,7 +312,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
     upload: async (file) => (await botsApi.upload(file)).ref,
     deleteUpload: (ref) => botsApi.deleteUpload(ref.uploadId),
     current: () => stagedRef.current,
-    update: (change) => setDraft((current) => withStaged(current, change)),
+    update: setStaged,
     notify: (message) => toast.error(message),
     previewUrl: (file) => URL.createObjectURL(file),
     releasePreview: (url) => URL.revokeObjectURL(url),
@@ -320,7 +327,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
     stageFiles,
     focus: () => textareaRef.current?.focus({ preventScroll: true }),
     setText: (next: string) => {
-      setDraft((current) => ({ ...current, text: next }));
+      stored.update((current) => ({ ...current, text: next }));
       pendingCaret.current = next.length;
       textareaRef.current?.focus({ preventScroll: true });
     },
@@ -332,7 +339,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
     if (!canSend) return;
     if (onNewChat && isNewChatCommand(draft)) {
       if (!onNewChat()) return;
-      setDraft(emptyDraft());
+      clearDraft();
       setMentionHint(null);
       return;
     }
@@ -343,7 +350,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
       return;
     }
     const picked = tools;
-    setDraft(emptyDraft());
+    clearDraft();
     setTools([]);
     setMentionClosed(false);
     for (const item of staged) if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
@@ -356,13 +363,19 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
     }).catch((): OwnerSendOutcome => "restored");
     if (outcome === "restored") {
       setTools((current) => [...new Set([...picked, ...current])]);
-      setDraft((current) =>
-        restoreRefused(current, sent, (attachment) => ({
-          name: attachment.name,
-          previewUrl:
-            attachment.kind === "image" ? botsApi.uploadUrl(attachment.uploadId) : undefined,
-        })),
-      );
+      stored.update((current) => {
+        const restored = restoreRefused(
+          { ...current, staged: stagedRef.current },
+          sent,
+          (attachment) => ({
+            name: attachment.name,
+            previewUrl:
+              attachment.kind === "image" ? botsApi.uploadUrl(attachment.uploadId) : undefined,
+          }),
+        );
+        setStaged(restored.staged);
+        return { text: restored.text, picked: restored.picked };
+      });
       textareaRef.current?.focus({ preventScroll: true });
     }
   };
@@ -379,15 +392,15 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
 
   const insertMention = (chosen: MentionableBot) => {
     if (!mention) return;
-    const next = draftInsertMention(draft, mention, caret, chosen);
-    setDraft(next.draft);
+    const next = draftInsertMention(stored.value, mention, caret, chosen);
+    stored.update(() => next.draft);
     setMentionHint(null);
     setCaret(next.caret);
     pendingCaret.current = next.caret;
   };
 
   const replaceSlash = (start: string) => {
-    setDraft((current) => editText(current, start + current.text.slice(caret)));
+    stored.update((current) => editText(current, start + current.text.slice(caret)));
     setCaret(start.length);
     pendingCaret.current = start.length;
   };
@@ -414,8 +427,8 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
 
   const startMention = () => {
     const el = textareaRef.current;
-    const next = draftStartMention(draft, el?.selectionStart ?? text.length);
-    setDraft(next.draft);
+    const next = draftStartMention(stored.value, el?.selectionStart ?? text.length);
+    stored.update(() => next.draft);
     setCaret(next.caret);
     setMentionClosed(false);
     pendingCaret.current = next.caret;
@@ -519,7 +532,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
             value={text}
             onChange={(e) => {
               const next = e.target.value;
-              setDraft((current) => editText(current, next));
+              stored.update((current) => editText(current, next));
               setMentionHint(null);
               setCaret(e.target.selectionStart ?? e.target.value.length);
               setMentionClosed(false);

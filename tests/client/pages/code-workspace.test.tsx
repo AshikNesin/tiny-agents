@@ -308,7 +308,7 @@ beforeEach(() => {
     codeSidebarOpen: true,
     codePane: null,
     lastCodePane: "changes",
-    newThreadDraft: { text: "", projectId: "" },
+    draftsSending: [],
   });
   more.projects = [];
   more.creating = null;
@@ -524,15 +524,58 @@ describe("the Code workspace", () => {
     expect(screen.getAllByRole("option").map((o) => o.textContent)).toEqual(["apiacme/api"]);
   });
 
-  it("clears a task as it starts, so leaving and coming back cannot send it twice", async () => {
+  it("keeps a task in the box while it starts, and leaving and coming back cannot send it twice", async () => {
     more.creating = new Promise(() => {});
     renderAt("/code");
     const box = await screen.findByRole("textbox", { name: "What should the agent do?" });
     await screen.findByText("web");
     fireEvent.change(box, { target: { value: "Fix the login callback" } });
     fireEvent.keyDown(box, { key: "Enter" });
-    await waitFor(() => expect(box).toHaveValue(""));
+    await waitFor(() =>
+      expect(posts().filter((post) => post.path === "/code/threads")).toHaveLength(1),
+    );
+    fireEvent.click(document.querySelector('[data-thread="demo:a"]')!);
+    await waitFor(() => expect(where()).toBe("/code/t/demo%3Aa"));
+    press("n");
+    const again = await screen.findByRole("textbox", { name: "What should the agent do?" });
+    expect(again).toHaveValue("Fix the login callback");
+    expect(screen.getByRole("button", { name: "Start" })).toBeDisabled();
+    fireEvent.keyDown(again, { key: "Enter" });
     expect(posts().filter((post) => post.path === "/code/threads")).toHaveLength(1);
+  });
+
+  it("keeps an unsent task on the project it was written for when another project becomes the latest", async () => {
+    more.projects = [
+      { ...project, id: "p2", name: "api", repo: { owner: "acme", name: "api" } },
+      { ...project, id: "p3", name: "docs", repo: { owner: "acme", name: "docs" } },
+    ];
+    useCodeStore.setState({ threads: [thread("a", { projectId: "p3" })] });
+    renderAt("/code");
+    const box = await screen.findByRole("textbox", { name: "What should the agent do?" });
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Project" })).toHaveTextContent("docs"),
+    );
+    fireEvent.change(box, { target: { value: "Fix the login callback" } });
+    fireEvent.click(document.querySelector('[data-thread="demo:a"]')!);
+    await waitFor(() => expect(where()).toBe("/code/t/demo%3Aa"));
+    act(() => {
+      useCodeStore.setState({
+        threads: [
+          thread("a", { projectId: "p3" }),
+          thread("b", { projectId: "p2", updatedAt: "2026-11-06T00:00:00Z" }),
+        ],
+      });
+    });
+    press("n");
+    const again = await screen.findByRole("textbox", { name: "What should the agent do?" });
+    expect(again).toHaveValue("Fix the login callback");
+    fireEvent.keyDown(again, { key: "Enter" });
+    await waitFor(() =>
+      expect(posts().find((post) => post.path === "/code/threads")?.body).toMatchObject({
+        projectId: "p3",
+        message: "Fix the login callback",
+      }),
+    );
   });
 
   it("n focuses the new thread box, not a dialog; Enter starts the thread in the remembered project", async () => {

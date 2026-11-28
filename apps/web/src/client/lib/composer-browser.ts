@@ -5,14 +5,6 @@ export const codeDraftKey = (key: string) => `tiny-agents:code-draft:${key}`;
 
 const MENTION_TIP_KEY = "tiny-agents:mention-tip-seen";
 
-export function readStoredDraft(storageKey: string): string {
-  return readStored(storageKey) ?? "";
-}
-
-export function writeStoredDraft(storageKey: string, text: string): void {
-  writeStored(storageKey, text || null);
-}
-
 export function mentionTipSeen(): boolean {
   return readStored(MENTION_TIP_KEY) === "1";
 }

@@ -16,10 +16,14 @@ import {
   useHarnessModels,
 } from "./controls";
 import { useCodeStore } from "../../store/code";
-import { useUiStore } from "../../store/ui";
+import { z } from "zod";
 import { readStored, writeStored } from "../../lib/browser-storage";
+import { useDraft } from "../../lib/use-draft";
 
 const PROJECT_KEY = "tiny-agents:code-project";
+const DRAFT_KEY = "tiny-agents:code-new-thread";
+const draftSchema = z.object({ text: z.string(), projectId: z.string() });
+const NO_DRAFT: z.infer<typeof draftSchema> = { text: "", projectId: "" };
 const RECENT_PROJECTS = 5;
 
 function lastProject(): string | null {
@@ -93,11 +97,9 @@ export function NewThread({
   const [instanceId, setInstanceId] = useState<string>("");
   const [model, setModel] = useState(DEFAULT);
   const [permission, setPermission] = useState<PermissionMode | null>(null);
-  const { text, projectId: chosenProject } = useUiStore((s) => s.newThreadDraft);
-  const setDraft = useUiStore((s) => s.setNewThreadDraft);
-  const setText = (next: string) => setDraft({ text: next });
-  const setProjectId = (next: string) => setDraft({ projectId: next });
-  const [starting, setStarting] = useState(false);
+  const draft = useDraft(DRAFT_KEY, draftSchema, NO_DRAFT);
+  const { text, projectId: chosenProject } = draft.value;
+  const starting = draft.submitting;
   const [remembered] = useState(lastProject);
 
   const { options: projectOptions, latest } = useProjectOptions(projects);
@@ -108,6 +110,13 @@ export function NewThread({
     projects?.[0]?.id ??
     "";
   const project = projects?.find((p) => p.id === projectId) ?? null;
+  const setText = (next: string) =>
+    draft.update((current) => ({
+      text: next,
+      projectId: next ? current.projectId || projectId : current.text ? "" : current.projectId,
+    }));
+  const setProjectId = (next: string) =>
+    draft.update((current) => ({ ...current, projectId: next }));
   const harness = harnesses.find((h) => h.id === instanceId);
   const models = useHarnessModels(harness?.id);
 
@@ -134,24 +143,20 @@ export function NewThread({
   const start = async () => {
     const message = text.trim();
     if (!message || !project || !harness || starting) return;
-    setStarting(true);
-    setText("");
     try {
-      const { threadId } = await codeApi.create({
-        projectId: project.id,
-        instanceId: harness.id,
-        message,
-        ...(model !== DEFAULT ? { model } : {}),
-        ...(permission ? { permissionMode: permission } : {}),
+      await draft.submit(async () => {
+        const { threadId } = await codeApi.create({
+          projectId: project.id,
+          instanceId: harness.id,
+          message,
+          ...(model !== DEFAULT ? { model } : {}),
+          ...(permission ? { permissionMode: permission } : {}),
+        });
+        rememberProject(project.id);
+        navigate(threadPath(threadId));
       });
-      rememberProject(project.id);
-      setDraft({ projectId: "" });
-      navigate(threadPath(threadId));
     } catch (error) {
-      if (!useUiStore.getState().newThreadDraft.text) setText(message);
       toast.error(errorMessage(error, "Could not start the thread."));
-    } finally {
-      setStarting(false);
     }
   };
 

@@ -21,6 +21,7 @@ import type { Bot, PastChatList, SendMessageBody } from "../../../apps/web/src/s
 import type { CatalogModel } from "../../../apps/web/src/shared/api/models";
 import type { ChatMessage } from "@/lib/chat-types";
 import { botStream, openedPaths } from "../fakes/sse";
+import { ApiFailure } from "../fakes/api";
 import { AppQueryProvider } from "../query-provider";
 import { chatBackend } from "./chat-backend";
 import { signedInAs, viewerLoaded } from "../fakes/viewer";
@@ -296,6 +297,21 @@ describe("ChatPane composer — one action button", () => {
     expect((await renderPane()).value).toBe("");
     cleanup();
     expect((await renderPane(other)).value).toBe("a different thought");
+  });
+
+  it("gives a refused message back as the draft even when the chat was left before the refusal", async () => {
+    seedStore();
+    let refuse: (reason: Error) => void = () => undefined;
+    api.post("/bots/host/messages", () => new Promise((_resolve, reject) => (refuse = reject)));
+    const composer = await renderPane();
+    await user.type(composer, "do not lose me{Enter}");
+    await waitFor(() => expect(sends()).toHaveLength(1));
+    cleanup();
+
+    await act(async () => refuse(new ApiFailure(500, "The bot is not reachable")));
+
+    const again = await renderPane();
+    await waitFor(() => expect(again.value).toBe("do not lose me"));
   });
 });
 
