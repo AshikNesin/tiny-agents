@@ -4,7 +4,7 @@ import { workerProcessEnv } from "./guards";
 import { mkdir, readdir, readFile, realpath, stat, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import path from "node:path";
-import { CodingError } from "./coding";
+import { CodingError } from "./coding-error";
 import { missingAs, warnFailure } from "./failures";
 import {
   EMPTY_TREE,

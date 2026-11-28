@@ -7,7 +7,7 @@ import {
   type QueryFactory,
   type ResumeResult,
 } from "../../../packages/claude-worker/src/index";
-import type { CodingDeps } from "../../../packages/claude-worker/src/coding";
+import type { CodingDeps } from "../../../packages/claude-worker/src/coding-session";
 import {
   connectWorker,
   type WebSocketLike,

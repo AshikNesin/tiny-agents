@@ -16,10 +16,10 @@ and `pnpm build` green.
 | 7     | A harness that declares a capability and omits its methods | done   |
 | 8     | Stored JSON read with a cast; a helper written twice       | done   |
 | 9     | A silent fallback                                          | done   |
-| 10    | A feature mounted by hand in several lists                 | open   |
+| 10    | A feature mounted by hand in several lists                 | done   |
 | 11    | Legacy ids and redirects kept beside their replacement     | done   |
-| 12    | A source file that grows past the size limit               | open   |
-| 13    | Prose rules for what a type or lint now enforces           | open   |
+| 12    | A source file that grows past the size limit               | done   |
+| 13    | Prose rules for what a type or lint now enforces           | done   |
 
 ## groot
 

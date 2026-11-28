@@ -1,7 +1,7 @@
 import { parseJson } from "@tiny-agents/std";
 import { z } from "zod";
 import { failureOf, GitHubError } from "./api";
-import type { RepoRef } from "./client";
+import type { RepoRef } from "./types";
 
 export interface AppAuthOptions {
   appId: string;

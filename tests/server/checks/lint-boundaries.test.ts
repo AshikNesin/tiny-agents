@@ -291,6 +291,15 @@ const FIXTURES: Record<string, Fixture> = {
     source: "export const ping = (probe: () => void) => setInterval(probe, 1000);\n",
     rules: [],
   },
+  "packages/code/src/r24-fail.ts": {
+    source: "void 0;\n".repeat(801),
+    rules: ["R24"],
+    mentions: "sibling module",
+  },
+  "packages/code/src/r24-pass.ts": {
+    source: "void 0;\n".repeat(799),
+    rules: [],
+  },
   "apps/web/src/server/api/r22-fail.ts": {
     source:
       "interface Row { id: string }\nexport const read = (text: string) => JSON.parse(text) as Row;\nexport const list = (text: string) => (JSON.parse(text)) as Row[];\n",

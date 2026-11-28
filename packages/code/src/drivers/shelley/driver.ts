@@ -1,9 +1,7 @@
 import { z } from "zod";
 import {
-  NO_CAPABILITIES,
   threadIdOf,
   type BackgroundJob,
-  type Capabilities,
   type CreateThreadInput,
   type HarnessHost,
   type HarnessInstance,
@@ -14,25 +12,15 @@ import {
   type ThreadSnapshot,
   type ThreadSummary,
   type TurnOutcome,
-  type GitDiff,
-  type GitFile,
-  type GitFileDiff,
 } from "../../contracts";
 import { badGateway, badRequest } from "../../server/errors";
 import { NO_PARTIAL, ThreadFeed } from "../../server/feed";
 import { Emitter } from "../../server/items";
 import { turnOutcome } from "../../server/outcome";
+import { qs, shelleyJson, trimUrl, type FetchLike, type ShelleyDeps } from "./client";
+import { CAPABILITIES, SLASH_COMMANDS } from "./catalog";
+import { descendantIds, ours, settingsOf, withAttachments } from "./conversations";
 import {
-  encodePath,
-  qs,
-  shelleyFetch,
-  shelleyJson,
-  trimUrl,
-  type FetchLike,
-  type ShelleyDeps,
-} from "./client";
-import {
-  assetPath,
   buildTranscript,
   lastWriteAt,
   maxSequence,
@@ -40,47 +28,22 @@ import {
   queuedMessages,
   totalCost,
 } from "./normalize";
+import { createdSchema, cwdCheckSchema, listSchemas, sentSchema } from "./schemas";
 import { createShelleyStream, type ShelleyStream, type StreamOptions } from "./stream";
 import { distinctModels, otherUsageEntries, usageEntries, usageReport } from "./usage";
 import {
   isWorking,
   tagsOf,
   TINY_AGENTS_TAG,
-  detailSchemaOf,
-  listOf,
   modelCostsSchema,
-  modelSchema,
-  opt,
-  rowSchema,
   settingsSchema,
-  subagentUsageSchemaOf,
   type ReportInvalid,
   type ShelleyDetail,
   type ShelleyMessage,
   type ShelleyModel,
   type ShelleyRow,
-  type ShelleySettings,
 } from "./wire";
-
-export const SHELLEY_THINKING_LEVELS = [
-  "off",
-  "minimal",
-  "low",
-  "medium",
-  "high",
-  "xhigh",
-  "max",
-] as const;
-
-const SLASH_COMMANDS = [
-  { command: "/model", hint: "Show or switch the model and reasoning (e.g. /model sonnet high)" },
-  { command: "/compact", hint: "Compact the context to free room" },
-  { command: "/btw", hint: "Ask a side question without disturbing the turn" },
-  { command: "/fork", hint: "Continue in a copy of this conversation" },
-  { command: "/cwd", hint: "Change the working directory" },
-  { command: "/new", hint: "Start a new conversation" },
-  { command: "/help", hint: "List Shelley's commands" },
-];
+import { workspaceOps } from "./workspace";
 
 export interface ShelleyHarnessOptions {
   id?: string;
@@ -93,209 +56,6 @@ export interface ShelleyHarnessOptions {
 export interface ShelleyHarness extends HarnessInstance {
   readonly stream: ShelleyStream;
   readonly url: string;
-}
-
-const CAPABILITIES: Capabilities = {
-  ...NO_CAPABILITIES,
-  turns: {
-    interrupt: true,
-    steer: true,
-    queue: true,
-    manageQueue: true,
-    recovery: ["retry", "resume", "continue"],
-    compact: true,
-  },
-  threads: {
-    fork: true,
-    rewind: false,
-    archive: true,
-    delete: true,
-    rename: true,
-    changeCwd: true,
-    subagents: true,
-    search: true,
-    discover: false,
-  },
-  settings: {
-    modelSwitch: true,
-    effortLevels: [...SHELLEY_THINKING_LEVELS],
-    permissionModes: [],
-  },
-  approvals: { tools: false, questions: false },
-  workspace: {
-    diffs: true,
-    findFiles: true,
-    uploads: true,
-    skills: true,
-    browse: true,
-    worktrees: true,
-    requiresCwd: false,
-  },
-  extras: { jobs: true, usageReport: true, commands: true },
-};
-
-export function descendantIds(rows: ShelleyRow[], id: string): string[] {
-  const children = new Map<string, string[]>();
-  for (const row of rows) {
-    const parent = row.parent_conversation_id;
-    if (!parent) continue;
-    const list = children.get(parent) ?? [];
-    list.push(row.conversation_id);
-    children.set(parent, list);
-  }
-  const found: string[] = [];
-  const seen = new Set([id]);
-  const queue = [id];
-  while (queue.length > 0) {
-    for (const child of children.get(queue.shift()!) ?? []) {
-      if (seen.has(child)) continue;
-      seen.add(child);
-      found.push(child);
-      queue.push(child);
-    }
-  }
-  return found;
-}
-
-function ours(rows: ShelleyRow[], context: ShelleyRow[] = []): ShelleyRow[] {
-  const byId = new Map<string, ShelleyRow>();
-  for (const row of [...context, ...rows]) byId.set(row.conversation_id, row);
-  const verdict = new Map<string, boolean>();
-  const tagged = (start: ShelleyRow): boolean => {
-    const path: string[] = [];
-    let row: ShelleyRow | undefined = start;
-    let found = false;
-    while (row && !path.includes(row.conversation_id)) {
-      const known = verdict.get(row.conversation_id);
-      if (known !== undefined) {
-        found = known;
-        break;
-      }
-      path.push(row.conversation_id);
-      if (tagsOf(row).includes(TINY_AGENTS_TAG)) {
-        found = true;
-        break;
-      }
-      row = row.parent_conversation_id ? byId.get(row.parent_conversation_id) : undefined;
-    }
-    for (const id of path) verdict.set(id, found);
-    return found;
-  };
-  return rows.filter(tagged);
-}
-
-function withAttachments(message: string, refs: string[] | undefined): string {
-  const paths = (refs ?? [])
-    .filter((ref) => ref.startsWith("file:/"))
-    .map((ref) => `[${ref.slice(5)}]`);
-  if (paths.length === 0) return message;
-  return [message.trim(), paths.join(" ")].filter(Boolean).join("\n\n");
-}
-
-function settingsOf(raw: ShelleySettings | undefined, row?: ShelleyRow): ThreadSettings {
-  return {
-    model: raw?.model || row?.model || null,
-    effort: raw?.thinking_level || null,
-    permissionMode: null,
-  };
-}
-
-const createdSchema = z.looseObject({ conversation_id: opt(z.string()) });
-
-const cwdCheckSchema = z.looseObject({ valid: z.boolean(), error: opt(z.string()) });
-
-const sentSchema = z.looseObject({ status: opt(z.string()) });
-
-const uploadedSchema = z.looseObject({ path: opt(z.string()) });
-
-const worktreeSchema = z.looseObject({
-  path: opt(z.string()),
-  worktree: opt(z.string()),
-  cwd: opt(z.string()),
-});
-
-const gitDiffSchema: z.ZodType<GitDiff> = z.looseObject({
-  id: z.string(),
-  message: z.string(),
-  author: z.string(),
-  timestamp: z.string(),
-  filesCount: z.number(),
-  additions: z.number(),
-  deletions: z.number(),
-  refs: opt(z.array(z.string())),
-});
-
-const gitFileSchema: z.ZodType<GitFile> = z.looseObject({
-  path: z.string(),
-  status: z.enum(["added", "modified", "deleted"]),
-  additions: z.number(),
-  deletions: z.number(),
-  isGenerated: z.boolean(),
-  binary: opt(z.boolean()),
-});
-
-const fileDiffSchema: z.ZodType<GitFileDiff> = z.looseObject({
-  path: z.string(),
-  oldContent: z.string(),
-  newContent: z.string(),
-  unshowable: opt(z.enum(["binary", "tooLarge"])),
-});
-
-function listSchemas(report: ReportInvalid) {
-  return {
-    rows: listOf("a Shelley conversation", rowSchema, report),
-    models: listOf("a Shelley model", modelSchema, report),
-    jobs: listOf(
-      "a Shelley background job",
-      z.looseObject({ id: z.string(), command: opt(z.string()), started_at: opt(z.string()) }),
-      report,
-    ),
-    detail: detailSchemaOf(report),
-    subagentUsage: subagentUsageSchemaOf(report),
-    skills: z.looseObject({
-      skills: listOf(
-        "a Shelley skill",
-        z.looseObject({ name: z.string(), description: opt(z.string()) }),
-        report,
-      ),
-    }),
-    foundFiles: z.looseObject({
-      search_dir: opt(z.string()),
-      matches: listOf(
-        "a Shelley file match",
-        z.looseObject({
-          path: z.string(),
-          is_dir: opt(z.boolean()),
-          line: opt(z.number()),
-          text: opt(z.string()),
-        }),
-        report,
-      ),
-    }),
-    listing: z.looseObject({
-      path: z.string(),
-      parent: opt(z.string()),
-      entries: listOf(
-        "a Shelley directory entry",
-        z.looseObject({ name: z.string(), is_dir: z.boolean() }),
-        report,
-      ),
-      git_repo_root: opt(z.string()),
-      git_head_subject: opt(z.string()),
-    }),
-    repos: z.looseObject({
-      repos: listOf(
-        "a Shelley repository",
-        z.looseObject({ path: z.string(), name: opt(z.string()) }),
-        report,
-      ),
-    }),
-    diffs: z.looseObject({
-      diffs: listOf("a Shelley diff", gitDiffSchema, report),
-      gitRoot: opt(z.string()),
-    }),
-    gitFiles: listOf("a Shelley changed file", gitFileSchema, report),
-  };
 }
 
 export function createShelleyHarness(options: ShelleyHarnessOptions): ShelleyHarness {
@@ -828,97 +588,7 @@ export function createShelleyHarness(options: ShelleyHarnessOptions): ShelleyHar
       return result.skills ?? [];
     },
 
-    async findFiles(dir, query, content) {
-      const result = await json(
-        lists.foundFiles,
-        `/find-files${qs({
-          dir,
-          q: query || undefined,
-          content,
-          include_dirs: content ? undefined : "true",
-        })}`,
-      );
-      const searched = (result.search_dir ?? dir).replace(/\/$/, "");
-      const base = dir.replace(/\/$/, "");
-      const prefix =
-        searched === base
-          ? ""
-          : searched.startsWith(`${base}/`)
-            ? `${searched.slice(base.length + 1)}/`
-            : `${searched}/`;
-      return (result.matches ?? []).map((m) => ({
-        path: `${prefix}${m.path}`,
-        ...(m.is_dir ? { isDir: true } : {}),
-        ...(m.line !== undefined ? { line: m.line } : {}),
-        ...(m.text !== undefined ? { text: m.text } : {}),
-      }));
-    },
-
-    async upload(file, filename) {
-      const result = await json(uploadedSchema, `/upload/raw${qs({ filename })}`, {
-        method: "POST",
-        body: file,
-        headers: { "Content-Type": file.type || "application/octet-stream" },
-        timeoutMs: 120_000,
-      });
-      if (!result.path) throw badGateway("Shelley did not return the uploaded path");
-      return { ref: `file:${result.path}` };
-    },
-
-    async browse(path) {
-      const listing = await json(lists.listing, `/list-directory${qs({ path })}`);
-      return {
-        path: listing.path,
-        ...(listing.parent ? { parent: listing.parent } : {}),
-        entries: (listing.entries ?? []).map((e) => ({ name: e.name, isDir: e.is_dir })),
-        ...(listing.git_repo_root ? { repoRoot: listing.git_repo_root } : {}),
-        ...(listing.git_head_subject ? { headSubject: listing.git_head_subject } : {}),
-      };
-    },
-
-    async validateCwd(path) {
-      return json(cwdCheckSchema, `/validate-cwd${qs({ path })}`);
-    },
-
-    async repos() {
-      const result = await json(lists.repos, "/git/repos");
-      return result.repos ?? [];
-    },
-
-    async createWorktree(cwd) {
-      const created = await json(worktreeSchema, "/git/create-worktree", {
-        method: "POST",
-        json: { cwd },
-      });
-      const path = created.path ?? created.worktree ?? created.cwd;
-      if (!path) throw badGateway("Shelley could not create a worktree here.");
-      return { path };
-    },
-
-    async diffs(cwd) {
-      const result = await json(lists.diffs, `/git/diffs${qs({ cwd })}`);
-      return {
-        diffs: result.diffs,
-        gitRoot: result.gitRoot ?? cwd,
-      };
-    },
-
-    async diffFiles(cwd, diffId) {
-      return json(lists.gitFiles, `/git/diffs/${encodeURIComponent(diffId)}/files${qs({ cwd })}`);
-    },
-
-    async fileDiff(cwd, diffId, path) {
-      return json(
-        fileDiffSchema,
-        `/git/file-diff/${encodeURIComponent(diffId)}/${encodePath(path)}${qs({ cwd })}`,
-      );
-    },
-
-    async asset(ref) {
-      const path = assetPath(ref);
-      if (!path) throw badRequest("Unknown asset");
-      return shelleyFetch(path, {}, deps);
-    },
+    ...workspaceOps(json, lists, deps),
   };
   return instance;
 }

@@ -5,10 +5,10 @@ import type { Capability } from "../../../../packages/agent/src/capabilities";
 import {
   createComputerSessions,
   createComputerToolkit,
-  normalizeKeys,
-  windowTarget,
   type ComputerSessions,
 } from "../../../../packages/agent/src/toolkits/computer";
+import { normalizeKeys } from "../../../../packages/agent/src/toolkits/computer-keys";
+import { windowTarget } from "../../../../packages/agent/src/toolkits/computer-secret";
 import { takeoverOf } from "../../../../packages/sandbox/src/computer-sessions";
 import { WaitTracker } from "../../../../packages/agent/src/waiting";
 import { FAKE_JPEG, fakeComputer, type FakeComputer } from "./computer-fakes";

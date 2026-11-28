@@ -1,17 +1,12 @@
-import { readFile, rename } from "node:fs/promises";
 import type { Context } from "@earendil-works/chord/context";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import {
-  defineDoc,
-  type ConversationId,
-  type EntryRecord,
-  type Harness,
-  type ToolExecutionResult,
-  type ToolRegistration,
+import type {
+  ConversationId,
+  EntryRecord,
+  Harness,
+  ToolRegistration,
 } from "@earendil-works/pi-durable";
 import type { ToolResultPayload, ToolSpec, WorkerMessage } from "@tiny-agents/claude-worker";
-import { z } from "zod";
-import { gateHooksOf } from "../../approvals";
 import type { ToolPermission } from "../../capabilities";
 import {
   type AgentEngine,
@@ -20,10 +15,8 @@ import {
   type CompiledConversation,
   type EngineSubmission,
 } from "../../engine";
-import { ranToResult, ToolGate } from "../../gate";
-import { secretRedactor } from "../../redact";
-import { finishedToolRow, liveToolRow, type ToolCallRow } from "../../tool-call-row";
-import { gateUserMessages, windowChat } from "../../transcript";
+import { ToolGate } from "../../gate";
+import { gateUserMessages } from "../../transcript";
 import type {
   ChatEvent,
   ChatMessage,
@@ -31,28 +24,38 @@ import type {
   ChatSubscription,
   ChatToolCall,
   ConversationRef,
-  QueuedMessage,
   WithdrawOutcome,
 } from "../../types";
 import { WaitTracker } from "../../waiting";
 import { loadHistory } from "../../conversation-store";
 import { ClaudeWorkerClient, type ToolUseCall, type WebSocketLike } from "./client";
 import { pauseMessage } from "./errors";
+import { importLegacy } from "./legacy-import";
 import { noWorkerLocator, type ClaudeWorkerLocator } from "./sandbox-worker";
-import { claudeToolApi } from "./tools";
+import {
+  blankSession,
+  ClaudePlanDoc,
+  newLiveTurn,
+  pausedReply,
+  sessionState,
+  submittedUser,
+  turnRequest,
+  type ClaudeSession,
+  type Listener,
+  type LiveTurn,
+  type Stored,
+} from "./session";
+import { runToolCall } from "./tool-call";
 import {
   admittedRequestId,
   claudeMessages,
   claudeRecordOf,
-  legacyEntries,
-  legacyFileSchema,
   replyEntry,
   settleToolCalls,
   userEntry,
   withdrawnEntry,
   type ClaudeRecord,
   type ClaudeReply,
-  type LegacySession,
 } from "./transcript";
 
 const ctx: Context = BACKGROUND_CONTEXT;
@@ -62,22 +65,9 @@ export const WORKER_RESTARTED =
 
 const NOT_CONFIGURED = "This bot's settings are not loaded yet. Send your message again.";
 
-const TASK_ID_BASE = 2_000_000_000;
-
 const ADMIT_LOOKBACK = 200;
 
 export const OWNER_WAIT_KEEPALIVE_MS = 30_000;
-
-const ClaudePlanDoc = defineDoc<{
-  conversations: Record<string, { left?: boolean; claudeSessionId?: string }>;
-  imported?: boolean;
-}>({
-  kind: "tiny.claude-plan",
-  version: 1,
-  scope: "session",
-  initial: () => ({ conversations: {} }),
-  checkpointWhen: () => false,
-});
 
 export interface ClaudeSessionSync {
   model: string;
@@ -99,45 +89,6 @@ export interface ClaudeCodeEngineOptions {
   worker?: ClaudeWorkerLocator;
 }
 
-interface Listener {
-  ref: ConversationRef;
-  listener: (events: ChatEvent[]) => void | Promise<void>;
-  window?: number;
-}
-
-interface LiveTurn {
-  turnId: string;
-  reply: ClaudeReply;
-  sent: boolean;
-  dispatched: boolean;
-  closed: boolean;
-  waits: Map<string, ReturnType<typeof setInterval>>;
-}
-
-interface Stored {
-  left: boolean;
-  claudeSessionId?: string;
-}
-
-interface ClaudeSession {
-  model: string;
-  system: string;
-  tools: ToolSpec[];
-  permissions: Record<string, ToolPermission>;
-  runners: ReadonlyMap<string, ToolRegistration>;
-  configured: boolean;
-  claudeSessionId?: string;
-  surface: "claude" | "pi";
-  stored?: Stored;
-  records?: Promise<ClaudeRecord[]>;
-  queue: EngineSubmission[];
-  withdrawing: Set<string>;
-  live?: LiveTurn;
-  nextTask: number;
-  busy: boolean;
-  writes: Promise<unknown>;
-}
-
 export class ClaudeCodeEngine implements AgentEngine {
   readonly kind = "claude-code" as const;
   private readonly sessions = new Map<ConversationRef, ClaudeSession>();
@@ -154,7 +105,7 @@ export class ClaudeCodeEngine implements AgentEngine {
 
   async start(): Promise<void> {
     if (!this.options.harness) return;
-    await this.importLegacy();
+    await importLegacy(this.options.legacyPath, this.harness, (error) => this.report(error));
     const doc = await this.harness.snapshot(ClaudePlanDoc, ctx);
     for (const [key, value] of Object.entries(doc?.conversations ?? {})) {
       const ref = Number(key);
@@ -163,7 +114,7 @@ export class ClaudeCodeEngine implements AgentEngine {
         left: value.left === true,
         ...(value.claudeSessionId ? { claudeSessionId: value.claudeSessionId } : {}),
       };
-      const session = this.blank();
+      const session = blankSession();
       session.surface = stored.left ? "pi" : "claude";
       session.stored = stored;
       if (stored.claudeSessionId) session.claudeSessionId = stored.claudeSessionId;
@@ -220,23 +171,8 @@ export class ClaudeCodeEngine implements AgentEngine {
       if (records.some((r) => r.kind === "user" && r.data.requestId === input.requestId)) {
         return "accepted";
       }
-      const user = {
-        requestId: input.requestId,
-        text: input.text,
-        createdAt: Date.now(),
-        ...(input.peer ? { peer: input.peer } : {}),
-        ...(input.author ? { author: { id: input.author.id, name: input.author.name } } : {}),
-        ...(input.attachments?.length ? { attachments: input.attachments } : {}),
-      };
-      const pause: ClaudeReply | undefined = paused
-        ? {
-            turnId: input.requestId,
-            text: "",
-            status: "error",
-            error: paused,
-            createdAt: Date.now(),
-          }
-        : undefined;
+      const user = submittedUser(input);
+      const pause = paused ? pausedReply(input.requestId, paused) : undefined;
       const appended = await this.harness.commit(async (tx) => {
         const recent = await tx.scanEntries(
           { conversationId: ref as ConversationId, order: "descending" },
@@ -314,7 +250,7 @@ export class ClaudeCodeEngine implements AgentEngine {
 
   async read(ref: ConversationRef): Promise<ChatState> {
     const session = this.require(ref);
-    return this.state(session, await this.messages(ref, session));
+    return sessionState(session, await this.messages(ref, session));
   }
 
   async watch(
@@ -323,7 +259,7 @@ export class ClaudeCodeEngine implements AgentEngine {
     { window }: { window?: number } = {},
   ): Promise<ChatSubscription> {
     const session = this.require(ref);
-    const initial = this.state(session, await this.messages(ref, session), window);
+    const initial = sessionState(session, await this.messages(ref, session), window);
     const entry: Listener = { ref, listener, window };
     this.listeners.add(entry);
     void listener([{ type: "snapshot", state: initial }]);
@@ -370,20 +306,7 @@ export class ClaudeCodeEngine implements AgentEngine {
     input: EngineSubmission,
   ): Promise<void> {
     const turnId = input.requestId;
-    const live: LiveTurn = {
-      turnId,
-      reply: {
-        turnId,
-        text: "",
-        status: "streaming",
-        ...(session.model ? { model: session.model } : {}),
-        createdAt: Date.now(),
-      },
-      sent: false,
-      dispatched: false,
-      closed: false,
-      waits: new Map(),
-    };
+    const live = newLiveTurn(turnId, session.model);
     session.live = live;
     this.emit(ref);
     if (session.surface !== "claude") {
@@ -417,18 +340,7 @@ export class ClaudeCodeEngine implements AgentEngine {
     const worker = this.worker();
     worker.track(String(ref));
     live.sent = true;
-    live.dispatched = worker.send({
-      type: "turn",
-      sessionId: String(ref),
-      turnId,
-      text: input.text,
-      model: session.model,
-      system: session.system,
-      ...(session.claudeSessionId ? { resume: session.claudeSessionId } : {}),
-      tools: session.tools,
-      ...(input.images?.length ? { images: input.images } : {}),
-      ...(maxTurns ? { maxTurns } : {}),
-    });
+    live.dispatched = worker.send(turnRequest(ref, session, input, maxTurns));
   }
 
   private async unavailable(
@@ -576,74 +488,21 @@ export class ClaudeCodeEngine implements AgentEngine {
     if (!live || live.turnId !== call.turnId || live.closed) {
       return { content: "This reply has ended.", isError: true };
     }
-    const args = asRecord(call.input);
-    const row = (fields: ToolCallRow) => {
-      if (live.closed) return;
-      const tool: ChatToolCall = { id: call.toolUseId, name: call.name, args, ...fields };
-      upsertTool(live.reply, tool);
-      this.ownerWait(ref, live, call.toolUseId, tool.status);
-      this.emit(ref);
-    };
-    const finished = (fields: ToolCallRow) => {
-      row(fields);
-      if (!live.closed) void this.appendReply(ref, session, live.reply);
-    };
-    const failed = (content: string): ToolResultPayload => {
-      finished(finishedToolRow({ output: content, isError: true }));
-      return { content, isError: true };
-    };
-    row(liveToolRow({ status: "running" }));
-    if (session.permissions[call.name] === "off")
-      return failed(`${call.name} is off for this bot.`);
-    session.nextTask += 1;
-    const taskId = session.nextTask;
-    let published: unknown;
-    const api = claudeToolApi({
-      name: call.name,
-      conversation: ref,
-      task: taskId,
-      docs: this.harness,
-      details: (value) => {
-        published = value;
-        row(liveToolRow({ status: "running", taskId, details: value }));
+    return runToolCall(
+      {
+        harness: () => this.harness,
+        gate: this.gate,
+        userMessages: (conversation) => this.userMessages(conversation),
+        emit: (conversation) => this.emit(conversation),
+        appendReply: (conversation, owner, reply) => this.appendReply(conversation, owner, reply),
+        ownerWait: (conversation, turn, toolUseId, status) =>
+          this.ownerWait(conversation, turn, toolUseId, status),
       },
-    });
-    const runner = session.runners.get(call.name);
-    try {
-      const result = await this.gate
-        .run(
-          {
-            name: call.name,
-            args,
-            replaySafe: runner?.replay === "safe",
-            hooks: runner ? gateHooksOf(runner) : undefined,
-            api,
-            context: ctx,
-            answers: "memory",
-            userMessages: () => this.userMessages(ref),
-            instructions: async () => session.system || undefined,
-            run: async () => `${ref}:${live.turnId}`,
-          },
-          async (inner) => {
-            row(liveToolRow({ status: "running", taskId }));
-            if (!runner) return unavailable(call.name);
-            return ranToResult(await runner.execute(args, inner, ctx));
-          },
-        )
-        .then(ranToResult);
-      const content = resultText(result);
-      finished(
-        finishedToolRow({
-          output: content,
-          details: result.details ?? published,
-          ...(result.isError ? { isError: true } : {}),
-          ...(result.diagnostics ? { diagnostics: result.diagnostics } : {}),
-        }),
-      );
-      return { content, ...(result.isError ? { isError: true } : {}) };
-    } catch (error) {
-      return failed(secretRedactor.scrub(error instanceof Error ? error.message : String(error)));
-    }
+      ref,
+      session,
+      live,
+      call,
+    );
   }
 
   private ownerWait(
@@ -730,22 +589,6 @@ export class ClaudeCodeEngine implements AgentEngine {
     });
   }
 
-  private state(session: ClaudeSession, messages: ChatMessage[], window?: number): ChatState {
-    const state = { messages, busy: session.busy, queued: this.queued(session) };
-    return window && messages.length > window ? windowChat(state, window)! : state;
-  }
-
-  private queued(session: ClaudeSession): QueuedMessage[] {
-    return session.queue
-      .filter((input) => !input.peer)
-      .map((input) => ({
-        requestId: input.requestId,
-        mode: "followUp" as const,
-        text: input.text,
-        ...(input.author ? { author: input.author } : {}),
-      }));
-  }
-
   private emit(ref: ConversationRef): void {
     const session = this.sessions.get(ref);
     if (!session || ![...this.listeners].some((entry) => entry.ref === ref)) return;
@@ -754,7 +597,7 @@ export class ClaudeCodeEngine implements AgentEngine {
         for (const entry of this.listeners) {
           if (entry.ref !== ref) continue;
           void entry.listener([
-            { type: "snapshot", state: this.state(session, messages, entry.window) },
+            { type: "snapshot", state: sessionState(session, messages, entry.window) },
           ]);
         }
       })
@@ -819,67 +662,6 @@ export class ClaudeCodeEngine implements AgentEngine {
     }
   }
 
-  private async importLegacy(): Promise<void> {
-    const path = this.options.legacyPath;
-    if (!path) return;
-    let raw: string;
-    try {
-      raw = await readFile(path, "utf8");
-    } catch (error) {
-      if (!isMissing(error)) this.report(new Error(`Could not read ${path}`, { cause: error }));
-      return;
-    }
-    const doc = await this.harness.snapshot(ClaudePlanDoc, ctx);
-    if (!doc?.imported) {
-      let parsed: z.infer<typeof legacyFileSchema>;
-      try {
-        parsed = legacyFileSchema.parse(JSON.parse(raw));
-      } catch (error) {
-        this.report(
-          new Error(`${path} is not a Claude plan transcript file; it was left as it is`, {
-            cause: error,
-          }),
-        );
-        return;
-      }
-      try {
-        await this.harness.commit(async (tx) => {
-          const state = await tx.doc(ClaudePlanDoc);
-          const sessions: [string, LegacySession][] = [];
-          for (const [key, session] of Object.entries(parsed.sessions ?? {})) {
-            const ref = Number(key);
-            if (!Number.isFinite(ref)) continue;
-            // eslint-disable-next-line react-doctor/async-await-in-loop
-            if (await tx.conversation(ref as ConversationId)) sessions.push([key, session]);
-          }
-          for (const [key, session] of sessions) {
-            const ref = Number(key);
-            for (const entry of legacyEntries(session)) {
-              // eslint-disable-next-line react-doctor/async-await-in-loop
-              await tx.appendEntry(ref as ConversationId, entry);
-            }
-            const left = session.surface === "pi" || state.conversations[key]?.left === true;
-            const claudeSessionId =
-              session.claudeSessionId ?? state.conversations[key]?.claudeSessionId;
-            state.conversations[key] = {
-              ...(left ? { left: true } : {}),
-              ...(claudeSessionId ? { claudeSessionId } : {}),
-            };
-          }
-          state.imported = true;
-        }, ctx);
-      } catch (error) {
-        this.report(new Error(`Could not import ${path}; it was left as it is`, { cause: error }));
-        return;
-      }
-    }
-    try {
-      await rename(path, `${path}.imported`);
-    } catch (error) {
-      this.report(new Error(`Imported ${path} but could not rename it`, { cause: error }));
-    }
-  }
-
   private get harness(): Harness {
     const { harness } = this.options;
     if (!harness) throw new Error("The Claude plan engine has no store.");
@@ -892,27 +674,10 @@ export class ClaudeCodeEngine implements AgentEngine {
     this.options.onBusy?.(ref, busy);
   }
 
-  private blank(): ClaudeSession {
-    return {
-      model: "",
-      system: "",
-      tools: [],
-      permissions: {},
-      runners: new Map(),
-      configured: false,
-      surface: "claude",
-      queue: [],
-      withdrawing: new Set(),
-      nextTask: TASK_ID_BASE,
-      busy: false,
-      writes: Promise.resolve(),
-    };
-  }
-
   private ensure(ref: ConversationRef): ClaudeSession {
     const existing = this.sessions.get(ref);
     if (existing) return existing;
-    const session = this.blank();
+    const session = blankSession();
     this.sessions.set(ref, session);
     return session;
   }
@@ -930,40 +695,3 @@ export class ClaudeCodeEngine implements AgentEngine {
 }
 
 function writerSeesFailure(): void {}
-
-function upsertTool(reply: ClaudeReply, tool: ChatToolCall): void {
-  const tools = reply.toolCalls ? [...reply.toolCalls] : [];
-  const index = tools.findIndex((item) => item.id === tool.id);
-  if (index >= 0) tools[index] = tool;
-  else tools.push(tool);
-  reply.toolCalls = tools;
-}
-
-function isMissing(error: unknown): boolean {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    "code" in error &&
-    (error as { code?: unknown }).code === "ENOENT"
-  );
-}
-
-function unavailable(name: string): ToolExecutionResult {
-  return {
-    output: [{ type: "text", text: `${name} is not available on the Claude plan engine.` }],
-    isError: true,
-  };
-}
-
-function resultText(result: ToolExecutionResult): string {
-  return (result.output ?? [])
-    .map((block) => (block.type === "text" ? block.text : ""))
-    .filter(Boolean)
-    .join("\n");
-}
-
-function asRecord(value: unknown): Record<string, unknown> {
-  if (value && typeof value === "object" && !Array.isArray(value))
-    return value as Record<string, unknown>;
-  return { value };
-}

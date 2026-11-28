@@ -425,6 +425,23 @@ const BOUNDARY_RULES: BoundaryRule[] = [
     rule: "repo/no-client-interval",
     enabled: true,
   })),
+  ...[
+    "apps/web/src/**",
+    "packages/agent/src/**",
+    "packages/claude-worker/src/**",
+    "packages/code/src/**",
+    "packages/git/src/**",
+    "packages/github/src/**",
+    "packages/models/src/**",
+    "packages/sandbox/src/**",
+    "packages/std/src/**",
+  ].map((scope): BoundaryRule => ({
+    id: "R24",
+    kind: "plugin",
+    scope,
+    rule: "repo/max-source-lines",
+    enabled: true,
+  })),
   {
     id: "R22",
     kind: "plugin",

@@ -7,7 +7,7 @@ and `pnpm verify:static` runs the gates CI runs. Guides start at
 
 ## Rules and their enforcers
 
-R1 to R23 are lint rules in `scripts/lint/boundaries.ts`, run by `pnpm check`.
+R1 to R24 are lint rules in `scripts/lint/boundaries.ts`, run by `pnpm check`.
 
 | Rule                                                                                                                                                                                                                                 | Enforcer                                                                         |
 | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------- |
@@ -19,6 +19,7 @@ R1 to R23 are lint rules in `scripts/lint/boundaries.ts`, run by `pnpm check`.
 | UI primitives (Base UI, Radix, cmdk) are imported only in `packages/ui`; pages use `@groot/ui`. `@shadcn/react` is allowed anywhere.                                                                                                 | R18                                                                              |
 | Render breadcrumbs with `Breadcrumbs` from `@groot/ui/breadcrumb`.                                                                                                                                                                   | R5a, R5b, R5c                                                                    |
 | Code and every test under `tests/` typecheck.                                                                                                                                                                                        | `pnpm typecheck`, run by the pre-push hook                                       |
+| No source file in `apps/web/src` or a tiny-agents package is over 800 lines.                                                                                                                                                         | R24                                                                              |
 | No function is written twice; one every package needs lives in `packages/std`.                                                                                                                                                       | `pnpm check:duplicates`                                                          |
 | No unused file or export.                                                                                                                                                                                                            | `pnpm check:dead`                                                                |
 | A module the rewrite retired stays gone, and a narrowed one narrow.                                                                                                                                                                  | `pnpm check:old-modules`                                                         |

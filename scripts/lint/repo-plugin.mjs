@@ -95,6 +95,11 @@ const CASTS = new Set(["TSAsExpression", "TSTypeAssertion"]);
 const unparenthesized = (node) =>
   node.type === "ParenthesizedExpression" ? unparenthesized(node.expression) : node;
 
+const MAX_SOURCE_LINES = 800;
+
+const FILE_TOO_LONG_MESSAGE = (lines) =>
+  `R24: this file has ${lines} lines; the limit is ${MAX_SOURCE_LINES}. Long files are where agents kept adding one more thing and where review findings clustered. Move a group of functions or components that change together into a sibling module named for what it does (a server feature uses <feature>.<role>.ts), and keep the entry point here.`;
+
 const CLIENT_INTERVAL_MESSAGE =
   "R23: re-read server data with `refetchInterval` on useResource (apps/web/src/client/queries/resource.ts), which stops with the component and pauses in a hidden tab. A hand-rolled setInterval poll outlived its component more than once.";
 
@@ -608,6 +613,18 @@ export default {
             if (node.source.value !== "node:process" && node.source.value !== "process") return;
             for (const s of node.specifiers) {
               if (s.type === "ImportSpecifier" && s.imported.name === "env") report(s);
+            }
+          },
+        };
+      },
+    },
+    "max-source-lines": {
+      create(context) {
+        return {
+          Program(node) {
+            const lines = context.sourceCode.lines.length;
+            if (lines > MAX_SOURCE_LINES) {
+              context.report({ node, message: FILE_TOO_LONG_MESSAGE(lines) });
             }
           },
         };
