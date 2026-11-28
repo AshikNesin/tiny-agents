@@ -17,7 +17,7 @@ and `pnpm build` green.
 | 8     | Stored JSON read with a cast; a helper written twice       | done   |
 | 9     | A silent fallback                                          | done   |
 | 10    | A feature mounted by hand in several lists                 | open   |
-| 11    | Legacy ids and redirects kept beside their replacement     | open   |
+| 11    | Legacy ids and redirects kept beside their replacement     | done   |
 | 12    | A source file that grows past the size limit               | open   |
 | 13    | Prose rules for what a type or lint now enforces           | open   |
 
@@ -47,5 +47,10 @@ lint rule groot adds later is ported by hand. Files under
 - A Shelley message's content blocks, a cached pull snapshot's inner arrays,
   the Auto-fix report and extracted upload content are each read as one
   object, so one bad element fails that value.
+- `/code/settings/projects` still redirects to `/settings/projects`, because
+  the Android app opens it (`NewCodeThreadScreen.kt`). Remove it once the app
+  links to the new page.
+- ADR 0011 still says a bare thread id belongs to Shelley; migration 0040
+  ended that, and the ADR needs a superseding entry.
 - A GitHub pull snapshot fails whole on a malformed element on purpose: it
   drives Auto-fix and merge decisions.

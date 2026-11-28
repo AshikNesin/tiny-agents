@@ -281,6 +281,13 @@
       "when": 1795701124619,
       "tag": "0039_vault_onepassword_backend",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "6",
+      "when": 1795841644371,
+      "tag": "0040_code_prefix_bare_thread_ids",
+      "breakpoints": true
     }
   ]
 }

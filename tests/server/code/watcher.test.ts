@@ -187,6 +187,28 @@ describe("Code watcher", () => {
     expect(pushed[0]!.title).toBe("⚠️ Fake hit an error in fix");
   });
 
+  it("reconciles a hand-off migration 0040 gave its Shelley prefix, with no thread row", async () => {
+    stop();
+    hub.stop();
+    const shelley = fakeHarness("shelley");
+    hub = createCodeHub({ instances: [shelley], listDebounceMs: 5 });
+    stop = startCodeWatcher({
+      hub,
+      deliver: async (finish) => void delivered.push(finish),
+      notify: (n) => void pushed.push(n),
+    });
+    await recordHandoff({
+      botId,
+      conversationId: "1",
+      idempotencyKey: "k5",
+      task: "t",
+      threadId: "shelley:cLegacy",
+    });
+    hub.start();
+    await eventually(() => expect(delivered).toHaveLength(1));
+    expect(delivered[0]!.text).toContain("finished **cLegacy**");
+  });
+
   it("pushes when the harness asks for the owner mid-turn", async () => {
     await follow("fake", "tU");
     hub.start();
