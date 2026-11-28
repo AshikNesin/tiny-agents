@@ -69,6 +69,7 @@ that the code alone cannot show.
 | 0051 | [API wire types live once, in `shared/api`](0051-wire-types-live-in-shared-api.md)                                                     | accepted                                                       |
 | 0052 | [Code thread ids always carry their instance](0052-thread-ids-always-carry-their-instance.md)                                          | accepted (supersedes 0011's bare-id rule)                      |
 | 0053 | [Artifacts are tool-written versions, rendered in a sandboxed frame](0053-artifacts-are-tool-written-versions-in-a-sandboxed-frame.md) | accepted                                                       |
+| 0054 | [A sandbox machine below the connection](0054-a-sandbox-machine-below-the-connection.md)                                               | accepted (amends 0013)                                         |
 | G4   | [Hono + Drizzle on SQLite, for Node and Cloudflare Workers](0004-hono-drizzle-sqlite-workers.md)                                       | accepted (groot)                                               |
 
 `G4` is groot's ADR 0004, synced from the boilerplate; tiny-agents' own 0004

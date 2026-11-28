@@ -26,6 +26,7 @@ import {
   createSandboxConnection,
   type SandboxConnection,
 } from "../../../../packages/sandbox/src/ssh/sandbox-connection";
+import { sshMachine } from "../../../../packages/sandbox/src/ssh/machine";
 import { startFakeSandboxServer } from "../../../../packages/sandbox/src/testing-ssh-server";
 import { until } from "../../fixtures/until";
 import { fakeSandboxConnection } from "./sandbox-connection-fake";
@@ -68,7 +69,7 @@ describe("coding toolkit on the sandbox", () => {
       });
       return { stdout: ran.stdout, stderr: ran.stderr, exitCode: ran.status ?? 1 };
     });
-    connection = createSandboxConnection({ host: "127.0.0.1", port: server.port });
+    connection = createSandboxConnection(sshMachine({ host: "127.0.0.1", port: server.port }));
     mkdirSync(onSandbox("/work/src"), { recursive: true });
     mkdirSync(onSandbox("/elsewhere"), { recursive: true });
   });

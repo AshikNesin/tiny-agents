@@ -7,6 +7,7 @@ import {
   createSandboxConnection,
   type SandboxConnection,
 } from "../../../../packages/sandbox/src/ssh/sandbox-connection";
+import { sshMachine } from "../../../../packages/sandbox/src/ssh/machine";
 import { startFakeSandboxServer } from "../../../../packages/sandbox/src/testing-ssh-server";
 import type { Capability } from "../../../../packages/agent/src/capabilities";
 import { fakeSandboxConnection } from "./sandbox-connection-fake";
@@ -169,7 +170,7 @@ describe("sandbox toolkit (integration, in-process SSH server)", () => {
       if (command === "false") return { stdout: "", exitCode: 1 };
       return { stdout: "" };
     });
-    connection = createSandboxConnection({ host: "127.0.0.1", port: server.port });
+    connection = createSandboxConnection(sshMachine({ host: "127.0.0.1", port: server.port }));
   });
 
   afterAll(() => {

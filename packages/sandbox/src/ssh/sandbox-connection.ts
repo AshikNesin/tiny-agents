@@ -13,8 +13,8 @@ import {
   openSftpChannel,
   PreDispatchError,
   SandboxTimeoutError,
-  type SshEndpoint,
 } from "./connection";
+import type { SandboxMachine } from "./machine";
 import { ChannelPtyStream, closeChannel, type PtySize, type PtyStream } from "./pty-stream";
 import { callerSeesRejection } from "../failures";
 import { readCapped, writeAtomic } from "./sftp";
@@ -77,7 +77,7 @@ interface Lease {
 }
 
 export function createSandboxConnection(
-  endpoint: SshEndpoint,
+  machine: SandboxMachine,
   options: SandboxConnectionOptions = {},
 ): SandboxConnection {
   const idleTimeoutMs = options.idleTimeoutMs ?? SANDBOX_IDLE_TIMEOUT_MS;
@@ -88,13 +88,18 @@ export function createSandboxConnection(
 
   const closedError = () => new Error("The sandbox connection is closed.");
 
+  const dialMachine = async (): Promise<ssh2.Client> => {
+    await machine.ready();
+    return dialSsh(await machine.dial());
+  };
+
   const dial = async (): Promise<ssh2.Client> => {
     try {
-      return await dialSsh(endpoint);
+      return await dialMachine();
     } catch (first) {
       if (first instanceof HostKeyChangedError || closed) throw first;
       try {
-        return await dialSsh(endpoint);
+        return await dialMachine();
       } catch (error) {
         if (error instanceof HostKeyChangedError) throw error;
         throw new Error(describeSandboxError(error), { cause: error });
@@ -214,7 +219,7 @@ export function createSandboxConnection(
   };
 
   return {
-    host: endpoint.host,
+    host: machine.label,
 
     async exec(command, execOptions = {}) {
       let result!: Promise<SandboxExecResult>;
