@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import type { Duplex } from "node:stream";
 import ssh2, { type ClientChannel, type ConnectConfig, type SFTPWrapper } from "ssh2";
 
 const { Client } = ssh2;
@@ -43,6 +44,7 @@ export interface SshEndpoint {
   privateKey?: string;
   connectTimeoutMs?: number;
   keepaliveIntervalMs?: number;
+  sock?: Duplex;
 }
 
 const DEFAULT_SSH_PORT = 22;
@@ -114,6 +116,7 @@ export function dialSsh(
             }
           : undefined,
         ...(endpoint.privateKey ? { privateKey: endpoint.privateKey } : {}),
+        ...(endpoint.sock ? { sock: endpoint.sock } : {}),
       } satisfies ConnectConfig);
   });
 }

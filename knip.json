@@ -40,6 +40,10 @@
     },
     "packages/*": {
       "project": ["src/**/*.{ts,tsx}"]
+    },
+    "packages/sandbox": {
+      "entry": ["src/microvm/bridge-main.ts"],
+      "project": ["src/**/*.{ts,tsx}"]
     }
   }
 }
