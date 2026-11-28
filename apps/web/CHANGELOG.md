@@ -1,5 +1,13 @@
 # @groot/web
 
+## 0.5.8
+
+### Patch Changes
+
+- Updated dependencies [[`58dc879`](https://github.com/AshikNesin/tiny-agents/commit/58dc879ce89908e77cb4914155a436ebfff1332e), [`4ec4594`](https://github.com/AshikNesin/tiny-agents/commit/4ec45946efc623a875374f553223d9afb1826c67)]:
+  - @tiny-agents/sandbox@0.3.0
+  - @tiny-agents/agent@1.3.1
+
 ## 0.5.7
 
 ### Patch Changes
