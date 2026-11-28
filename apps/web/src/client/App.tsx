@@ -29,13 +29,13 @@ import { VaultPage } from "./pages/vault/Vault";
 import { TerminalPage } from "./pages/terminal";
 import { ComputerPage } from "./pages/computer";
 import { BrowserPage } from "./pages/browser";
-import { CodeWorkspace, LegacyCodeSettings, OpenProjectChat, OpenReviewLink } from "./pages/code";
+import { CodeWorkspace, OpenProjectChat, OpenReviewLink } from "./pages/code";
 import { AppShell } from "./components/shell/AppShell";
 import { BrandMark } from "./components/shell/BrandMark";
 import { APP_NAV, guestNav } from "./components/shell/nav";
 import { isGuestPage } from "../shared/guest-access";
 import { useUiStore } from "./store/ui";
-import { useViewerRole } from "./store/people";
+import { useViewer, viewerRole } from "./queries/viewer";
 
 const SHELL_CONFIG: ShellConfig = {
   brand: { label: "tiny-agents", icon: BrandMark, to: "/chats" },
@@ -77,7 +77,7 @@ const SHELL_CONFIG: ShellConfig = {
 const TOASTER = { position: "top-center" } as const;
 
 function Root() {
-  const restricted = useViewerRole() !== "owner";
+  const restricted = viewerRole(useViewer()) !== "owner";
   const config = useMemo<ShellConfig>(
     () =>
       restricted
@@ -109,7 +109,7 @@ function Root() {
 }
 
 function GuestGate() {
-  const role = useViewerRole();
+  const role = viewerRole(useViewer());
   const { pathname } = useLocation();
   if (role === "owner" || isGuestPage(pathname)) return <Outlet />;
   if (role === "guest") return <Navigate to="/chats" replace />;
@@ -145,14 +145,14 @@ export const appRoutes: RouteObject[] = [
               { path: "/code/new", element: <CodeWorkspace /> },
               { path: "/code/t/:threadId", element: <CodeWorkspace /> },
               { path: "/code/p/:projectId", element: <OpenProjectChat /> },
-              { path: "/code/reviews", element: <Navigate to="/code" replace /> },
               { path: "/code/reviews/:reviewId", element: <CodeWorkspace /> },
               { path: "/code/review", element: <OpenReviewLink /> },
               { path: "/code/review/:owner/:repo/:number", element: <OpenReviewLink /> },
               { path: "/code/review/:owner/:repo/pull/:number/*", element: <OpenReviewLink /> },
-              { path: "/code/settings", element: <LegacyCodeSettings /> },
-              { path: "/code/settings/:section", element: <LegacyCodeSettings /> },
-              { path: "/code/settings/projects/:projectId", element: <LegacyCodeSettings /> },
+              {
+                path: "/code/settings/projects",
+                element: <Navigate to="/settings/projects" replace />,
+              },
               { path: "/routines", element: <Routines /> },
               { path: "/skills", element: <SkillsPage /> },
               { path: "/skills/:id", element: <SkillsPage /> },

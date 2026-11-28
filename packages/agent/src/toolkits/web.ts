@@ -8,6 +8,7 @@ import { defineToolkit, tool } from "../toolkit";
 import { VAULT_RULE, type VaultBroker } from "../vault";
 import { checkPublicUrl, isPrivateAddress } from "@tiny-agents/sandbox";
 import { safeMessage, vaultUseFromSink, vaultGatePlan } from "./vault";
+import { fail } from "./result";
 
 export interface WebToolkitOptions {
   apiKey?: string;
@@ -44,11 +45,6 @@ const SEARCH_TIMEOUT_MS = 30_000;
 const FETCH_TIMEOUT_MS = 150_000;
 
 type WebSource = { url: string; title: string };
-
-const fail = (text: string): ToolExecutionResult => ({
-  output: [{ type: "text", text }],
-  isError: true,
-});
 
 const defaultResolve = async (hostname: string) =>
   (await lookup(hostname, { all: true })).map((entry) => entry.address);
@@ -97,7 +93,16 @@ export function createWebToolkit(options: WebToolkitOptions): Capability {
       body: init.body,
       signal: AbortSignal.timeout(init.timeoutMs),
     });
-    const json = (await response.json().catch(() => undefined)) as unknown;
+    let json: unknown;
+    try {
+      json = await response.json();
+    } catch (error) {
+      if (!response.ok) throw new Error(describeFailure(response, undefined), { cause: error });
+      throw new Error(
+        `TinyFish ${response.status}: the response was not JSON (${describeError(error)})`,
+        { cause: error },
+      );
+    }
     if (!response.ok) throw new Error(describeFailure(response, json));
     if (!json || typeof json !== "object")
       throw new Error(`TinyFish ${response.status}: empty response`);
@@ -207,7 +212,14 @@ export function createWebToolkit(options: WebToolkitOptions): Capability {
   async function publicTarget(raw: string): Promise<{ url: URL; addresses: string[] }> {
     const url = checkPublicUrl(raw);
     const host = url.hostname.replace(/^\[|\]$/g, "");
-    const addresses = isIP(host) ? [host] : await resolveHost(host).catch(() => []);
+    let addresses: string[];
+    try {
+      addresses = isIP(host) ? [host] : await resolveHost(host);
+    } catch (error) {
+      throw new Error(`Could not resolve ${url.hostname}: ${describeError(error)}`, {
+        cause: error,
+      });
+    }
     if (addresses.length === 0) throw new Error(`Could not resolve ${url.hostname}.`);
     if (addresses.some(isPrivateAddress)) {
       throw new Error("Private and local addresses can't be requested.");
@@ -347,7 +359,7 @@ export function createWebToolkit(options: WebToolkitOptions): Capability {
       });
       const location = response.headers.get("location");
       if (response.status >= 300 && response.status < 400 && location) {
-        await response.body?.cancel().catch(() => undefined);
+        await response.body?.cancel().catch(doneWithStream("redirect body", url));
         if (hop >= MAX_REDIRECTS) throw httpError("Too many redirects.");
         try {
           ({ url, addresses } = await publicTarget(new URL(location, url).href));
@@ -421,7 +433,7 @@ export const pinnedFetch: PinnedFetch = async (url, addresses, init) => {
     });
     return response;
   } finally {
-    dispatcher.close().catch(() => undefined);
+    dispatcher.close().catch(doneWithStream("connection pool", url));
   }
 };
 
@@ -435,6 +447,14 @@ function describeError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+function doneWithStream(what: string, url?: URL) {
+  return (error: unknown): void => {
+    console.debug(
+      `http_request: releasing the ${what}${url ? ` for ${url.host}` : ""} failed after it was no longer needed: ${describeError(error)}`,
+    );
+  };
+}
+
 async function readCapped(response: HopResponse): Promise<string> {
   if (!response.body) return "";
   const reader = response.body.getReader();
@@ -446,7 +466,7 @@ async function readCapped(response: HopResponse): Promise<string> {
     chunks.push(value);
     size += value.byteLength;
     if (size >= MAX_HTTP_BYTES) {
-      await reader.cancel().catch(() => undefined);
+      await reader.cancel().catch(doneWithStream("capped response body"));
       break;
     }
   }

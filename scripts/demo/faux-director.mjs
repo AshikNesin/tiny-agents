@@ -47,9 +47,7 @@ function evaluate(wsUrl, expression) {
   return new Promise((resolve) => {
     const ws = new WebSocket(wsUrl);
     const done = (value) => {
-      try {
-        ws.close();
-      } catch {}
+      ws.close();
       resolve(value);
     };
     setTimeout(() => done(undefined), 4000);

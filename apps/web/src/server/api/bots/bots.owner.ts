@@ -1,5 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import type { AgentRuntime } from "@tiny-agents/agent";
+import { logger } from "@groot/core/logger";
 import { db, botMessages, bots, routineRuns, routines } from "../../db";
 
 export interface ConversationBot {
@@ -110,7 +111,13 @@ export async function ownerTurnOf(
   conversation: number,
   runtime: () => ChatReader,
 ): Promise<OwnerTurn> {
-  const owner = await conversationOwner(conversation).catch(() => undefined);
+  const owner = await conversationOwner(conversation).catch((error: unknown) => {
+    logger.warn(
+      { error, conversation },
+      "Could not look up a conversation's owner; treating it as disabled",
+    );
+    return undefined;
+  });
   if (!owner) return { status: "disabled" };
   const reader: ChatReader = { readChat: (ref) => runtime().readChat(ref) };
   if (await isUnattended(conversation, reader, owner)) return { status: "unattended", owner };

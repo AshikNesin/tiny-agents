@@ -1,43 +1,20 @@
 import { CalendarDays, Clock, Zap } from "lucide-react";
 import { Card } from "@groot/ui/card";
 import { Badge } from "@groot/ui/badge";
-import { StatusBadge } from "@groot/ui/status-badge";
 import { listRowClass } from "@groot/ui/list-row";
 import { cn } from "@groot/ui/lib/utils";
 import { Section } from "@groot/shell/components/layout/Section";
 import type { Routine, RoutineRun } from "../../../shared/api/routines";
+import { routineRunLabels } from "../../../shared/machines/routine-run";
+import { MachineStatusBadge } from "../../components/MachineStatusBadge";
+import { formatDuration, formatTokens } from "../../lib/format";
 import { markdownToPlainText } from "../../lib/plain-text";
 import { formatIst } from "../../../shared/routines-schedule";
 
-const RUN_STATUS_VARIANT: Record<RoutineRun["status"], string> = {
-  awaiting: "pending",
-  succeeded: "success",
-  blocked: "warning",
-  failed: "failed",
-  missed: "warning",
-  cancelled: "cancelled",
-};
-
-const RUN_STATUS_LABEL: Partial<Record<RoutineRun["status"], string>> = {
-  blocked: "needs attention",
-};
-
-function durationSeconds(run: RoutineRun): number | null {
+function durationMs(run: RoutineRun): number | null {
   if (!run.startedAt || !run.finishedAt) return null;
-  const seconds = Math.round(
-    (new Date(run.finishedAt).getTime() - new Date(run.startedAt).getTime()) / 1000,
-  );
-  return seconds >= 0 ? seconds : null;
-}
-
-function formatTokens(tokens: number): string {
-  if (tokens < 1000) return `${tokens} tokens`;
-  if (tokens < 1_000_000) return `${Math.round(tokens / 1000)}k tokens`;
-  return `${(tokens / 1_000_000).toFixed(1)}M tokens`;
-}
-
-function formatDuration(seconds: number): string {
-  return seconds < 60 ? `${seconds}s` : `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
+  const ms = new Date(run.finishedAt).getTime() - new Date(run.startedAt).getTime();
+  return ms >= 0 ? ms : null;
 }
 
 export function UpcomingRuns({ upcoming }: { upcoming: Routine[] }) {
@@ -71,10 +48,7 @@ export function RecentRuns({ runs }: { runs: RoutineRun[] }) {
           {runs.map((run) => (
             <li key={run.id} className={cn(listRowClass, "flex-col items-start")}>
               <div className="flex w-full items-center gap-3">
-                <StatusBadge
-                  status={RUN_STATUS_VARIANT[run.status]}
-                  label={RUN_STATUS_LABEL[run.status] ?? run.status}
-                />
+                <MachineStatusBadge status={run.status} labels={routineRunLabels} />
                 <span className="min-w-0 flex-1 truncate text-sm">
                   {run.routineName ?? "Routine"}
                 </span>
@@ -89,9 +63,9 @@ export function RecentRuns({ runs }: { runs: RoutineRun[] }) {
               </div>
               <p className="line-clamp-2 w-full text-xs text-muted-foreground">
                 {formatIst(run.scheduledFor)}
-                {durationSeconds(run) !== null &&
-                  ` · took ${formatDuration(durationSeconds(run)!)}`}
-                {run.tokens != null && run.tokens > 0 && ` · ${formatTokens(run.tokens)}`}
+                {durationMs(run) !== null &&
+                  ` · took ${formatDuration(durationMs(run)!, { precision: "seconds" })}`}
+                {run.tokens != null && run.tokens > 0 && ` · ${formatTokens(run.tokens)} tokens`}
                 {run.output && (
                   <>
                     {" · "}

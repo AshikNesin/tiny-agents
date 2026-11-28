@@ -425,7 +425,7 @@ describe("reviewing a Code thread's own PR", () => {
     const { threadId, head } = await threadPull();
     const review = await open();
     const { archiveCodeThread } =
-      await import("../../../../apps/web/src/server/api/code/code.pulls");
+      await import("../../../../apps/web/src/server/api/code/code.pulls.reconcile");
 
     await archiveCodeThread(threadId, true);
 
@@ -1060,6 +1060,22 @@ describe("changing the PR's code", () => {
       sha,
     );
     expect(await yours(key)).toEqual([]);
+  });
+
+  it("pushes nothing, rather than commit under a made-up name, when GitHub does not say who you are", async () => {
+    const { review } = await reviewWith([`printf 'one\\nTWO\\nthree\\n' > src/a.ts`]);
+    const branchHead = () =>
+      sh(local, `git -C ${bare} rev-parse --verify --quiet refs/heads/retry-webhooks || echo none`);
+    const before = await branchHead();
+    github.viewer = async () => {
+      throw new Error("GitHub is down");
+    };
+
+    const res = await call("POST", `/reviews/${review.id}/push`, { message: "Shout" });
+
+    expect(res.status).toBe(502);
+    expect(res.body.error?.message).toContain("GitHub is down");
+    expect(await branchHead()).toBe(before);
   });
 
   it("refuses to push to a fork that does not allow edits from maintainers", async () => {

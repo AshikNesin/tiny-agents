@@ -1,3 +1,6 @@
+import { parseEach, parseJson } from "@tiny-agents/std";
+import { logger } from "@groot/core/logger";
+import { z } from "zod";
 import type { McpToolInfo } from "@tiny-agents/agent";
 import type { ModelCatalog } from "@tiny-agents/models";
 
@@ -47,30 +50,57 @@ export interface ConnectionToolColumns {
   disabledTools: string;
 }
 
-export function parseTools(raw: string): McpToolInfo[] {
+const jsonSchemaSchema = z.record(z.string(), z.unknown());
+
+const cachedToolSchema = z.object({
+  name: z.string(),
+  title: z.string().optional(),
+  description: z.string().optional(),
+  inputSchema: jsonSchemaSchema.optional(),
+  outputSchema: jsonSchemaSchema.optional(),
+  readOnly: z.boolean().optional(),
+  idempotent: z.boolean().optional(),
+  destructive: z.boolean().optional(),
+  openWorld: z.boolean().optional(),
+});
+
+export type CachedTool = z.infer<typeof cachedToolSchema>;
+
+export function parseTools(raw: string): CachedTool[] {
   try {
-    const tools = JSON.parse(raw) as unknown;
-    return Array.isArray(tools)
-      ? (tools.filter((tool) => typeof tool === "object" && tool !== null) as McpToolInfo[])
-      : [];
+    return parseEach(
+      parseJson("A connection's cached tools", raw, z.array(z.unknown())),
+      cachedToolSchema,
+      (_value, problem) =>
+        logger.warn({ problem }, "Skipped a cached connection tool that does not fit its shape"),
+    );
   } catch {
     return [];
   }
 }
 
+export function installableTool(tool: CachedTool): McpToolInfo {
+  return { ...tool, inputSchema: tool.inputSchema ?? {} };
+}
+
 export function parseDisabledTools(raw: string): Set<string> {
   try {
-    const names = JSON.parse(raw) as unknown;
-    return new Set(Array.isArray(names) ? names.filter((n) => typeof n === "string") : []);
+    const names = parseJson("A connection's disabled tools", raw, z.array(z.unknown()));
+    return new Set(names.filter((n) => typeof n === "string"));
   } catch {
     return new Set();
   }
 }
 
+export function connectionTools(connection: ConnectionToolColumns): CachedTool[];
+export function connectionTools<T extends { name: string }>(
+  connection: ConnectionToolColumns,
+  tools: T[],
+): T[];
 export function connectionTools(
   connection: ConnectionToolColumns,
-  tools: McpToolInfo[] = parseTools(connection.toolsCache),
-): McpToolInfo[] {
+  tools: Array<{ name: string }> = parseTools(connection.toolsCache),
+): Array<{ name: string }> {
   const disabled = parseDisabledTools(connection.disabledTools);
   return tools.filter((tool) => !disabled.has(tool.name));
 }

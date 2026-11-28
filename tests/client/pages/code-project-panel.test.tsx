@@ -7,7 +7,17 @@ import { NO_CAPABILITIES } from "@tiny-agents/code/contracts";
 import { ProjectChat } from "@/pages/code/ProjectChat";
 import { useCodeStore } from "@/store/code";
 import { useUiStore } from "@/store/ui";
-import type { HarnessInfo, ThreadSnapshot, ThreadSummary } from "@/lib/code/api";
+import type { HarnessInfo, ModelOption, ThreadSnapshot, ThreadSummary } from "@/lib/code/api";
+import type { Bot, BotListEntry, CapabilityList } from "../../../apps/web/src/shared/api/bots";
+import type { ComputerStatus } from "../../../apps/web/src/shared/api/live";
+import type {
+  InboxPullView,
+  ProjectView,
+  PullReviewView,
+  ReviewInboxSettings,
+} from "../../../apps/web/src/shared/api/code";
+import type { MemoryList } from "../../../apps/web/src/shared/api/memories";
+import { fakeApi } from "../fakes/api";
 import { AppQueryProvider } from "../query-provider";
 import { streamAt } from "../fakes/sse";
 
@@ -25,52 +35,7 @@ vi.mock("sonner", () => ({
 }));
 vi.mock("@/lib/sse", async () => (await import("../fakes/sse")).sseModule);
 
-const posts = vi.hoisted(() => [] as Array<{ path: string; body: unknown }>);
-const deletes = vi.hoisted(() => [] as string[]);
-const asked = vi.hoisted(() => [] as unknown[]);
-const openReviews = vi.hoisted(() => [] as unknown[]);
-const inboxLimit = vi.hoisted(() => ({ value: 10 }));
-vi.mock("@groot/shell/lib/api", async (importOriginal) => {
-  const original = await importOriginal<typeof import("@groot/shell/lib/api")>();
-  return {
-    ...original,
-    apiClient: Object.assign(Object.create(original.apiClient) as typeof original.apiClient, {
-      get: async (path: string) =>
-        path === "/code/projects"
-          ? [project]
-          : path === "/bots/lead/memories"
-            ? { memories: [] }
-            : path === "/code/reviews/inbox"
-              ? asked
-              : path === "/code/reviews"
-                ? openReviews
-                : path === "/code/reviews/settings"
-                  ? {
-                      repos: "all",
-                      direct: true,
-                      drafts: false,
-                      bots: false,
-                      mute: [],
-                      limit: inboxLimit.value,
-                    }
-                  : [],
-      delete: async (path: string) => {
-        deletes.push(path);
-        return { deleted: true };
-      },
-      post: async (path: string, body: unknown) => {
-        posts.push({ path, body });
-        if (path === "/code/reviews") return { id: "rv9" };
-        if (path === "/code/projects/p1/chat") return projectBot;
-        if (path.endsWith("/suggest")) {
-          const typed = (body as { typed?: string }).typed;
-          return { suggestion: typed ? `${typed} the tests first` : "Get it merged to main" };
-        }
-        return path === "/code/threads" ? { threadId: "new1" } : { status: "accepted" };
-      },
-    }),
-  };
-});
+let api: ReturnType<typeof fakeApi>;
 
 const agent: HarnessInfo = {
   id: "demo",
@@ -159,21 +124,37 @@ const reviewed = thread("ccc", {
   status: { group: "review", reason: null },
 });
 const done = thread("dddd", { status: { group: "done", reason: null } });
-const project = {
+const project: ProjectView = {
   id: "p1",
   name: "web",
   repo: { owner: "acme", name: "web" },
-  transport: "gh" as const,
+  transport: "gh",
   baseBranch: "main",
   checkoutPath: "/code/acme--web/checkout",
   defaultInstanceId: "demo",
   defaultModel: null,
-  settings: { instructions: "Merge finished work to main once CI is green." },
+  settings: {
+    scripts: {},
+    archiveOnMerge: true,
+    draftPulls: true,
+    branchPrefix: "ta/",
+    protectedPaths: [],
+    workflowInstructions: "",
+    instructions: "Merge finished work to main once CI is green.",
+    autofix: {
+      triggers: { checks: true, reviews: true, conflicts: true },
+      trustedBots: [],
+      hourlyLimit: 6,
+      noOwnerLimit: 10,
+      passMinutes: 20,
+      onByDefault: false,
+    },
+  },
   chatBotId: "lead",
   createdAt: "2026-11-05T00:00:00Z",
 };
 
-const projectBot = vi.hoisted(() => ({
+const projectBot: Bot = {
   id: "lead",
   conversationId: "c-lead",
   name: "web",
@@ -198,7 +179,30 @@ const projectBot = vi.hoisted(() => ({
   connectionCapabilities: [],
   createdAt: "2026-11-05T00:00:00Z",
   updatedAt: "2026-11-05T00:00:00Z",
-}));
+};
+
+const computer: ComputerStatus = {
+  configured: false,
+  setupHint: null,
+  active: false,
+  profile: "shared",
+  driver: null,
+  width: null,
+  height: null,
+  takeover: null,
+  starting: false,
+  phase: null,
+  error: null,
+};
+
+const inbox: ReviewInboxSettings = {
+  repos: "all",
+  direct: true,
+  drafts: false,
+  bots: false,
+  mute: [],
+  limit: 10,
+};
 
 const elsewhere = thread("other", {
   projectId: "p2",
@@ -214,11 +218,18 @@ const phone = (matches: boolean) =>
 const panel = () => screen.getByRole("complementary", { name: "Project panel" });
 
 beforeEach(() => {
-  posts.length = 0;
-  deletes.length = 0;
-  asked.length = 0;
-  openReviews.length = 0;
-  inboxLimit.value = 10;
+  api = fakeApi();
+  api.get("/code/projects", () => [project]);
+  api.get("/bots", (): BotListEntry[] => []);
+  api.get("/bots/:id/memories", (): MemoryList => ({ memories: [] }));
+  api.get("/bots/:id/computer", () => computer);
+  api.get("/capabilities", (): CapabilityList => ({ capabilities: [] }));
+  api.get("/code/harnesses/:instanceId/models", (): ModelOption[] => []);
+  api.get("/code/reviews/inbox", (): InboxPullView[] => []);
+  api.get("/code/reviews", (): PullReviewView[] => []);
+  api.get("/code/reviews/settings", () => inbox);
+  api.post("/code/projects/p1/chat", () => projectBot);
+  api.post("/code/threads/:id/messages", () => ({ status: "accepted" }));
   phone(false);
   useUiStore.setState({ codeSidebarOpen: true, codePane: null, lastCodePane: "changes" });
   useCodeStore.setState({
@@ -310,9 +321,9 @@ describe("the project chat's side panel", () => {
     fireEvent.change(steer, { target: { value: "Rebase on main" } });
     fireEvent.keyDown(steer, { key: "Enter" });
     await waitFor(() =>
-      expect(posts.find((p) => p.path === "/code/threads/demo%3Accc/messages")?.body).toMatchObject(
-        { message: "Rebase on main" },
-      ),
+      expect(api.sent("POST", "/code/threads/demo%3Accc/messages")[0]?.body).toMatchObject({
+        message: "Rebase on main",
+      }),
     );
     expect(screen.getByPlaceholderText("Message web")).toBeInTheDocument();
     fireEvent.click(within(panel()).getByRole("button", { name: "Back to threads" }));

@@ -190,7 +190,8 @@ Enter-to-send is for physical keyboards (issue #1).
 
 ## The guest shell is cosmetic
 
-`store/people.ts` treats an unknown viewer as the owner, and `App.tsx` hides
+`apps/web/src/client/queries/viewer.ts` says whether the viewer is loading,
+unknown, the owner or a guest, and `App.tsx` hides
 the pages a guest cannot open only so the shell does not fill with errors.
 The server guards every route on its own (#145), so the client's guest
 checks are never a security boundary.

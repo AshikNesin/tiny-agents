@@ -14,7 +14,7 @@ import { cn } from "@groot/ui/lib/utils";
 import { Spinner } from "../../components/ui/spinner";
 import { relativeTime } from "../../lib/bot-groups";
 import { copyText } from "../../lib/clipboard";
-import { formatDuration } from "../../lib/code/format";
+import { formatDuration } from "../../lib/format";
 import { projectsApi } from "../../lib/code/projects";
 import { useRefreshOn, useResource } from "../../queries/resource";
 import type { CheckLogView, CheckStepView, PullView } from "../../../shared/api/code";
@@ -280,7 +280,10 @@ function LogExcerpt({
     "Could not read the log.",
     { structuralSharing: false },
   );
-  const { data: log, loadError: error, refresh } = read;
+  const log =
+    read.status === "ready" ? read.data : read.status === "failed" ? (read.last ?? null) : null;
+  const error = read.status === "failed" ? read.loadError : null;
+  const refresh = read.refresh;
 
   useRefreshOn(check.state, refresh);
   useEffect(() => {

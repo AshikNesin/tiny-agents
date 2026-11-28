@@ -30,17 +30,13 @@ import {
   type SecretFillField,
 } from "@tiny-agents/sandbox/browser";
 import { safeMessage, vaultUseFromSink, vaultGatePlan } from "./vault";
+import { fail } from "./result";
 
 export interface BrowserVaultOptions {
   vault?: VaultBroker;
   ownerWaits?: WaitTracker;
   allowedPrivateHosts?: string;
 }
-
-const fail = (text: string): ToolExecutionResult => ({
-  output: [{ type: "text", text }],
-  isError: true,
-});
 
 async function currentOrigin(session: BrowserSession): Promise<string> {
   if (!session.origin || !session.fillSecret) {
@@ -192,6 +188,9 @@ function normalizeCredentialRequest(
   };
 }
 
+const reasonOf = (error: unknown): string =>
+  error instanceof Error ? error.message : String(error);
+
 async function frameOriginOf(
   session: BrowserSession,
   request: CredentialRequest,
@@ -201,7 +200,15 @@ async function frameOriginOf(
   const frames = new Set<string>();
   for (const field of request.fields) {
     if (!field.ref) continue;
-    const origin = await session.refOrigin(field.ref).catch(() => request.origin);
+    let origin: string;
+    try {
+      origin = await session.refOrigin(field.ref);
+    } catch (error) {
+      throw new Error(
+        `Could not check which site field "${field.key}" (${field.ref}) sits on: ${reasonOf(error)} Take a new snapshot and use a current ref.`,
+        { cause: error },
+      );
+    }
     if (origin !== request.origin) frames.add(origin);
   }
   if (frames.size > 1) {
@@ -276,11 +283,15 @@ export function createBrowserVaultTools(
         );
       }
       const tab = await peek(conversation);
-      const normalized = normalizeCredentialRequest(
-        args,
-        tab ? await currentOrigin(tab.session).catch(() => "null") : "null",
-        options.allowedPrivateHosts,
-      );
+      let pageOrigin = "null";
+      if (tab) {
+        try {
+          pageOrigin = await currentOrigin(tab.session);
+        } catch (error) {
+          return fail(`Could not read which site the browser is on: ${reasonOf(error)}`);
+        }
+      }
+      const normalized = normalizeCredentialRequest(args, pageOrigin, options.allowedPrivateHosts);
       if (typeof normalized === "string") return fail(normalized);
       let frameOrigin: string | undefined;
       try {
@@ -301,12 +312,22 @@ export function createBrowserVaultTools(
           "Too many credential requests this hour. Ask the owner to take over the browser.",
         );
       }
+      let saved: { savedHandle?: string } = {};
+      if (broker) {
+        try {
+          saved = await broker.requested({
+            conversation,
+            taskId,
+            origin: normalized.origin,
+            title: normalized.title,
+          });
+        } catch (error) {
+          return fail(
+            `Could not check the vault for a saved login, so nothing was asked: ${reasonOf(error)}`,
+          );
+        }
+      }
       recentRequests.set(conversation, [...recent, Date.now()]);
-      const saved = broker
-        ? await broker
-            .requested({ conversation, taskId, origin: normalized.origin, title: normalized.title })
-            .catch(() => ({ savedHandle: undefined }))
-        : { savedHandle: undefined };
       request = {
         ...normalized,
         ...(frameOrigin ? { frameOrigin } : {}),

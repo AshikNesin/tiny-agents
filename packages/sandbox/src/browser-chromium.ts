@@ -1,11 +1,12 @@
 import { execFile } from "node:child_process";
-import { statSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { promisify } from "node:util";
 import { chromium } from "playwright-core";
 import type { BrowserContext, Locator, Page, Response } from "playwright-core";
 import { fillSecretFields, pageOrigin, refOrigin } from "./browser-fill";
 import { assertRefShape, isBlockedPrivateUrl, parseExemptHosts } from "./browser-guard";
 import { compactSnapshot, tidyText } from "./browser-snapshot";
+import { alreadyClosed, metInTime, survived, waitTimedOut } from "./failures";
 import { PROXY_BYPASS_FLAG, REFUSED_HEADER, startEgressProxy } from "./egress-proxy";
 import type { BrowserSession, BrowserVnc, OpenBrowserOptions } from "./browser-sessions";
 import { navigationGuard, type NavigationGuard, type ResolveHost } from "./navigation-guard";
@@ -43,16 +44,16 @@ async function throughChallenges(page: Page, response: Response | null): Promise
     const main = page.mainFrame();
     const committed = page
       .waitForEvent("framenavigated", { predicate: (f) => f === main, timeout })
-      .catch(() => undefined);
+      .catch(waitTimedOut);
     const next = await page
       .waitForResponse(
         (r) => r.request().isNavigationRequest() && r.frame() === main && !isRedirect(r.status()),
         { timeout },
       )
-      .catch(() => null);
+      .catch(waitTimedOut);
     if (!next) break;
     await committed;
-    await page.waitForLoadState("domcontentloaded", { timeout: SETTLE_MS }).catch(() => undefined);
+    await page.waitForLoadState("domcontentloaded", { timeout: SETTLE_MS }).catch(waitTimedOut);
     current = next;
   }
   return current;
@@ -101,10 +102,7 @@ async function readUserAgent(executable: string): Promise<string> {
 function resolveExecutable(explicit?: string): string | undefined {
   if (explicit) return explicit;
   for (const candidate of [VM_HEADLESS_SHELL, DEBIAN_CHROMIUM]) {
-    try {
-      statSync(candidate);
-      return candidate;
-    } catch {}
+    if (existsSync(candidate)) return candidate;
   }
   return undefined;
 }
@@ -147,7 +145,7 @@ export function createChromiumTransport(options: ChromiumTransportOptions = {}) 
       guard: await navigationGuard(browser, resolveHost),
       onDisconnect: (listener) => context.once("close", listener),
       close: async () => {
-        await context.close().catch(() => {});
+        await context.close().catch(alreadyClosed("closing the browser context"));
         await proxy.close();
       },
     });
@@ -176,7 +174,7 @@ export function pageSession(
     mine.push(target);
     claimed.add(target);
     follow(target);
-    void watch(target)?.catch(() => undefined);
+    void watch(target)?.catch(survived("guarding a held tab (its next action retries)"));
   };
   const letGo = (target: Page) => {
     const at = mine.indexOf(target);
@@ -212,7 +210,9 @@ export function pageSession(
         .pages()
         .filter((p) => !claimed.has(p));
       const next = mine[mine.length - 1] ?? remaining[remaining.length - 1];
-      void (next ? switchTo(next) : target.context().newPage().then(switchTo)).catch(() => {});
+      void (next ? switchTo(next) : target.context().newPage().then(switchTo)).catch(
+        alreadyClosed("replacing the closed tab"),
+      );
     });
   }
   hold(page);
@@ -232,7 +232,12 @@ export function pageSession(
       return pageSession(
         tab,
         open,
-        { close: (current) => current.close().catch(() => {}), ...(guard ? { guard } : {}) },
+        {
+          close: async (current) => {
+            await current.close().catch(alreadyClosed("closing a tab"));
+          },
+          ...(guard ? { guard } : {}),
+        },
         claimed,
       );
     },
@@ -297,13 +302,13 @@ export function pageSession(
       guarded(async (current) => {
         const popup = current
           .waitForEvent("popup", { timeout: NAVIGATION_START_MS })
-          .catch(() => null);
+          .catch(waitTimedOut);
         await settleAfter(current, () => clickRef(current, ref));
         const opened = await popup;
         if (!opened) return { url: current.url() };
         await opened
           .waitForLoadState("domcontentloaded", { timeout: SETTLE_MS })
-          .catch(() => undefined);
+          .catch(waitTimedOut);
         await settle(opened);
         await switchTo(opened);
         return { url: opened.url(), newTab: true };
@@ -317,7 +322,7 @@ export function pageSession(
       ),
     switchTab: async (index) => {
       await switchTo(tabAt(index));
-      await page.bringToFront().catch(() => undefined);
+      await page.bringToFront().catch(survived("bringing the tab to the front"));
       await watch(page);
       return { url: page.url(), title: await titleOf(page) };
     },
@@ -326,7 +331,7 @@ export function pageSession(
       if (mine.length === 1) throw new Error("This is your only tab; it can't be closed.");
       if (target === page) {
         await switchTo(mine[index === mine.length - 1 ? index - 1 : index + 1]!);
-        await page.bringToFront().catch(() => undefined);
+        await page.bringToFront().catch(survived("bringing the tab to the front"));
       }
       letGo(target);
       await target.close();
@@ -351,13 +356,13 @@ export function pageSession(
       } finally {
         await current
           .evaluate((id) => document.getElementById(id)?.remove(), labels.id)
-          .catch(() => undefined);
+          .catch(survived("removing the ref labels from the page"));
       }
     },
     release: () => {
       for (const tab of mine.filter((t) => t !== page)) {
         letGo(tab);
-        void tab.close().catch(() => {});
+        void tab.close().catch(alreadyClosed("closing a released tab"));
       }
       guard?.unwatch(page);
     },
@@ -365,7 +370,7 @@ export function pageSession(
       closing = true;
       const others = mine.filter((tab) => tab !== page);
       for (const tab of [...mine]) letGo(tab);
-      await Promise.all(others.map((tab) => tab.close().catch(() => {})));
+      await Promise.all(others.map((tab) => tab.close().catch(alreadyClosed("closing a tab"))));
       await teardown.close(page);
     },
   };
@@ -382,10 +387,7 @@ async function drawRefLabels(page: Page): Promise<{ id: string; count: number }>
   for (let at = 0; at < refs.length && inView.length < MAX_LABELS; at += MAX_LABELS) {
     const boxes = await Promise.all(
       refs.slice(at, at + MAX_LABELS).map(async (ref) => {
-        const box = await page
-          .getByRef(ref)
-          .boundingBox({ timeout: 1_000 })
-          .catch(() => null);
+        const box = await page.getByRef(ref).boundingBox({ timeout: 1_000 }).catch(waitTimedOut);
         return box && { ref, x: box.x, y: box.y, width: box.width, height: box.height };
       }),
     );
@@ -425,14 +427,17 @@ async function drawRefLabels(page: Page): Promise<{ id: string; count: number }>
 }
 
 async function leaveForBlank(page: Page): Promise<void> {
+  let last: unknown;
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       await page.goto("about:blank");
       return;
-    } catch {
-      await page.waitForLoadState("load", { timeout: 5_000 }).catch(() => undefined);
+    } catch (error) {
+      last = error;
+      await page.waitForLoadState("load", { timeout: 5_000 }).catch(waitTimedOut);
     }
   }
+  survived("leaving the refused page for about:blank")(last);
 }
 
 function visiblePage(pages: Page[]): Promise<Page | undefined> {
@@ -449,7 +454,10 @@ function visiblePage(pages: Page[]): Promise<Page | undefined> {
     for (const p of pages) {
       p.evaluate("document.visibilityState", undefined).then(
         (state) => settle(state === "visible" ? p : undefined),
-        () => settle(),
+        (error: unknown) => {
+          alreadyClosed("reading a tab's visibility")(error);
+          settle();
+        },
       );
     }
   });
@@ -471,13 +479,12 @@ async function settleAfter<T>(page: Page, action: () => Promise<T>): Promise<T> 
   const navigation = Promise.any([
     page.waitForRequest((r) => r.isNavigationRequest() && r.frame() === main, window),
     page.waitForEvent("framenavigated", { predicate: (f) => f === main, ...window }),
-  ]).then(
-    () => true,
-    () => false,
-  );
+  ])
+    .then(() => true)
+    .catch(waitTimedOut);
   const result = await action();
   if (await navigation) {
-    await page.waitForLoadState("domcontentloaded", { timeout: SETTLE_MS }).catch(() => undefined);
+    await page.waitForLoadState("domcontentloaded", { timeout: SETTLE_MS }).catch(waitTimedOut);
     await settle(page);
   }
   return result;
@@ -492,30 +499,26 @@ async function waitForText(
     return true;
   }
   const state = wait.gone ? "hidden" : "visible";
-  return page
-    .getByText(wait.text)
-    .first()
-    .waitFor({ state, timeout: wait.timeoutMs })
-    .then(
-      () => true,
-      () => false,
-    );
+  return metInTime(page.getByText(wait.text).first().waitFor({ state, timeout: wait.timeoutMs }));
 }
 
 async function settle(page: Page): Promise<void> {
-  await page.waitForLoadState("load", { timeout: SETTLE_MS }).catch(() => undefined);
+  await page.waitForLoadState("load", { timeout: SETTLE_MS }).catch(waitTimedOut);
 }
 
 const TITLE_MS = 1_000;
 
 async function titleOf(page: Page): Promise<string | undefined> {
   let timer: ReturnType<typeof setTimeout> | undefined;
-  const late = new Promise<string>((resolve) => {
-    timer = setTimeout(() => resolve(""), TITLE_MS);
+  const late = new Promise<undefined>((resolve) => {
+    timer = setTimeout(() => resolve(undefined), TITLE_MS);
   });
-  const title = await Promise.race([page.title().catch(() => ""), late]);
+  const title = await Promise.race([
+    page.title().catch(alreadyClosed("reading the tab's title")),
+    late,
+  ]);
   clearTimeout(timer);
-  return title.trim() || undefined;
+  return title?.trim() || undefined;
 }
 
 async function clickRef(page: Page, ref: string) {

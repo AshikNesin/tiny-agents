@@ -203,11 +203,13 @@ Call them directly; the database is real, so there is nothing to mock
 
 Render it the way `main.tsx` mounts the app: a client from
 `createShellQueryClient({ queries: { retry: false } })` in a
-`ShellQueryProvider`, and `GrootUIProvider` for confirmations and toasts. Stub
-`fetch` with `vi.stubGlobal` rather than mocking `apiClient`, so the envelope,
-`ApiError` and the error wording are the real ones, and assert on the toast
-text a person reads (`tests/client/components/shell/AppSettings.test.tsx`,
-`tests/client/lib/query-client.test.tsx`).
+`ShellQueryProvider`, and `GrootUIProvider` for confirmations and toasts. Fake the
+network with `fakeApi()` from `tests/client/fakes/api.ts` rather than mocking
+`apiClient` or a `*-api` module (lint R21), so the envelope, `ApiError` and the
+error wording are the real ones. Declare each route the test needs
+(`api.get("/tasks", () => tasks)`), throw `ApiFailure` from a
+reply to fail it, and assert on the text a person reads or on the request that
+left the browser (`api.sent("POST", "/tasks")`).
 
 ### Dates and time
 

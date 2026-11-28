@@ -21,7 +21,7 @@ import { useCommandPaletteStore } from "@groot/shell/store/command-palette";
 import { chatBots, useBotsStore } from "../../store/bots";
 import { useUiStore } from "../../store/ui";
 import { PRIMARY_NAV, SECONDARY_NAV, guestNav } from "./nav";
-import { useViewerRole } from "../../store/people";
+import { useViewer, viewerRole } from "../../queries/viewer";
 import { BotRail, BotsSection } from "./BotsSection";
 import { BrandMark } from "./BrandMark";
 import { ProjectsSection } from "./ProjectsSection";
@@ -83,7 +83,7 @@ export function AppSidebar() {
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const allBots = useBotsStore((s) => s.bots);
-  const owner = useViewerRole() === "owner";
+  const owner = viewerRole(useViewer()) === "owner";
   const bots = useMemo(() => chatBots(allBots, owner), [allBots, owner]);
   const collapsed = useUiStore((s) => s.collapsed);
   const mobileOpen = useUiStore((s) => s.mobileOpen);
@@ -91,7 +91,7 @@ export function AppSidebar() {
   const toggleCommandPalette = useCommandPaletteStore((s) => s.toggle);
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
-  const restricted = useViewerRole() !== "owner";
+  const restricted = !owner;
   const primaryNav = restricted ? guestNav(PRIMARY_NAV) : PRIMARY_NAV;
   const topNav = primaryNav.filter((item) => item.to === "/tasks");
   const toolNav = primaryNav.filter((item) => item.to !== "/tasks");

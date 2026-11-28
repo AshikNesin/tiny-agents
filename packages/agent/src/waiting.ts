@@ -72,6 +72,24 @@ export interface WaitTransition extends WaitInfo {
   task: number;
 }
 
+export function notifyEach<A extends unknown[]>(
+  listeners: Iterable<(...args: A) => void>,
+  onThrow: (error: unknown) => void,
+  ...args: A
+): void {
+  for (const listener of listeners) {
+    try {
+      listener(...args);
+    } catch (error) {
+      onThrow(error);
+    }
+  }
+}
+
+function warnWaitListenerThrew(error: unknown): void {
+  console.warn("A wait listener threw; the other listeners still ran:", error);
+}
+
 export class WaitTracker {
   constructor(readonly channel: WaitChannel = "approval") {}
 
@@ -118,16 +136,8 @@ export class WaitTracker {
 
   #emit(conversation: number, transition: WaitTransition): void {
     const count = this.count(conversation);
-    for (const listener of this.#listeners) {
-      try {
-        listener(conversation, count);
-      } catch {}
-    }
-    for (const listener of this.#transitionListeners) {
-      try {
-        listener(transition);
-      } catch {}
-    }
+    notifyEach(this.#listeners, warnWaitListenerThrew, conversation, count);
+    notifyEach(this.#transitionListeners, warnWaitListenerThrew, transition);
   }
 }
 
@@ -178,7 +188,12 @@ export async function restoreParkedWaits(
     let info: WaitInfo = {};
     try {
       info = parseStored("tiny.wait.info", wait.info ?? {}, waitInfo);
-    } catch {}
+    } catch (error) {
+      console.warn(
+        `Parked wait ${record.id} in conversation ${record.conversationId} is restored without its card details, which do not fit their shape:`,
+        error,
+      );
+    }
     tracker.add(Number(record.conversationId), Number(record.id), info);
   }
 }

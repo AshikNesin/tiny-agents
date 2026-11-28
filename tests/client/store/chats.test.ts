@@ -1,8 +1,6 @@
 import { describe, expect, it, vi } from "vite-plus/test";
 import { ApiError } from "@groot/shell/lib/api";
 
-vi.mock("../../../apps/web/src/client/lib/bots-api", () => ({ botsApi: {} }));
-
 import {
   createChatSessions,
   type ChatPorts,

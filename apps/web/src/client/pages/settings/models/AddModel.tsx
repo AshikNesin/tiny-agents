@@ -3,7 +3,8 @@ import { Plus } from "lucide-react";
 import type { DiscoveredModel } from "../../../../shared/api/models";
 import { useModelDiscovery } from "../../../queries/models";
 import { SearchSelect, type SearchSelectOption } from "@groot/ui/search-select";
-import { formatTokens } from "./model-labels";
+import { errorMessage } from "../../../lib/errors";
+import { formatTokens } from "../../../lib/format";
 
 export function AddModel({
   accountId,
@@ -15,7 +16,7 @@ export function AddModel({
   onAdd: (model: { upstreamId: string; name?: string }) => Promise<boolean>;
 }) {
   const [listed, setListed] = useState<DiscoveredModel[] | null>(null);
-  const [failed, setFailed] = useState(false);
+  const [failed, setFailed] = useState<string | null>(null);
   const listAvailable = useModelDiscovery().available.mutateAsync;
   useEffect(() => {
     let cancelled = false;
@@ -23,8 +24,8 @@ export function AddModel({
       .then(({ models }) => {
         if (!cancelled) setListed(models);
       })
-      .catch(() => {
-        if (!cancelled) setFailed(true);
+      .catch((error: unknown) => {
+        if (!cancelled) setFailed(errorMessage(error, "Couldn't list the models."));
       });
     return () => {
       cancelled = true;
@@ -49,7 +50,7 @@ export function AddModel({
     if (added) setListed((list) => list?.filter((m) => m.upstreamId !== upstreamId) ?? null);
   };
   const emptyText = failed
-    ? "Couldn't list the models. Type a model id to add it."
+    ? `${failed} Type a model id to add it.`
     : listed === null
       ? "Loading models…"
       : "No listed model matches. Type its id to add it.";

@@ -1,12 +1,8 @@
 import { and, asc, desc, eq, isNull } from "drizzle-orm";
-import { z } from "zod";
 import { Boom } from "@groot/core/errors";
-import { createNamespaceKv } from "@groot/core/kv";
 import { logger } from "@groot/core/logger";
 import {
-  parseRepo,
   repoSlug,
-  type InboxFilter,
   type PullSnapshot,
   type RepoRef,
   type ReviewCommentInput,
@@ -29,9 +25,6 @@ import {
   TmuxMissingError,
 } from "@tiny-agents/sandbox/terminal";
 import type {
-  InboxPullView,
-  ReviewInboxSettings,
-  InboxQuery,
   PullReviewView,
   PullThreadsView,
   PushedReview,
@@ -44,7 +37,7 @@ import { getTerminalService } from "../terminal/terminal.instance";
 import { reviewCard } from "../../../shared/code-messages";
 import { codeGitHub } from "./code.github";
 import { codeHub } from "./code.hub";
-import { archiveCodeThread } from "./code.pulls";
+import { archiveCodeThread } from "./code.pulls.reconcile";
 import { app } from "../../app-root";
 import { applyTitle } from "./code.naming";
 import { projectModel, repoOf } from "./code.projects";
@@ -71,6 +64,12 @@ function parsePullRef(input: string): { repo: RepoRef; number: number } | undefi
 
 export const reviewPath = (project: CodeProjectRow, number: number) =>
   `${project.checkoutPath.replace(/\/checkout$/, "")}/reviews/pr-${number}`;
+
+function viewerUnknown(error: unknown): never {
+  throw Boom.badGateway(
+    `GitHub did not say who you are: ${error instanceof Error ? error.message : String(error)}`,
+  );
+}
 
 function lastReviewed(pr: PullSnapshot, login: string): string | null {
   const mine = pr.reviews
@@ -108,7 +107,10 @@ async function threadWorktreeAt(
   const thread = await db.query.codeThreads.findFirst({ where: eq(codeThreads.id, threadId) });
   if (!thread?.worktree || thread.branch !== pr.headRef) return undefined;
   if (!(await ws.exists(thread.worktree))) return undefined;
-  const at = await ws.headSha(thread.worktree).catch(() => undefined);
+  const at = await ws.headSha(thread.worktree).catch((error: unknown) => {
+    logger.warn({ error, threadId }, "Code: could not read the coding thread's head for a review");
+    return undefined;
+  });
   return at === head ? thread.worktree : undefined;
 }
 
@@ -201,7 +203,7 @@ async function checkOutPull(
     );
   }
   const [viewer, ws] = await Promise.all([
-    github.viewer().catch(() => undefined),
+    github.viewer().catch(viewerUnknown),
     services.workspace(project),
   ]);
   const own = reviewPath(project, pr.number);
@@ -231,8 +233,8 @@ async function checkOutPull(
     baseRef: pr.baseRef,
     headSha,
     fromFork: pr.fromFork,
-    mine: !!viewer && !!pr.author && viewer.login.toLowerCase() === pr.author.toLowerCase(),
-    ...(viewer ? { reviewedSha: lastReviewed(pr, viewer.login) } : {}),
+    mine: !!pr.author && viewer.login.toLowerCase() === pr.author.toLowerCase(),
+    reviewedSha: lastReviewed(pr, viewer.login),
     worktree: path,
     archivedAt: null,
     updatedAt: new Date(),
@@ -492,113 +494,6 @@ export async function resolveReviewThread(id: string, threadId: string) {
   await github.resolveThread(threadId);
 }
 
-const inboxFields = {
-  repos: z.enum(["all", "projects"]),
-  direct: z.boolean(),
-  drafts: z.boolean(),
-  bots: z.boolean(),
-  mute: z
-    .array(z.string().max(200))
-    .max(100)
-    .transform((words) => [...new Set(words.map((w) => w.trim()).filter(Boolean))]),
-  limit: z.number().int().min(1).max(100),
-};
-
-export const inboxSettingsChange = z.object(inboxFields).partial();
-
-const inboxSettingsSchema = z.object({
-  repos: inboxFields.repos.default("all"),
-  direct: inboxFields.direct.default(true),
-  drafts: inboxFields.drafts.default(false),
-  bots: inboxFields.bots.default(false),
-  mute: inboxFields.mute.default([]),
-  limit: inboxFields.limit.default(10),
-});
-
-const inboxKv = () => createNamespaceKv("CODE_REVIEWS");
-
-export async function inboxSettings(): Promise<ReviewInboxSettings> {
-  const parsed = inboxSettingsSchema.safeParse((await inboxKv().get("inbox")) ?? {});
-  return parsed.success ? parsed.data : inboxSettingsSchema.parse({});
-}
-
-export async function saveInboxSettings(
-  change: Partial<ReviewInboxSettings>,
-): Promise<ReviewInboxSettings> {
-  const next = inboxSettingsSchema.parse({ ...(await inboxSettings()), ...change });
-  await inboxKv().set("inbox", next);
-  return next;
-}
-
-function muted(settings: ReviewInboxSettings) {
-  const words = settings.mute.map((w) => w.toLowerCase());
-  const authors = new Set(words.filter((w) => w.startsWith("@")).map((w) => w.slice(1)));
-  const titles = words.filter((w) => !w.startsWith("@"));
-  return (pr: { title: string; author: string }) =>
-    authors.has(pr.author.toLowerCase()) ||
-    titles.some((word) => pr.title.toLowerCase().includes(word));
-}
-
-export async function reviewInbox(query: InboxQuery = {}): Promise<InboxPullView[]> {
-  const [projects, settings] = await Promise.all([db.select().from(codeProjects), inboxSettings()]);
-  const repo = query.repo ?? (settings.repos === "projects" ? "projects" : undefined);
-  const filter: InboxFilter = {};
-  if (query.days) {
-    filter.updatedSince = new Date(Date.now() - query.days * 86_400_000).toISOString().slice(0, 10);
-  }
-  if (repo === "projects") {
-    if (projects.length === 0) return [];
-    filter.repos = projects.map((p) => ({ owner: p.repoOwner, name: p.repoName }));
-  } else if (repo) {
-    const ref = parseRepo(repo);
-    if (!ref) throw Boom.badRequest(`Not a repository: ${repo}`);
-    filter.repos = [ref];
-  }
-  if (query.drafts === "hide" || !settings.drafts) filter.drafts = false;
-  if (settings.direct) filter.direct = true;
-  const github = await codeGitHub().client();
-  let pulls;
-  try {
-    pulls = await github.reviewInbox(filter);
-  } catch (error) {
-    throw Boom.badRequest(
-      `Cannot read your review requests on GitHub: ${error instanceof Error ? error.message : String(error)}`,
-    );
-  }
-  const open = await db.select().from(codeReviews).where(isNull(codeReviews.archivedAt));
-  const projectOf = new Map(
-    projects.map((p) => [`${p.repoOwner}/${p.repoName}`.toLowerCase(), p.id]),
-  );
-  const reviewOf = new Map(open.map((r) => [`${r.projectId}#${r.number}`, r.id]));
-  const isMuted = muted(settings);
-  const kept = pulls.filter((pr) => (settings.bots || !pr.bot) && !isMuted(pr));
-  return kept.map((pr) => {
-    const projectId = projectOf.get(repoSlug(pr.repo).toLowerCase()) ?? null;
-    const section: InboxPullView["section"] =
-      pr.reason === "requested"
-        ? "needs"
-        : pr.reason === "authored"
-          ? "mine"
-          : pr.lastReview?.commit && pr.lastReview.commit !== pr.headSha
-            ? "updated"
-            : "waiting";
-    return {
-      section,
-      repo: repoSlug(pr.repo),
-      number: pr.number,
-      title: pr.title,
-      url: pr.url,
-      author: pr.author,
-      draft: pr.draft,
-      updatedAt: pr.updatedAt,
-      decision: pr.decision,
-      lastReviewAt: pr.lastReview?.at ?? null,
-      projectId,
-      reviewId: projectId ? (reviewOf.get(`${projectId}#${pr.number}`) ?? null) : null,
-    };
-  });
-}
-
 async function ownWorktree(id: string) {
   const found = await reviewWorktree(id);
   if (found.worktree !== reviewPath(found.project, found.row.number)) {
@@ -622,16 +517,12 @@ export async function pushReview(id: string, message: string): Promise<PushedRev
       `@${pr.author ?? row.author}'s fork does not allow edits from maintainers, so you cannot push to it. Post your changes as suggestions instead.`,
     );
   }
-  const [dirty, head, viewer] = await Promise.all([
-    ws.uncommitted(worktree),
-    ws.headSha(worktree),
-    github.viewer().catch(() => undefined),
-  ]);
+  const [dirty, head] = await Promise.all([ws.uncommitted(worktree), ws.headSha(worktree)]);
   if (dirty.length === 0 && head === row.headSha) {
     throw Boom.badRequest("You have not changed anything in this pull request.");
   }
   if (dirty.length > 0) {
-    const login = viewer?.login ?? "tiny-agents";
+    const { login } = await github.viewer().catch(viewerUnknown);
     await ws
       .commitAll(worktree, message, {
         name: login,

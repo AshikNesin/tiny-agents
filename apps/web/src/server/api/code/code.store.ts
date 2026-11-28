@@ -1,3 +1,5 @@
+import { parseJson } from "@tiny-agents/std";
+import { z } from "zod";
 import { and, asc, desc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import type { IndexedThread, ThreadIndex } from "@tiny-agents/code/server";
 import {
@@ -15,10 +17,7 @@ import { ensureThread, threadRef } from "./code.threads";
 
 function parseData(raw: string): Record<string, unknown> {
   try {
-    const value = JSON.parse(raw) as unknown;
-    return value && typeof value === "object" && !Array.isArray(value)
-      ? (value as Record<string, unknown>)
-      : {};
+    return parseJson("A code thread's stored data", raw, z.record(z.string(), z.unknown()));
   } catch {
     return {};
   }

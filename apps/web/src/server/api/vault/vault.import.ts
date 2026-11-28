@@ -1,3 +1,5 @@
+import { parseJson } from "@tiny-agents/std";
+import { z } from "zod";
 import { eq, isNotNull, sql } from "drizzle-orm";
 import { logger } from "@groot/core/logger";
 import { connections, db, kv, vaultItems, vaultValues, type Connection } from "../../db";
@@ -27,24 +29,25 @@ export interface VaultImportReport {
   };
 }
 
+const entrySchema = z.looseObject({ policy: z.string(), sealed: z.string().startsWith("v2:") });
+
 function parseEntry(raw: string): { policy: string; sealed: string } {
-  let entry: unknown;
+  let entry: z.infer<typeof entrySchema>;
   try {
-    const inner = JSON.parse(raw) as unknown;
-    entry = typeof inner === "string" ? JSON.parse(inner) : undefined;
-  } catch {}
-  const { policy, sealed } = (entry ?? {}) as { policy?: unknown; sealed?: unknown };
-  if (typeof policy !== "string" || typeof sealed !== "string" || !sealed.startsWith("v2:")) {
-    throw new Error("not a vault entry in the pre-Q4 format");
+    const inner = parseJson("A pre-Q4 vault entry's wrapping", raw, z.string());
+    entry = parseJson("A pre-Q4 vault entry", inner, entrySchema);
+  } catch (error) {
+    throw new Error("not a vault entry in the pre-Q4 format", { cause: error });
   }
-  return { policy, sealed };
+  return { policy: entry.policy, sealed: entry.sealed };
 }
 
 function parseIndex(raw: string): string[] {
   try {
-    const inner = JSON.parse(raw) as unknown;
-    const ids = typeof inner === "string" ? (JSON.parse(inner) as unknown) : undefined;
-    return Array.isArray(ids) ? ids.filter((id): id is string => typeof id === "string") : [];
+    const inner = parseJson("The pre-Q4 vault index's wrapping", raw, z.string());
+    return parseJson("The pre-Q4 vault index", inner, z.array(z.unknown())).filter(
+      (id): id is string => typeof id === "string",
+    );
   } catch {
     return [];
   }

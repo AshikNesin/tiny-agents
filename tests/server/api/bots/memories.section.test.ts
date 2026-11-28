@@ -14,7 +14,7 @@ import { createMemoryCapability, type MemoryStore } from "../../../../packages/a
 import {
   createMemoryStore,
   memoryStore,
-} from "../../../../apps/web/src/server/api/bots/memories.store";
+} from "../../../../apps/web/src/server/api/memories/memories.store";
 import type { AgentRuntime } from "../../../../packages/agent/src/runtime";
 import type { ChatMessage } from "../../../../packages/agent/src/types";
 import { bots, db, memories } from "../../../../apps/web/src/server/db";

@@ -4,12 +4,12 @@ import {
   buildCapturePrompt,
   parseExtraction,
   createMemoryCapture,
-} from "../../../../apps/web/src/server/api/bots/memories.capture";
+} from "../../../../apps/web/src/server/api/memories/memories.capture";
 import {
   captureWindow,
   captureConversation,
-} from "../../../../apps/web/src/server/api/bots/memories.runner";
-import { memoryStore } from "../../../../apps/web/src/server/api/bots/memories.store";
+} from "../../../../apps/web/src/server/api/memories/memories.runner";
+import { memoryStore } from "../../../../apps/web/src/server/api/memories/memories.store";
 import type { SideCaller } from "../../../../apps/web/src/server/api/bots/side-call";
 import type { ConversationOwner } from "../../../../apps/web/src/server/api/bots/bots.owner";
 import { bots, db, memories, routines, users } from "../../../../apps/web/src/server/db";

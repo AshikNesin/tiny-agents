@@ -14,7 +14,9 @@ they move here. Decisions already written elsewhere stay there: the sandbox
 connection pool and the tailscaled rule ([ADR 0013](0013-one-sandbox-connection.md)),
 the git read flags ([ADR 0025](0025-steady-code-diffs.md)), the Shelley
 request header ([ADR 0009](0009-shelley-is-the-coding-agent.md)), and the
-live-session and VM-stack drift tables (`docs/rewrite/README.md` §4.2).
+live-session and VM-stack drifts (each pinned by
+`tests/server/app/agent/live-sessions-drift.test.ts` and
+`tests/server/app/agent/vm-stack-drift.test.ts`).
 
 ## Concurrency without transactions (core and jobs)
 

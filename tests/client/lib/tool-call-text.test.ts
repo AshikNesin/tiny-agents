@@ -9,8 +9,6 @@ import {
   describeCalls,
   durationText,
   expiryText,
-  formatDuration,
-  formatWait,
   groupText,
   NO_TOOL_LABELS,
   stepTitle,
@@ -221,27 +219,14 @@ describe("approval note", () => {
 });
 
 describe("durations", () => {
-  it("formats a step's time", () => {
-    expect(formatDuration(0)).toBe("1ms");
-    expect(formatDuration(340.4)).toBe("340ms");
-    expect(formatDuration(1234)).toBe("1.2s");
-    expect(formatDuration(125_000)).toBe("125.0s");
-  });
-
-  it("formats an Owner wait like a person would", () => {
-    expect(formatWait(200)).toBe("1s");
-    expect(formatWait(40_000)).toBe("40s");
-    expect(formatWait(100_000)).toBe("1m 40s");
-    expect(formatWait(120_000)).toBe("2m");
-    expect(formatWait(7_500_000)).toBe("2h 5m");
-    expect(formatWait(7_200_000)).toBe("2h");
-  });
-
   it("adds the wait to a finished call's time", () => {
     expect(durationText(call("x"))).toBeUndefined();
     expect(durationText(call("x", { durationMs: 1234 }))).toBe("1.2s");
     expect(durationText(call("x", { durationMs: 1234, waitedMs: 40_000 }))).toBe(
       "1.2s · waited 40s for you",
+    );
+    expect(durationText(call("x", { durationMs: 125_000, waitedMs: 7_500_000 }))).toBe(
+      "2m 5s · waited 2h 5m for you",
     );
   });
 });

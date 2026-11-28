@@ -1,3 +1,5 @@
+import { parseJson } from "@tiny-agents/std";
+import { z } from "zod";
 import { withToolPicks } from "../../../shared/tool-picks";
 import { randomBytes } from "node:crypto";
 import { and, desc, eq } from "drizzle-orm";
@@ -25,14 +27,8 @@ import type {
 import { DEFAULT_AUTOFIX } from "./code.autofix";
 import { codeGitHub } from "./code.github";
 import { applyTitle, threadNames } from "./code.naming";
-import {
-  branchName,
-  checkpointRef,
-  cleanBranchPrefix,
-  DEFAULT_BRANCH_PREFIX,
-  type ProjectScripts,
-  type Workspace,
-} from "./code.workspace";
+import { checkpointRef, type ProjectScripts, type Workspace } from "./code.workspace";
+import { branchName, cleanBranchPrefix, DEFAULT_BRANCH_PREFIX } from "./code.branches";
 import {
   PROJECT_RULE,
   branchTitle,
@@ -58,12 +54,41 @@ const DEFAULT_PROJECT_SETTINGS: ProjectSettings = {
   },
 };
 
+const storedSettingsSchema = z.object({
+  scripts: z
+    .object({ setup: z.string(), check: z.string(), archive: z.string() })
+    .partial()
+    .optional()
+    .catch(undefined),
+  archiveOnMerge: z.boolean().optional().catch(undefined),
+  draftPulls: z.boolean().optional().catch(undefined),
+  branchPrefix: z.string().optional().catch(undefined),
+  protectedPaths: z.array(z.string()).optional().catch(undefined),
+  workflowInstructions: z.string().optional().catch(undefined),
+  instructions: z.string().optional().catch(undefined),
+  autofix: z
+    .object({
+      triggers: z
+        .object({ checks: z.boolean(), reviews: z.boolean(), conflicts: z.boolean() })
+        .partial(),
+      trustedBots: z.array(z.string()),
+      hourlyLimit: z.number(),
+      noOwnerLimit: z.number(),
+      passMinutes: z.number(),
+      onByDefault: z.boolean(),
+    })
+    .partial()
+    .optional()
+    .catch(undefined),
+});
+
 export function projectSettings(raw: string): ProjectSettings {
-  let value: Partial<ProjectSettings> = {};
+  let value: z.infer<typeof storedSettingsSchema> = {};
   try {
-    const parsed = JSON.parse(raw) as unknown;
-    if (parsed && typeof parsed === "object") value = parsed as Partial<ProjectSettings>;
-  } catch {}
+    value = parseJson("A project's settings", raw, storedSettingsSchema);
+  } catch (error) {
+    logger.warn({ error }, "Code: a project's stored settings are unreadable; using the defaults");
+  }
   const d = DEFAULT_PROJECT_SETTINGS;
   return {
     scripts: { ...d.scripts, ...value.scripts },
@@ -289,7 +314,13 @@ export async function scriptsFor(
   ws: Workspace,
   path: string,
 ): Promise<ProjectScripts> {
-  const checkedIn = await ws.readScripts(path).catch(() => ({}));
+  const checkedIn = await ws.readScripts(path).catch((error: unknown): ProjectScripts => {
+    logger.warn(
+      { error, path },
+      "Code: could not read the checked-in scripts; using the project's",
+    );
+    return {};
+  });
   return { ...checkedIn, ...projectSettings(project.settings).scripts };
 }
 
@@ -355,7 +386,10 @@ export async function startProjectThread(
   }
   const startCheckpoint = await ws
     .checkpoint(path, checkpointRef(branch, 0))
-    .catch(() => undefined);
+    .catch((error: unknown) => {
+      logger.warn({ error, path }, "Code: could not take the thread's starting checkpoint");
+      return undefined;
+    });
   const { branch: _branch, tools = [], ...create } = input;
   let created: { nativeId: string };
   try {
@@ -366,7 +400,12 @@ export async function startProjectThread(
       model: input.model ?? projectModel(project, instance.id),
     });
   } catch (error) {
-    await ws.removeWorktree(project.checkoutPath, path).catch(() => undefined);
+    await ws.removeWorktree(project.checkoutPath, path).catch((cleanup: unknown) => {
+      logger.warn(
+        { error: cleanup, path },
+        "Code: could not remove the worktree of a failed start",
+      );
+    });
     throw error;
   }
   await applyTitle(instance, created.nativeId, names?.title ?? branchTitle(branch));

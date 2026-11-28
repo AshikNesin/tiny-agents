@@ -18,7 +18,8 @@ import {
   type TerminalConnectionState,
 } from "../../lib/terminal-ws";
 import { createTerminal, type TerminalHandle, type TerminalSize } from "../../lib/xterm";
-import { isMac, pasteShortcut, readClipboardText } from "../../lib/clipboard";
+import { pasteShortcut, readClipboardText } from "../../lib/clipboard";
+import { isMac } from "../../lib/platform";
 
 export interface TerminalControls {
   send: (bytes: Uint8Array<ArrayBuffer>) => void;

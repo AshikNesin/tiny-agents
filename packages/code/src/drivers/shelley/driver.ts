@@ -1,8 +1,7 @@
+import { z } from "zod";
 import {
-  NO_CAPABILITIES,
   threadIdOf,
   type BackgroundJob,
-  type Capabilities,
   type CreateThreadInput,
   type HarnessHost,
   type HarnessInstance,
@@ -18,17 +17,10 @@ import { badGateway, badRequest } from "../../server/errors";
 import { NO_PARTIAL, ThreadFeed } from "../../server/feed";
 import { Emitter } from "../../server/items";
 import { turnOutcome } from "../../server/outcome";
+import { qs, shelleyJson, trimUrl, type FetchLike, type ShelleyDeps } from "./client";
+import { CAPABILITIES, SLASH_COMMANDS } from "./catalog";
+import { descendantIds, ours, settingsOf, withAttachments } from "./conversations";
 import {
-  encodePath,
-  qs,
-  shelleyFetch,
-  shelleyJson,
-  trimUrl,
-  type FetchLike,
-  type ShelleyDeps,
-} from "./client";
-import {
-  assetPath,
   buildTranscript,
   lastWriteAt,
   maxSequence,
@@ -36,40 +28,22 @@ import {
   queuedMessages,
   totalCost,
 } from "./normalize";
+import { createdSchema, cwdCheckSchema, listSchemas, sentSchema } from "./schemas";
 import { createShelleyStream, type ShelleyStream, type StreamOptions } from "./stream";
 import { distinctModels, otherUsageEntries, usageEntries, usageReport } from "./usage";
 import {
   isWorking,
   tagsOf,
   TINY_AGENTS_TAG,
-  type ModelCost,
+  modelCostsSchema,
+  settingsSchema,
+  type ReportInvalid,
   type ShelleyDetail,
   type ShelleyMessage,
   type ShelleyModel,
   type ShelleyRow,
-  type ShelleySettings,
-  type SubagentUsage,
 } from "./wire";
-
-export const SHELLEY_THINKING_LEVELS = [
-  "off",
-  "minimal",
-  "low",
-  "medium",
-  "high",
-  "xhigh",
-  "max",
-] as const;
-
-const SLASH_COMMANDS = [
-  { command: "/model", hint: "Show or switch the model and reasoning (e.g. /model sonnet high)" },
-  { command: "/compact", hint: "Compact the context to free room" },
-  { command: "/btw", hint: "Ask a side question without disturbing the turn" },
-  { command: "/fork", hint: "Continue in a copy of this conversation" },
-  { command: "/cwd", hint: "Change the working directory" },
-  { command: "/new", hint: "Start a new conversation" },
-  { command: "/help", hint: "List Shelley's commands" },
-];
+import { workspaceOps } from "./workspace";
 
 export interface ShelleyHarnessOptions {
   id?: string;
@@ -84,119 +58,20 @@ export interface ShelleyHarness extends HarnessInstance {
   readonly url: string;
 }
 
-const CAPABILITIES: Capabilities = {
-  ...NO_CAPABILITIES,
-  turns: {
-    interrupt: true,
-    steer: true,
-    queue: true,
-    manageQueue: true,
-    recovery: ["retry", "resume", "continue"],
-    compact: true,
-  },
-  threads: {
-    fork: true,
-    rewind: false,
-    archive: true,
-    delete: true,
-    rename: true,
-    changeCwd: true,
-    subagents: true,
-    search: true,
-    discover: false,
-  },
-  settings: {
-    modelSwitch: true,
-    effortLevels: [...SHELLEY_THINKING_LEVELS],
-    permissionModes: [],
-  },
-  approvals: { tools: false, questions: false },
-  workspace: {
-    diffs: true,
-    findFiles: true,
-    uploads: true,
-    skills: true,
-    browse: true,
-    worktrees: true,
-    requiresCwd: false,
-  },
-  extras: { jobs: true, usageReport: true, commands: true },
-};
-
-export function descendantIds(rows: ShelleyRow[], id: string): string[] {
-  const children = new Map<string, string[]>();
-  for (const row of rows) {
-    const parent = row.parent_conversation_id;
-    if (!parent) continue;
-    const list = children.get(parent) ?? [];
-    list.push(row.conversation_id);
-    children.set(parent, list);
-  }
-  const found: string[] = [];
-  const seen = new Set([id]);
-  const queue = [id];
-  while (queue.length > 0) {
-    for (const child of children.get(queue.shift()!) ?? []) {
-      if (seen.has(child)) continue;
-      seen.add(child);
-      found.push(child);
-      queue.push(child);
-    }
-  }
-  return found;
-}
-
-function ours(rows: ShelleyRow[], context: ShelleyRow[] = []): ShelleyRow[] {
-  const byId = new Map<string, ShelleyRow>();
-  for (const row of [...context, ...rows]) byId.set(row.conversation_id, row);
-  const verdict = new Map<string, boolean>();
-  const tagged = (start: ShelleyRow): boolean => {
-    const path: string[] = [];
-    let row: ShelleyRow | undefined = start;
-    let found = false;
-    while (row && !path.includes(row.conversation_id)) {
-      const known = verdict.get(row.conversation_id);
-      if (known !== undefined) {
-        found = known;
-        break;
-      }
-      path.push(row.conversation_id);
-      if (tagsOf(row).includes(TINY_AGENTS_TAG)) {
-        found = true;
-        break;
-      }
-      row = row.parent_conversation_id ? byId.get(row.parent_conversation_id) : undefined;
-    }
-    for (const id of path) verdict.set(id, found);
-    return found;
-  };
-  return rows.filter(tagged);
-}
-
-function withAttachments(message: string, refs: string[] | undefined): string {
-  const paths = (refs ?? [])
-    .filter((ref) => ref.startsWith("file:/"))
-    .map((ref) => `[${ref.slice(5)}]`);
-  if (paths.length === 0) return message;
-  return [message.trim(), paths.join(" ")].filter(Boolean).join("\n\n");
-}
-
-function settingsOf(raw: ShelleySettings | undefined, row?: ShelleyRow): ThreadSettings {
-  return {
-    model: raw?.model || row?.model || null,
-    effort: raw?.thinking_level || null,
-    permissionMode: null,
-  };
-}
-
 export function createShelleyHarness(options: ShelleyHarnessOptions): ShelleyHarness {
   const id = options.id ?? "shelley";
   const url = trimUrl(options.url);
   if (!url) throw new Error("Shelley needs a URL (SHELLEY_URL).");
   const deps: ShelleyDeps = { config: { url }, fetch: options.fetch };
   const { host } = options;
-  const json = <T>(path: string, init: Parameters<typeof shelleyJson>[1] = {}) =>
-    shelleyJson<T>(path, init, deps);
+  const report: ReportInvalid = (what, problem) =>
+    host.logger.warn(`Skipped ${what} that does not fit its shape`, { problem });
+  const lists = listSchemas(report);
+  const json = <T>(
+    schema: z.ZodType<T>,
+    path: string,
+    init: Parameters<typeof shelleyJson>[1] = {},
+  ) => shelleyJson(path, init, deps, schema);
   const conv = (nativeId: string) => `/conversation/${encodeURIComponent(nativeId)}`;
   const stream = createShelleyStream({ deps, logger: host.logger, ...options.stream });
   const events = new Emitter<InstanceEvent>((error) =>
@@ -236,7 +111,7 @@ export function createShelleyHarness(options: ShelleyHarnessOptions): ShelleyHar
   async function tag(nativeId: string, existing: string[] = []): Promise<void> {
     const tags = [...new Set([...existing, TINY_AGENTS_TAG])];
     try {
-      await json(`${conv(nativeId)}/tags`, { method: "POST", json: { tags } });
+      await json(z.unknown(), `${conv(nativeId)}/tags`, { method: "POST", json: { tags } });
     } catch (error) {
       host.logger.warn("Could not tag a Shelley conversation", { nativeId, error: String(error) });
     }
@@ -250,7 +125,7 @@ export function createShelleyHarness(options: ShelleyHarnessOptions): ShelleyHar
       adopted = true;
       return;
     }
-    const rows = [...(await activeRows()), ...rowsOf(await json("/conversations/archived"))];
+    const rows = [...(await activeRows()), ...(await json(lists.rows, "/conversations/archived"))];
     const untagged = rows.filter(
       (row) =>
         !row.parent_conversation_id &&
@@ -271,12 +146,10 @@ export function createShelleyHarness(options: ShelleyHarnessOptions): ShelleyHar
 
   let modelsPromise: Promise<ShelleyModel[]> | undefined;
   const shelleyModels = (): Promise<ShelleyModel[]> =>
-    (modelsPromise ??= json<ShelleyModel[]>("/models")
-      .then((list) => (Array.isArray(list) ? list : []))
-      .catch((error: unknown) => {
-        modelsPromise = undefined;
-        throw error;
-      }));
+    (modelsPromise ??= json(lists.models, "/models").catch((error: unknown) => {
+      modelsPromise = undefined;
+      throw error;
+    }));
 
   const summary = (row: ShelleyRow): ThreadSummary => ({
     id: threadIdOf(id, row.conversation_id),
@@ -295,15 +168,13 @@ export function createShelleyHarness(options: ShelleyHarnessOptions): ShelleyHar
     ...(row.preview ? { preview: row.preview } : {}),
     ...(row.subagent_count ? { subagentCount: row.subagent_count } : {}),
     ...(row.running_background_jobs ? { runningJobs: row.running_background_jobs } : {}),
-    ...(row.queued_messages ? { queuedCount: queuedMessages(row).length } : {}),
+    ...(row.queued_messages ? { queuedCount: queuedMessages(row, report).length } : {}),
     ...(row.turn_interrupted ? { turnInterrupted: true } : {}),
     repoRoot: row.git_repo_root ?? null,
     gitCommit: row.git_commit ?? null,
     gitSubject: row.git_subject ?? null,
     ...(row.slug ? { externalUrl: `${url}/c/${encodeURIComponent(row.slug)}` } : {}),
   });
-
-  const rowsOf = (list: unknown): ShelleyRow[] => (Array.isArray(list) ? list : []);
 
   async function activeRows(): Promise<ShelleyRow[]> {
     if (!stream.list()) await stream.refreshList();
@@ -312,11 +183,21 @@ export function createShelleyHarness(options: ShelleyHarnessOptions): ShelleyHar
     return rows;
   }
 
+  const unread =
+    <T>(what: string, nativeId: string, fallback: T) =>
+    (error: unknown): T => {
+      host.logger.warn(`Could not read a Shelley thread's ${what}`, {
+        nativeId,
+        error: String(error),
+      });
+      return fallback;
+    };
+
   async function jobsOf(nativeId: string): Promise<BackgroundJob[]> {
-    const list = await json<Array<{ id: string; command?: string; started_at?: string }>>(
-      `${conv(nativeId)}/background-jobs`,
-    ).catch(() => []);
-    return (Array.isArray(list) ? list : []).map((job) => ({
+    const list = await json(lists.jobs, `${conv(nativeId)}/background-jobs`).catch(
+      unread("background jobs", nativeId, []),
+    );
+    return list.map((job) => ({
       id: job.id,
       command: job.command ?? job.id,
       ...(job.started_at ? { startedAt: job.started_at } : {}),
@@ -324,7 +205,9 @@ export function createShelleyHarness(options: ShelleyHarnessOptions): ShelleyHar
   }
 
   async function subagentCost(nativeId: string): Promise<number> {
-    const usage = await json<SubagentUsage>(`${conv(nativeId)}/subagent-usage`).catch(() => null);
+    const usage = await json(lists.subagentUsage, `${conv(nativeId)}/subagent-usage`).catch(
+      unread("subagent usage", nativeId, null),
+    );
     return usage ? usage.reported_usd || usage.estimated_usd || 0 : 0;
   }
 
@@ -347,7 +230,7 @@ export function createShelleyHarness(options: ShelleyHarnessOptions): ShelleyHar
   }
 
   async function outcomeOf(nativeId: string): Promise<TurnOutcome> {
-    const detail = await json<ShelleyDetail>(conv(nativeId));
+    const detail = await json(lists.detail, conv(nativeId));
     const messages = detail.messages ?? [];
     const row = rowOf(nativeId, detail);
     return turnOutcome({
@@ -362,15 +245,17 @@ export function createShelleyHarness(options: ShelleyHarnessOptions): ShelleyHar
 
   async function load(nativeId: string): Promise<Loaded> {
     const [detail, children, rawSettings] = await Promise.all([
-      json<ShelleyDetail>(conv(nativeId)),
-      json<unknown>(`${conv(nativeId)}/subagents`).catch(() => []),
-      json<ShelleySettings>(`${conv(nativeId)}/settings`).catch(() => undefined),
+      json(lists.detail, conv(nativeId)),
+      json(lists.rows, `${conv(nativeId)}/subagents`).catch(unread("subagents", nativeId, [])),
+      json(settingsSchema, `${conv(nativeId)}/settings`).catch(
+        unread("settings", nativeId, undefined),
+      ),
     ]);
     const row = rowOf(nativeId, detail);
     const settings = settingsOf(rawSettings, row);
-    const models = await shelleyModels().catch(() => [] as ShelleyModel[]);
+    const models = await shelleyModels().catch(unread("model list", nativeId, []));
     const contextMax = models.find((m) => m.id === settings.model)?.max_context_tokens;
-    return { detail, row, children: rowsOf(children), settings, contextMax };
+    return { detail, row, children, settings, contextMax };
   }
 
   async function snapshotOf(
@@ -393,7 +278,7 @@ export function createShelleyHarness(options: ShelleyHarnessOptions): ShelleyHar
       }),
       items: buildTranscript(list, id, { progress }),
       settings,
-      queued: queuedMessages(row),
+      queued: queuedMessages(row, report),
       jobs,
       children: children.map(summary),
       context: {
@@ -418,16 +303,17 @@ export function createShelleyHarness(options: ShelleyHarnessOptions): ShelleyHar
 
     async listThreads(view) {
       if (view === "archived") {
-        return ours(rowsOf(await json("/conversations/archived"))).map(summary);
+        return ours(await json(lists.rows, "/conversations/archived")).map(summary);
       }
       return ours(await activeRows()).map(summary);
     },
 
     async searchThreads(query, archived) {
       const rows = await json(
+        lists.rows,
         `/conversations/search${qs({ q: query, archived: archived ? "true" : undefined })}`,
       );
-      return ours(rowsOf(rows), stream.list() ?? []).map(summary);
+      return ours(rows, stream.list() ?? []).map(summary);
     },
 
     async getThread(nativeId) {
@@ -478,7 +364,7 @@ export function createShelleyHarness(options: ShelleyHarnessOptions): ShelleyHar
           row = { ...row, ...frame.conversation };
           if (feed.live) {
             feed.thread(summary(row));
-            feed.state({ queued: queuedMessages(row) });
+            feed.state({ queued: queuedMessages(row, report) });
             refreshJobs(row.running_background_jobs ?? 0);
           }
         }
@@ -545,7 +431,7 @@ export function createShelleyHarness(options: ShelleyHarnessOptions): ShelleyHar
     outcome: outcomeOf,
 
     async createThread(input: CreateThreadInput) {
-      const created = await json<{ conversation_id?: string }>("/conversations/new", {
+      const created = await json(createdSchema, "/conversations/new", {
         method: "POST",
         json: {
           message: withAttachments(input.message, input.attachments),
@@ -564,39 +450,42 @@ export function createShelleyHarness(options: ShelleyHarnessOptions): ShelleyHar
       const action = archived ? "archive" : "unarchive";
       let cascade: string[] = [];
       try {
-        const rows = archived ? await activeRows() : rowsOf(await json("/conversations/archived"));
+        const rows = archived
+          ? await activeRows()
+          : await json(lists.rows, "/conversations/archived");
         cascade = descendantIds(rows, nativeId);
       } catch {
         cascade = [];
       }
-      await json(`${conv(nativeId)}/${action}`, { method: "POST" });
+      await json(z.unknown(), `${conv(nativeId)}/${action}`, { method: "POST" });
       const settled = await Promise.allSettled(
-        cascade.map((child) => json(`${conv(child)}/${action}`, { method: "POST" })),
+        cascade.map((child) => json(z.unknown(), `${conv(child)}/${action}`, { method: "POST" })),
       );
       void stream.refreshList();
       return { moved: cascade.filter((_, i) => settled[i]!.status === "fulfilled") };
     },
 
     async remove(nativeId) {
-      await json(`${conv(nativeId)}/delete`, { method: "POST" });
+      await json(z.unknown(), `${conv(nativeId)}/delete`, { method: "POST" });
       void stream.refreshList();
     },
 
     async rename(nativeId, title) {
-      await json(`${conv(nativeId)}/rename`, { method: "POST", json: { slug: title } });
+      await json(z.unknown(), `${conv(nativeId)}/rename`, {
+        method: "POST",
+        json: { slug: title },
+      });
       void stream.refreshList();
     },
 
     async changeCwd(nativeId, cwd) {
-      const check = await json<{ valid: boolean; error?: string }>(
-        `/validate-cwd${qs({ path: cwd })}`,
-      );
+      const check = await json(cwdCheckSchema, `/validate-cwd${qs({ path: cwd })}`);
       if (!check.valid) throw badRequest(check.error ?? "Not a directory Shelley can use.");
-      await json(`${conv(nativeId)}/cwd`, { method: "POST", json: { cwd } });
+      await json(z.unknown(), `${conv(nativeId)}/cwd`, { method: "POST", json: { cwd } });
     },
 
     async fork(nativeId, at) {
-      const forked = await json<{ conversation_id?: string }>(`${conv(nativeId)}/fork`, {
+      const forked = await json(createdSchema, `${conv(nativeId)}/fork`, {
         method: "POST",
         json: { message_id: at },
       });
@@ -610,7 +499,7 @@ export function createShelleyHarness(options: ShelleyHarnessOptions): ShelleyHar
     externalUrl: (thread) => thread.externalUrl,
 
     async send(nativeId, input: SendInput) {
-      const result = await json<{ status?: string }>(`${conv(nativeId)}/chat`, {
+      const result = await json(sentSchema, `${conv(nativeId)}/chat`, {
         method: "POST",
         json: {
           message: withAttachments(input.message, input.attachments),
@@ -622,11 +511,11 @@ export function createShelleyHarness(options: ShelleyHarnessOptions): ShelleyHar
     },
 
     async interrupt(nativeId) {
-      await json(`${conv(nativeId)}/cancel`, { method: "POST" });
+      await json(z.unknown(), `${conv(nativeId)}/cancel`, { method: "POST" });
     },
 
     async recover(nativeId, action) {
-      await json(`${conv(nativeId)}/${action}`, {
+      await json(z.unknown(), `${conv(nativeId)}/${action}`, {
         method: "POST",
         ...(action === "continue" ? { json: {} } : {}),
       });
@@ -634,19 +523,23 @@ export function createShelleyHarness(options: ShelleyHarnessOptions): ShelleyHar
 
     async queued(nativeId, action, queuedId) {
       const upstream = action === "send" ? "send-queued" : "cancel-queued";
-      await json(`${conv(nativeId)}/${upstream}${qs({ queued_id: queuedId })}`, {
+      await json(z.unknown(), `${conv(nativeId)}/${upstream}${qs({ queued_id: queuedId })}`, {
         method: "POST",
       });
     },
 
     async killJob(nativeId, jobId) {
-      await json(`${conv(nativeId)}/background-jobs/${encodeURIComponent(jobId)}/kill`, {
-        method: "POST",
-      });
+      await json(
+        z.unknown(),
+        `${conv(nativeId)}/background-jobs/${encodeURIComponent(jobId)}/kill`,
+        {
+          method: "POST",
+        },
+      );
     },
 
     async updateSettings(nativeId, change) {
-      const next = await json<ShelleySettings>(`${conv(nativeId)}/settings`, {
+      const next = await json(settingsSchema, `${conv(nativeId)}/settings`, {
         method: "POST",
         json: {
           ...(change.model !== undefined ? { model: change.model ?? "" } : {}),
@@ -657,21 +550,21 @@ export function createShelleyHarness(options: ShelleyHarnessOptions): ShelleyHar
     },
 
     async usage(nativeId) {
-      const detail = await json<ShelleyDetail>(conv(nativeId));
+      const detail = await json(lists.detail, conv(nativeId));
       const messages = detail.messages ?? [];
       const models = distinctModels(usageEntries(messages), otherUsageEntries(messages));
       const [costs, subagents] = await Promise.all([
         models.length
-          ? json<{ costs?: Record<string, ModelCost | null> }>("/model-costs", {
+          ? json(modelCostsSchema, "/model-costs", {
               method: "POST",
               json: { models },
             })
               .then((r) => r.costs ?? {})
-              .catch(() => null)
+              .catch(unread("model costs", nativeId, null))
           : Promise.resolve({}),
-        json<SubagentUsage>(`${conv(nativeId)}/subagent-usage`)
+        json(lists.subagentUsage, `${conv(nativeId)}/subagent-usage`)
           .then((u) => u.per_model ?? [])
-          .catch(() => null),
+          .catch(unread("subagent usage", nativeId, null)),
       ]);
       return usageReport({ messages, costs, subagents });
     },
@@ -691,113 +584,11 @@ export function createShelleyHarness(options: ShelleyHarnessOptions): ShelleyHar
     commands: () => SLASH_COMMANDS,
 
     async skills(cwd, nativeId) {
-      const result = await json<{ skills?: Array<{ name: string; description?: string }> }>(
-        `/skills${qs({ cwd, conversation_id: nativeId })}`,
-      );
+      const result = await json(lists.skills, `/skills${qs({ cwd, conversation_id: nativeId })}`);
       return result.skills ?? [];
     },
 
-    async findFiles(dir, query, content) {
-      const result = await json<{
-        search_dir?: string;
-        matches?: Array<{ path: string; is_dir?: boolean; line?: number; text?: string }>;
-      }>(
-        `/find-files${qs({
-          dir,
-          q: query || undefined,
-          content,
-          include_dirs: content ? undefined : "true",
-        })}`,
-      );
-      const searched = (result.search_dir ?? dir).replace(/\/$/, "");
-      const base = dir.replace(/\/$/, "");
-      const prefix =
-        searched === base
-          ? ""
-          : searched.startsWith(`${base}/`)
-            ? `${searched.slice(base.length + 1)}/`
-            : `${searched}/`;
-      return (result.matches ?? []).map((m) => ({
-        path: `${prefix}${m.path}`,
-        ...(m.is_dir ? { isDir: true } : {}),
-        ...(m.line !== undefined ? { line: m.line } : {}),
-        ...(m.text !== undefined ? { text: m.text } : {}),
-      }));
-    },
-
-    async upload(file, filename) {
-      const result = await json<{ path?: string }>(`/upload/raw${qs({ filename })}`, {
-        method: "POST",
-        body: file,
-        headers: { "Content-Type": file.type || "application/octet-stream" },
-        timeoutMs: 120_000,
-      });
-      if (!result.path) throw badGateway("Shelley did not return the uploaded path");
-      return { ref: `file:${result.path}` };
-    },
-
-    async browse(path) {
-      const listing = await json<{
-        path: string;
-        parent?: string;
-        entries?: Array<{ name: string; is_dir: boolean }>;
-        git_repo_root?: string;
-        git_head_subject?: string;
-      }>(`/list-directory${qs({ path })}`);
-      return {
-        path: listing.path,
-        ...(listing.parent ? { parent: listing.parent } : {}),
-        entries: (listing.entries ?? []).map((e) => ({ name: e.name, isDir: e.is_dir })),
-        ...(listing.git_repo_root ? { repoRoot: listing.git_repo_root } : {}),
-        ...(listing.git_head_subject ? { headSubject: listing.git_head_subject } : {}),
-      };
-    },
-
-    async validateCwd(path) {
-      return json<{ valid: boolean; error?: string }>(`/validate-cwd${qs({ path })}`);
-    },
-
-    async repos() {
-      const result = await json<{ repos?: Array<{ path: string; name?: string }> | null }>(
-        "/git/repos",
-      );
-      return result.repos ?? [];
-    },
-
-    async createWorktree(cwd) {
-      const created = await json<{ path?: string; worktree?: string; cwd?: string }>(
-        "/git/create-worktree",
-        { method: "POST", json: { cwd } },
-      );
-      const path = created.path ?? created.worktree ?? created.cwd;
-      if (!path) throw badGateway("Shelley could not create a worktree here.");
-      return { path };
-    },
-
-    async diffs(cwd) {
-      const result = await json<{ diffs?: unknown; gitRoot?: string }>(`/git/diffs${qs({ cwd })}`);
-      return {
-        diffs: Array.isArray(result.diffs) ? result.diffs : [],
-        gitRoot: result.gitRoot ?? cwd,
-      };
-    },
-
-    async diffFiles(cwd, diffId) {
-      const files = await json<unknown>(
-        `/git/diffs/${encodeURIComponent(diffId)}/files${qs({ cwd })}`,
-      );
-      return Array.isArray(files) ? files : [];
-    },
-
-    async fileDiff(cwd, diffId, path) {
-      return json(`/git/file-diff/${encodeURIComponent(diffId)}/${encodePath(path)}${qs({ cwd })}`);
-    },
-
-    async asset(ref) {
-      const path = assetPath(ref);
-      if (!path) throw badRequest("Unknown asset");
-      return shelleyFetch(path, {}, deps);
-    },
+    ...workspaceOps(json, lists, deps),
   };
   return instance;
 }

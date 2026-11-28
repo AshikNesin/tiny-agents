@@ -5,6 +5,7 @@ import type { Capability } from "../capabilities";
 import { defineToolkit, tool } from "../toolkit";
 import { ambiguousAlternation } from "./attachments-regex";
 import { shQuote, type SandboxConnection } from "@tiny-agents/sandbox";
+import { fail } from "./result";
 
 export type AttachmentStatus = "none" | "pending" | "ready" | "failed" | "unsupported";
 
@@ -67,11 +68,6 @@ export interface AttachmentsToolkitOptions {
 const READ_CHARS = 64_000;
 const MAX_HITS = 50;
 const SNIPPET = 160;
-
-const fail = (text: string): ToolExecutionResult => ({
-  output: [{ type: "text", text }],
-  isError: true,
-});
 
 const attr = (value: string) => value.replace(/["<>&\r\n]/g, "_");
 

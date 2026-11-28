@@ -168,7 +168,14 @@ export function CodeWorkspace() {
     "Could not open this thread.",
     { enabled: Boolean(threadId) && threads !== null && !listedRow },
   );
-  const row = listedRow ?? unlisted.data ?? undefined;
+  const row =
+    listedRow ??
+    (unlisted.status === "ready"
+      ? unlisted.data
+      : unlisted.status === "failed"
+        ? unlisted.last
+        : undefined);
+  const unlistedError = unlisted.status === "failed" ? unlisted.loadError : null;
   const harness = row ? harnessOf(harnesses, row.instanceId) : undefined;
   const project = row?.projectId ? projects?.find((p) => p.id === row.projectId) : undefined;
   const openPane: CodePane | null = threadId && pane && project ? pane : null;
@@ -536,11 +543,11 @@ export function CodeWorkspace() {
               ) : undefined
             }
           />
-        ) : threadId && (unlisted.loadError || (row && !harness)) ? (
+        ) : threadId && (unlistedError || (row && !harness)) ? (
           <EmptyState
             icon={Code2}
             title="This thread cannot be opened"
-            description={unlisted.loadError ?? "Its coding agent is not connected to this server."}
+            description={unlistedError ?? "Its coding agent is not connected to this server."}
           />
         ) : threadId ? (
           <div className="flex h-full items-center justify-center">

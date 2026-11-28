@@ -1,7 +1,6 @@
-import { Hono } from "hono";
+import { routes } from "../routes";
 import { z } from "zod";
 import { Boom } from "@groot/core/errors";
-import type { AppEnv } from "@groot/core/types";
 import { ok } from "@groot/core/utils/api-response.utils";
 import { parseBody, parseStringParam, requireUser } from "@groot/core/utils/controller.utils";
 import { claudeLoginShellLine } from "@tiny-agents/agent/claude-worker";
@@ -27,7 +26,7 @@ import type {
   TerminalTicket,
 } from "../../../shared/api/terminal";
 
-const router = new Hono<AppEnv>();
+const router = routes();
 
 const createSchema: z.ZodType<TerminalCreateBody> = z.object({
   cols: z.number().int().min(2).max(500).optional(),
@@ -69,7 +68,7 @@ router.get("/terminal/sessions", async (c) => {
   return ok<TerminalList>(c, { status: statusDto(status), sessions: sessions.map(sessionDto) });
 });
 
-router.post("/terminal/sessions", async (c) => {
+router.post("/terminal/sessions", "signedIn", async (c) => {
   const body = await parseBody(c, createSchema);
   try {
     const created = await getTerminalService().create(
@@ -83,7 +82,7 @@ router.post("/terminal/sessions", async (c) => {
   }
 });
 
-router.delete("/terminal/sessions/:name", async (c) => {
+router.delete("/terminal/sessions/:name", "signedIn", async (c) => {
   const name = nameParam(parseStringParam(c.req.param("name"), "name"));
   const force = c.req.query("force") === "1";
   try {
@@ -98,7 +97,7 @@ router.delete("/terminal/sessions/:name", async (c) => {
   }
 });
 
-router.post("/terminal/sessions/:name/ticket", async (c) => {
+router.post("/terminal/sessions/:name/ticket", "signedIn", async (c) => {
   const name = nameParam(parseStringParam(c.req.param("name"), "name"));
   return ok<TerminalTicket>(c, {
     path: `/api/v1/terminal/ws/${encodeURIComponent(name)}?ticket=${issueTerminalTicket({
@@ -125,4 +124,4 @@ function mapServiceError(error: unknown): unknown {
   throw error;
 }
 
-export default router;
+export default router.hono;

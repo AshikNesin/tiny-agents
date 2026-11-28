@@ -1,4 +1,5 @@
-import { GitHubError, graphQlData, type GitHubApi, type GraphQlBody } from "./api";
+import { z } from "zod";
+import { failureMessage, GitHubError, graphQlData, restData, type GitHubApi } from "./api";
 
 export interface ExecResult {
   stdout: string;
@@ -17,19 +18,13 @@ const GH_TIMEOUT_MS = 60_000;
 
 function failure(result: ExecResult): GitHubError {
   const status = /\(HTTP (\d{3})\)/.exec(result.stderr)?.[1];
-  let message = result.stderr.trim().replace(/^gh: /, "");
-  try {
-    const body = JSON.parse(result.stdout) as { message?: string; errors?: unknown };
-    if (typeof body.message === "string") message = body.message;
-  } catch {}
+  const stderr = result.stderr.trim().replace(/^gh: /, "");
+  let message = failureMessage(result.stdout, stderr || `gh exited with ${result.exitCode}`);
   if (result.exitCode === 127) message = "gh is not installed on the sandbox.";
   if (/auth login|not logged in/i.test(result.stderr)) {
     message = "gh is not signed in on the sandbox. Run `gh auth login` from the Terminal page.";
   }
-  return new GitHubError(
-    message || `gh exited with ${result.exitCode}`,
-    status ? Number(status) : undefined,
-  );
+  return new GitHubError(message, status ? Number(status) : undefined);
 }
 
 export function createGhTransport(exec: ExecPort): GitHubApi {
@@ -38,7 +33,7 @@ export function createGhTransport(exec: ExecPort): GitHubApi {
     if (result.exitCode !== 0) {
       if (args.startsWith("graphql")) {
         try {
-          graphQlData(JSON.parse(result.stdout) as GraphQlBody<unknown>);
+          graphQlData(result.stdout, z.unknown());
         } catch (error) {
           if (error instanceof GitHubError) throw error;
         }
@@ -50,19 +45,27 @@ export function createGhTransport(exec: ExecPort): GitHubApi {
 
   return {
     kind: "gh",
-    async graphql<T>(query: string, variables: Record<string, unknown> = {}) {
+    async graphql<T>(schema: z.ZodType<T>, query: string, variables: Record<string, unknown> = {}) {
       const out = await run("graphql --input -", JSON.stringify({ query, variables }));
-      return graphQlData(JSON.parse(out) as GraphQlBody<T>);
+      return graphQlData(out, schema);
     },
-    async rest<T>(method: string, path: string, options: { body?: unknown; text?: boolean } = {}) {
+    async rest<T>(
+      schema: z.ZodType<T>,
+      method: string,
+      path: string,
+      options: { body?: unknown } = {},
+    ) {
       if (!SAFE_PATH.test(path)) throw new GitHubError(`Invalid path ${path}`);
       const input = options.body === undefined ? "" : " --input -";
       const out = await run(
         `--method ${method} ${path}${input}`,
         options.body === undefined ? undefined : JSON.stringify(options.body),
       );
-      if (options.text) return out as T;
-      return (out.trim() ? JSON.parse(out) : undefined) as T;
+      return restData(`GitHub's answer to ${method} ${path}`, out, schema);
+    },
+    async text(method: string, path: string) {
+      if (!SAFE_PATH.test(path)) throw new GitHubError(`Invalid path ${path}`);
+      return run(`--method ${method} ${path}`);
     },
   };
 }

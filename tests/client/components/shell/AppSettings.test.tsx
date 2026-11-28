@@ -9,8 +9,8 @@ import { createShellQueryClient, ShellQueryProvider } from "@groot/shell/lib/que
 import { AppSettings } from "@groot/shell/components/AppSettings";
 import type { AppSetting } from "@groot/shell/hooks/useAppSettingsData";
 
-vi.mock("@groot/shell/components/CodeMirrorEditor", () => ({
-  CodeMirrorEditor: ({ value, onChange }: { value: string; onChange: (v: string) => void }) => (
+vi.mock("@uiw/react-codemirror", () => ({
+  default: ({ value, onChange }: { value: string; onChange: (v: string) => void }) => (
     <textarea aria-label="JSON value" value={value} onChange={(e) => onChange(e.target.value)} />
   ),
 }));

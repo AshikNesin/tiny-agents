@@ -7,9 +7,11 @@
   gsap.config({ force3D: false, nullTargetWarn: false });
 
   const cues = (window.__filmCues = window.__filmCues || {});
-  const fontsReady = Promise.all([...document.fonts].map((f) => f.load().catch(() => {}))).then(
-    () => document.fonts.ready,
-  );
+  const fontsReady = Promise.all(
+    [...document.fonts].map((f) =>
+      f.load().catch((error) => console.warn(`font ${f.family} did not load`, error)),
+    ),
+  ).then(() => document.fonts.ready);
 
   function driven(fn, start = 0) {
     let v = start;

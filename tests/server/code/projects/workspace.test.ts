@@ -2,13 +2,15 @@ import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import {
-  branchSlug,
-  cleanBranchSlug,
   createWorkspace,
   matchesGlob,
   WorkspaceError,
   type Workspace,
 } from "../../../../apps/web/src/server/api/code/code.workspace";
+import {
+  branchSlug,
+  cleanBranchSlug,
+} from "../../../../apps/web/src/server/api/code/code.branches";
 import { bareRepo, localExec, sh, type LocalExec } from "./local-exec";
 
 const repo = { owner: "acme", name: "web" };

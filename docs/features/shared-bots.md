@@ -63,4 +63,5 @@ Code: `apps/web/src/server/api/people/` (`access.ts` for the viewer and
 every check past the guard, the guard, live access, service, routes),
 `bots.conversation.ts` (`sharedChatGuidance`), `bots.owner.ts` (`shared`),
 `apps/web/src/client/components/PeopleSettings.tsx`, the Sharing tab
-(`components/bot-dialog/SharingSection.tsx`), `store/people.ts`.
+(`components/bot-dialog/SharingSection.tsx`),
+`apps/web/src/client/queries/viewer.ts`.

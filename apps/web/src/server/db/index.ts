@@ -7,19 +7,15 @@ import * as core from "@groot/core/database";
 import { resolveSqlitePath } from "@groot/core/database/node";
 import * as schema from "./schema";
 
-export type AppDatabase = BetterSQLite3Database<typeof schema>;
+export type AppDatabase = BetterSQLite3Database<typeof schema> & { $client: Database.Database };
 
 export interface CreateAppDbOptions {
   migrationsFolder?: string;
   image?: Buffer;
 }
 
-const connections = new WeakMap<AppDatabase, Database.Database>();
-
 export function sqliteConnection(instance: AppDatabase): Database.Database {
-  const sqlite = connections.get(instance);
-  if (!sqlite) throw new Error("Not a database this module opened");
-  return sqlite;
+  return instance.$client;
 }
 
 export function createAppDb(url: string, options: CreateAppDbOptions = {}): AppDatabase {
@@ -32,7 +28,6 @@ export function createAppDb(url: string, options: CreateAppDbOptions = {}): AppD
   sqlite.pragma("busy_timeout = 5000");
 
   const instance = drizzle(sqlite, { schema });
-  connections.set(instance, sqlite);
   if (options.migrationsFolder) {
     if (!existsSync(options.migrationsFolder)) {
       throw new Error(`Migrations folder not found: ${options.migrationsFolder}`);

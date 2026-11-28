@@ -27,8 +27,6 @@ const sectionIds = new Set(
   ].map((m) => m[1]),
 );
 
-const LEGACY_TAB_PROBES = new Set(["account-shell.mjs", "account-shell.md"]);
-
 describe("verify journeys name real pages", () => {
   it("finds the settings sections to check against", () => {
     expect([...sectionIds]).toEqual(expect.arrayContaining(["account", "models", "security"]));
@@ -56,9 +54,9 @@ describe("verify journeys name real pages", () => {
     expect(unknown).toEqual([]);
   });
 
-  it("only the redirect probes use the old /settings?tab= links", () => {
+  it("nothing uses the old /settings?tab= links", () => {
     const legacy = [...journeys, ...recipes]
-      .filter(({ name, text }) => !LEGACY_TAB_PROBES.has(name) && text.includes("/settings?tab="))
+      .filter(({ text }) => text.includes("/settings?tab="))
       .map(({ name }) => name);
     expect(legacy).toEqual([]);
   });

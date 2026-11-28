@@ -1,11 +1,14 @@
+import { parseJson } from "@tiny-agents/std";
+import { z } from "zod";
 import { policyDigest } from "../../crypto/secret-box";
 import type { VaultItem } from "../../db";
 
 function list(raw: string | null | undefined): string[] {
   if (!raw) return [];
   try {
-    const value = JSON.parse(raw) as unknown;
-    return Array.isArray(value) ? value.filter((v): v is string => typeof v === "string") : [];
+    return parseJson("A vault item's list", raw, z.array(z.unknown())).filter(
+      (v): v is string => typeof v === "string",
+    );
   } catch {
     return [];
   }
@@ -14,7 +17,7 @@ function list(raw: string | null | undefined): string[] {
 function json(raw: string | null | undefined): unknown {
   if (!raw) return undefined;
   try {
-    return JSON.parse(raw) as unknown;
+    return parseJson("A vault item's header rule", raw, z.unknown());
   } catch {
     return undefined;
   }

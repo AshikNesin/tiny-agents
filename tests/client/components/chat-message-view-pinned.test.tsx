@@ -6,8 +6,7 @@
  * divider, a person's bubble (mine, someone else's, failed, with
  * attachments), each peer card, and an assistant turn in each status with
  * each tool card and trace row, live and read-only. Recorded on the one-file
- * component before it was split (docs/rewrite/PLAN.md row 5.6), so the split
- * must render each the same. Markdown is a stand-in.
+ * component before it was split, so the split must render each the same. Markdown is a stand-in.
  */
 import React from "react";
 import { act, render, screen, waitFor } from "@testing-library/react";
@@ -19,12 +18,8 @@ import { ChatMessageView, PeerIncomingCard } from "@/components/ChatMessageView"
 import type { ChatMessage, ChatToolCall } from "@/lib/chat-types";
 import { OwnerActionsProvider, type OwnerActions } from "@/lib/owner-actions";
 import { markup, outline } from "../dom-outline";
+import { ApiFailure, fakeApi } from "../fakes/api";
 import { AppQueryProvider } from "../query-provider";
-
-vi.mock("@/lib/vault-api", () => ({
-  apiError: (_error: unknown, fallback: string) => fallback,
-  vaultApi: { request: () => new Promise(() => {}) },
-}));
 
 vi.mock("streamdown", () => ({
   Streamdown: ({ children }: { children?: React.ReactNode }) => (
@@ -93,6 +88,11 @@ function pin(container: Element) {
 }
 
 beforeEach(() => {
+  const api = fakeApi();
+  api.get("/vault/requests/:taskId", () => new Promise(() => {}));
+  api.get("/uploads/:uploadId", () => {
+    throw new ApiFailure(404, "Upload not found", "NOT_FOUND");
+  });
   useAuthStore.setState({ user: { id: 1 } } as never);
 });
 

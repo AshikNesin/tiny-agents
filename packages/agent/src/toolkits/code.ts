@@ -9,6 +9,7 @@ import type { Capability } from "../capabilities";
 import { defineToolkit, tool } from "../toolkit";
 import { toolIdempotencyKey } from "./tasks";
 import { sanitizePeerText } from "./peer-text";
+import { fail, ok } from "./result";
 
 export interface CodeHandoffRecord {
   threadId: string;
@@ -104,12 +105,6 @@ export interface CodeToolkitOptions {
   store?: CodeStore;
   setupHint?: string;
 }
-
-const ok = (text: string): ToolExecutionResult => ({ output: [{ type: "text", text }] });
-const fail = (text: string): ToolExecutionResult => ({
-  output: [{ type: "text", text }],
-  isError: true,
-});
 
 const threadIdSchema = Type.String({
   pattern: "^([a-z][a-z0-9-]{0,39}:)?[A-Za-z0-9_.-]{1,128}$",
@@ -416,7 +411,7 @@ export function createCodeToolkit(options: CodeToolkitOptions): Capability {
   const tools = codeTools(options);
   const guidance = section("code", async () => {
     if (!store) return undefined;
-    const harnesses = await store.harnesses().catch(() => []);
+    const harnesses = await store.harnesses();
     return harnesses.length ? rules(harnesses, await store.projects()) : undefined;
   });
 

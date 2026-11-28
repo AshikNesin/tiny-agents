@@ -1,5 +1,4 @@
-import { Hono } from "hono";
-import type { AppEnv } from "@groot/core/types";
+import { routes } from "../routes";
 import { appEnv, type AppEnv as AppVars } from "../../env";
 
 const DEFAULT_ANDROID_PACKAGE = "io.nesin.tinyagents";
@@ -35,7 +34,7 @@ export function assetLinks(
   ];
 }
 
-const appLinksRouter = new Hono<AppEnv>();
+const appLinksRouter = routes();
 
 appLinksRouter.get("/.well-known/assetlinks.json", (c) => {
   const statements = assetLinks();
@@ -43,4 +42,4 @@ appLinksRouter.get("/.well-known/assetlinks.json", (c) => {
   return c.json(statements, 200, { "Cache-Control": "public, max-age=3600" });
 });
 
-export default appLinksRouter;
+export default appLinksRouter.hono;

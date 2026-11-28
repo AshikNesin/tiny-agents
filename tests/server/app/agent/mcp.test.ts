@@ -2,7 +2,7 @@ import type { Context as PiContext } from "@earendil-works/pi-ai";
 import { until } from "../../fixtures/until";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import { z } from "zod";
-import { defaultPermission } from "../../../../packages/agent/src/capabilities";
+import { defaultPermission } from "../../../../packages/agent/src/wire";
 import {
   connectMcp,
   createMcpCapability,

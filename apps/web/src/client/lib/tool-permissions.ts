@@ -1,12 +1,8 @@
 import type { CapabilityInfo, ToolPermission } from "../../shared/api/bots";
+import { defaultPermission } from "@tiny-agents/agent/wire";
 
 export type ToolInfo = CapabilityInfo["tools"][number];
 export type Permissions = Record<string, ToolPermission>;
-
-function defaultPermission(tool: ToolInfo): ToolPermission {
-  if (tool.askOnly) return "ask";
-  return tool.readOnly || tool.allowByDefault ? "allow" : "ask";
-}
 
 export function permissionOf(permissions: Permissions, tool: ToolInfo): ToolPermission {
   return permissions[tool.name] ?? defaultPermission(tool);

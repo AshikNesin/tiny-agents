@@ -366,6 +366,39 @@ describe("request_credentials", () => {
     expect(runtime.pendingApprovals(ref)).toBe(0);
   }, 20_000);
 
+  it("asks for nothing when a field's frame cannot be checked", async () => {
+    const page = fakePage("https://www.thehindu.com");
+    page.session.refOrigin = async () => {
+      throw new Error("No element has ref f1e3.");
+    };
+    const framed: JsonObject = {
+      title: "Sign in to The Hindu",
+      purpose: "Read the article",
+      fields: [{ key: "email", label: "Email", type: "email", autocomplete: "email", ref: "f1e3" }],
+    };
+    const { runtime, ref, events } = await open(page, [["request_credentials", framed]]);
+    await runtime.submit(ref, { requestId: "r1", text: "sign in" });
+    const text = await until(() => result(events), "result");
+    expect(text).toContain(
+      'Could not check which site field "email" (f1e3) sits on: No element has ref f1e3.',
+    );
+    expect(runtime.pendingApprovals(ref)).toBe(0);
+  }, 20_000);
+
+  it("asks for nothing when the vault cannot say whether a login is saved", async () => {
+    const page = fakePage("https://hi.nesin.io");
+    const { runtime, ref, events, broker } = await open(page, [["request_credentials", ask]]);
+    broker.requested = async () => {
+      throw new Error("database is locked");
+    };
+    await runtime.submit(ref, { requestId: "r1", text: "check umami" });
+    const text = await until(() => result(events), "result");
+    expect(text).toContain(
+      "Could not check the vault for a saved login, so nothing was asked: database is locked",
+    );
+    expect(runtime.pendingApprovals(ref)).toBe(0);
+  }, 20_000);
+
   it("tells the bot which fields the page never showed (a sign-in stopped between steps)", async () => {
     const page = fakePage("https://hi.nesin.io");
     const { runtime, ref, events } = await open(page, [["request_credentials", ask]]);

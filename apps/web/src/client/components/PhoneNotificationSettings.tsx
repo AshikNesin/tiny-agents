@@ -3,16 +3,11 @@ import { toast } from "sonner";
 import { Send, Smartphone, Trash2 } from "lucide-react";
 import { Button } from "@groot/ui/button";
 import { useConfirm } from "@groot/ui/primitives";
-import { StatusBadge } from "@groot/ui/status-badge";
 import type { PushDevice } from "../../shared/api/push";
-import { pushApi } from "../lib/push-api";
+import { pushSubscriptionLabels } from "../../shared/machines/push-subscription";
+import { MachineStatusBadge } from "./MachineStatusBadge";
 import { errorMessage } from "../lib/errors";
-
-const STATUS = {
-  active: { status: "success", label: "Receiving" },
-  failing: { status: "warning", label: "Failing" },
-  revoked: { status: "error", label: "Signed out" },
-} as const;
+import { usePushDeviceMutations, usePushDevices } from "../queries/push";
 
 const via = (device: PushDevice) =>
   device.distributor === "fcm"
@@ -22,27 +17,24 @@ const via = (device: PushDevice) =>
       : device.host;
 
 export function PhoneNotificationSettings() {
-  const [devices, setDevices] = useState<PushDevice[] | null>(null);
+  const list = usePushDevices();
+  const { test: testDevice, remove: removeDevice } = usePushDeviceMutations();
+  const devices = list.status === "ready" ? list.data : list.status === "failed" ? list.last : null;
+  const loadError = list.status === "failed" ? list.loadError : null;
   const [busy, setBusy] = useState<string | null>(null);
   const confirm = useConfirm();
 
-  const reload = () =>
-    pushApi
-      .devices()
-      .then(({ devices: all }) => setDevices(all))
-      .catch((error: unknown) => toast.error(errorMessage(error, "Failed to load phones")));
-
   useEffect(() => {
-    void reload();
-  }, []);
+    if (loadError) toast.error(loadError);
+  }, [loadError]);
 
   const test = async (device: PushDevice) => {
     setBusy(device.id);
     try {
-      const result = await pushApi.test(device.id);
+      const result = await testDevice.mutateAsync(device.id);
       if (result.ok) toast.success(`Test sent to ${device.label || "the phone"}`);
       else toast.error("The test didn't go through", { description: result.reason });
-      await reload();
+      await list.refresh();
     } catch (error) {
       toast.error(errorMessage(error, "Failed to send a test"));
     } finally {
@@ -59,14 +51,14 @@ export function PhoneNotificationSettings() {
     });
     if (!ok) return;
     try {
-      await pushApi.remove(device.id);
-      await reload();
+      await removeDevice.mutateAsync(device.id);
+      await list.refresh();
     } catch (error) {
       toast.error(errorMessage(error, "Failed to remove the phone"));
     }
   };
 
-  if (devices === null) return null;
+  if (!devices) return null;
   if (devices.length === 0) {
     return (
       <p className="text-muted-foreground text-sm">
@@ -82,10 +74,7 @@ export function PhoneNotificationSettings() {
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <span className="font-medium">{device.label || "Phone"}</span>
-              <StatusBadge
-                status={STATUS[device.status].status}
-                label={STATUS[device.status].label}
-              />
+              <MachineStatusBadge status={device.status} labels={pushSubscriptionLabels} />
             </div>
             <p className="text-muted-foreground text-xs">
               Via {via(device)}

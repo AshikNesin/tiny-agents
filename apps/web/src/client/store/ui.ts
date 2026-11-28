@@ -55,8 +55,8 @@ interface UiState {
   foldedSections: string[];
   toggleSection: (name: string) => void;
   toggleSidebar: (mode: AppMode) => void;
-  newThreadDraft: { text: string; projectId: string };
-  setNewThreadDraft: (draft: Partial<{ text: string; projectId: string }>) => void;
+  draftsSending: string[];
+  setDraftSending: (key: string, sending: boolean) => void;
   codePane: CodePane | null;
   lastCodePane: CodePane;
   setCodePane: (pane: CodePane | null) => void;
@@ -101,9 +101,13 @@ export const useUiStore = create<UiState>((set) => ({
     writeStored(FOLDED_SECTIONS_KEY, JSON.stringify(next));
     set({ foldedSections: next });
   },
-  newThreadDraft: { text: "", projectId: "" },
-  setNewThreadDraft: (draft) =>
-    set((state) => ({ newThreadDraft: { ...state.newThreadDraft, ...draft } })),
+  draftsSending: [],
+  setDraftSending: (key, sending) =>
+    set((state) => ({
+      draftsSending: sending
+        ? [...state.draftsSending, key]
+        : state.draftsSending.filter((other) => other !== key),
+    })),
   toggleSidebar: (mode) => {
     if (mode === "chat") {
       useUiStore.getState().setCollapsed(!useUiStore.getState().collapsed);

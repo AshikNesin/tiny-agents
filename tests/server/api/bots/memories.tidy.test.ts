@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { asc, eq } from "drizzle-orm";
-import { memoryLedger } from "../../../../apps/web/src/server/api/bots/memories.ledger";
+import { memoryLedger } from "../../../../apps/web/src/server/api/memories/memories.ledger";
 import {
   setMemoryTidier,
   tidyAllMemories,
   tidyBotMemories,
-} from "../../../../apps/web/src/server/api/bots/memories.tidy";
+} from "../../../../apps/web/src/server/api/memories/memories.tidy";
 import type { SideCaller } from "../../../../apps/web/src/server/api/bots/side-call";
 import { bots, db, memories, users } from "../../../../apps/web/src/server/db";
 import { resetAppTables, seedBot } from "../../fixtures";

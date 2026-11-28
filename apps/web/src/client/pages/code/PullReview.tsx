@@ -1,7 +1,7 @@
 import { PageKeys, useKeyCommands, type KeyCommand } from "../../components/keys";
 import { ReviewFindings, openFindings } from "./ReviewFindings";
 import type { FindingView, ReviewVerdict } from "../../../shared/api/code";
-import { useCallback, useEffect, useEffectEvent, useMemo, useState, type FormEvent } from "react";
+import { useCallback, useMemo, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
@@ -44,11 +44,13 @@ import { DEFAULT, ModelPicker, useHarnessModels } from "./controls";
 import { PendingComments } from "./PendingComments";
 import { AssistantPane } from "./ResizablePane";
 import { PullDiffs } from "./PullDiffs";
-import { DiffViewButtons, FilesButton, useDiffView } from "./DiffWorkspace";
+import { DiffViewButtons, FilesButton } from "./DiffViewButtons";
+import { useDiffView } from "./use-diff-view";
 import { usePullConversations } from "./PullThreads";
 import { SubmitReviewButton } from "./SubmitReview";
 import { OpenInTerminal, useOpenInTerminal, YourChangesActions } from "./YourChanges";
 
+const REVIEWING_POLL_MS = 3000;
 const STARTERS = ["Summarize this PR", "What could break?", "Is it tested well?"];
 
 export function PullReview({
@@ -62,11 +64,19 @@ export function PullReview({
 }) {
   const navigate = useNavigate();
   const reviewKey = ["code", "reviews", "detail", reviewId];
-  const { data: review, loadError: error } = useResource(
+  const loaded = useResource(
     reviewKey,
     () => reviewsApi.get(reviewId),
     "Could not open the review.",
+    { refetchInterval: (query) => (query.state.data?.reviewing ? REVIEWING_POLL_MS : false) },
   );
+  const review =
+    loaded.status === "ready"
+      ? loaded.data
+      : loaded.status === "failed"
+        ? (loaded.last ?? null)
+        : null;
+  const error = loaded.status === "failed" ? loaded.loadError : null;
   const client = useQueryClient();
   const setReview = (next: PullReviewView) => client.setQueryData(reviewKey, next);
   const [updating, setUpdating] = useState(false);
@@ -96,12 +106,6 @@ export function PullReview({
     () => client.invalidateQueries({ queryKey: ["code", "reviews", "detail", reviewId] }),
     [client, reviewId],
   );
-  const pollReview = useEffectEvent(() => void refreshReview());
-  useEffect(() => {
-    if (!reviewing) return;
-    const timer = setInterval(() => pollReview(), 3000);
-    return () => clearInterval(timer);
-  }, [reviewing]);
 
   const open = useMemo(() => (review ? openFindings(review) : []), [review]);
   const current = open.find((finding) => finding.id === focused) ?? open[0];

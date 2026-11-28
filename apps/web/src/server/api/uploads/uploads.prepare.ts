@@ -3,11 +3,10 @@ import {
   type PreparedImage,
   type ImageProcessor,
 } from "@tiny-agents/agent";
-
-let processor: Promise<ImageProcessor> | undefined;
+import { app } from "../../app-root";
 
 function images(): Promise<ImageProcessor> {
-  return (processor ??= createNodePhotonImages());
+  return (app().imageProcessor ??= createNodePhotonImages());
 }
 
 export function sniffImage(bytes: Buffer): string | undefined {

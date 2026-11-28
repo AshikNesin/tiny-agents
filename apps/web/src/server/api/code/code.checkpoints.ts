@@ -1,5 +1,6 @@
 import { desc, eq } from "drizzle-orm";
 import { Boom } from "@groot/core/errors";
+import { HarnessError } from "@tiny-agents/code/server";
 import { codeCheckpoints, db, type CodeCheckpoint } from "../../db";
 import { codeGitHub } from "./code.github";
 import { codeHub } from "./code.hub";
@@ -62,6 +63,13 @@ export async function checkpointRange(threadId: string, checkpointId: string) {
   return { from: all[index + 1] ?? to, to, worktree, ws };
 }
 
+function noTurnWhenTheHarnessForgotTheThread(error: unknown): undefined {
+  if (error instanceof HarnessError && error.status === 404) return undefined;
+  throw Boom.badGateway(
+    `The harness did not say whether the agent is working, so nothing was reverted: ${error instanceof Error ? error.message : String(error)}`,
+  );
+}
+
 export async function revertTo(
   threadId: string,
   checkpointId: string,
@@ -72,7 +80,9 @@ export async function revertTo(
   const thread = { id: threadId, branch, worktree };
   const working = async () => {
     const target = codeHub()?.resolve(threadId);
-    const outcome = await target?.instance.outcome(target.nativeId).catch(() => undefined);
+    const outcome = await target?.instance
+      .outcome(target.nativeId)
+      .catch(noTurnWhenTheHarnessForgotTheThread);
     return outcome?.working === true;
   };
   const work = async (): Promise<CodeCheckpoint | undefined> => {

@@ -5,22 +5,15 @@ import React from "react";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
-import { afterEach, describe, expect, it, vi } from "vite-plus/test";
+import { describe, expect, it } from "vite-plus/test";
 import { NewThread } from "@/pages/code/NewThread";
-import { codeApi, type HarnessInfo } from "@/lib/code/api";
+import type { HarnessInfo, ModelOption } from "@/lib/code/api";
 import type { ProjectView } from "../../../apps/web/src/shared/api/code";
 import { NO_CAPABILITIES } from "../../../packages/code/src/contracts/capabilities";
+import { fakeApi } from "../fakes/api";
 import { AppQueryProvider } from "../query-provider";
 
-vi.mock("@groot/shell/lib/api", async (importOriginal) => {
-  const original = await importOriginal<typeof import("@groot/shell/lib/api")>();
-  return {
-    ...original,
-    apiClient: Object.assign(Object.create(original.apiClient) as typeof original.apiClient, {
-      get: async () => [{ id: "pi-opus", label: "Opus", ready: true }],
-    }),
-  };
-});
+const models: ModelOption[] = [{ id: "pi-opus", label: "Opus", ready: true }];
 
 const harness = (id: string, label: string, modelSwitch: boolean) =>
   ({
@@ -44,11 +37,11 @@ const project = {
   defaultModel: "pi-opus",
 } as unknown as ProjectView;
 
-afterEach(() => vi.restoreAllMocks());
-
 describe("Code new thread", () => {
   it("drops the project's default model when another agent is picked", async () => {
-    const create = vi.spyOn(codeApi, "create").mockResolvedValue({ threadId: "t1" });
+    const api = fakeApi();
+    api.get("/code/harnesses/:instanceId/models", () => models);
+    api.post("/code/threads", () => ({ threadId: "t1" }));
     const user = userEvent.setup();
     render(
       <AppQueryProvider>
@@ -69,8 +62,8 @@ describe("Code new thread", () => {
     await user.click(await screen.findByText("Claude Code"));
     await user.type(screen.getByTestId("code-new-message"), "fix it{Enter}");
 
-    await waitFor(() => expect(create).toHaveBeenCalled());
-    expect(create.mock.calls[0]![0]).toEqual({
+    await waitFor(() => expect(api.sent("POST", "/code/threads")).toHaveLength(1));
+    expect(api.sent("POST", "/code/threads")[0]!.body).toEqual({
       projectId: "p1",
       instanceId: "claude-code",
       message: "fix it",

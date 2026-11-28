@@ -158,7 +158,13 @@ export function CredentialRequestCard({
   botName: string;
 }) {
   const text = credentialRequestText(call, botName);
-  const { data: request, loadError } = useCredentialRequest(call.taskId);
+  const resource = useCredentialRequest(call.taskId);
+  const request =
+    resource.status === "ready"
+      ? resource.data
+      : resource.status === "failed"
+        ? (resource.last ?? null)
+        : null;
   return (
     <Item className="border-primary/40 bg-primary/5 my-1 max-w-lg" data-testid="credential-card">
       <ItemContent className="gap-3">
@@ -170,7 +176,9 @@ export function CredentialRequestCard({
         {request ? (
           <CredentialRequestForm taskId={call.taskId} request={request} />
         ) : (
-          <ItemDescription>{loadError ?? "Loading…"}</ItemDescription>
+          <ItemDescription>
+            {resource.status === "failed" ? resource.loadError : "Loading…"}
+          </ItemDescription>
         )}
       </ItemContent>
     </Item>

@@ -40,7 +40,8 @@ import {
 } from "../../components/ui/trace";
 import { useTraceSession } from "../../queries/traces";
 import { countEvents, shows, toolDisplayName, type FilterKey } from "./filters";
-import { formatCost, formatDuration, formatTime, formatTokens, dayLabel } from "./format";
+import { formatCost, formatDuration, formatTokens } from "../../lib/format";
+import { formatTime, dayLabel } from "./format";
 import { HARNESS_LABEL, KIND_LABEL } from "./Traces";
 
 function chatLink(session: TraceSession): string | undefined {
@@ -390,7 +391,13 @@ function SessionTrace({ detail }: { detail: TraceSessionDetail }) {
 
 export function TraceDetailPage() {
   const { id = "" } = useParams();
-  const { data, loadError, refresh } = useTraceSession(id);
+  const resource = useTraceSession(id);
+  const data =
+    resource.status === "ready"
+      ? resource.data
+      : resource.status === "failed"
+        ? resource.last
+        : undefined;
   const session = data?.session;
   const link = session ? chatLink(session) : undefined;
   const breadcrumb = (
@@ -425,19 +432,19 @@ export function TraceDetailPage() {
         ) : undefined
       }
     >
-      {loadError ? (
+      {resource.status === "failed" ? (
         <ErrorState
-          title={loadError}
+          title={resource.loadError}
           action={
-            <Button variant="outline" onClick={() => void refresh()}>
+            <Button variant="outline" onClick={() => void resource.refresh()}>
               Try again
             </Button>
           }
         />
-      ) : !data ? (
+      ) : resource.status === "loading" ? (
         <SkeletonList />
       ) : (
-        <SessionTrace detail={data} />
+        <SessionTrace detail={resource.data} />
       )}
     </PageLayout>
   );

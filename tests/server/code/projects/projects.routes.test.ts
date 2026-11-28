@@ -464,6 +464,24 @@ describe("publish and the PR tab", () => {
     );
   });
 
+  it("commits nothing, rather than commit under a made-up name, when GitHub does not say who is publishing", async () => {
+    const project = await newProject();
+    const thread = await newThread(project.id);
+    const enc = encodeURIComponent(thread.id);
+    await sh(local, `cd ${thread.worktree} && printf 'fixed\\n' > src/login.ts`);
+    const head = await sh(local, `git -C ${thread.worktree} rev-parse HEAD`);
+    github.viewer = async () => {
+      throw new Error("GitHub is down");
+    };
+
+    const published = await call("POST", `/threads/${enc}/publish`, { commit: true });
+
+    expect(published.status).toBe(502);
+    expect(published.body.error?.message).toContain("GitHub is down");
+    expect(await sh(local, `git -C ${thread.worktree} rev-parse HEAD`)).toBe(head);
+    expect(github.pulls).toEqual([]);
+  });
+
   it("once its PR is squash-merged, counts only commits made after it, so Create PR does not come back", async () => {
     const project = await newProject();
     await call("PATCH", `/projects/${project.id}`, { settings: { archiveOnMerge: false } });
@@ -1103,7 +1121,7 @@ describe("thread lifecycle", () => {
     const project = await newProject();
     const thread = await newThread(project.id);
     const { archiveCodeThread } =
-      await import("../../../../apps/web/src/server/api/code/code.pulls");
+      await import("../../../../apps/web/src/server/api/code/code.pulls.reconcile");
     await commit(thread.worktree, "a.txt");
     await archiveCodeThread(thread.id, true);
     expect(existsSync(thread.worktree)).toBe(false);
@@ -1126,7 +1144,7 @@ describe("thread lifecycle", () => {
 describe("the reconcile chain", () => {
   it("re-arms itself from its own link only, and boot repairs a broken chain", async () => {
     const { registerCodeJobs, rearmReconcilers, RECONCILE_JOB } =
-      await import("../../../../apps/web/src/server/api/code/code.pulls");
+      await import("../../../../apps/web/src/server/api/code/code.pulls.reconcile");
     const { getJobHandler } = await import("@groot/jobs/server/worker");
     const { codePullRequests, jobs } = await import("../../../../apps/web/src/server/db");
     registerCodeJobs();

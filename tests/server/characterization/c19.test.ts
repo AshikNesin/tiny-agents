@@ -7,7 +7,7 @@ import {
   type QueryFactory,
   type ResumeResult,
 } from "../../../packages/claude-worker/src/index";
-import type { CodingDeps } from "../../../packages/claude-worker/src/coding";
+import type { CodingDeps } from "../../../packages/claude-worker/src/coding-session";
 import {
   connectWorker,
   type WebSocketLike,
@@ -199,7 +199,14 @@ describe("C19: Shelley's `working` map", () => {
   it("still holds a conversation that left Shelley's list, so its late turn end fires", async () => {
     const encoder = new TextEncoder();
     let push: ((frame: object) => void) | undefined;
-    let rows = [{ conversation_id: "c1", working: false }];
+    let rows = [
+      {
+        conversation_id: "c1",
+        working: false,
+        updated_at: "2026-11-05T00:00:00Z",
+        created_at: "2026-11-05T00:00:00Z",
+      },
+    ];
     const fetch = async (url: string) => {
       if (url.endsWith("/api/stream2")) {
         const body = new ReadableStream<Uint8Array>({

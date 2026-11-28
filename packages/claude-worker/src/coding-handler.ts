@@ -1,4 +1,6 @@
-import { CodingError, type CodingBook, type CodingSession } from "./coding";
+import type { CodingBook } from "./coding";
+import type { CodingSession } from "./coding-session";
+import { CodingError } from "./coding-error";
 import { runCodingOp } from "./coding-ops";
 import { claudeConfigDir, withSessionPatches } from "./session-patches";
 import {

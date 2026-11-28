@@ -5,6 +5,7 @@ import { innerDetails } from "./approvals";
 import { parseStored, toJson } from "./durable-json";
 import type { ChatCredentialRequest } from "./types";
 import { pendingToolTask, sealedAsNotPending, wakeOwnerWait, type HostTx } from "./waiting";
+import { record } from "@tiny-agents/std";
 
 const CREDENTIAL_FIELD_TYPES = [
   "text",
@@ -86,11 +87,6 @@ export function credentialResultDetails(
   };
 }
 
-const record = (value: unknown): Record<string, unknown> | undefined =>
-  value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : undefined;
-
 export function credentialsOf(details: unknown): ChatCredentialRequest | undefined {
   const value = innerDetails(details);
   const request = record(value?.request);
@@ -160,10 +156,9 @@ export const CREDENTIAL_REQUESTS_PER_HOUR = 3;
 export const CREDENTIAL_REQUEST_TTL_MS = 10 * 60_000;
 
 export function credentialSubject(request: Pick<CredentialRequest, "origin" | "title">): string {
-  let host = request.origin;
-  try {
-    host = new URL(request.origin).hostname.replace(/^www\./, "");
-  } catch {}
+  const host = URL.canParse(request.origin)
+    ? new URL(request.origin).hostname.replace(/^www\./, "")
+    : request.origin;
   return `${request.title} on ${host}`;
 }
 

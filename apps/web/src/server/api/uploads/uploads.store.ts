@@ -1,3 +1,5 @@
+import { parseJson } from "@tiny-agents/std";
+import { z } from "zod";
 import { eq, inArray } from "drizzle-orm";
 import { storageService } from "@groot/core/storage";
 import type {
@@ -45,7 +47,13 @@ type UploadRow = Upload;
 export function summarize(row: UploadRow): AttachmentSummary {
   let meta: Record<string, unknown> = {};
   try {
-    meta = row.extractMeta ? (JSON.parse(row.extractMeta) as Record<string, unknown>) : {};
+    meta = row.extractMeta
+      ? parseJson(
+          "An upload's extraction details",
+          row.extractMeta,
+          z.record(z.string(), z.unknown()),
+        )
+      : {};
   } catch {
     meta = {};
   }

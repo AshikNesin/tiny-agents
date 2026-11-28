@@ -10,39 +10,24 @@
  * so no server is involved.
  */
 import React from "react";
-import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { BrowserRouter } from "react-router-dom";
 import { ChatPane } from "@/components/ChatPane";
 import { useBotsStore } from "@/store/bots";
 import { chatSessions } from "@/store/chats";
-import { usePeopleStore } from "@/store/people";
-import type { Bot } from "../../../apps/web/src/shared/api/bots";
+import type { Bot, PastChatList, SendMessageBody } from "../../../apps/web/src/shared/api/bots";
 import type { CatalogModel } from "../../../apps/web/src/shared/api/models";
 import type { ChatMessage } from "@/lib/chat-types";
 import { botStream, openedPaths } from "../fakes/sse";
+import { ApiFailure } from "../fakes/api";
 import { AppQueryProvider } from "../query-provider";
+import { chatBackend } from "./chat-backend";
+import { signedInAs, viewerLoaded } from "../fakes/viewer";
+import type { PeopleMe } from "../../../apps/web/src/shared/api/people";
 
-const sendMock = vi.fn().mockResolvedValue(undefined);
-const readMock = vi.fn().mockResolvedValue(undefined);
-const abortMock = vi.fn().mockResolvedValue(undefined);
-const resetMock = vi.fn();
-const withdrawMock = vi.fn().mockResolvedValue(undefined);
-const pastChatsMock = vi.fn().mockResolvedValue([]);
-
-vi.mock("@/lib/bots-api", () => ({
-  botsApi: {
-    send: (...args: unknown[]) => sendMock(...args),
-    abort: (...args: unknown[]) => abortMock(...args),
-    reset: (...args: unknown[]) => resetMock(...args),
-    withdraw: (...args: unknown[]) => withdrawMock(...args),
-    list: vi.fn().mockResolvedValue([]),
-    read: () => readMock(),
-    capabilities: vi.fn().mockResolvedValue([]),
-    pastChats: (...args: unknown[]) => pastChatsMock(...args),
-  },
-}));
+let api: ReturnType<typeof chatBackend>;
 
 vi.mock("@/lib/sse", async () => (await import("../fakes/sse")).sseModule);
 
@@ -107,7 +92,6 @@ function seedStore(opts: { lastReadAt?: string | null } = {}) {
     fullBots: {},
   });
   chatSessions.store.setState({ sessions: {} });
-  usePeopleStore.setState({ role: "owner" });
 }
 
 const done = (id: string, role: ChatMessage["role"], text: string, createdAt: number) =>
@@ -120,7 +104,7 @@ function snapshot(messages: ChatMessage[], busy = false) {
   });
 }
 
-function renderPane(bot: Bot = HOST) {
+async function renderPane(bot: Bot = HOST) {
   render(
     <AppQueryProvider>
       <BrowserRouter>
@@ -128,27 +112,29 @@ function renderPane(bot: Bot = HOST) {
       </BrowserRouter>
     </AppQueryProvider>,
   );
+  await viewerLoaded(api);
   return screen.getByRole("textbox") as HTMLTextAreaElement;
 }
 
 const user = userEvent.setup();
+const sends = () => api.sent<SendMessageBody>("POST", "/bots/host/messages");
+const resets = () => api.sent("POST", "/bots/host/reset");
+const aborts = () => api.sent("POST", "/bots/host/abort");
+const newConversation = () =>
+  api.post("/bots/host/reset", (): Bot => ({ ...HOST, conversationId: "c2" }));
 
 beforeEach(() => {
-  sendMock.mockClear();
-  pastChatsMock.mockResolvedValue([]);
-  readMock.mockClear();
-  abortMock.mockClear();
-  resetMock.mockReset();
-  withdrawMock.mockClear();
+  api = chatBackend(HOST);
+  signedInAs(api, "owner");
   localStorage.clear();
 });
 
 describe("ChatPane composer — Enter behavior by pointer type", () => {
   it("sends on Enter with a fine (desktop) pointer", async () => {
     seedStore();
-    const composer = renderPane();
+    const composer = await renderPane();
     await user.type(composer, "hello desktop{Enter}");
-    await waitFor(() => expect(sendMock).toHaveBeenCalledOnce());
+    await waitFor(() => expect(sends()).toHaveLength(1));
     expect(composer.value).toBe("");
   });
 
@@ -173,14 +159,14 @@ describe("ChatPane composer — Enter behavior by pointer type", () => {
       })),
     );
     try {
-      const composer = renderPane();
+      const composer = await renderPane();
       await user.type(composer, "hello mobile{Enter}second line");
-      expect(sendMock).not.toHaveBeenCalled();
+      expect(sends()).toHaveLength(0);
       expect(composer.value).toBe("hello mobile\nsecond line");
 
       await user.click(screen.getByRole("button", { name: "Send message" }));
-      await waitFor(() => expect(sendMock).toHaveBeenCalledOnce());
-      expect(sendMock.mock.calls[0]![2]).toBe("hello mobile\nsecond line");
+      await waitFor(() => expect(sends()).toHaveLength(1));
+      expect(sends()[0]!.body.text).toBe("hello mobile\nsecond line");
     } finally {
       vi.unstubAllGlobals();
     }
@@ -188,9 +174,9 @@ describe("ChatPane composer — Enter behavior by pointer type", () => {
 });
 
 describe("ChatPane transcript", () => {
-  it("draws the New messages divider above the first reply that arrived while away", () => {
+  it("draws the New messages divider above the first reply that arrived while away", async () => {
     seedStore({ lastReadAt: new Date(1_500).toISOString() });
-    renderPane();
+    await renderPane();
     snapshot([
       done("u1", "user", "read question", 1_000),
       done("a1", "assistant", "first unread reply", 2_000),
@@ -203,16 +189,16 @@ describe("ChatPane transcript", () => {
 
   it("waits for the first snapshot before showing the empty state", async () => {
     seedStore();
-    renderPane();
+    await renderPane();
     expect(screen.queryByText(/say hi/i)).toBeNull();
     expect(screen.queryByText(/reconnecting/i)).toBeNull();
     snapshot([]);
     expect(await screen.findByText(/say hi/i)).toBeInTheDocument();
   });
 
-  it("shows typing dots until the reply's first token arrives", () => {
+  it("shows typing dots until the reply's first token arrives", async () => {
     seedStore();
-    renderPane();
+    await renderPane();
     snapshot([done("u1", "user", "hi", 1_000)], true);
     expect(screen.getByTestId("typing-indicator")).toBeInTheDocument();
     botStream("host").send({
@@ -230,14 +216,14 @@ describe("ChatPane transcript", () => {
 
   it("draws an Echo in the transcript and a held message over the composer, with its cancel", async () => {
     seedStore();
-    sendMock.mockReturnValueOnce(new Promise(() => undefined));
-    const composer = renderPane();
+    api.post("/bots/host/messages", () => new Promise(() => undefined));
+    const composer = await renderPane();
     snapshot([done("u1", "user", "hi", 1_000)], true);
     await user.type(composer, "also this{Enter}");
     expect(await screen.findByText("also this")).toBeInTheDocument();
     expect(screen.queryByTestId("queued-bubble")).toBeNull();
 
-    const requestId = sendMock.mock.calls[0]![1] as string;
+    const requestId = sends()[0]!.body.requestId;
     botStream("host").send({
       type: "queued",
       items: [{ requestId, mode: "steer", text: "also this" }],
@@ -246,20 +232,20 @@ describe("ChatPane transcript", () => {
     expect(row).toHaveAttribute("data-mode", "steer");
     expect(row).toHaveTextContent("Steeringalso this");
     await user.click(screen.getByRole("button", { name: "Cancel this message" }));
-    expect(withdrawMock).toHaveBeenCalledWith("host", requestId);
+    expect(api.sent("DELETE", `/bots/host/messages/${requestId}`)).toHaveLength(1);
   });
 });
 
 describe("ChatPane composer — one action button", () => {
-  function renderBusy(busy: boolean) {
+  async function renderBusy(busy: boolean) {
     seedStore();
-    const composer = renderPane();
+    const composer = await renderPane();
     snapshot([done("u1", "user", "hi", 1_000)], busy);
     return composer;
   }
 
   it("shows only Stop while replying with nothing typed, and Steer once text is typed", async () => {
-    const composer = renderBusy(true);
+    const composer = await renderBusy(true);
     expect(screen.getByRole("button", { name: "Stop generating" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /send message|steer the reply/i })).toBeNull();
 
@@ -268,26 +254,26 @@ describe("ChatPane composer — one action button", () => {
     expect(screen.queryByRole("button", { name: "Stop generating" })).toBeNull();
   });
 
-  it("shows only Send when idle", () => {
-    renderBusy(false);
+  it("shows only Send when idle", async () => {
+    await renderBusy(false);
     expect(screen.getByRole("button", { name: "Send message" })).toBeDisabled();
     expect(screen.queryByRole("button", { name: "Stop generating" })).toBeNull();
   });
 
   it("stops the reply on Escape and shows the stop as pending until the run ends", async () => {
-    const composer = renderBusy(true);
+    const composer = await renderBusy(true);
     composer.focus();
     await user.keyboard("{Escape}");
-    expect(abortMock).toHaveBeenCalledOnce();
+    expect(aborts()).toHaveLength(1);
     expect(await screen.findByRole("button", { name: "Stopping" })).toBeDisabled();
 
     await user.keyboard("{Escape}");
-    expect(abortMock).toHaveBeenCalledOnce();
+    expect(aborts()).toHaveLength(1);
   });
 
   it("keeps an unsent draft per bot across remounts and clears it on send", async () => {
     seedStore();
-    const composer = renderPane();
+    const composer = await renderPane();
     await user.type(composer, "half-written thought");
     cleanup();
 
@@ -297,27 +283,42 @@ describe("ChatPane composer — one action button", () => {
       conversationId: "c2",
       name: "Other Bot",
     };
-    const otherComposer = renderPane(other);
+    const otherComposer = await renderPane(other);
     expect(otherComposer.value).toBe("");
     await user.type(otherComposer, "a different thought");
     cleanup();
 
-    const again = renderPane();
+    const again = await renderPane();
     expect(again.value).toBe("half-written thought");
     await user.type(again, "{Enter}");
-    await waitFor(() => expect(sendMock).toHaveBeenCalledOnce());
+    await waitFor(() => expect(sends()).toHaveLength(1));
     cleanup();
 
-    expect(renderPane().value).toBe("");
+    expect((await renderPane()).value).toBe("");
     cleanup();
-    expect(renderPane(other).value).toBe("a different thought");
+    expect((await renderPane(other)).value).toBe("a different thought");
+  });
+
+  it("gives a refused message back as the draft even when the chat was left before the refusal", async () => {
+    seedStore();
+    let refuse: (reason: Error) => void = () => undefined;
+    api.post("/bots/host/messages", () => new Promise((_resolve, reject) => (refuse = reject)));
+    const composer = await renderPane();
+    await user.type(composer, "do not lose me{Enter}");
+    await waitFor(() => expect(sends()).toHaveLength(1));
+    cleanup();
+
+    await act(async () => refuse(new ApiFailure(500, "The bot is not reachable")));
+
+    const again = await renderPane();
+    await waitFor(() => expect(again.value).toBe("do not lose me"));
   });
 });
 
 describe("ChatPane header", () => {
-  it("keeps the header to the bot menu and three quiet icons: live view, Past chats and New chat", () => {
+  it("keeps the header to the bot menu and three quiet icons: live view, Past chats and New chat", async () => {
     seedStore();
-    renderPane({ ...HOST, description: "Plans trips" });
+    await renderPane({ ...HOST, description: "Plans trips" });
     const header = screen.getByRole("banner");
     expect(within(header).getByRole("button", { name: "Host Bot menu" })).toBeInTheDocument();
     expect(
@@ -339,7 +340,7 @@ describe("ChatPane header", () => {
         </BrowserRouter>
       </AppQueryProvider>,
     );
-    await user.click(screen.getByRole("button", { name: "Host Bot menu" }));
+    await user.click(await screen.findByRole("button", { name: "Host Bot menu" }));
     expect(screen.queryByTestId("yolo-toggle")).toBeNull();
     await user.click(await screen.findByRole("menuitem", { name: "Bot settings" }));
     expect(onEditBot).toHaveBeenCalledOnce();
@@ -347,7 +348,7 @@ describe("ChatPane header", () => {
 
   it("shows YOLO as a chip in the composer, as Code's composer does", async () => {
     seedStore();
-    renderPane();
+    await renderPane();
     snapshot([]);
     const chip = screen.getByRole("button", { name: "YOLO" });
     expect(chip).toHaveAttribute("aria-pressed", "false");
@@ -361,8 +362,8 @@ describe("ChatPane header", () => {
 
   it("disables new chat on an empty conversation and starts one without asking otherwise", async () => {
     seedStore();
-    resetMock.mockResolvedValueOnce({ ...HOST, conversationId: "c2" });
-    renderPane();
+    newConversation();
+    await renderPane();
     snapshot([]);
     const newChat = screen.getByRole("button", { name: "Start a new chat" });
     expect(newChat).toBeDisabled();
@@ -373,14 +374,13 @@ describe("ChatPane header", () => {
     });
     expect(newChat).toBeEnabled();
     await user.keyboard("{Control>}{Shift>}o{/Shift}{/Control}");
-    await waitFor(() => expect(resetMock).toHaveBeenCalledWith("host"));
+    await waitFor(() => expect(resets()).toHaveLength(1));
     expect(screen.queryByRole("dialog", { name: "Start a new chat?" })).toBeNull();
   });
 
   it("New chat reopens the chat on the bot's fresh conversation, the old transcript gone", async () => {
     seedStore();
-    const fresh = { ...HOST, conversationId: "c2" };
-    resetMock.mockResolvedValueOnce(fresh);
+    newConversation();
     useBotsStore.setState({ fullBots: { host: HOST } });
     function Live() {
       const bot = useBotsStore((s) => s.fullBots.host) ?? HOST;
@@ -393,12 +393,13 @@ describe("ChatPane header", () => {
         </BrowserRouter>
       </AppQueryProvider>,
     );
+    await viewerLoaded(api);
     snapshot([done("u1", "user", "the old conversation", 1_000)]);
     const opens = openedPaths.length;
 
     await user.click(screen.getByRole("button", { name: "Start a new chat" }));
     await waitFor(() => expect(openedPaths.length).toBe(opens + 1));
-    expect(resetMock).toHaveBeenCalledWith("host");
+    expect(resets()).toHaveLength(1);
     expect(screen.queryByText("the old conversation")).toBeNull();
     snapshot([]);
     expect(await screen.findByText(/say hi/i)).toBeInTheDocument();
@@ -406,51 +407,57 @@ describe("ChatPane header", () => {
 
   it("/new in the composer starts a new chat without the confirm and sends nothing", async () => {
     seedStore();
-    resetMock.mockResolvedValueOnce({ ...HOST, conversationId: "c2" });
-    const composer = renderPane();
+    newConversation();
+    const composer = await renderPane();
     snapshot([done("u1", "user", "the old conversation", 1_000)]);
 
     await user.type(composer, " /new {Enter}");
-    await waitFor(() => expect(resetMock).toHaveBeenCalledWith("host"));
-    expect(sendMock).not.toHaveBeenCalled();
+    await waitFor(() => expect(resets()).toHaveLength(1));
+    expect(sends()).toHaveLength(0);
     expect(composer.value).toBe("");
     expect(screen.queryByRole("dialog", { name: "Start a new chat?" })).toBeNull();
   });
 
   it("/new keeps the draft until the chat and the account have loaded", async () => {
     seedStore();
-    usePeopleStore.setState({ role: null });
-    const composer = renderPane();
+    newConversation();
+    let answer: (value: PeopleMe) => void = () => undefined;
+    api.get("/people/me", () => new Promise<PeopleMe>((resolve) => (answer = resolve)));
+    const composer = await renderPane();
 
     await user.type(composer, "/new{Enter}");
     expect(composer.value).toBe("/new");
-    expect(resetMock).not.toHaveBeenCalled();
-    expect(sendMock).not.toHaveBeenCalled();
+    expect(resets()).toHaveLength(0);
+    expect(sends()).toHaveLength(0);
 
     snapshot([done("u1", "user", "the old conversation", 1_000)]);
     await user.keyboard("{Enter}");
     expect(composer.value).toBe("/new");
-    expect(resetMock).not.toHaveBeenCalled();
+    expect(resets()).toHaveLength(0);
 
-    usePeopleStore.setState({ role: "owner" });
-    await user.keyboard("{Enter}");
-    await waitFor(() => expect(resetMock).toHaveBeenCalledWith("host"));
+    await act(async () => answer({ guest: false }));
+    await waitFor(async () => {
+      await user.keyboard("{Enter}");
+      expect(resets()).toHaveLength(1);
+    });
     expect(composer.value).toBe("");
   });
 
   it("lists past chats on the bot menu's Chat history page", async () => {
     seedStore();
-    pastChatsMock.mockResolvedValue([
-      {
-        id: "c1",
-        title: "Goa trip",
-        startedAt: "2026-10-12T10:00:00.000Z",
-        endedAt: "2026-10-20T10:00:00.000Z",
-        lastMessagePreview: "Booked the 6:40 flight",
-        messageCount: 34,
-      },
-    ]);
-    renderPane();
+    api.get("/bots/host/chats", (): PastChatList => ({
+      chats: [
+        {
+          id: "c1",
+          title: "Goa trip",
+          startedAt: "2026-10-12T10:00:00.000Z",
+          endedAt: "2026-10-20T10:00:00.000Z",
+          lastMessagePreview: "Booked the 6:40 flight",
+          messageCount: 34,
+        },
+      ],
+    }));
+    await renderPane();
     await user.click(screen.getByRole("button", { name: "Host Bot menu" }));
     await user.click(await screen.findByRole("menuitem", { name: "Chat history" }));
     expect(await screen.findByText("Goa trip")).toBeInTheDocument();
@@ -459,7 +466,7 @@ describe("ChatPane header", () => {
 
   it("says so on the history page when there is no past chat yet", async () => {
     seedStore();
-    renderPane();
+    await renderPane();
     await user.click(screen.getByRole("button", { name: "Host Bot menu" }));
     await user.click(await screen.findByRole("menuitem", { name: "Chat history" }));
     expect(

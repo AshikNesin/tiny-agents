@@ -89,7 +89,7 @@ test.describe("Routines", () => {
     await page.goto(`/chats/${botId}`);
     const line = page.getByTestId("routine-runs").filter({ hasText: ROUTINE_NAME });
     await expect(line).toBeVisible({ timeout: 20_000 });
-    await expect(line.getByRole("button")).toContainText("done");
+    await expect(line.getByRole("button")).toContainText("succeeded");
     await expect(page.getByText(`**Routine "${ROUTINE_NAME}"`)).toHaveCount(0);
     await line.getByRole("button").click();
     await expect(line.getByTestId("routine-run")).toBeVisible();

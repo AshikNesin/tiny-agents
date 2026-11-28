@@ -1,44 +1,42 @@
 import React from "react";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, beforeEach, expect, it, vi } from "vite-plus/test";
+import { describe, beforeEach, expect, it } from "vite-plus/test";
 import { MemoryRouter } from "react-router-dom";
 import { Routines } from "@/pages/routines/Routines";
 import { GrootUIProvider } from "@groot/ui";
-import type { Routine, RoutineRun } from "../../../apps/web/src/shared/api/routines";
+import type { BotListEntry } from "../../../apps/web/src/shared/api/bots";
+import type { Deleted } from "../../../apps/web/src/shared/api/common";
+import type {
+  Routine,
+  RoutineHook,
+  RoutineRun,
+  RoutineRuns,
+  RoutineRunStarted,
+  RoutineWithPreview,
+} from "../../../apps/web/src/shared/api/routines";
+import { FIXED_NOW } from "../../test-clock";
+import { fakeApi } from "../fakes/api";
 import { AppQueryProvider } from "../query-provider";
 
-vi.mock("@/lib/bots-api", () => ({
-  botsApi: {
-    list: vi.fn().mockResolvedValue([{ id: "b1", name: "Helper Bot" }]),
-  },
-}));
+let api: ReturnType<typeof fakeApi>;
 
-const listMock = vi.fn();
-const recentRunsMock = vi.fn();
-const createMock = vi.fn();
-const updateMock = vi.fn();
-const runNowMock = vi.fn();
-const removeMock = vi.fn();
-const rotateHookMock = vi.fn();
-
-vi.mock("@/lib/routines-api", async (importOriginal) => {
-  const original = await importOriginal<typeof import("@/lib/routines-api")>();
-  return {
-    ...original,
-    routinesApi: {
-      list: (...args: unknown[]) => listMock(...args),
-      recentRuns: (...args: unknown[]) => recentRunsMock(...args),
-      create: (...args: unknown[]) => createMock(...args),
-      update: (...args: unknown[]) => updateMock(...args),
-      runNow: (...args: unknown[]) => runNowMock(...args),
-      pause: vi.fn(),
-      resume: vi.fn(),
-      remove: (...args: unknown[]) => removeMock(...args),
-      rotateHook: (...args: unknown[]) => rotateHookMock(...args),
-    },
-  };
-});
+const helperBot: BotListEntry = {
+  id: "b1",
+  conversationId: "c1",
+  name: "Helper Bot",
+  description: "",
+  modelId: null,
+  lastMessagePreview: null,
+  lastActivityAt: FIXED_NOW,
+  lastReadAt: null,
+  unread: false,
+  replying: false,
+  approvals: 0,
+  questions: 0,
+  pinnedAt: null,
+  projectId: null,
+};
 
 const routine: Routine = {
   id: "r1",
@@ -80,13 +78,15 @@ const run: RoutineRun = {
 };
 
 function loadPage(routines: Routine[] = [routine], runs: RoutineRun[] = [run]) {
-  listMock.mockResolvedValue(routines);
-  recentRunsMock.mockResolvedValue({ runs });
-  createMock.mockResolvedValue({ ...routine, nextFireTimes: [] });
-  updateMock.mockResolvedValue({ ...routine, nextFireTimes: [] });
-  runNowMock.mockResolvedValue({ runId: "run2" });
-  removeMock.mockResolvedValue({ deleted: true });
+  api.get("/routines", () => routines);
+  api.get("/routines/runs/recent", (): RoutineRuns => ({ runs }));
+  api.post("/routines", (): RoutineWithPreview => ({ ...routine, nextFireTimes: [] }));
+  api.patch("/routines/:id", (): RoutineWithPreview => ({ ...routine, nextFireTimes: [] }));
+  api.post("/routines/:id/run", (): RoutineRunStarted => ({ runId: "run2" }));
+  api.delete("/routines/:id", (): Deleted => ({ deleted: true }));
 }
+
+const created = () => api.sent("POST", "/routines");
 
 function mount() {
   return render(
@@ -117,7 +117,8 @@ async function fillBasics(user: ReturnType<typeof userEvent.setup>) {
 
 describe("Routines page", { timeout: 15_000 }, () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    api = fakeApi();
+    api.get("/bots", () => [helperBot]);
   });
 
   it("renders upcoming runs, schedule cards, and recent executions in IST", async () => {
@@ -143,18 +144,20 @@ describe("Routines page", { timeout: 15_000 }, () => {
       hasHook: true,
     };
     loadPage([webhook], []);
-    rotateHookMock.mockResolvedValue({ url: "https://app.test/api/v1/routines/hooks/tok123" });
+    api.post("/routines/:id/hook", (): RoutineHook => ({
+      url: "https://app.test/api/v1/routines/hooks/tok123",
+    }));
     const user = userEvent.setup();
     mount();
 
     expect(await screen.findByText("Runs when its webhook URL is called")).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "Webhook URL" }));
-    expect(rotateHookMock).not.toHaveBeenCalled();
+    expect(api.sent("POST", "/routines/r9/hook")).toEqual([]);
     await user.click(await screen.findByRole("button", { name: "Make new URL" }));
 
     const field = await screen.findByLabelText("Webhook URL");
     expect((field as HTMLInputElement).value).toBe("https://app.test/api/v1/routines/hooks/tok123");
-    expect(rotateHookMock).toHaveBeenCalledWith("r9");
+    expect(api.sent("POST", "/routines/r9/hook")).toHaveLength(1);
   });
 
   it("creates a webhook routine from the Webhook schedule tab", async () => {
@@ -166,8 +169,8 @@ describe("Routines page", { timeout: 15_000 }, () => {
     await user.click(screen.getByRole("tab", { name: "Webhook" }));
     expect(screen.getByText("When its webhook URL is called")).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "Create" }));
-    await waitFor(() => expect(createMock).toHaveBeenCalled());
-    expect(createMock.mock.calls[0]![0]).toMatchObject({ schedule: { kind: "webhook" } });
+    await waitFor(() => expect(created()).toHaveLength(1));
+    expect(created()[0]!.body).toMatchObject({ schedule: { kind: "webhook" } });
   });
 
   it("editing shows the routine's progress note, and clearing it saves null", async () => {
@@ -179,8 +182,8 @@ describe("Routines page", { timeout: 15_000 }, () => {
     expect((note as HTMLTextAreaElement).value).toBe("Done: links 1-5. Next: 6.");
     await user.clear(note);
     await user.click(screen.getByRole("button", { name: "Save" }));
-    await waitFor(() => expect(updateMock).toHaveBeenCalled());
-    expect(updateMock.mock.calls[0]![1]).toMatchObject({ progress: null });
+    await waitFor(() => expect(api.sent("PATCH", "/routines/r1")).toHaveLength(1));
+    expect(api.sent("PATCH", "/routines/r1")[0]!.body).toMatchObject({ progress: null });
   });
 
   it("says how often a routine messaged you, and flags one that messages every run", async () => {
@@ -203,7 +206,7 @@ describe("Routines page", { timeout: 15_000 }, () => {
   it("shows what a run spent in tokens beside how long it took", async () => {
     loadPage([routine], [{ ...run, tokens: 42_300 }]);
     mount();
-    expect(await screen.findByText(/took 1m 4s · 42k tokens/)).toBeTruthy();
+    expect(await screen.findByText(/took 1m 4s · 42K tokens/)).toBeTruthy();
   });
 
   it("creates a routine with the compiled interval schedule", async () => {
@@ -222,8 +225,8 @@ describe("Routines page", { timeout: 15_000 }, () => {
     expect(screen.getAllByText(/IST$/).length).toBeGreaterThanOrEqual(3);
 
     await user.click(screen.getByRole("button", { name: "Create" }));
-    await waitFor(() => expect(createMock).toHaveBeenCalledTimes(1));
-    expect(createMock).toHaveBeenCalledWith(
+    await waitFor(() => expect(created()).toHaveLength(1));
+    expect(created()[0]!.body).toEqual(
       expect.objectContaining({
         botId: "b1",
         name: "e2e-routine",
@@ -249,8 +252,8 @@ describe("Routines page", { timeout: 15_000 }, () => {
     expect(within(dialog).getAllByText(/\d{2}:\d{2} IST/).length).toBe(3);
 
     await user.click(screen.getByRole("button", { name: "Create" }));
-    await waitFor(() => expect(createMock).toHaveBeenCalledTimes(1));
-    expect(createMock.mock.calls[0][0].schedule).toEqual({ kind: "cron", expr: "30 18 * * *" });
+    await waitFor(() => expect(created()).toHaveLength(1));
+    expect(created()[0]!.body).toMatchObject({ schedule: { kind: "cron", expr: "30 18 * * *" } });
   });
 
   it("sends a once schedule with the +05:30 IST offset", async () => {
@@ -274,10 +277,9 @@ describe("Routines page", { timeout: 15_000 }, () => {
     );
     await fillBasics(user);
     await user.click(screen.getByRole("button", { name: "Create" }));
-    await waitFor(() => expect(createMock).toHaveBeenCalledTimes(1));
-    expect(createMock.mock.calls[0][0].schedule).toEqual({
-      kind: "once",
-      at: `${year}-11-01T09:00:00+05:30`,
+    await waitFor(() => expect(created()).toHaveLength(1));
+    expect(created()[0]!.body).toMatchObject({
+      schedule: { kind: "once", at: `${year}-11-01T09:00:00+05:30` },
     });
   });
 
@@ -286,11 +288,13 @@ describe("Routines page", { timeout: 15_000 }, () => {
     const user = userEvent.setup({ pointerEventsCheck: 0 });
     mount();
 
-    listMock.mockImplementation(async () =>
-      updateMock.mock.calls.at(-1)?.[1]?.enabled === false
-        ? [{ ...routine, enabled: false, nextRunAt: null }]
-        : [routine],
-    );
+    const updates = () => api.sent("PATCH", "/routines/r1").map((request) => request.body);
+    let saved: Routine = routine;
+    api.get("/routines", () => [saved]);
+    api.patch("/routines/:id", (): RoutineWithPreview => {
+      saved = saved.enabled ? { ...routine, enabled: false, nextRunAt: null } : routine;
+      return { ...saved, nextFireTimes: [] };
+    });
 
     const toggle = await screen.findByRole("switch", { name: /pause morning-digest/i });
     await user.click(toggle);
@@ -299,7 +303,7 @@ describe("Routines page", { timeout: 15_000 }, () => {
     });
     await user.click(resumeToggle);
 
-    await waitFor(() => expect(updateMock).toHaveBeenNthCalledWith(2, "r1", { enabled: true }));
+    await waitFor(() => expect(updates()).toEqual([{ enabled: false }, { enabled: true }]));
   });
 
   it("runs now and records the action", async () => {
@@ -308,7 +312,7 @@ describe("Routines page", { timeout: 15_000 }, () => {
     mount();
 
     await user.click(await screen.findByRole("button", { name: /run now/i }));
-    await waitFor(() => expect(runNowMock).toHaveBeenCalledWith("r1"));
+    await waitFor(() => expect(api.sent("POST", "/routines/r1/run")).toHaveLength(1));
   });
 
   it("shows a started run's result without a reload", async () => {
@@ -318,8 +322,10 @@ describe("Routines page", { timeout: 15_000 }, () => {
       finishedAt: null,
       output: null,
     };
-    listMock.mockResolvedValue([routine]);
-    recentRunsMock.mockResolvedValueOnce({ runs: [awaiting] }).mockResolvedValue({ runs: [run] });
+    api.get("/routines", () => [routine]);
+    api.get("/routines/runs/recent", (): RoutineRuns => ({
+      runs: api.sent("GET", "/routines/runs/recent").length === 1 ? [awaiting] : [run],
+    }));
     mount();
 
     expect(await screen.findByText("awaiting")).toBeTruthy();
@@ -352,8 +358,8 @@ describe("Routines page", { timeout: 15_000 }, () => {
     );
     await user.click(screen.getByRole("button", { name: "Create" }));
 
-    await waitFor(() => expect(createMock).toHaveBeenCalledTimes(1));
-    expect(createMock.mock.calls[0][0]).toMatchObject({
+    await waitFor(() => expect(created()).toHaveLength(1));
+    expect(created()[0]!.body).toMatchObject({
       botId: "b1",
       name: "Summarize what changed in my repos…",
       schedule: { kind: "cron" },

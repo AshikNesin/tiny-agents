@@ -6,7 +6,8 @@ import type { DeliveryRuntime } from "../bots/bots.delivery";
 import { deliverHandoffFinish } from "./code.bots";
 import { createCodeHub, setCodeHub } from "./code.hub";
 import { buildHarnesses } from "./code.registry";
-import { onTurnEnded, rearmReconcilers } from "./code.pulls";
+import { onTurnEnded } from "./code.pulls";
+import { rearmReconcilers } from "./code.pulls.reconcile";
 import { startCodeWatcher } from "./code.watcher";
 import { threadKey } from "./code.threads";
 

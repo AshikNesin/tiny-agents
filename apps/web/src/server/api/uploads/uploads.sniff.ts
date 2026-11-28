@@ -1,4 +1,5 @@
 import { unzipSync } from "fflate";
+import { logger } from "@groot/core/logger";
 import { sniffImage } from "./uploads.prepare";
 import { startsWith, type ExtractKind } from "./uploads.text";
 
@@ -15,7 +16,7 @@ export class SniffError extends Error {}
 
 const IMAGE_EXTENSIONS = ["png", "jpg", "jpeg", "webp", "gif"];
 
-export const TEXT_EXTENSIONS = new Set([
+export const TEXT_EXTENSIONS: ReadonlySet<string> = new Set([
   "txt",
   "md",
   "log",
@@ -123,7 +124,12 @@ function zipEntryNames(bytes: Uint8Array): string[] {
         return false;
       },
     });
-  } catch {}
+  } catch (error) {
+    logger.debug(
+      { error, listed: names.length },
+      "Uploads: a zip's entries could not all be listed",
+    );
+  }
   return names;
 }
 
@@ -232,4 +238,9 @@ export function sniffFile(bytes: Uint8Array, ext: string): SniffResult {
             ? "yaml"
             : "text";
   return { mime, kind };
+}
+
+export function extensionOf(name: string): string {
+  const dot = name.lastIndexOf(".");
+  return dot === -1 ? "" : name.slice(dot + 1).toLowerCase();
 }

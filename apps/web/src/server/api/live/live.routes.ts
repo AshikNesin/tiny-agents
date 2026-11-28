@@ -3,10 +3,10 @@ import type { LiveComputer } from "@tiny-agents/sandbox/computer";
 import { Boom } from "@groot/core/errors";
 import { browserLiveViewHint, getBrowserSessions } from "../bots/browser.sessions";
 import { SHARED_BROWSER_PROFILE } from "../bots/browser.targets";
-import { issueBrowserPageVncTicket, issueVncTicket } from "../bots/browser.vnc";
+import { issueBrowserPageVncTicket, issueVncTicket } from "./browser.vnc";
 import { computerSetupHint, getComputerSessions } from "../bots/computer.sessions";
-import { issueComputerVncTicket, issueDesktopVncTicket } from "../bots/computer.vnc";
-import { listProfiles } from "../bots/profiles";
+import { issueComputerVncTicket, issueDesktopVncTicket } from "./computer.vnc";
+import { listProfiles } from "./profiles";
 import { liveRouter, OWNER_TAB, type LiveAddress, type LiveSurface } from "./live.router";
 import type {
   BrowserProfile,

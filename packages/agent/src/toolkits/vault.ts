@@ -1,6 +1,6 @@
 import type { Context } from "@earendil-works/chord/context";
 import { Type } from "typebox";
-import type { JsonObject, ToolExecutionApi, ToolExecutionResult } from "@earendil-works/pi-durable";
+import type { JsonObject, ToolExecutionApi } from "@earendil-works/pi-durable";
 import { z } from "zod";
 import { gateApproved, type GateHooks, type GatePlan } from "../approvals";
 import type { Capability } from "../capabilities";
@@ -21,17 +21,13 @@ import {
   type VaultPlan,
   type VaultUse,
 } from "../vault";
+import { fail } from "./result";
 
 const VAULT_APPROVAL_TTL_MS = 10 * 60_000;
 
 export interface VaultToolkitOptions {
   broker?: VaultBroker;
 }
-
-const fail = (text: string): ToolExecutionResult => ({
-  output: [{ type: "text", text }],
-  isError: true,
-});
 
 function describeItem(item: VaultItemMeta): string {
   const lines = [`- ${item.handle} (${item.kind}): ${item.label}`];

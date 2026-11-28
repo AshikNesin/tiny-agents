@@ -1,4 +1,5 @@
 import { CHAT_WINDOW, type AgentRuntime } from "@tiny-agents/agent";
+import { logger } from "@groot/core/logger";
 import type { BotStreamEvent } from "../../../shared/bot-stream";
 import { chatCards } from "../routines/routines.cards";
 import { onBotChatEvent } from "./bots.events";
@@ -26,7 +27,9 @@ export async function followBotChat(
     for (const next of stops.splice(0).reverse()) {
       try {
         next();
-      } catch {}
+      } catch (error) {
+        logger.warn({ error, botId: bot.id }, "Bot stream: a watcher did not stop cleanly");
+      }
     }
   };
   const conversation = conversationRef(bot.conversationId);

@@ -3,75 +3,43 @@ import {
   WORKFLOW_KINDS,
   type WorkflowName,
 } from "../../../shared/code-status";
-import { eq, inArray } from "drizzle-orm";
 import { Boom } from "@groot/core/errors";
 import { logger } from "@groot/core/logger";
-import { notificationService } from "@groot/core/notification/notification.service";
-import { addJob, cancelJob } from "@groot/jobs/server/queue";
-import { registerJobHandler } from "@groot/jobs/server/worker";
-import {
-  GitHubError,
-  type GitHubClient,
-  type MergeMethod,
-  type PullSnapshot,
-} from "@tiny-agents/github";
+import type { MergeMethod } from "@tiny-agents/github";
 import type { TurnOutcome } from "@tiny-agents/code/server";
-import {
-  codeThreads,
-  db,
-  jobs,
-  type CodePullRow,
-  type CodeProjectRow,
-  type CodeThreadRow,
-} from "../../db";
-import type { PullView, ThreadPullsView } from "../../../shared/api/code";
-import { codePullUpdate, type CodePullKind } from "../notifications/notifications.events";
-import {
-  actionableItems,
-  checksJustFailed,
-  DEFAULT_AUTOFIX,
-  decide,
-  ignoredItems,
-  nextLookMs,
-  stalledChecks,
-  stateHash,
-  type AutofixSettings,
-} from "./code.autofix";
+import type { CodePullRow, CodeProjectRow, CodeThreadRow } from "../../db";
+import type { ThreadPullsView } from "../../../shared/api/code";
+import { actionableItems, stateHash } from "./code.autofix";
+import { cancelPendingJob } from "../pending-jobs";
 import { checkpointTurn } from "./code.checkpoints";
 import { codeGitHub } from "./code.github";
 import { codeHub } from "./code.hub";
-import { threadKey } from "./code.threads";
 import { pullTitle } from "./code.naming";
-import { reportPull, type PullReportKind } from "./code.report";
-import { finishPass, startPass, timeOutPass } from "./code.passes";
-import { yoloWaiting } from "./code.yolo";
-import {
-  onProjectThreadArchived,
-  projectSettings,
-  projectThread,
-  projectView,
-  repoOf,
-} from "./code.projects";
+import { finishPass, startPass } from "./code.passes";
+import { projectSettings, projectThread, projectView, repoOf } from "./code.projects";
 import {
   appCommentIds,
   cacheSnapshot,
-  cachedSnapshot,
   deletePull,
   findPull,
   getPull,
   insertPull,
   moveLoop,
   openPullOf,
-  openPulls,
-  passRecord,
-  passesOf,
   pullsOf,
   runningPass,
-  setPendingJob,
   updatePull,
 } from "./code.pulls.store";
-
-export const RECONCILE_JOB = "code-pr-reconcile";
+import {
+  armReconcile,
+  autofixSettings,
+  githubMessage,
+  ownerLoginOf,
+  reconcileNow,
+  tellProjectChat,
+  YOLO_LOOK_MS,
+} from "./code.pulls.reconcile";
+import { pullView } from "./code.pulls.view";
 
 async function requireProjectThread(threadId: string) {
   const found = await projectThread(threadId);
@@ -91,44 +59,13 @@ async function openPullContext(threadId: string) {
   };
 }
 
-function autofixSettings(raw: string): AutofixSettings {
-  const s = projectSettings(raw).autofix;
-  return {
-    ...DEFAULT_AUTOFIX,
-    triggers: s.triggers,
-    trustedBots: s.trustedBots,
-    hourlyLimit: s.hourlyLimit,
-    noOwnerLimit: s.noOwnerLimit,
-    passMinutes: s.passMinutes,
-  };
+function logUnrefreshed(error: unknown, threadId: string): undefined {
+  logger.warn({ error, threadId }, "Code: could not refresh the thread's pull request from GitHub");
 }
 
-async function ownerLoginOf(
-  project: { transport: string },
-  github: Pick<GitHubClient, "viewer">,
-): Promise<string | null> {
-  if (project.transport === "app") return null;
-  return (await github.viewer().catch(() => undefined))?.login ?? null;
+function logUnknownOwner(error: unknown, threadId: string): undefined {
+  logger.warn({ error, threadId }, "Code: could not tell who owns the thread's pull request");
 }
-
-function logUntoldProjectChat(error: unknown, threadId: string) {
-  logger.warn({ error, threadId }, "Code: could not tell the project chat about a PR");
-}
-
-async function tellProjectChat(pull: CodePullRow, kind: PullReportKind, detail?: string) {
-  await reportPull(pull, kind, detail).catch((error: unknown) =>
-    logUntoldProjectChat(error, pull.threadId),
-  );
-}
-
-async function notify(pull: CodePullRow, kind: CodePullKind, detail?: string) {
-  await tellProjectChat(pull, kind, detail);
-  if ((codeHub()?.viewers(pull.threadId) ?? 0) > 0) return;
-  notificationService.notify(codePullUpdate(pull, kind, detail));
-}
-
-const githubMessage = (error: unknown) =>
-  error instanceof GitHubError || error instanceof Error ? error.message : String(error);
 
 function pullBody(commits: Array<{ sha: string; subject: string }>): string {
   const list = commits
@@ -155,7 +92,11 @@ export async function publish(
     )
       .viewer()
       .then((viewer) => viewer.login)
-      .catch(() => "tiny-agents");
+      .catch((error: unknown) => {
+        throw Boom.badGateway(
+          `GitHub did not say who you are, so nothing was committed: ${githubMessage(error)}`,
+        );
+      });
     await ws
       .commitAll(thread.worktree, thread.title?.trim() || `Changes on ${thread.branch}`, {
         name: login,
@@ -256,7 +197,7 @@ export async function linkPull(threadId: string, number: number): Promise<CodePu
 export async function unlinkPull(threadId: string): Promise<void> {
   const open = await openPullOf(threadId);
   if (!open) throw Boom.notFound("The thread has no open pull request.");
-  if (open.pendingJobId) await cancelJob(open.pendingJobId).catch(() => undefined);
+  if (open.pendingJobId) await cancelPendingJob(open.pendingJobId);
   await deletePull(open.id);
 }
 
@@ -347,8 +288,6 @@ export async function mergePull(threadId: string, picked?: MergeMethod): Promise
   await reconcileNow(open.id);
 }
 
-const YOLO_LOOK_MS = 30_000;
-
 export async function armYoloMerge(threadId: string, method: MergeMethod): Promise<void> {
   const { project, open, repo, github } = await openPullContext(threadId);
   const snapshot = await (await github()).snapshot(repo, open.number);
@@ -364,49 +303,6 @@ export async function armYoloMerge(threadId: string, method: MergeMethod): Promi
 export async function cancelYoloMerge(threadId: string): Promise<void> {
   const { open } = await openPullContext(threadId);
   await updatePull(open.id, { yoloMethod: null, yoloWaiting: null });
-}
-
-function keepWaitingWhenAThreadWillNotResolve(error: unknown, threadId: string) {
-  logger.warn({ error, threadId }, "Code: YOLO Merge could not resolve a review thread");
-}
-
-async function yoloStep(
-  pull: CodePullRow,
-  snapshot: PullSnapshot,
-  github: GitHubClient,
-  repo: ReturnType<typeof repoOf>,
-): Promise<"merged" | "waiting"> {
-  const method = pull.yoloMethod!;
-  for (const thread of snapshot.threads.filter((t) => !t.resolved)) {
-    await github
-      .resolveThread(thread.id)
-      .catch((error: unknown) => keepWaitingWhenAThreadWillNotResolve(error, thread.id));
-  }
-  let draft = snapshot.draft;
-  if (draft) {
-    try {
-      await github.markReady(snapshot.id);
-      draft = false;
-    } catch (error) {
-      logger.warn({ error, pull: pull.id }, "Code: YOLO Merge could not mark the PR ready");
-    }
-  }
-  const waiting = draft
-    ? "Waiting for the draft to be marked ready."
-    : yoloWaiting(snapshot, method);
-  if (waiting) {
-    await updatePull(pull.id, { yoloWaiting: waiting });
-    return "waiting";
-  }
-  try {
-    await github.merge(repo, pull.number, method);
-  } catch (error) {
-    await updatePull(pull.id, { yoloWaiting: `Waiting: GitHub said ${githubMessage(error)}` });
-    return "waiting";
-  }
-  await updatePull(pull.id, { yoloMethod: null, yoloWaiting: null });
-  await notify(pull, "merged");
-  return "merged";
 }
 
 export async function setPullDraft(threadId: string, draft: boolean): Promise<void> {
@@ -474,253 +370,6 @@ const NOTHING_TO_DO: Record<WorkflowName, string> = {
   resolve_conflicts: "The branch has no conflict with its base.",
 };
 
-async function reconcileNow(pullId: string): Promise<number | null> {
-  const hub = codeHub();
-  const work = () => reconcile(pullId);
-  return hub ? hub.serial(`code-pr:${pullId}`, work) : work();
-}
-
-async function reconcile(pullId: string, now = Date.now()): Promise<number | null> {
-  const before = await getPull(pullId);
-  if (!before || before.state !== "open") return null;
-  const found = await projectThread(before.threadId);
-  if (!found) return null;
-  const { project } = found;
-  const services = codeGitHub();
-  const github = await services.client(project);
-  let snapshot: PullSnapshot;
-  try {
-    snapshot = await github.snapshot(repoOf(project), before.number);
-  } catch (error) {
-    logger.warn({ error, pull: pullId }, "Code: could not read a linked pull request");
-    return 5 * 60_000;
-  }
-  let pull = await cacheSnapshot(pullId, snapshot);
-  if (!pull) return null;
-  const settings = autofixSettings(project.settings);
-
-  if (snapshot.state === "open" && pull.yoloMethod) {
-    if ((await yoloStep(pull, snapshot, github, repoOf(project))) === "merged") {
-      return reconcile(pullId, now);
-    }
-    pull = (await getPull(pull.id)) ?? pull;
-  }
-
-  if (snapshot.state === "merged") {
-    await moveLoop(pull.id, "merged");
-    await notify(pull, "merged");
-    if (projectSettings(project.settings).archiveOnMerge) await archiveThread(pull.threadId);
-    return null;
-  }
-  if (snapshot.state === "closed") {
-    await moveLoop(pull.id, "off", {
-      reason: "The pull request was closed.",
-      autofix: false,
-    });
-    if (
-      projectSettings(project.settings).archiveOnMerge &&
-      !(await holdsUncommittedWork(services, project, found.thread.worktree))
-    ) {
-      await archiveThread(pull.threadId);
-    }
-    return null;
-  }
-
-  const stalled = stalledChecks(snapshot, now, settings.stallHours);
-  if (stalled.length && pull.stalledNotifiedSha !== snapshot.headSha) {
-    await updatePull(pull.id, { stalledNotifiedSha: snapshot.headSha });
-    await notify(
-      pull,
-      "stalled",
-      `${stalled.map((c) => c.name).join(", ")} has been pending for hours.`,
-    );
-  }
-
-  const running = await runningPass(pull.id);
-  if (running?.status === "running") {
-    const target = codeHub()?.resolve(pull.threadId);
-    const outcome = await target?.instance.outcome(target.nativeId).catch(() => undefined);
-    if (
-      outcome &&
-      !outcome.working &&
-      (outcome.endedAt ?? 0) >= (running.startedAt?.getTime() ?? 0)
-    ) {
-      await finishPass(running, outcome);
-      pull = (await getPull(pull.id)) ?? pull;
-    }
-  }
-
-  const ownerLogin = await ownerLoginOf(project, github);
-  let lastPushAt: number | null = null;
-  for (let step = 0; step < 3; step += 1) {
-    const passes = await passesOf(pull.id);
-    lastPushAt = passes.find((p) => p.pushedSha)?.finishedAt?.getTime() ?? null;
-    const decision = decide({
-      snapshot,
-      loop: {
-        enabled: pull.autofix,
-        status: pull.loopStatus,
-        changedAt: pull.loopChangedAt?.getTime() ?? null,
-        headAtChange: pull.loopHeadSha,
-        passesWithoutOwner: pull.passesWithoutOwner,
-        ownerInputAt: pull.ownerInputAt?.getTime() ?? null,
-      },
-      passes: passes.map(passRecord),
-      appCommentIds: await appCommentIds(pull.id),
-      ownerLogin,
-      settings,
-      now,
-    });
-    if (pull.loopStatus === "green" && decision.kind !== "none" && decision.kind !== "green") {
-      await moveLoop(pull.id, "watching", { headSha: snapshot.headSha });
-      pull = (await getPull(pull.id)) ?? pull;
-    }
-    if (decision.kind === "resume") {
-      await moveLoop(pull.id, "watching", { headSha: snapshot.headSha });
-      pull = (await getPull(pull.id)) ?? pull;
-      continue;
-    }
-    if (decision.kind === "wait") {
-      return Math.max(5_000, decision.until - now);
-    }
-    if (decision.kind === "pass") {
-      await startPass(pull, decision.trigger, decision.items, decision.hash);
-    } else if (decision.kind === "green") {
-      if (await moveLoop(pull.id, "green", { headSha: snapshot.headSha }))
-        await notify(pull, "green");
-    } else if (decision.kind === "timeout") {
-      const pass = passes.find((p) => p.id === decision.passId);
-      if (pass) await timeOutPass(pass);
-    } else if (decision.kind === "needs_input") {
-      if (
-        await moveLoop(pull.id, "needs_input", {
-          reason: decision.reason,
-          headSha: snapshot.headSha,
-        })
-      ) {
-        await notify(pull, "needs_input", decision.reason);
-      }
-    } else if (decision.kind === "pause") {
-      if (
-        await moveLoop(pull.id, "paused", {
-          reason: decision.reason,
-          headSha: snapshot.headSha,
-        })
-      ) {
-        await notify(pull, "needs_input", decision.reason);
-      }
-    } else if (decision.kind === "off") {
-      if (
-        await moveLoop(pull.id, "off", {
-          reason: decision.reason,
-          autofix: false,
-        })
-      ) {
-        await notify(pull, "off", decision.reason);
-      }
-    } else if (decision.kind === "none" && !pull.autofix) {
-      const failed = checksJustFailed(cachedSnapshot(before), snapshot);
-      if (failed.length) await notify(pull, "checks_failed", failed.join(", "));
-    }
-    break;
-  }
-  const latest = (await getPull(pull.id)) ?? pull;
-  const next = nextLookMs(snapshot, latest.loopStatus, lastPushAt, now, settings.stallHours);
-  return latest.yoloMethod && next !== null ? Math.min(next, YOLO_LOOK_MS) : next;
-}
-
-async function holdsUncommittedWork(
-  services: ReturnType<typeof codeGitHub>,
-  project: CodeProjectRow,
-  worktree: string | null,
-): Promise<boolean> {
-  if (!worktree) return false;
-  const ws = await services.workspace(project);
-  if (!(await ws.exists(worktree))) return false;
-  return (await ws.uncommitted(worktree)).length > 0;
-}
-
-async function archiveThread(threadId: string): Promise<void> {
-  try {
-    await archiveCodeThread(threadId, true);
-  } catch (error) {
-    logger.warn({ error, threadId }, "Code: could not archive a finished thread");
-  }
-}
-
-export async function archiveCodeThread(threadId: string, archived: boolean): Promise<string[]> {
-  const target = codeHub()?.resolve(threadId);
-  const canArchive = target?.instance.archive && target.instance.capabilities().threads.archive;
-  const moved = canArchive
-    ? (await target.instance.archive!(target.nativeId, archived)).moved.map((child) =>
-        threadKey(target.instance.id, child),
-      )
-    : [];
-  for (const id of new Set([threadId, ...moved])) {
-    await db.update(codeThreads).set({ archived }).where(eq(codeThreads.id, id));
-    const open = archived ? await openPullOf(id) : undefined;
-    if (open)
-      await moveLoop(open.id, "off", { reason: "The thread was archived.", autofix: false });
-    await onProjectThreadArchived(id, archived);
-  }
-  if (target) void codeHub()?.refresh(target.instance.id);
-  return moved;
-}
-
-export async function armReconcile(
-  pullId: string,
-  delayMs: number,
-  expected?: string | null,
-): Promise<string | undefined> {
-  const work = async (): Promise<string | undefined> => {
-    const runAt = new Date(Date.now() + delayMs);
-    const jobId = await addJob(RECONCILE_JOB, { pullId }, { runAt, retryLimit: 1 });
-    if (await setPendingJob(pullId, jobId, expected)) {
-      if (expected === undefined) {
-        const rows = await db
-          .select()
-          .from(jobs)
-          .where(inArray(jobs.state, ["created"]));
-        for (const job of rows) {
-          const data = job.data as { pullId?: string } | null;
-          if (job.id !== jobId && job.name === RECONCILE_JOB && data?.pullId === pullId) {
-            await cancelJob(job.id).catch(() => undefined);
-          }
-        }
-      }
-      return jobId;
-    }
-    await cancelJob(jobId).catch(() => undefined);
-    return undefined;
-  };
-  const hub = codeHub();
-  return hub ? hub.serial(`code-pr-arm:${pullId}`, work) : work();
-}
-
-export function registerCodeJobs(): void {
-  registerJobHandler<{ pullId: string }>(RECONCILE_JOB, async (job) => {
-    const next = await reconcileNow(job.data.pullId);
-    if (next === null) {
-      await setPendingJob(job.data.pullId, null, job.id);
-      return { next: null };
-    }
-    await armReconcile(job.data.pullId, next, job.id);
-    return { next };
-  });
-}
-
-export async function rearmReconcilers(): Promise<number> {
-  let armed = 0;
-  for (const pull of await openPulls()) {
-    const live = pull.pendingJobId
-      ? await db.query.jobs.findFirst({ where: eq(jobs.id, pull.pendingJobId) })
-      : undefined;
-    if (live && (live.state === "created" || live.state === "active")) continue;
-    if (await armReconcile(pull.id, 5_000, pull.pendingJobId)) armed += 1;
-  }
-  return armed;
-}
-
 export async function onTurnEnded(threadId: string, outcome: TurnOutcome): Promise<void> {
   if (outcome.working) return;
   await checkpointTurn(threadId).catch((error: unknown) =>
@@ -728,78 +377,24 @@ export async function onTurnEnded(threadId: string, outcome: TurnOutcome): Promi
   );
   const open = await openPullOf(threadId);
   if (!open) {
-    if (await projectThread(threadId)) await linkByBranch(threadId).catch(() => undefined);
+    if (await projectThread(threadId)) {
+      await linkByBranch(threadId).catch((error: unknown) => logUnrefreshed(error, threadId));
+    }
     return;
   }
   const pass = await runningPass(open.id);
   if (pass?.status === "running") await finishPass(pass, outcome);
 }
 
-async function pullView(
-  row: CodePullRow,
-  ownerLogin: string | null,
-  settings: AutofixSettings,
-): Promise<PullView> {
-  const snapshot = cachedSnapshot(row);
-  const passes = await passesOf(row.id);
-  const ignored = snapshot
-    ? ignoredItems({
-        snapshot,
-        appCommentIds: await appCommentIds(row.id),
-        ownerLogin,
-        settings,
-      })
-    : [];
-  return {
-    id: row.id,
-    number: row.number,
-    url: row.url,
-    title: row.title,
-    state: row.state,
-    draft: row.draft,
-    headRef: row.headRef,
-    baseRef: row.baseRef,
-    syncedAt: row.syncedAt?.toISOString() ?? null,
-    autofix: row.autofix,
-    loop: { status: row.loopStatus, reason: row.loopReason },
-    yolo: row.yoloMethod ? { method: row.yoloMethod, waiting: row.yoloWaiting } : null,
-    snapshot,
-    stalled: snapshot
-      ? stalledChecks(snapshot, Date.now(), settings.stallHours).map((c) => c.name)
-      : [],
-    ignored,
-    passes: passes.map((p) => ({
-      id: p.id,
-      trigger: p.trigger,
-      status: p.status,
-      outcome: p.outcome,
-      detail: p.detail,
-      items: passItems(p.items),
-      pushedSha: p.pushedSha,
-      costUsd: p.costUsd,
-      createdAt: p.createdAt.toISOString(),
-      finishedAt: p.finishedAt?.toISOString() ?? null,
-    })),
-  };
+function countUnknownWhenGitFails(error: unknown): null {
+  logger.warn({ error }, "Code: git could not read a thread's worktree");
+  return null;
 }
 
-function passItems(raw: string): Array<{ id: string; title: string }> {
-  try {
-    const value = JSON.parse(raw) as unknown;
-    if (!Array.isArray(value)) return [];
-    return value
-      .filter((i): i is { id: string; title?: unknown } => typeof i?.id === "string")
-      .map((i) => ({
-        id: i.id,
-        title: typeof i.title === "string" ? i.title : i.id,
-      }));
-  } catch {
-    return [];
-  }
+function landingUnknownWhenGitFails(error: unknown): null {
+  logger.warn({ error }, "Code: git could not tell whether a thread's work landed");
+  return null;
 }
-
-const countUnknownWhenGitFails = (): null => null;
-const landingUnknownWhenGitFails = (): null => null;
 
 export async function pushBase(threadId: string): Promise<void> {
   const { thread, project } = await requireProjectThread(threadId);
@@ -828,8 +423,8 @@ export async function threadPulls(threadId: string, fresh = true): Promise<Threa
   const { project, thread } = found;
   if (fresh) {
     const open = await openPullOf(threadId);
-    if (open) await reconcileNow(open.id).catch(() => undefined);
-    else await linkByBranch(threadId).catch(() => undefined);
+    const refreshed = open ? reconcileNow(open.id) : linkByBranch(threadId);
+    await refreshed.catch((error: unknown) => logUnrefreshed(error, threadId));
   }
   const rows = await pullsOf(threadId);
   const active = rows.find((r) => r.state === "open") ?? null;
@@ -861,15 +456,17 @@ export async function threadPulls(threadId: string, fresh = true): Promise<Threa
       ahead = await ws.commitsSince(worktree, lastMerged.headSha).catch(countUnknownWhenGitFails);
     }
   }
-  const ownerLogin = await codeGitHub()
-    .client(project)
-    .then((github) => ownerLoginOf(project, github))
-    .catch(() => null);
+  const owner = active
+    ? await codeGitHub()
+        .client(project)
+        .then(async (github) => ({ login: await ownerLoginOf(project, github) }))
+        .catch((error: unknown) => logUnknownOwner(error, threadId))
+    : undefined;
   const settings = autofixSettings(project.settings);
   return {
     project: projectView(project),
     branch: thread.branch,
-    active: active ? await pullView(active, ownerLogin, settings) : null,
+    active: active ? await pullView(active, owner, settings) : null,
     earlier: rows
       .filter((r) => r !== active)
       .map((r) => ({

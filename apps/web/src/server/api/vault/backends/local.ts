@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { and, eq, sql } from "drizzle-orm";
 import { SecretValue, type VaultKind } from "@tiny-agents/agent";
@@ -44,6 +45,32 @@ interface StoredItem {
   updatedAt: string;
 }
 
+const storedItemSchema: z.ZodType<StoredItem> = z.looseObject({
+  kind: z.enum(["login", "card", "identity", "api_key"]),
+  title: z.string(),
+  urls: z.array(z.string()),
+  values: z.partialRecord(
+    z.enum([
+      "username",
+      "password",
+      "totp",
+      "notes",
+      "card_number",
+      "card_expiry",
+      "card_cvc",
+      "card_holder",
+      "card_billing_address",
+      "identity_name",
+      "identity_email",
+      "identity_phone",
+      "identity_address",
+      "value",
+    ]),
+    z.string(),
+  ),
+  updatedAt: z.string(),
+});
+
 const binding = (id: string, policy: string): SecretBinding => ({
   purpose: "vault-local",
   record: id,
@@ -77,7 +104,7 @@ function authority(row: Pick<VaultValue, "policy">, links: PolicyColumns[]): str
 function openRow(row: VaultValue, links: PolicyColumns[]): StoredItem {
   const policy = authority(row, links);
   try {
-    return openJson<StoredItem>(row.sealed, binding(row.id, policy))!;
+    return openJson("A sealed vault item", row.sealed, binding(row.id, policy), storedItemSchema)!;
   } catch (error) {
     if (error instanceof SecretLockedError) throw new BackendError("failed", error.message);
     throw error;

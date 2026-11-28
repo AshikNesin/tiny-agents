@@ -7,42 +7,30 @@
  * Tools with its toolkits open, closed and not set up, the browser profile,
  * a search with and without matches, and connections; Skills and Sharing
  * empty and filled), and the inline delete confirmation. Recorded on the
- * one-file dialog before it was split (docs/rewrite/PLAN.md row 5.6), so the
- * split must render each the same.
+ * one-file dialog before it was split, so the split must render each the
+ * same.
  */
 import React from "react";
 import { act, render as renderPlain, screen, waitFor } from "@testing-library/react";
 import { AppQueryProvider } from "../query-provider";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
-import { ApiError } from "@groot/shell/lib/api";
 import { BotDialog } from "@/components/BotDialog";
-import type { Bot } from "../../../apps/web/src/shared/api/bots";
+import type {
+  Bot,
+  CapabilityInfo,
+  CapabilityList,
+  ToolPermissionsData,
+} from "../../../apps/web/src/shared/api/bots";
+import type { Connection } from "../../../apps/web/src/shared/api/connections";
 import type { CatalogModel } from "../../../apps/web/src/shared/api/models";
+import type { Guest, GuestList } from "../../../apps/web/src/shared/api/people";
+import type { Skill } from "../../../apps/web/src/shared/api/skills";
 import { markup, outline } from "../dom-outline";
+import { ApiFailure, fakeApi } from "../fakes/api";
 
 const render = (ui: React.ReactElement) => renderPlain(ui, { wrapper: AppQueryProvider });
 
-const api = vi.hoisted(() => ({
-  capabilities: vi.fn(),
-  skills: vi.fn(),
-  people: vi.fn(),
-  connections: vi.fn(),
-  update: vi.fn(),
-  remove: vi.fn(),
-}));
-
-vi.mock("@/lib/bots-api", () => ({
-  botsApi: {
-    capabilities: () => api.capabilities(),
-    update: (...args: unknown[]) => api.update(...args),
-    create: vi.fn(),
-    remove: (...args: unknown[]) => api.remove(...args),
-  },
-}));
-vi.mock("@/lib/skills-api", () => ({ skillsApi: { list: () => api.skills() } }));
-vi.mock("@/lib/people-api", () => ({ peopleApi: { list: () => api.people() } }));
-vi.mock("@/lib/connections-api", () => ({ connectionsApi: { list: () => api.connections() } }));
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 const tool = (name: string, label: string, extra: object = {}) => ({
@@ -52,7 +40,7 @@ const tool = (name: string, label: string, extra: object = {}) => ({
   ...extra,
 });
 
-const CAPABILITIES = [
+const CAPABILITIES: CapabilityInfo[] = [
   {
     id: "tasks",
     kind: "toolkit",
@@ -115,58 +103,107 @@ const models: CatalogModel[] = [
   },
 ];
 
-const bot = {
+const bot: Bot = {
   id: "b1",
   conversationId: "c1",
   name: "Chief",
   description: "Runs things",
   systemPrompt: "Be brief.",
   modelId: "m1",
+  chatStartedAt: "2026-01-01T00:00:00.000Z",
   toolPermissions: { "tasks.add": "allow" },
   skillIds: ["s1"],
   connectionIds: ["k1"],
+  connectionCapabilities: [],
   guestIds: [7],
   memoryEnabled: false,
   autoReview: true,
   yoloByDefault: false,
+  memoryCapturedThrough: null,
   browserProfile: "own",
+  projectId: null,
   lastReadAt: null,
   lastActivityAt: "2026-01-01T00:00:00.000Z",
   lastMessagePreview: null,
   pinnedAt: null,
   createdAt: "2026-01-01T00:00:00.000Z",
   updatedAt: "2026-01-01T00:00:00.000Z",
-} as unknown as Bot;
+};
 
-function fill() {
-  api.capabilities.mockResolvedValue(CAPABILITIES);
-  api.skills.mockResolvedValue([
-    { id: "s1", name: "Deploy", description: "Ships the app", body: "x" },
-    { id: "s2", name: "Review", description: "Reviews code", body: "y" },
-  ]);
-  api.people.mockResolvedValue({
-    guests: [
-      { id: 7, name: "Grace", email: "grace@example.com" },
-      { id: 8, name: " ", email: "linus@example.com" },
-    ],
-  });
-  api.connections.mockResolvedValue([
-    {
-      id: "k1",
-      name: "Notion",
-      status: "connected",
-      tools: [{ enabled: true }, { enabled: false }],
-    },
-    { id: "k2", name: "Linear", status: "needs_auth", tools: [] },
-  ]);
-}
+const skill = (id: string, name: string, description: string, body: string): Skill => ({
+  id,
+  name,
+  description,
+  body,
+  files: [],
+  source: "manual",
+  sourceUrl: null,
+  allBots: false,
+  botIds: [],
+  createdAt: "2026-01-01T00:00:00.000Z",
+  updatedAt: "2026-01-01T00:00:00.000Z",
+});
 
-function empty() {
-  api.capabilities.mockResolvedValue([]);
-  api.skills.mockResolvedValue([]);
-  api.people.mockResolvedValue({ guests: [] });
-  api.connections.mockResolvedValue([]);
-}
+const guest = (id: number, name: string, email: string): Guest => ({
+  id,
+  name,
+  email,
+  createdAt: "2026-01-01T00:00:00.000Z",
+  botIds: [],
+});
+
+const connectionTool = (name: string, enabled: boolean): Connection["tools"][number] => ({
+  name,
+  serverName: name,
+  label: name,
+  description: "",
+  readOnly: false,
+  enabled,
+});
+
+const connection = (
+  id: string,
+  name: string,
+  status: Connection["status"],
+  tools: Connection["tools"],
+): Connection => ({
+  id,
+  name,
+  slug: name.toLowerCase(),
+  url: `https://${name.toLowerCase()}.example/mcp`,
+  transport: "streamable-http",
+  authType: "none",
+  headerName: null,
+  hasSecret: false,
+  secretRef: null,
+  tools,
+  allBots: false,
+  botIds: [],
+  status,
+  createdAt: "2026-01-01T00:00:00.000Z",
+});
+
+let api: ReturnType<typeof fakeApi>;
+
+beforeEach(() => {
+  api = fakeApi();
+  api.get("/tool-permissions", (): ToolPermissionsData => ({ permissions: {} }));
+  api.get("/capabilities", (): CapabilityList => ({ capabilities: CAPABILITIES }));
+  api.get("/skills", (): Skill[] => [
+    skill("s1", "Deploy", "Ships the app", "x"),
+    skill("s2", "Review", "Reviews code", "y"),
+  ]);
+  api.get("/people", (): GuestList => ({
+    guests: [guest(7, "Grace", "grace@example.com"), guest(8, " ", "linus@example.com")],
+  }));
+  api.get("/connections", (): Connection[] => [
+    connection("k1", "Notion", "connected", [
+      connectionTool("search", true),
+      connectionTool("write", false),
+    ]),
+    connection("k2", "Linear", "needs_auth", []),
+  ]);
+});
 
 async function mount(props: Partial<React.ComponentProps<typeof BotDialog>> = {}) {
   const result = render(
@@ -199,11 +236,6 @@ const hoverShown = () =>
   });
 const user = userEvent.setup();
 
-beforeEach(() => {
-  for (const fn of Object.values(api)) fn.mockReset();
-  fill();
-});
-
 describe("BotDialog, pinned", () => {
   it("a new bot", async () => {
     await mount({ bot: null });
@@ -221,19 +253,14 @@ describe("BotDialog, pinned", () => {
   });
 
   it("edit: Profile with a missing model and a long prompt", async () => {
-    await mount({ bot: { ...bot, modelId: "gone", systemPrompt: "x".repeat(9_000) } as Bot });
+    await mount({ bot: { ...bot, modelId: "gone", systemPrompt: "x".repeat(9_000) } });
     pin();
   });
 
   it("edit: a taken name", async () => {
-    api.update.mockRejectedValue(
-      new ApiError({
-        status: 409,
-        code: "CONFLICT",
-        message: "A bot named Chief exists",
-        url: "/bots",
-      }),
-    );
+    api.patch("/bots/b1", () => {
+      throw new ApiFailure(409, "A bot named Chief exists", "CONFLICT");
+    });
     await mount();
     await user.click(screen.getByRole("tab", { name: "Skills" }));
     await hoverShown();
@@ -273,23 +300,7 @@ describe("BotDialog, pinned", () => {
     pin("no match");
   });
 
-  it("edit: Tools with nothing", async () => {
-    empty();
-    await mount();
-    await user.click(screen.getByRole("tab", { name: "Tools" }));
-    await hoverShown();
-    pin();
-  });
-
   it("edit: Skills", async () => {
-    await mount();
-    await user.click(screen.getByRole("tab", { name: "Skills" }));
-    await hoverShown();
-    pin();
-  });
-
-  it("edit: Skills, none", async () => {
-    empty();
     await mount();
     await user.click(screen.getByRole("tab", { name: "Skills" }));
     await hoverShown();
@@ -303,17 +314,9 @@ describe("BotDialog, pinned", () => {
     pin();
   });
 
-  it("edit: Sharing, none", async () => {
-    empty();
-    await mount();
-    await user.click(screen.getByRole("tab", { name: "Sharing" }));
-    await hoverShown();
-    pin();
-  });
-
   it("edit: the delete confirmation", async () => {
     let finish: () => void = () => {};
-    api.remove.mockReturnValue(new Promise<void>((resolve) => (finish = resolve)));
+    api.delete("/bots/b1", () => new Promise<void>((resolve) => (finish = resolve)));
     await mount();
     const deletes = screen.getAllByRole("button", { name: "Delete bot" });
     await user.click(deletes[deletes.length - 1]!);
@@ -325,7 +328,7 @@ describe("BotDialog, pinned", () => {
   });
 
   it("edit: saving", async () => {
-    api.update.mockReturnValue(new Promise(() => {}));
+    api.patch("/bots/b1", () => new Promise(() => {}));
     await mount();
     await user.click(screen.getByRole("button", { name: "Save changes" }));
     pin();

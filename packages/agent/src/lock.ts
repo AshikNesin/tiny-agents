@@ -38,7 +38,9 @@ export function acquireStoreLock(storePath: string, options: AcquireLockOptions 
   } catch (error) {
     try {
       db.close();
-    } catch {}
+    } catch (closeError) {
+      console.warn(`Could not close ${path} after failing to take the store lock:`, closeError);
+    }
     if (error instanceof Error && /locked|busy/i.test(error.message)) {
       throw new StoreLockedError(storePath);
     }

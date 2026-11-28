@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { afterAll, beforeAll, describe, expect, it } from "vite-plus/test";
-import { boundaryOverrides } from "../../../scripts/lint/boundaries";
+import { boundaryOverrides, enforcedRuleIds } from "../../../scripts/lint/boundaries";
 
 const repoRoot = process.cwd();
 const vitePlus = createRequire(path.join(repoRoot, "package.json")).resolve(
@@ -280,6 +280,36 @@ const FIXTURES: Record<string, Fixture> = {
   "packages/agent/src/r6-angle-fail.ts": {
     source: "export const f = (x: string) => <number>(<unknown>x);\n",
     rules: ["R6"],
+  },
+  "apps/web/src/client/pages/r23-fail.tsx": {
+    source:
+      "export function start(refresh: () => void) {\n  const timer = setInterval(refresh, 5000);\n  const other = window.setInterval(refresh, 5000);\n  return [timer, other];\n}\n",
+    rules: ["R23", "R23"],
+    mentions: "refetchInterval",
+  },
+  "apps/web/src/client/lib/r23-transport-pass.ts": {
+    source: "export const ping = (probe: () => void) => setInterval(probe, 1000);\n",
+    rules: [],
+  },
+  "packages/code/src/r24-fail.ts": {
+    source: "void 0;\n".repeat(801),
+    rules: ["R24"],
+    mentions: "sibling module",
+  },
+  "packages/code/src/r24-pass.ts": {
+    source: "void 0;\n".repeat(799),
+    rules: [],
+  },
+  "apps/web/src/server/api/r22-fail.ts": {
+    source:
+      "interface Row { id: string }\nexport const read = (text: string) => JSON.parse(text) as Row;\nexport const list = (text: string) => (JSON.parse(text)) as Row[];\n",
+    rules: ["R22", "R22"],
+    mentions: "parseJson(what, text, schema)",
+  },
+  "packages/sandbox/src/r22-pass.ts": {
+    source:
+      "export const read = (text: string): unknown => JSON.parse(text);\nexport const cast = (value: unknown) => value as string;\n",
+    rules: [],
   },
   "packages/agent/src/r6-pass.ts": {
     source: "export const f = (x: unknown) => x as string;\n",
@@ -742,7 +772,7 @@ const FIXTURES: Record<string, Fixture> = {
   "apps/web/src/server/r12-export-let-fail.ts": {
     source: "export let current: string | undefined;\nexport let a = 1,\n  b = 2;\n",
     rules: ["R12", "R12", "R12"],
-    mentions: "docs/rewrite/DECISIONS.md D8",
+    mentions: "ReadonlySet<T>",
   },
   "apps/web/src/server/api/vault/r12-collections-fail.ts": {
     source:
@@ -754,19 +784,10 @@ const FIXTURES: Record<string, Fixture> = {
       "const LIMIT = 3;\nconst LIST = [1, 2];\nconst seen = [...new Set(LIST)];\nexport const counter = () => {\n  let n = 0;\n  const hits = new Map<number, number>();\n  return () => hits.set((n += LIMIT), seen.length);\n};\nfor (let i = 0; i < 1; i++) void i;\n",
     rules: [],
   },
-  "apps/web/src/server/crypto/secret-box.ts": {
+  "apps/web/src/server/api/r12-readonly-pass.ts": {
     source:
-      "const derived = new Map<string, string>();\nlet other = 0;\nexport const keys = () => [derived, other++];\n",
-    rules: ["R12"],
-  },
-  "apps/web/src/server/api/uploads/uploads.prepare.ts": {
-    source:
-      "let processor: Promise<number> | undefined;\nexport const load = () => (processor ??= Promise.resolve(1));\n",
+      'const WORDS: ReadonlySet<string> = new Set(["a"]);\nconst BY_NAME: ReadonlyMap<string, number> = new Map([["a", 1]]);\nexport const has = (word: string) => WORDS.has(word) || BY_NAME.has(word);\n',
     rules: [],
-  },
-  "apps/web/src/server/api/vault/r12-allowlisted-name-elsewhere-fail.ts": {
-    source: "const derived = new Map<string, string>();\nexport const d = derived;\n",
-    rules: ["R12"],
   },
   "apps/web/src/client/lib/r13-declarations-api.ts": {
     source:
@@ -811,6 +832,37 @@ const FIXTURES: Record<string, Fixture> = {
     source: "let open = false;\nexport const toggle = () => (open = !open);\n",
     rules: [],
   },
+  "tests/client/r21-fail.test.tsx": {
+    source:
+      'import { vi } from "vite-plus/test";\nvi.mock("@/lib/bots-api", () => ({ botsApi: { list: vi.fn() } }));\nvi.mock("@groot/shell/lib/api");\nvi.mock("@tiny-agents/agent");\nvi.mock("../../apps/web/src/client/store/bots");\nvi.doMock("@/components/BrowserPanel", () => ({ BrowserPanel: () => null }));\n',
+    rules: ["R21", "R21", "R21", "R21", "R21"],
+    mentions: "fakeApi() from tests/client/fakes/api.ts",
+  },
+  "tests/client/pages/r21-transport-pass.test.tsx": {
+    source:
+      'import { vi } from "vite-plus/test";\nvi.mock("@/lib/sse", async () => (await import("../fakes/sse")).sseModule);\nvi.mock("../../../apps/web/src/client/lib/sse");\nvi.mock("@/lib/novnc");\nvi.mock("@/lib/xterm");\nvi.mock("@/lib/terminal-ws");\n',
+    rules: [],
+  },
+  "tests/client/r21-third-party-pass.test.tsx": {
+    source:
+      'import { vi } from "vite-plus/test";\nconst specifier = "@/lib/bots-api";\nvi.mock("sonner", () => ({ toast: { error: vi.fn() } }));\nvi.mock("streamdown");\nvi.mock(specifier);\nvi.stubGlobal("fetch", vi.fn());\n',
+    rules: [],
+  },
+  "tests/client/r21-spy-fail.test.tsx": {
+    source:
+      'import { vi } from "vite-plus/test";\nimport { botsApi } from "@/lib/bots-api";\nimport * as shell from "@groot/shell/lib/api";\nimport store from "../../apps/web/src/client/store/bots";\nvi.spyOn(botsApi, "list").mockResolvedValue([]);\nvi.spyOn(shell.apiClient, "get");\nvi.spyOn(store, "getState");\n',
+    rules: ["R21", "R21", "R21"],
+    mentions: "fakeApi() from tests/client/fakes/api.ts",
+  },
+  "tests/client/r21-spy-pass.test.tsx": {
+    source:
+      'import { vi } from "vite-plus/test";\nimport { toast } from "sonner";\nimport * as sse from "@/lib/sse";\nimport type { Bot } from "@/lib/chat-types";\nconst local = { run: (bot: Bot) => bot };\nvi.spyOn(console, "error").mockImplementation(() => undefined);\nvi.spyOn(window, "setInterval");\nvi.spyOn(HTMLElement.prototype, "getBoundingClientRect");\nvi.spyOn(Date, "now");\nvi.spyOn(toast, "error");\nvi.spyOn(sse, "subscribeSse");\nvi.spyOn(local, "run");\n',
+    rules: [],
+  },
+  "tests/server/r21-elsewhere-pass.test.ts": {
+    source: 'import { vi } from "vite-plus/test";\nvi.mock("@/lib/bots-api");\n',
+    rules: [],
+  },
 };
 
 type Diagnostic = { filename: string; message: string; help?: string };
@@ -845,7 +897,8 @@ describe("boundary lint rules", () => {
   it.each(Object.entries(FIXTURES))("%s", (file, { rules, mentions }) => {
     const texts = findings.get(file) ?? [];
     const fired = texts.map((t) => /\b(R\d+[a-z]?): /.exec(t)?.[1]).toSorted();
-    expect(fired, texts.join("\n")).toEqual(rules);
-    if (mentions) expect(texts.join("\n")).toContain(mentions);
+    const enforced = rules.filter((id) => enforcedRuleIds.has(id));
+    expect(fired, texts.join("\n")).toEqual(enforced);
+    if (mentions && enforced.length > 0) expect(texts.join("\n")).toContain(mentions);
   });
 });

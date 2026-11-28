@@ -34,10 +34,16 @@ import {
 import { useVaultItem, useVaultMutations, useVaultReveal } from "../../queries/vault";
 import { PolicyForm } from "../../components/vault/PolicyForm";
 import { useStepUp } from "../../components/vault/StepUp";
+import { ignoreClipboardRefusal } from "../../lib/clipboard";
 import { Switch } from "@groot/ui/switch";
 import { ValueFieldInput } from "./NewVaultItem";
 
 const SHOW_MS = 30_000;
+
+function sayClipboardStillHoldsIt(error: unknown): void {
+  ignoreClipboardRefusal(error);
+  toast.warning("Couldn't clear the clipboard. Copy something else to replace it.");
+}
 
 const OUTCOME_LABEL: Record<string, string> = {
   used: "used",
@@ -124,7 +130,10 @@ function FieldRow({
       if (!result) return;
       await navigator.clipboard.writeText(result.value);
       toast.success(`${FIELD_LABEL[field]} copied; it's cleared from the clipboard in 30 seconds`);
-      setTimeout(() => void navigator.clipboard.writeText("").catch(() => {}), SHOW_MS);
+      setTimeout(
+        () => void navigator.clipboard.writeText("").catch(sayClipboardStillHoldsIt),
+        SHOW_MS,
+      );
     } catch (error) {
       toast.error(apiError(error, "Couldn't copy it"));
     }
@@ -165,7 +174,14 @@ function FieldRow({
 export function VaultItemDetail({ handle }: { handle: string }) {
   const navigate = useNavigate();
   const { run } = useStepUp();
-  const { data: detail, loadError, refresh } = useVaultItem(handle);
+  const resource = useVaultItem(handle);
+  const { refresh } = resource;
+  const detail =
+    resource.status === "ready"
+      ? resource.data
+      : resource.status === "failed"
+        ? (resource.last ?? null)
+        : null;
   const mutations = useVaultMutations();
   const [policy, setPolicy] = useState<VaultPolicy | null>(null);
   const [policyFrom, setPolicyFrom] = useState<Detail | null>(null);
@@ -226,13 +242,13 @@ export function VaultItemDetail({ handle }: { handle: string }) {
     }
   };
 
-  if (loadError) {
+  if (resource.status === "failed") {
     return (
       <PageLayout title="Vault item" backTo="/vault" maxWidth="4xl">
         <EmptyState
           icon={TriangleAlert}
           title="Couldn't load the item"
-          description={loadError}
+          description={resource.loadError}
           variant="destructive"
         />
       </PageLayout>

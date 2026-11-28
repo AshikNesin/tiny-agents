@@ -4,6 +4,7 @@ import { isUnattendedConversation } from "../approvals";
 import type { Capability } from "../capabilities";
 import { defineToolkit, tool } from "../toolkit";
 import { toolIdempotencyKey } from "./tasks";
+import { fail, ok } from "./result";
 
 export const REPORT_ROUTINE_BLOCKED = "report_routine_blocked";
 const MAX_BLOCKED_REASON = 300;
@@ -93,14 +94,6 @@ function resolveSchedule(schedule: ScheduleInput, now: () => Date): RoutineSched
   if (schedule.kind !== "in") return schedule;
   return { kind: "once", at: new Date(now().getTime() + schedule.minutes * 60_000).toISOString() };
 }
-
-const ok = (text: string): ToolExecutionResult => ({
-  output: [{ type: "text", text }],
-});
-const fail = (text: string): ToolExecutionResult => ({
-  output: [{ type: "text", text }],
-  isError: true,
-});
 
 async function attempt(work: () => Promise<ToolExecutionResult>): Promise<ToolExecutionResult> {
   try {

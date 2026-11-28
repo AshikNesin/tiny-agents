@@ -16,7 +16,7 @@ import { PullDiffs } from "@/pages/code/PullDiffs";
 import { ReviewPanel } from "@/pages/code/ReviewPanel";
 import { OpenInTerminal, YourChangesActions } from "@/pages/code/YourChanges";
 import type { PullReviewView } from "../../../apps/web/src/shared/api/code";
-import type { DiffView } from "@/pages/code/DiffWorkspace";
+import type { DiffView } from "@/pages/code/use-diff-view";
 import { AppQueryProvider } from "../query-provider";
 
 const render = (ui: Parameters<typeof renderBare>[0]) =>

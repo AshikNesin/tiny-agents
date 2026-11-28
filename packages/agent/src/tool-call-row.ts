@@ -5,6 +5,7 @@ import { takeoverOf } from "@tiny-agents/sandbox/computer";
 import { codingResultOf } from "./toolkits/coding";
 import { questionsOf } from "./toolkits/questions";
 import type { ChatToolCall, ChatToolStatus } from "./types";
+import { record } from "@tiny-agents/std";
 
 export type ToolCallRow = Omit<ChatToolCall, "id" | "name" | "args">;
 
@@ -119,12 +120,6 @@ function finishedStatus(
   if (approval?.interrupted || codes.includes("interrupted")) return "interrupted";
   if (codes.includes("aborted")) return "aborted";
   return outcome.isError ? "error" : "done";
-}
-
-function record(value: unknown): Record<string, unknown> | undefined {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : undefined;
 }
 
 function clip(raw: string): string {

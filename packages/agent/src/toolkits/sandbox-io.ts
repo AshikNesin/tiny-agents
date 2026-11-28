@@ -1,4 +1,3 @@
-import type { ToolExecutionResult } from "@earendil-works/pi-durable";
 import {
   SandboxTimeoutError,
   type SandboxConnection,
@@ -11,10 +10,7 @@ export interface CommandResult {
   exitCode: number;
 }
 
-export const fail = (text: string): ToolExecutionResult => ({
-  output: [{ type: "text", text }],
-  isError: true,
-});
+export { fail } from "./result";
 
 export const errorText = (error: unknown) =>
   error instanceof Error ? error.message : String(error);

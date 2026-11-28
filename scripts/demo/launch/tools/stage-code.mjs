@@ -15,7 +15,16 @@ const CWD = path.join(HOME, "code/shop");
 const RUN_FILE = path.join(DIR, "run.json");
 
 process.env.TA_URL = URL_;
-const { open, api, dumpCss, snap, verify } = await import("./snaplib.mjs");
+const {
+  open,
+  api,
+  dumpCss,
+  snap,
+  verify,
+  ignoreNetworkStillBusy,
+  signalGroupIfRunning,
+  serverReady,
+} = await import("./snaplib.mjs");
 
 const OWNER = { name: "Ashik", email: "demo@example.com", password: "demo@example.com" }; // gitleaks:allow
 const BOT = { name: "Code Buddy", description: "Fixes bugs and ships code" };
@@ -58,16 +67,10 @@ async function stopOwn() {
   })();
   if (!ours) return;
   log(`stopping the earlier instance (process group ${pid})`);
-  try {
-    process.kill(-pid, "SIGTERM");
-  } catch {}
+  signalGroupIfRunning(pid, "SIGTERM");
   const deadline = Date.now() + 15_000;
   while (alive(pid) && Date.now() < deadline) await sleep(250);
-  if (alive(pid)) {
-    try {
-      process.kill(-pid, "SIGKILL");
-    } catch {}
-  }
+  if (alive(pid)) signalGroupIfRunning(pid, "SIGKILL");
   while ((await portOpen(PORT)) && Date.now() < deadline + 5_000) await sleep(250);
 }
 
@@ -153,10 +156,7 @@ export async function boot() {
   const deadline = Date.now() + 240_000;
   for (;;) {
     if (!alive(child.pid)) throw new Error("the server exited during boot; see server.log");
-    const ready = await fetch(`${URL_}/ready`)
-      .then((res) => res.json())
-      .catch(() => undefined);
-    if (ready?.ready) break;
+    if (await serverReady(URL_)) break;
     if (Date.now() > deadline) throw new Error("not ready after 240s; see server.log");
     await sleep(1000);
   }
@@ -178,9 +178,12 @@ const CAST_CWD = "~/code/shop";
 async function until(what, check, timeout = 60_000) {
   const deadline = Date.now() + timeout;
   for (;;) {
-    const value = await check().catch(() => undefined);
+    let failure;
+    const value = await check().catch((error) => {
+      failure = error;
+    });
     if (value) return value;
-    if (Date.now() > deadline) throw new Error(`timed out waiting for ${what}`);
+    if (Date.now() > deadline) throw new Error(`timed out waiting for ${what}`, { cause: failure });
     await sleep(250);
   }
 }
@@ -348,7 +351,7 @@ async function stageMode(mode) {
       .or(card.getByLabel("Working"))
       .first()
       .waitFor();
-    await page.waitForLoadState("networkidle").catch(() => {});
+    await page.waitForLoadState("networkidle").catch(ignoreNetworkStillBusy);
     await shoot(session, "codebuddy-handoff", { css: true });
 
     await page.goto(`/code/t/${encodeURIComponent(thread.id)}`);
@@ -397,7 +400,7 @@ async function stageMode(mode) {
     await transcript.getByText(FOOTER).waitFor({ timeout: 30_000 });
     await page.reload();
     await transcript.getByText(FOOTER).waitFor();
-    await page.waitForLoadState("networkidle").catch(() => {});
+    await page.waitForLoadState("networkidle").catch(ignoreNetworkStillBusy);
     await scrollToEnd(page, transcript.getByText(FOOTER));
     await shoot(session, "code-done");
 
@@ -409,7 +412,7 @@ async function stageMode(mode) {
     await page.goto(mode === "mobile" ? "/code" : `/code/t/${encodeURIComponent(thread.id)}`);
     const list = page.getByRole("navigation", { name: "Code threads" });
     await list.getByRole("link", { name: new RegExp(`^${TITLE}`) }).waitFor();
-    await page.waitForLoadState("networkidle").catch(() => {});
+    await page.waitForLoadState("networkidle").catch(ignoreNetworkStillBusy);
     await page.waitForTimeout(500);
     await shoot(session, "code-list", { css: true });
 
@@ -424,7 +427,7 @@ async function stageMode(mode) {
       .getByRole("region", { name: "Messages" })
       .getByText(CLOSING, { exact: true })
       .waitFor();
-    await page.waitForLoadState("networkidle").catch(() => {});
+    await page.waitForLoadState("networkidle").catch(ignoreNetworkStillBusy);
     await shoot(session, "codebuddy-chat", { css: true });
   } finally {
     await session.browser.close();

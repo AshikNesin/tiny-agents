@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef } from "react";
 import { create } from "zustand";
 import { toast } from "sonner";
 import { errorMessage } from "../errors";
-import { useViewerRole } from "../../store/people";
+import { useViewer, viewerRole } from "../../queries/viewer";
 import type { ReviewDraft, ReviewDraftBody } from "../../../shared/api/code";
 import { projectsApi } from "./projects";
 
@@ -58,6 +58,10 @@ export const useCommentStore = create<CommentsState>((set, get) => ({
   },
 }));
 
+export function sayCommentsDidNotLoad(error: unknown): void {
+  toast.error(errorMessage(error, "Could not load your review comments."));
+}
+
 const NONE: ReviewDraft[] = [];
 
 export function useThreadComments(threadId: string | undefined, enabled = true): ReviewDraft[] {
@@ -65,7 +69,7 @@ export function useThreadComments(threadId: string | undefined, enabled = true):
   const comments = useCommentStore((s) => (threadId ? s.byThread[threadId] : undefined));
   useEffect(() => {
     if (!threadId || !enabled) return;
-    load(threadId).catch(() => undefined);
+    load(threadId).catch(sayCommentsDidNotLoad);
   }, [threadId, enabled, load]);
   return enabled ? (comments ?? NONE) : NONE;
 }
@@ -159,7 +163,7 @@ export function useThreadCommenting(
   threadId: string | undefined,
   onGuestText: (text: string) => void,
 ): ThreadCommenting | undefined {
-  const role = useViewerRole();
+  const role = viewerRole(useViewer());
   const comments = useThreadComments(threadId, role === "owner");
   const add = useCommentStore((s) => s.add);
   const remove = useCommentStore((s) => s.remove);
@@ -168,7 +172,7 @@ export function useThreadCommenting(
     guestText.current = onGuestText;
   });
   return useMemo(() => {
-    if (!threadId || role === null) return undefined;
+    if (!threadId || role === "loading" || role === "unknown") return undefined;
     return {
       comments,
       add: async (body: ReviewDraftBody) => {

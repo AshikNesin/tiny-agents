@@ -193,7 +193,13 @@ export function BotDialog({
                   setToolQuery={setToolQuery}
                   expanded={expanded}
                   setExpanded={setExpanded}
-                  inherited={ownerPermissions.data?.permissions}
+                  inherited={
+                    ownerPermissions.status === "ready"
+                      ? ownerPermissions.data.permissions
+                      : ownerPermissions.status === "failed"
+                        ? ownerPermissions.last?.permissions
+                        : undefined
+                  }
                 />
               </TabsContent>
               <TabsContent value="skills">

@@ -1,5 +1,6 @@
 import { SandboxTimeoutError } from "./ssh/connection";
 import type { SandboxConnection } from "./ssh/sandbox-connection";
+import { survived } from "./failures";
 import { bashScript, exitSentinel, exitWith, failureDetail, shQuote } from "./shell";
 import {
   DesktopGoneError,
@@ -419,7 +420,7 @@ export function createX11ComputerTransport(
         async close() {
           closed = true;
           listeners.length = 0;
-          await stack.stop(dir).catch(() => {});
+          await stack.stop(dir).catch(survived(`stopping the desktop stack in ${dir}`));
         },
       };
       return desktop;

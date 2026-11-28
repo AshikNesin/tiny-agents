@@ -127,6 +127,26 @@ describe("reverting to a checkpoint while an agent works", () => {
     );
   });
 
+  it("refuses when the harness cannot say whether the agent is working, keeping the files", async () => {
+    const project = await newProject();
+    const thread = await newThread(project.id);
+    await sh(local, `cd ${thread.worktree} && printf 'uncommitted agent work\\n' > agent.txt`);
+    const list = (await checkpointsOfThread(thread.id)).body.data!;
+    const start = list[list.length - 1]!;
+    harness.outcome = async () => {
+      throw new Error("the worker is unreachable");
+    };
+
+    const revert = await call(
+      "POST",
+      `/threads/${encodeURIComponent(thread.id)}/checkpoints/${start.id}/revert`,
+    );
+
+    expect(revert.status).toBe(502);
+    expect(revert.body.error?.message).toContain("the worker is unreachable");
+    expect(existsSync(`${thread.worktree}/agent.txt`)).toBe(true);
+  });
+
   it("still reverts once the agent has stopped", async () => {
     const project = await newProject();
     const thread = await newThread(project.id);

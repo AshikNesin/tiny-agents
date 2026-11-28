@@ -9,6 +9,8 @@
   },
   "dependencies": {
     "@earendil-works/pi-ai": "1.6.0",
-    "@tiny-agents/claude-worker": "workspace:*"
+    "@tiny-agents/claude-worker": "workspace:*",
+    "@tiny-agents/std": "workspace:*",
+    "zod": "^4.6.7"
   }
 }

@@ -6,22 +6,21 @@
  * the sandbox note, and "Update & restart" asks the supervisor.
  */
 import React from "react";
-import { render, screen } from "@testing-library/react";
+import { render as renderBare, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import { beforeEach, describe, expect, it } from "vite-plus/test";
 import { UpdatesSettings } from "@/components/UpdatesSettings";
+import { fakeApi } from "../fakes/api";
 import type { UpdateStatus, UpdateView } from "../../../apps/web/src/shared/local-updates";
+import { AppQueryProvider } from "../query-provider";
 
-const getMock = vi.fn<() => Promise<UpdateView>>();
-const applyMock = vi.fn<() => Promise<UpdateView>>();
+const render = (ui: React.ReactElement) => renderBare(ui, { wrapper: AppQueryProvider });
 
-vi.mock("@/lib/updates-api", () => ({
-  updatesApi: {
-    get: () => getMock(),
-    check: vi.fn(),
-    apply: () => applyMock(),
-  },
-}));
+let api: ReturnType<typeof fakeApi>;
+
+function serve(view: UpdateView) {
+  api.get("/system/update", () => view);
+}
 
 const STATUS: UpdateStatus = {
   track: "origin/main",
@@ -37,21 +36,23 @@ const STATUS: UpdateStatus = {
 };
 
 beforeEach(() => {
-  getMock.mockReset();
-  applyMock.mockReset();
+  api = fakeApi();
 });
 
 describe("UpdatesSettings", () => {
   it("explains pnpm local on a server it does not supervise", async () => {
-    getMock.mockResolvedValue({ supervised: false, status: null });
+    serve({ supervised: false, status: null });
     render(<UpdatesSettings />);
     expect(await screen.findByText(/cannot update itself/)).toBeTruthy();
     expect(screen.queryByRole("button", { name: /Update & restart/ })).toBeNull();
   });
 
   it("shows the update and asks the supervisor to apply it", async () => {
-    getMock.mockResolvedValue({ supervised: true, status: STATUS });
-    applyMock.mockResolvedValue({ supervised: true, status: { ...STATUS, phase: "building" } });
+    serve({ supervised: true, status: STATUS });
+    api.post("/system/update/apply", (): UpdateView => ({
+      supervised: true,
+      status: { ...STATUS, phase: "building" },
+    }));
     render(<UpdatesSettings />);
 
     expect(await screen.findByText("Available")).toBeTruthy();
@@ -59,7 +60,7 @@ describe("UpdatesSettings", () => {
     expect(screen.getByText("The sandbox image changed")).toBeTruthy();
 
     await userEvent.click(screen.getByRole("button", { name: /Update & restart/ }));
-    expect(applyMock).toHaveBeenCalledOnce();
+    expect(api.sent("POST", "/system/update/apply")).toHaveLength(1);
     expect(await screen.findByRole("button", { name: /Building…/ })).toHaveProperty(
       "disabled",
       true,
@@ -67,7 +68,7 @@ describe("UpdatesSettings", () => {
   });
 
   it("shows a failed update with its build output", async () => {
-    getMock.mockResolvedValue({
+    serve({
       supervised: true,
       status: {
         ...STATUS,

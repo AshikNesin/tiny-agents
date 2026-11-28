@@ -62,11 +62,8 @@ export const gates = [
   { name: "Design tokens", run: "pnpm check:tokens" },
   { name: "pnpm policy", run: "pnpm check:pnpm-policy" },
   { name: "Old modules", run: "pnpm check:old-modules" },
-  { name: "Comment ratchet", run: "pnpm check:comments --base origin/${GITHUB_BASE_REF:-main}" },
-  {
-    name: "Silent fallback ratchet",
-    run: "pnpm exec tsx scripts/check-fallback-ratchet.ts --base origin/${GITHUB_BASE_REF:-main}",
-  },
+  { name: "Duplicate functions", run: "pnpm check:duplicates" },
+  { name: "No comments", run: "pnpm check:comments" },
   {
     name: "Migrations are up to date with the schema",
     job: "migrations",

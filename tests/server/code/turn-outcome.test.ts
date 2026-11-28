@@ -177,15 +177,14 @@ describe("turnOutcomeProblems", () => {
 });
 
 describe("parseThreadId", () => {
-  it("splits `<instance>:<native>` and gives bare ids to the legacy instance only when asked", () => {
+  it("splits `<instance>:<native>` and refuses an id with no instance", () => {
     expect(parseThreadId("claude-code:abc")).toEqual({
       instanceId: "claude-code",
       nativeId: "abc",
     });
     expect(parseThreadId("cA")).toBeUndefined();
-    expect(parseThreadId("cA", "shelley")).toEqual({ instanceId: "shelley", nativeId: "cA" });
-    expect(parseThreadId(":cA", "shelley")).toBeUndefined();
-    expect(parseThreadId("Bad:cA", "shelley")).toBeUndefined();
-    expect(parseThreadId("a b", "shelley")).toBeUndefined();
+    expect(parseThreadId(":cA")).toBeUndefined();
+    expect(parseThreadId("Bad:cA")).toBeUndefined();
+    expect(parseThreadId("shelley:a b")).toBeUndefined();
   });
 });

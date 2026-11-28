@@ -4,6 +4,7 @@ import type { Capability } from "../capabilities";
 import { defineToolkit, tool } from "../toolkit";
 import { toolIdempotencyKey } from "./tasks";
 import { CUSTODY_RULE, sanitizePeerText } from "./peer-text";
+import { fail, ok } from "./result";
 
 export interface BotMessagingStore {
   deliver(input: {
@@ -19,12 +20,6 @@ export interface BotMessagingStore {
   }>;
   roster(conversationId: number): Promise<{ name: string; description: string }[]>;
 }
-
-const ok = (text: string): ToolExecutionResult => ({ output: [{ type: "text", text }] });
-const fail = (text: string): ToolExecutionResult => ({
-  output: [{ type: "text", text }],
-  isError: true,
-});
 
 const noDeliver = (to: string, reason: string): ToolExecutionResult =>
   fail(

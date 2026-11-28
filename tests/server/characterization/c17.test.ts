@@ -9,7 +9,7 @@ import { authToken, installFakeRuntime } from "../fixtures";
 
 const signIn = vi.hoisted(() => ({ reads: 0 }));
 
-vi.mock("../../../apps/web/src/server/api/bots/claude-worker", () => {
+vi.mock("../../../apps/web/src/server/api/sandbox/claude-worker", () => {
   const locator = {
     mode: "sandbox",
     resolve: () => new Promise(() => undefined),

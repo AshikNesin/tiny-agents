@@ -2,6 +2,7 @@ import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
 import type { Browser, Page } from "playwright-core";
 import { isBlockedPrivateUrl } from "./browser-guard";
+import { alreadyClosed, callerSeesRejection, reportFailure } from "./failures";
 import { isPrivateAddress } from "./public-url";
 
 export type ResolveHost = (hostname: string) => Promise<string[]>;
@@ -20,6 +21,8 @@ function within<T>(promise: Promise<T>, ms: number, message: string): Promise<T>
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
 
+const withoutQuery = (url: string) => url.split(/[?#]/)[0] ?? url;
+
 export async function refusesNavigation(
   raw: string,
   exempt: ReadonlySet<string>,
@@ -30,10 +33,17 @@ export async function refusesNavigation(
   const bare = host.replace(/^\[|\]$/g, "");
   const name = bare.replace(/\.+$/, "");
   if (!resolveHost || isIP(bare) || exempt.has(host) || exempt.has(name)) return false;
-  const addresses = await within(resolveHost(name), LOOKUP_TIMEOUT_MS, "lookup timed out").catch(
-    () => null,
-  );
-  if (addresses === null) return true;
+  let addresses: string[];
+  try {
+    addresses = await within(resolveHost(name), LOOKUP_TIMEOUT_MS, "lookup timed out");
+  } catch (error) {
+    reportFailure(`refusing navigation to ${name}, its lookup failed`, error);
+    return true;
+  }
+  if (addresses.length === 0) {
+    reportFailure(`refusing navigation to ${name}`, "its lookup returned no address");
+    return true;
+  }
   const exemptAddress = (address: string) => exempt.has(address) || exempt.has(`[${address}]`);
   return addresses.some((address) => isPrivateAddress(address) && !exemptAddress(address));
 }
@@ -62,7 +72,7 @@ export function navigationGuard(
       options.resolveHost === undefined ? resolveAll : options.resolveHost,
     );
     guards.set(browser, guard);
-    guard.catch(() => guards.delete(browser));
+    guard.catch(callerSeesRejection(() => guards.delete(browser)));
   }
   return guard;
 }
@@ -87,7 +97,15 @@ async function createGuard(
   cdp.on("Fetch.requestPaused", (event) => {
     const guarded = frames.get(event.frameId);
     const verdict = guarded
-      ? refusesNavigation(event.request.url, guarded.exempt, resolveHost).catch(() => true)
+      ? refusesNavigation(event.request.url, guarded.exempt, resolveHost).catch(
+          (error: unknown) => {
+            reportFailure(
+              `refusing ${withoutQuery(event.request.url)}, it could not be checked`,
+              error,
+            );
+            return true;
+          },
+        )
       : Promise.resolve(false);
     void verdict.then(async (refuse) => {
       if (refuse) refused.set(event.frameId, { url: event.request.url, at: ++refusals });
@@ -98,7 +116,11 @@ async function createGuard(
               errorReason: "BlockedByClient",
             })
           : cdp.send("Fetch.continueRequest", { requestId: event.requestId })
-      ).catch(() => undefined);
+      ).catch(
+        alreadyClosed(
+          `${refuse ? "failing" : "continuing"} the paused request to ${withoutQuery(event.request.url)} (it stays paused)`,
+        ),
+      );
     });
   });
   await cdp.send("Target.setDiscoverTargets", { discover: true });
@@ -123,15 +145,17 @@ async function createGuard(
         return id;
       });
       watched.set(page, frameId);
-      frameId.catch(() => {
-        if (watched.get(page) === frameId) watched.delete(page);
-      });
+      frameId.catch(
+        callerSeesRejection(() => {
+          if (watched.get(page) === frameId) watched.delete(page);
+        }),
+      );
       return frameId;
     },
     unwatch(page) {
       const frameId = watched.get(page);
       watched.delete(page);
-      void frameId?.then(drop, () => undefined);
+      void frameId?.then(drop, callerSeesRejection());
     },
     mark: () => refusals,
     refusedSince: (frameId, mark) => {
@@ -147,6 +171,6 @@ async function mainFrameId(page: Page): Promise<string> {
     const { targetInfo } = await cdp.send("Target.getTargetInfo");
     return targetInfo.targetId;
   } finally {
-    void cdp.detach().catch(() => undefined);
+    void cdp.detach().catch(alreadyClosed("detaching the tab's CDP session"));
   }
 }

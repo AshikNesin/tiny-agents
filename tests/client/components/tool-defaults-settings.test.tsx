@@ -3,53 +3,42 @@
  */
 import { act, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import { beforeEach, describe, expect, it } from "vite-plus/test";
 import { GrootUIProvider } from "@groot/ui";
 import { ToolDefaultsSettings } from "@/components/ToolDefaultsSettings";
+import type { CapabilityList, ToolPermissionsData } from "../../../apps/web/src/shared/api/bots";
+import { fakeApi } from "../fakes/api";
 import { AppQueryProvider } from "../query-provider";
 
-const api = vi.hoisted(() => ({
-  capabilities: vi.fn(),
-  toolPermissions: vi.fn(),
-  setToolPermissions: vi.fn(),
-}));
-
-vi.mock("@/lib/bots-api", async (importOriginal) => {
-  const original = await importOriginal<typeof import("@/lib/bots-api")>();
-  return {
-    ...original,
-    botsApi: {
-      ...original.botsApi,
-      capabilities: (...args: unknown[]) => api.capabilities(...args),
-      toolPermissions: (...args: unknown[]) => api.toolPermissions(...args),
-      setToolPermissions: (...args: unknown[]) => api.setToolPermissions(...args),
-    },
-  };
-});
+let api: ReturnType<typeof fakeApi>;
 
 const settle = () => act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
 const user = userEvent.setup();
 
 beforeEach(() => {
-  for (const fn of Object.values(api)) fn.mockReset();
+  api = fakeApi();
 });
 
 describe("ToolDefaultsSettings", () => {
   it("shows the permissions every bot starts from and saves a change for all of them", async () => {
-    api.capabilities.mockResolvedValue([
-      {
-        id: "tasks",
-        kind: "toolkit",
-        name: "Tasks",
-        description: "Your tasks",
-        tools: [
-          { name: "add_task", label: "Added task", description: "Add a task" },
-          { name: "delete_task", label: "Deleted task", description: "Delete a task" },
-        ],
-      },
-    ]);
-    api.toolPermissions.mockResolvedValue({ permissions: { add_task: "allow" } });
-    api.setToolPermissions.mockImplementation(async (permissions: unknown) => ({ permissions }));
+    const capabilities: CapabilityList = {
+      capabilities: [
+        {
+          id: "tasks",
+          kind: "toolkit",
+          name: "Tasks",
+          description: "Your tasks",
+          tools: [
+            { name: "add_task", label: "Added task", description: "Add a task" },
+            { name: "delete_task", label: "Deleted task", description: "Delete a task" },
+          ],
+        },
+      ],
+    };
+    const stored: ToolPermissionsData = { permissions: { add_task: "allow" } };
+    api.get("/capabilities", () => capabilities);
+    api.get("/tool-permissions", () => stored);
+    api.put("/tool-permissions", (request) => request.body);
     render(
       <AppQueryProvider>
         <GrootUIProvider>
@@ -65,7 +54,9 @@ describe("ToolDefaultsSettings", () => {
 
     const remove = screen.getByRole("radiogroup", { name: "Deleted task permission" });
     await user.click(within(remove).getByRole("radio", { name: "Off" }));
-    expect(api.setToolPermissions).toHaveBeenCalledWith({ add_task: "allow", delete_task: "off" });
+    expect(api.sent("PUT", "/tool-permissions").map((request) => request.body)).toEqual([
+      { permissions: { add_task: "allow", delete_task: "off" } },
+    ]);
     await settle();
     expect(
       within(screen.getByRole("radiogroup", { name: "Deleted task permission" }))

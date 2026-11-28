@@ -48,17 +48,6 @@ export const claudeCodeApi = {
 
 export const CATEGORY_ORDER: readonly MemoryCategory[] = ["preference", "fact", "goal", "habit"];
 
-let capabilitiesCache: Promise<CapabilityInfo[]> | null = null;
-
-async function fetchCapabilities(): Promise<CapabilityInfo[]> {
-  try {
-    return (await apiClient.get<CapabilityList>("/capabilities")).capabilities ?? [];
-  } catch (error) {
-    capabilitiesCache = null;
-    throw error;
-  }
-}
-
 export const botsApi = {
   list: () => apiClient.get<BotListEntry[]>("/bots"),
   create: (input: BotCreateBody) => apiClient.post<Bot>("/bots", input),
@@ -118,7 +107,8 @@ export const botsApi = {
     apiClient.post<Bot>(`/bots/${id}/pin`, { pinned } satisfies PinBody),
   setYolo: (id: string, on: boolean) =>
     apiClient.put<YoloState>(`/bots/${id}/yolo`, { on } satisfies YoloBody),
-  capabilities: () => (capabilitiesCache ??= fetchCapabilities()),
+  capabilities: async (): Promise<CapabilityInfo[]> =>
+    (await apiClient.get<CapabilityList>("/capabilities")).capabilities ?? [],
   decideApproval: (
     id: string,
     taskId: number,

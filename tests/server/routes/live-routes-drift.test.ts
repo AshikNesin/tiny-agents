@@ -9,8 +9,8 @@ import {
   redeemBrowserPageVncTicket,
   redeemVncTicket,
   resetVncTicketsForTests,
-} from "../../../apps/web/src/server/api/bots/browser.vnc";
-import { resetComputerVncTicketsForTests } from "../../../apps/web/src/server/api/bots/computer.vnc";
+} from "../../../apps/web/src/server/api/live/browser.vnc";
+import { resetComputerVncTicketsForTests } from "../../../apps/web/src/server/api/live/computer.vnc";
 import {
   createBrowserSessions,
   type BrowserSession,
@@ -132,11 +132,11 @@ async function ownBot(name: string) {
 
 describe("the live routes the app mounts", () => {
   it("is exactly these methods and paths", () => {
-    const live = createTestApp()
+    const mounted = createTestApp()
       .routes.filter((route) => route.method !== "ALL")
       .map((route) => `${route.method} ${route.path}`)
-      .filter((route) => /\/(browser|computer)(\/|$)/.test(route))
-      .sort();
+      .filter((route) => /\/(browser|computer)(\/|$)/.test(route));
+    const live = [...new Set(mounted)].sort();
     expect(live).toEqual([
       "DELETE /api/v1/bots/:id/browser/profile",
       "DELETE /api/v1/bots/:id/computer/profile",

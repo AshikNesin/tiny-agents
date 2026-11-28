@@ -26,25 +26,22 @@ easy to leave behind when the code moves, and impossible to supersede.
   and becomes a GitHub issue to fix the hack. A tautology or a stale comment
   is deleted.
 - Lint rule R16 (`repo/no-comments` in `scripts/lint/repo-plugin.mjs`) bans
-  comments in TypeScript and JavaScript, and `pnpm check:comments` (a gate in
-  `scripts/gates.mjs`) holds TypeScript, JavaScript, Kotlin and CSS to the
-  ratchet.
-- The ratchet is `scripts/lint/comment-baseline.json`: the comments each file
-  may still hold. It starts at today's count and only shrinks: the gate fails
-  a file over its count, a count left above the file's real number (run
-  `pnpm comments:ratchet`), and any count that grew against the base branch.
-  A rename may carry its count; a new file starts at zero.
+  comments in TypeScript and JavaScript, and `pnpm check:comments`
+  (`scripts/check-comments.ts`, a gate in `scripts/gates.mjs`) bans them in
+  Kotlin and CSS too.
+- The sweep started from a ratchet that let each file keep its old comments
+  until they were deleted. Once every count reached zero, on 2026-11-28, the
+  ratchet, its baseline file and the sweep skill were removed: there is no
+  allowance left to shrink.
 - Kept as they are: tool directives (`eslint-disable`, `oxlint-disable`,
   `@ts-expect-error`, `/* @__PURE__ */`, `@Suppress`-style markers), license
   headers, generated files, and the paths in `OUT_OF_SCOPE` in
   `scripts/lint/comments.mjs`.
-- The `/delete-comment` skill (`.claude/skills/delete-comment/SKILL.md`)
-  repeats the sweep on any part of the code.
 
 ## Consequences
 
-- Each sweep is a mechanical diff plus a short list of issues and ADRs; the
-  ratchet keeps it from coming back.
+- Each sweep was a mechanical diff plus a short list of issues and ADRs; the
+  zero-tolerance rule keeps comments from coming back.
 - A reader who wants the why looks in `docs/adr/`, the issue, or `git blame`,
   not beside the line.
 - Files synced from groot (`packages/core`, `jobs`, `shell`, `ui`) and the

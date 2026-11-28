@@ -2,8 +2,8 @@
  * @vitest-environment jsdom
  *
  * Chat keys: the same single-letter commands as the Code workspace. The bot
- * stream is a fake (fakes/sse.ts) and the bots API a mock, so no server is
- * involved.
+ * stream is a fake (fakes/sse.ts) and the server is fakeApi(), so no server
+ * is involved.
  */
 import React from "react";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
@@ -12,33 +12,14 @@ import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { ChatPane } from "@/components/ChatPane";
 import { useBotsStore } from "@/store/bots";
 import { chatSessions } from "@/store/chats";
-import { usePeopleStore } from "@/store/people";
-import type { Bot } from "../../../apps/web/src/shared/api/bots";
+import type { Bot, SendMessageBody } from "../../../apps/web/src/shared/api/bots";
 import type { CatalogModel } from "../../../apps/web/src/shared/api/models";
 import { botStream } from "../fakes/sse";
 import { AppQueryProvider } from "../query-provider";
+import { chatBackend } from "./chat-backend";
+import { signedInAs, viewerLoaded } from "../fakes/viewer";
 
-const sendMock = vi.fn().mockResolvedValue(undefined);
-const readMock = vi.fn().mockResolvedValue(undefined);
-const abortMock = vi.fn().mockResolvedValue(undefined);
-const resetMock = vi.fn();
-const rewindMock = vi.fn();
-const withdrawMock = vi.fn().mockResolvedValue(undefined);
-const pastChatsMock = vi.fn().mockResolvedValue([]);
-
-vi.mock("@/lib/bots-api", () => ({
-  botsApi: {
-    send: (...args: unknown[]) => sendMock(...args),
-    abort: (...args: unknown[]) => abortMock(...args),
-    reset: (...args: unknown[]) => resetMock(...args),
-    rewind: (...args: unknown[]) => rewindMock(...args),
-    withdraw: (...args: unknown[]) => withdrawMock(...args),
-    list: vi.fn().mockResolvedValue([]),
-    read: () => readMock(),
-    capabilities: vi.fn().mockResolvedValue([]),
-    pastChats: (...args: unknown[]) => pastChatsMock(...args),
-  },
-}));
+let api: ReturnType<typeof chatBackend>;
 
 vi.mock("@/lib/sse", async () => (await import("../fakes/sse")).sseModule);
 
@@ -115,14 +96,13 @@ function seedStore() {
     fullBots: {},
   });
   chatSessions.store.setState({ sessions: {} });
-  usePeopleStore.setState({ role: "owner" });
 }
 
 function Where() {
   return <output data-testid="where">{useLocation().pathname}</output>;
 }
 
-function renderPane() {
+async function renderPane() {
   render(
     <AppQueryProvider>
       <MemoryRouter initialEntries={["/chats/host"]}>
@@ -136,6 +116,7 @@ function renderPane() {
       </MemoryRouter>
     </AppQueryProvider>,
   );
+  await viewerLoaded(api);
   return screen.getByRole("textbox") as HTMLTextAreaElement;
 }
 
@@ -143,20 +124,20 @@ const press = (key: string, init: KeyboardEventInit = {}) =>
   act(() => {
     fireEvent.keyDown(document.body, { key, ...init });
   });
+const sends = () => api.sent<SendMessageBody>("POST", "/bots/host/messages");
 const where = () => screen.getByTestId("where").textContent;
 
 beforeEach(() => {
   seedStore();
-  abortMock.mockClear();
-  sendMock.mockClear();
-  rewindMock.mockReset();
-  rewindMock.mockResolvedValue(HOST);
+  api = chatBackend(HOST);
+  signedInAs(api, "owner");
+  api.post("/bots/host/rewind", () => HOST);
   localStorage.clear();
 });
 
 describe("chat keys", () => {
-  it("? lists the chat's keys", () => {
-    renderPane();
+  it("? lists the chat's keys", async () => {
+    await renderPane();
     press("?", { shiftKey: true });
     const keys = screen.getByTestId("code-keys");
     expect(keys).toHaveTextContent("Next bot");
@@ -165,8 +146,8 @@ describe("chat keys", () => {
     expect(keys).toHaveTextContent("Past chats");
   });
 
-  it("c puts the cursor in the composer, and a letter typed there is text", () => {
-    const composer = renderPane();
+  it("c puts the cursor in the composer, and a letter typed there is text", async () => {
+    const composer = await renderPane();
     (document.activeElement as HTMLElement | null)?.blur();
     press("c");
     expect(document.activeElement).toBe(composer);
@@ -174,8 +155,8 @@ describe("chat keys", () => {
     expect(where()).toBe("/chats/host");
   });
 
-  it("j and k walk the bots in the sidebar's order; u jumps to the next one that needs you", () => {
-    const composer = renderPane();
+  it("j and k walk the bots in the sidebar's order; u jumps to the next one that needs you", async () => {
+    const composer = await renderPane();
     composer.blur();
     press("j");
     expect(where()).toBe("/chats/older");
@@ -187,14 +168,14 @@ describe("chat keys", () => {
   });
 
   it("h opens the bot's past chats", async () => {
-    const composer = renderPane();
+    const composer = await renderPane();
     composer.blur();
     press("h");
     expect(await screen.findByText("Chat history")).toBeInTheDocument();
   });
 
   it("Escape outside the composer stops a reply", async () => {
-    const composer = renderPane();
+    const composer = await renderPane();
     act(() => {
       botStream("host").send({
         type: "snapshot",
@@ -203,13 +184,13 @@ describe("chat keys", () => {
     });
     composer.blur();
     press("Escape");
-    await waitFor(() => expect(abortMock).toHaveBeenCalledWith("host"));
+    await waitFor(() => expect(api.sent("POST", "/bots/host/abort")).toHaveLength(1));
   });
 });
 
 describe("past chats", () => {
   it("opens from the header in one click", async () => {
-    renderPane();
+    await renderPane();
     fireEvent.click(screen.getByRole("button", { name: "Past chats" }));
     expect(await screen.findByText("Chat history")).toBeInTheDocument();
   });
@@ -244,18 +225,20 @@ describe("the last turn", () => {
     });
 
   it("t runs it again from before it", async () => {
-    const composer = renderPane();
+    const composer = await renderPane();
     conversation();
     composer.blur();
     press("t");
 
-    await waitFor(() => expect(sendMock).toHaveBeenCalled());
-    expect(rewindMock).toHaveBeenCalledWith("host", "e1");
-    expect(sendMock.mock.calls.at(-1)?.[2]).toBe("Find flights");
+    await waitFor(() => expect(sends()).not.toHaveLength(0));
+    expect(api.sent("POST", "/bots/host/rewind").map((request) => request.body)).toEqual([
+      { at: "e1" },
+    ]);
+    expect(sends().at(-1)?.body.text).toBe("Find flights");
   });
 
   it("e puts it in the composer, and sending goes back to before it with the edit", async () => {
-    const composer = renderPane();
+    const composer = await renderPane();
     conversation();
     composer.blur();
     press("e");
@@ -267,14 +250,16 @@ describe("the last turn", () => {
     });
     fireEvent.keyDown(composer, { key: "Enter" });
 
-    await waitFor(() => expect(sendMock).toHaveBeenCalled());
-    expect(rewindMock).toHaveBeenCalledWith("host", "e1");
-    expect(sendMock.mock.calls.at(-1)?.[2]).toBe("Find flights in December");
+    await waitFor(() => expect(sends()).not.toHaveLength(0));
+    expect(api.sent("POST", "/bots/host/rewind").map((request) => request.body)).toEqual([
+      { at: "e1" },
+    ]);
+    expect(sends().at(-1)?.body.text).toBe("Find flights in December");
     expect(screen.queryByText(/Editing your last message/)).not.toBeInTheDocument();
   });
 
-  it("offers Edit and Retry on the last message itself", () => {
-    renderPane();
+  it("offers Edit and Retry on the last message itself", async () => {
+    await renderPane();
     conversation();
     expect(screen.getByRole("button", { name: "Edit this message" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Run this again" })).toBeInTheDocument();

@@ -21,7 +21,9 @@ window.addEventListener("vite:preloadError", (event) => {
 window.setTimeout(() => {
   try {
     sessionStorage.removeItem("chunk-reload");
-  } catch {}
+  } catch (error) {
+    if (!(error instanceof DOMException)) throw error;
+  }
 }, 10_000);
 
 setDefaultTheme("dark");

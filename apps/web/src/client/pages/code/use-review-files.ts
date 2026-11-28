@@ -6,7 +6,7 @@ import { projectsApi } from "../../lib/code/projects";
 import { useRefreshOn, useResource } from "../../queries/resource";
 import { useSteadyKey } from "../../lib/code/use-live-changes";
 import type { ReviewFile } from "../../../shared/api/code";
-import { treeOrder } from "./DiffWorkspace";
+import { treeOrder } from "./workspace-file";
 
 export function useReviewFiles(
   threadId: string,
@@ -18,17 +18,20 @@ export function useReviewFiles(
   const [reload, setReload] = useState(0);
   const refresh = useCallback(() => setReload((n) => n + 1), []);
   const filesKey = ["code", "review-files", threadId, scope];
-  const {
-    data: files,
-    loadError: error,
-    refresh: refetch,
-  } = useResource(
+  const listed = useResource(
     filesKey,
     async () => treeOrder(await projectsApi.reviewFiles(threadId, scope)),
     "Could not read the changes.",
     { placeholderData: keepPreviousData },
   );
-  useRefreshOn(`${String(settledKey)}\u0000${reload}`, refetch);
+  const files =
+    listed.status === "ready"
+      ? listed.data
+      : listed.status === "failed"
+        ? (listed.last ?? null)
+        : null;
+  const error = listed.status === "failed" ? listed.loadError : null;
+  useRefreshOn(`${String(settledKey)}\u0000${reload}`, listed.refresh);
   const client = useQueryClient();
   const setFiles = (update: (list: ReviewFile[] | undefined) => ReviewFile[] | undefined) =>
     client.setQueryData<ReviewFile[]>(filesKey, update);

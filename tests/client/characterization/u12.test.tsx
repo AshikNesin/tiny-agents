@@ -1,10 +1,24 @@
 import React from "react";
-import { act, render, renderHook, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vite-plus/test";
+import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it } from "vite-plus/test";
 import { createMemoryRouter, RouterProvider, type RouteObject } from "react-router-dom";
 import { appRoutes } from "@/App";
-import { peopleApi } from "@/lib/people-api";
-import { useViewerRole, usePeopleStore } from "@/store/people";
+import type { PeopleMe } from "../../../apps/web/src/shared/api/people";
+import { ApiFailure, fakeApi } from "../fakes/api";
+import { ViewerProbe } from "../fakes/viewer";
+import { AppQueryProvider } from "../query-provider";
+
+let api: ReturnType<typeof fakeApi>;
+
+function peopleMeFails() {
+  api.get("/people/me", () => {
+    throw new ApiFailure(503, "network down");
+  });
+}
+
+beforeEach(() => {
+  api = fakeApi();
+});
 
 function gateElement(routes: RouteObject[]): React.ReactNode {
   for (const route of routes) {
@@ -28,56 +42,52 @@ function renderAt(path: string) {
     ],
     { initialEntries: [path] },
   );
-  render(<RouterProvider router={router} />);
+  render(
+    <AppQueryProvider>
+      <ViewerProbe />
+      <RouterProvider router={router} />
+    </AppQueryProvider>,
+  );
   return router;
 }
 
-afterEach(() => {
-  vi.restoreAllMocks();
-  usePeopleStore.setState({ role: null });
-});
+const viewer = () => screen.getByTestId("viewer").textContent;
+const asked = () => api.sent("GET", "/people/me");
 
 describe("U12: who the shell thinks is signed in", () => {
   it("shows no owner page until /people/me answers, then sends a guest away", async () => {
-    let answer: (value: { guest: boolean }) => void = () => undefined;
-    vi.spyOn(peopleApi, "me").mockReturnValue(new Promise((resolve) => (answer = resolve)));
-    usePeopleStore.setState({ role: null });
+    let answer: (value: PeopleMe) => void = () => undefined;
+    api.get("/people/me", () => new Promise<PeopleMe>((resolve) => (answer = resolve)));
     const router = renderAt("/vault");
-    const loading = usePeopleStore.getState().load();
+    await waitFor(() => expect(asked()).toHaveLength(1));
 
     expect(screen.queryByText("Vault page (owner only)")).not.toBeInTheDocument();
-    expect(renderHook(() => useViewerRole()).result.current).toBeNull();
+    expect(viewer()).toBe("loading");
 
-    await act(async () => {
-      answer({ guest: true });
-      await loading;
-    });
+    await act(async () => answer({ guest: true }));
     expect(await screen.findByText("Chats page")).toBeInTheDocument();
     expect(router.state.location.pathname).toBe("/chats");
   });
 
   it("keeps a failed /people/me from opening an owner page, and recovers on the next load", async () => {
-    vi.spyOn(peopleApi, "me").mockRejectedValue(new Error("network down"));
-    usePeopleStore.setState({ role: null });
+    peopleMeFails();
     renderAt("/vault");
-    await act(() => usePeopleStore.getState().load());
+    await waitFor(() => expect(viewer()).toBe("unknown"));
 
-    expect(usePeopleStore.getState().role).toBeNull();
     expect(screen.queryByText("Vault page (owner only)")).not.toBeInTheDocument();
     expect(screen.queryByText("Chats page")).not.toBeInTheDocument();
 
-    vi.mocked(peopleApi.me).mockResolvedValue({ guest: false });
-    await act(() => usePeopleStore.getState().load());
+    api.get("/people/me", (): PeopleMe => ({ guest: false }));
+    cleanup();
+    renderAt("/vault");
     expect(await screen.findByText("Vault page (owner only)")).toBeInTheDocument();
   });
 
   it("still opens a guest page for a viewer whose /people/me failed", async () => {
-    vi.spyOn(peopleApi, "me").mockRejectedValue(new Error("network down"));
-    usePeopleStore.setState({ role: null });
+    peopleMeFails();
     renderAt("/chats");
-    await act(() => usePeopleStore.getState().load());
+    await waitFor(() => expect(viewer()).toBe("unknown"));
 
     expect(screen.getByText("Chats page")).toBeInTheDocument();
-    expect(usePeopleStore.getState().role).toBeNull();
   });
 });

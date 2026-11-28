@@ -1,51 +1,42 @@
-import { useEffect, useMemo, useState } from "react";
-import type { CapabilityInfo } from "../../../shared/api/bots";
+import { useMemo } from "react";
 import type { ConnectionSummary } from "../../../shared/api/connections";
-import type { Guest } from "../../../shared/api/people";
 import type { SkillSummary } from "../../../shared/api/skills";
-import { botsApi } from "../../lib/bots-api";
-import { connectionsApi } from "../../lib/connections-api";
-import { peopleApi } from "../../lib/people-api";
-import { skillsApi } from "../../lib/skills-api";
+import { useCapabilities } from "../../queries/capabilities";
+import { useConnections } from "../../queries/connections";
+import { useGuests } from "../../queries/people";
+import type { Resource } from "../../queries/resource";
+import { useSkills } from "../../queries/skills";
+
+function listed<T>(resource: Resource<T[]>): T[] | undefined {
+  if (resource.status === "ready") return resource.data;
+  if (resource.status === "failed") return resource.last;
+  return undefined;
+}
 
 export function useBotDialogLists(open: boolean) {
-  const [capabilities, setCapabilities] = useState<CapabilityInfo[]>([]);
-  const [connections, setConnections] = useState<ConnectionSummary[]>([]);
-  const [skills, setSkills] = useState<SkillSummary[]>([]);
-  const [guests, setGuests] = useState<Guest[]>([]);
+  const capabilities = listed(useCapabilities("Failed to load toolkits", { enabled: open }));
+  const allConnections = listed(useConnections({ enabled: open }));
+  const allSkills = listed(useSkills({ enabled: open }));
+  const allGuests = listed(useGuests({ enabled: open }));
 
-  useEffect(() => {
-    if (!open) return;
-    void botsApi
-      .capabilities()
-      .then(setCapabilities)
-      .catch(() => undefined);
-    void skillsApi
-      .list()
-      .then((all) => setSkills(all.map(({ id, name, description }) => ({ id, name, description }))))
-      .catch(() => undefined);
-    void peopleApi
-      .list()
-      .then(({ guests: all }) => setGuests(all))
-      .catch(() => undefined);
-    void connectionsApi
-      .list()
-      .then((all) =>
-        setConnections(
-          all.map(({ id, name, status, tools }) => ({
-            id,
-            name,
-            status,
-            toolCount: tools.filter((tool) => tool.enabled).length,
-          })),
-        ),
-      )
-      .catch(() => undefined);
-  }, [open]);
-
+  const guests = useMemo(() => allGuests ?? [], [allGuests]);
+  const skills = useMemo<SkillSummary[]>(
+    () => (allSkills ?? []).map(({ id, name, description }) => ({ id, name, description })),
+    [allSkills],
+  );
+  const connections = useMemo<ConnectionSummary[]>(
+    () =>
+      (allConnections ?? []).map(({ id, name, status, tools }) => ({
+        id,
+        name,
+        status,
+        toolCount: tools.filter((tool) => tool.enabled).length,
+      })),
+    [allConnections],
+  );
   const toolkitsList = useMemo(
     () =>
-      capabilities.filter(
+      (capabilities ?? []).filter(
         (capability) =>
           capability.kind === "toolkit" &&
           !capability.auto &&

@@ -7,6 +7,7 @@ import {
 } from "node:http";
 import { connect, isIP, type Socket } from "node:net";
 import type { Duplex } from "node:stream";
+import { reportFailure } from "./failures";
 import type { ResolveHost } from "./navigation-guard";
 import { isPrivateAddress } from "./public-url";
 
@@ -62,7 +63,10 @@ function decideEgress(
         !exemptName && list.some((address) => isPrivateAddress(address) && !exemptAddress(address));
       return refused ? { refused: true } : { addresses: [...new Set(list)] };
     },
-    (): Verdict => ({ failed: `${name} did not resolve` }),
+    (error: unknown): Verdict => {
+      reportFailure(`the egress proxy could not resolve ${name}, answering 502`, error);
+      return { failed: `${name} did not resolve` };
+    },
   );
 }
 
@@ -195,9 +199,24 @@ export async function startEgressProxy(options: EgressProxyOptions): Promise<Egr
     upstream.once("close", () => client.destroy());
   };
 
-  const server = createServer((req, res) => void forward(req, res).catch(() => res.destroy()));
+  const server = createServer(
+    (req, res) =>
+      void forward(req, res).catch((error: unknown) => {
+        reportFailure(
+          `the egress proxy failed on a request to ${req.headers.host ?? "an unnamed host"}, dropping it`,
+          error,
+        );
+        res.destroy();
+      }),
+  );
   server.on("connect", (req, socket, head) => {
-    void tunnel(req, socket, head).catch(() => socket.destroy());
+    void tunnel(req, socket, head).catch((error: unknown) => {
+      reportFailure(
+        `the egress proxy failed tunnelling to ${req.url ?? "a host"}, dropping it`,
+        error,
+      );
+      socket.destroy();
+    });
   });
   server.on("connection", track);
   await new Promise<void>((resolve, reject) => {

@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import type { UpdatePhase, UpdateStatus, UpdateView } from "../../shared/local-updates";
-import { updatesApi } from "../lib/updates-api";
+import type { UpdatePhase, UpdateStatus } from "../../shared/local-updates";
+import { useUpdateMutations, useUpdateView } from "../queries/updates";
 import { errorMessage } from "../lib/errors";
 
 const BUSY: UpdatePhase[] = ["checking", "building", "restarting"];
-const POLL_MS = 2000;
 
 export function pollOutcome(
   status: UpdateStatus | null | undefined,
@@ -22,59 +21,46 @@ export function isBusy(status: UpdateStatus | null, updatingFrom: string | null)
 }
 
 export function useUpdates() {
-  const [view, setView] = useState<UpdateView | null>(null);
   const [updatingFrom, setUpdatingFrom] = useState<string | null>(null);
-
-  const load = useCallback(async () => {
-    try {
-      const next = await updatesApi.get();
-      setView(next);
-      return next;
-    } catch {
-      return null;
-    }
-  }, []);
+  const resource = useUpdateView((latest) => isBusy(latest?.status ?? null, updatingFrom));
+  const { refresh } = resource;
+  const view =
+    resource.status === "ready"
+      ? resource.data
+      : resource.status === "failed"
+        ? (resource.last ?? null)
+        : null;
+  const mutations = useUpdateMutations();
+  const applying = mutations.apply.isPending;
 
   const status = view?.status ?? null;
   const busy = isBusy(status, updatingFrom);
 
+  const outcome = applying ? "keep-polling" : pollOutcome(status, updatingFrom);
   useEffect(() => {
-    void load();
-  }, [load]);
-
-  useEffect(() => {
-    if (!busy) return;
-    let timer: ReturnType<typeof setTimeout>;
-    const tick = async () => {
-      const next = await load();
-      const outcome = pollOutcome(next?.status, updatingFrom);
-      if (outcome === "reload") return window.location.reload();
-      if (outcome === "update-failed") setUpdatingFrom(null);
-      timer = setTimeout(() => void tick(), POLL_MS);
-    };
-    timer = setTimeout(() => void tick(), POLL_MS);
-    return () => clearTimeout(timer);
-  }, [busy, load, updatingFrom]);
+    if (outcome === "reload") window.location.reload();
+    if (outcome === "update-failed") setUpdatingFrom(null);
+  }, [outcome]);
 
   const check = useCallback(async () => {
     try {
-      setView(await updatesApi.check());
-      setTimeout(() => void load(), 500);
+      await mutations.check.mutateAsync();
+      setTimeout(() => void refresh(), 500);
     } catch (error) {
       toast.error(errorMessage(error, "Could not check for updates"));
     }
-  }, [load]);
+  }, [mutations.check, refresh]);
 
   const apply = useCallback(async () => {
     if (!status) return;
     setUpdatingFrom(status.current.sha);
     try {
-      setView(await updatesApi.apply());
+      await mutations.apply.mutateAsync();
     } catch (error) {
       setUpdatingFrom(null);
       toast.error(errorMessage(error, "Could not start the update"));
     }
-  }, [status]);
+  }, [status, mutations.apply]);
 
   return { view, status, busy, updatingFrom, check, apply };
 }

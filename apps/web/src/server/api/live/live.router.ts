@@ -1,12 +1,13 @@
-import { Hono } from "hono";
+import { routes, type Routes } from "../routes";
 import { z, type ZodType } from "zod";
-import type { AppContext, AppEnv } from "@groot/core/types";
+import type { AppContext } from "@groot/core/types";
 import { ok } from "@groot/core/utils/api-response.utils";
 import { parseBody, parseStringParam, requireUser } from "@groot/core/utils/controller.utils";
 import { Boom } from "@groot/core/errors";
+import { logger } from "@groot/core/logger";
 import * as botsService from "../bots/bots.service";
 import { browserTargetForBot } from "../bots/browser.targets";
-import { knownProfile } from "../bots/profiles";
+import { knownProfile } from "./profiles";
 import { watchOnly } from "../people/access";
 import type { DesktopApp, DesktopApps, LiveStarting, VncTicket } from "../../../shared/api/live";
 
@@ -148,24 +149,30 @@ function badGateway(error: unknown, fallback: string): never {
   throw Boom.badGateway(error instanceof Error ? error.message : fallback);
 }
 
-function register(router: Hono<AppEnv>, surface: LiveSurface<LiveEntry>, a: Addressing): void {
-  router.post(`${a.base}/start`, async (c) => {
+function logFailedStart(error: unknown, route: string): void {
+  logger.warn({ error, route }, "Live: the session did not start");
+}
+
+function register(router: Routes, surface: LiveSurface<LiveEntry>, a: Addressing): void {
+  router.post(`${a.base}/start`, "signedIn", async (c) => {
     const { at } = await a.resolve(c);
     surface
       .ops()
       .start(at)
-      .catch(() => {});
+      .catch((error: unknown) => logFailedStart(error, a.base));
     return ok<LiveStarting>(c, { starting: true });
   });
 
-  router.post(`${a.base}/vnc-ticket`, async (c) => {
+  router.post(`${a.base}/vnc-ticket`, "signedIn", async (c) => {
     const { at, scope } = await a.resolve(c);
     const ops = surface.ops();
     const live = ops.get(at);
     const view = live && surface.view(live);
     if (!live || (!view && a.noViewIsNotRunning)) throw Boom.notFound(a.notRunning);
     if (!view) throw Boom.conflict(surface.noView);
-    if (a.opensTabForTicket) await ops.start(at).catch(() => {});
+    if (a.opensTabForTicket) {
+      await ops.start(at).catch((error: unknown) => logFailedStart(error, a.base));
+    }
     const ticket = a.issueTicket({
       userId: requireUser(c).userId,
       at,
@@ -178,7 +185,7 @@ function register(router: Hono<AppEnv>, surface: LiveSurface<LiveEntry>, a: Addr
 
   const { resize } = surface;
   if (resize) {
-    router.post(`${a.base}/resize`, async (c) => {
+    router.post(`${a.base}/resize`, "signedIn", async (c) => {
       const [{ at }, body] = await a.withBody(c, resizeSchema);
       const live = surface.ops().get(at);
       if (!live) throw Boom.notFound(a.notRunning);
@@ -194,7 +201,7 @@ function register(router: Hono<AppEnv>, surface: LiveSurface<LiveEntry>, a: Addr
     });
   }
 
-  router.post(`${a.base}/driver`, async (c) => {
+  router.post(`${a.base}/driver`, "signedIn", async (c) => {
     const [{ at }, body] = await a.withBody(c, driverSchema);
     const ops = surface.ops();
     const live = ops.get(at);
@@ -205,7 +212,7 @@ function register(router: Hono<AppEnv>, surface: LiveSurface<LiveEntry>, a: Addr
   });
 }
 
-function registerApps(router: Hono<AppEnv>, surface: LiveSurface<LiveEntry>, a: Addressing): void {
+function registerApps(router: Routes, surface: LiveSurface<LiveEntry>, a: Addressing): void {
   const { apps } = surface;
   if (!apps) return;
   router.get(`${a.base}/apps`, async (c) => {
@@ -219,7 +226,7 @@ function registerApps(router: Hono<AppEnv>, surface: LiveSurface<LiveEntry>, a: 
     }
   });
 
-  router.post(`${a.base}/apps`, async (c) => {
+  router.post(`${a.base}/apps`, "signedIn", async (c) => {
     const [{ at }, body] = await a.withBody(c, openAppSchema);
     const live = surface.ops().get(at);
     if (!live) throw Boom.notFound(a.notRunning);
@@ -234,8 +241,8 @@ function registerApps(router: Hono<AppEnv>, surface: LiveSurface<LiveEntry>, a: 
   });
 }
 
-function registerReset(router: Hono<AppEnv>, surface: LiveSurface<LiveEntry>, a: Addressing): void {
-  router.delete(a.reset, async (c) => {
+function registerReset(router: Routes, surface: LiveSurface<LiveEntry>, a: Addressing): void {
+  router.delete(a.reset, "signedIn", async (c) => {
     const { at } = await a.resolve(c);
     const ops = surface.ops();
     try {
@@ -247,8 +254,8 @@ function registerReset(router: Hono<AppEnv>, surface: LiveSurface<LiveEntry>, a:
   });
 }
 
-export function liveRouter(surfaces: LiveSurface<LiveEntry>[]): Hono<AppEnv> {
-  const router = new Hono<AppEnv>();
+export function liveRouter(surfaces: LiveSurface<LiveEntry>[]): Routes["hono"] {
+  const router = routes();
   for (const surface of surfaces) {
     const bot = byBot(surface);
     router.get(bot.base, async (c) => ok(c, surface.bots.status((await bot.resolve(c)).at)));
@@ -261,5 +268,5 @@ export function liveRouter(surfaces: LiveSurface<LiveEntry>[]): Hono<AppEnv> {
     registerApps(router, surface, profile);
     registerReset(router, surface, profile);
   }
-  return router;
+  return router.hono;
 }

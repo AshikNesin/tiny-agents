@@ -37,6 +37,12 @@ interface BotsState {
   disconnectActivity: () => void;
 }
 
+const shownAsTheBotsError = () => undefined;
+
+function unreadReturnsOnTheNextLoad(error: unknown): void {
+  console.warn("Could not mark the chat read; the server still lists it as unread", error);
+}
+
 let activityConnection: { close(): void } | null = null;
 let botsRequest = 0;
 let newestOutcome: { bots: BotListEntry[] } | { error: unknown } | undefined;
@@ -192,7 +198,9 @@ export const useBotsStore = create<BotsState>((set, get) => {
           models,
           defaultModel: defaultModelId ?? undefined,
         });
-      } catch {}
+      } catch (error) {
+        console.error("Could not load the models; the model list keeps its last value", error);
+      }
     },
 
     togglePin: async (botId) => {
@@ -210,14 +218,12 @@ export const useBotsStore = create<BotsState>((set, get) => {
     },
 
     refreshBotsInBackground: () => {
-      void get()
-        .loadBots()
-        .catch(() => undefined);
+      void get().loadBots().catch(shownAsTheBotsError);
     },
 
     markRead: (botId) => {
       patchBot(botId, { unread: false });
-      void botsApi.read(botId).catch(() => undefined);
+      void botsApi.read(botId).catch(unreadReturnsOnTheNextLoad);
     },
 
     loadBot: async (botId, { fresh = false } = {}) => {

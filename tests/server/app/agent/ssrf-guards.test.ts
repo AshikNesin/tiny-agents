@@ -240,6 +240,11 @@ describe("refusesNavigation's name checks (S7b)", () => {
     expect(await refusesNavigation("http://slow.example/", exempt(), stuck)).toBe(true);
   }, 15_000);
 
+  it("refuses a name whose lookup returns no address", async () => {
+    const empty = async () => [];
+    expect(await refusesNavigation("http://nowhere.example/", exempt(), empty)).toBe(true);
+  });
+
   it("refuses a name whose lookup fails, unless the name is exempt", async () => {
     const failing = () => Promise.reject(new Error("ENOTFOUND"));
     expect(await refusesNavigation("http://gone.example/", exempt(), failing)).toBe(true);

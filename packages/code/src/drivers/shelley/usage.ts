@@ -1,5 +1,7 @@
+import { parseJson } from "@tiny-agents/std";
+import { z } from "zod";
 import type { UsageBand, UsageReport, UsageRow } from "../../contracts";
-import type { ModelCost, ShelleyMessage, SubagentModelUsage } from "./wire";
+import { opt, type ModelCost, type ShelleyMessage, type SubagentModelUsage } from "./wire";
 
 export interface UsageEntry {
   input_tokens: number;
@@ -11,16 +13,22 @@ export interface UsageEntry {
   url?: string;
 }
 
-export interface OtherUsageEntry {
-  purpose: string;
-  input_tokens?: number;
-  cache_creation_input_tokens?: number;
-  cache_read_input_tokens?: number;
-  output_tokens?: number;
-  cost_usd?: number;
-  model?: string;
-  url?: string;
-}
+const optionalNumber = opt(z.number());
+const optionalText = opt(z.string());
+
+const usageEntrySchema = z.object({
+  input_tokens: optionalNumber,
+  cache_creation_input_tokens: optionalNumber,
+  cache_read_input_tokens: optionalNumber,
+  output_tokens: optionalNumber,
+  cost_usd: optionalNumber,
+  model: optionalText,
+  url: optionalText,
+});
+
+const otherUsageEntrySchema = usageEntrySchema.extend({ purpose: z.string() });
+
+export type OtherUsageEntry = z.infer<typeof otherUsageEntrySchema>;
 
 type PriceKey = keyof ModelCost;
 type TokenKey =
@@ -51,10 +59,10 @@ const TOKEN_BANDS: Array<{
   { key: "output_tokens", costKey: "output", label: "Output", color: "oklch(0.75 0.14 55)" },
 ];
 
-function parse<T>(raw: string | null | undefined): T | null {
+function parse<T>(what: string, raw: string | null | undefined, schema: z.ZodType<T>): T | null {
   if (!raw) return null;
   try {
-    return JSON.parse(raw) as T;
+    return parseJson(what, raw, schema);
   } catch {
     return null;
   }
@@ -75,7 +83,7 @@ export function usageEntries(messages: Iterable<ShelleyMessage>): UsageEntry[] {
   const out: UsageEntry[] = [];
   for (const m of messages) {
     if (m.type !== "agent") continue;
-    const u = parse<UsageEntry>(m.usage_data);
+    const u = parse("A Shelley message's usage", m.usage_data, usageEntrySchema);
     if (hasTokens(u)) out.push(u);
   }
   return out;
@@ -84,8 +92,11 @@ export function usageEntries(messages: Iterable<ShelleyMessage>): UsageEntry[] {
 export function otherUsageEntries(messages: Iterable<ShelleyMessage>): OtherUsageEntry[] {
   const out: OtherUsageEntry[] = [];
   for (const m of messages) {
-    const rows = parse<OtherUsageEntry[]>(m.other_usage_data);
-    if (Array.isArray(rows)) out.push(...rows.filter((r) => r && typeof r.purpose === "string"));
+    const rows = parse("A Shelley message's other usage", m.other_usage_data, z.array(z.unknown()));
+    for (const row of rows ?? []) {
+      const entry = otherUsageEntrySchema.safeParse(row);
+      if (entry.success) out.push(entry.data);
+    }
   }
   return out;
 }

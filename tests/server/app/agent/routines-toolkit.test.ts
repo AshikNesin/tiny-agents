@@ -2,7 +2,8 @@ import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { ProviderDoc, type ProviderState } from "@earendil-works/pi-durable";
 import type { ToolExecutionApi, ToolExecutionResult } from "@earendil-works/pi-durable";
 import { describe, expect, it } from "vite-plus/test";
-import { defaultPermission, type Capability } from "../../../../packages/agent/src/capabilities";
+import type { Capability } from "../../../../packages/agent/src/capabilities";
+import { defaultPermission } from "../../../../packages/agent/src/wire";
 import {
   createRoutinesToolkit,
   type RoutineRecord,

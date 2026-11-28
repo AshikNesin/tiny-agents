@@ -1,9 +1,13 @@
 import * as React from "react";
 
-import { loadHighlighter } from "../lib/highlighter";
+import { importHighlighter } from "../lib/highlighter";
 
-type Highlighter = NonNullable<Awaited<ReturnType<typeof loadHighlighter>>>;
+type Highlighter = NonNullable<Awaited<ReturnType<typeof importHighlighter>>>;
 type GrammarState = Parameters<Highlighter["highlight"]>[1];
+
+function codeStaysPlain(error: unknown): void {
+  console.error("The syntax highlighter failed to load; showing plain code", error);
+}
 
 export function useHighlightedCode(value: string, language: string): React.ReactNode[] {
   const code = value.endsWith("\n") ? value.slice(0, -1) : value;
@@ -16,13 +20,13 @@ export function useHighlightedCode(value: string, language: string): React.React
   React.useEffect(() => {
     let cancelled = false;
 
-    loadHighlighter(language)
+    importHighlighter(language)
       .then((next) => {
         if (!cancelled) {
           setLoaded({ language, highlighter: next });
         }
       })
-      .catch(() => {});
+      .catch(codeStaysPlain);
 
     return () => {
       cancelled = true;

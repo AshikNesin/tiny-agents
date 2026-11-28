@@ -1,9 +1,8 @@
 import { createHash, randomBytes } from "node:crypto";
 import { and, asc, eq, gt, inArray, isNull, sql } from "drizzle-orm";
-import { Hono } from "hono";
+import { routes } from "../routes";
 import { Boom } from "@groot/core/errors";
 import { env } from "@groot/core/env";
-import type { AppEnv } from "@groot/core/types";
 import { ok } from "@groot/core/utils/api-response.utils";
 import { routeBodyLimit } from "@groot/core/middlewares/body-limit.middleware";
 import { addJob } from "@groot/jobs/server/queue";
@@ -143,10 +142,11 @@ export function composeEventsSection(
   );
 }
 
-export const hookRouter = new Hono<AppEnv>();
+export const hookRouter = routes();
 
 hookRouter.post(
   "/routines/hooks/:token",
+  "public",
   routeBodyLimit(HOOK_BODY_LIMIT_BYTES, {
     onError: () => {
       throw Boom.entityTooLarge("Webhook payloads are limited to 256 KB");

@@ -53,6 +53,17 @@ const port = serverPort();
 const store = releaseStore(root, process.env.TINY_AGENTS_RELEASES_DIR || defaultReleasesDir());
 const log = (line: string) => console.log(`[local] ${line}`);
 
+async function serverReady(): Promise<boolean> {
+  try {
+    const response = await fetch(`http://127.0.0.1:${port}/ready`, {
+      signal: AbortSignal.timeout(2000),
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
 const supervisor = new Supervisor(
   {
     check: async (current) => {
@@ -63,11 +74,7 @@ const supervisor = new Supervisor(
     isBuilt: store.isBuilt,
     build: store.build,
     launch: store.launch,
-    probe: () =>
-      fetch(`http://127.0.0.1:${port}/ready`, { signal: AbortSignal.timeout(2000) }).then(
-        (response) => response.ok,
-        () => false,
-      ),
+    probe: serverReady,
     saveCurrent: store.saveCurrent,
     prune: store.prune,
     log,
@@ -110,7 +117,9 @@ try {
   log(String(error));
   process.exit(1);
 }
-await store.prune([sha]).catch(() => undefined);
+await store
+  .prune([sha])
+  .catch((error: unknown) => log(`Could not prune old releases (${String(error)})`));
 
 const check = () => void supervisor.check();
 setTimeout(check, 10_000);

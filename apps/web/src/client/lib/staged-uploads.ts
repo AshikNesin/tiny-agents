@@ -48,6 +48,10 @@ export function canStageMore<Ref>(staged: StagedUpload<Ref>[]): boolean {
   return staged.length < MAX_ATTACHMENTS;
 }
 
+function removedUploadStaysOnTheServer(error: unknown): void {
+  console.warn("A removed attachment could not be deleted from the server", error);
+}
+
 export async function stageUploads<Ref>(
   files: Iterable<File>,
   staging: Staging<Ref>,
@@ -74,7 +78,7 @@ export async function stageUploads<Ref>(
       staging.upload(named).then(
         (ref) => {
           if (!staging.current().some((item) => item.key === key)) {
-            void staging.deleteUpload?.(ref).catch(() => undefined);
+            void staging.deleteUpload?.(ref).catch(removedUploadStaysOnTheServer);
             return;
           }
           staging.update((current) =>
@@ -99,5 +103,6 @@ export async function stageUploads<Ref>(
 export function unstageUpload<Ref>(item: StagedUpload<Ref>, staging: Staging<Ref>): void {
   staging.update((current) => current.filter((candidate) => candidate.key !== item.key));
   if (item.previewUrl) staging.releasePreview?.(item.previewUrl);
-  if (item.ref !== undefined) void staging.deleteUpload?.(item.ref).catch(() => undefined);
+  if (item.ref !== undefined)
+    void staging.deleteUpload?.(item.ref).catch(removedUploadStaysOnTheServer);
 }

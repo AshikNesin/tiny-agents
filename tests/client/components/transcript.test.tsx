@@ -7,26 +7,26 @@
  * actions.
  */
 import React, { useState } from "react";
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render as renderBare, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { ConfirmProvider } from "@groot/ui/primitives";
 import { Transcript, type TranscriptPages } from "@/components/Transcript";
 import { PastChatPane } from "@/components/PastChatPane";
 import { MessageScrollerProvider } from "@/components/ui/message-scroller";
-import type { Bot } from "../../../apps/web/src/shared/api/bots";
+import type {
+  Bot,
+  CapabilityList,
+  PastChatList,
+  PastChatView,
+} from "../../../apps/web/src/shared/api/bots";
+import { fakeApi } from "../fakes/api";
 import { chatTimeline } from "@/lib/chat-timeline";
 import type { ChatMessage } from "@/lib/chat-types";
+import { AppQueryProvider } from "../query-provider";
 
-const pastChatMock = vi.fn();
-vi.mock("@/lib/bots-api", () => ({
-  botsApi: {
-    capabilities: vi.fn().mockResolvedValue([]),
-    pastChat: (...args: unknown[]) => pastChatMock(...args),
-    pastChatHistory: vi.fn(),
-    pastChats: vi.fn().mockResolvedValue([]),
-  },
-}));
+const render = (ui: React.ReactElement) => renderBare(ui, { wrapper: AppQueryProvider });
+
 vi.mock("streamdown", () => ({
   Streamdown: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
 }));
@@ -140,7 +140,7 @@ describe("Past chat transcript", () => {
   };
 
   it("renders a waiting approval and Question without actions", async () => {
-    pastChatMock.mockResolvedValue({
+    const view: PastChatView = {
       chat: {
         id: "chat-1",
         title: "Old chat",
@@ -173,9 +173,15 @@ describe("Past chat transcript", () => {
           }),
         ],
         hasMore: false,
+        busy: false,
+        queued: [],
       },
       runs: [],
-    });
+    };
+    const api = fakeApi();
+    api.get("/capabilities", (): CapabilityList => ({ capabilities: [] }));
+    api.get("/bots/b1/chats", (): PastChatList => ({ chats: [] }));
+    api.get("/bots/b1/chats/chat-1", () => view);
     render(
       <ConfirmProvider>
         <MemoryRouter initialEntries={["/chats/b1/past/chat-1"]}>

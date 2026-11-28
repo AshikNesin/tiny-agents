@@ -1,6 +1,7 @@
 import { defineExtension, section } from "@earendil-works/pi-durable";
 import { createToolSearchExtension } from "@earendil-works/pi-durable/tool-search";
 import type { Extension } from "@earendil-works/pi-durable";
+import { defaultPermission } from "./wire";
 
 export type ToolPermission = "allow" | "ask" | "off";
 
@@ -40,11 +41,6 @@ export interface CapabilitySelection {
   autoReview?: boolean;
   unattended?: boolean;
   budgetTokens?: number;
-}
-
-export function defaultPermission(tool: ToolInfo): ToolPermission {
-  if (tool.askOnly) return "ask";
-  return tool.readOnly || tool.allowByDefault ? "allow" : "ask";
 }
 
 export function hiddenWhere(

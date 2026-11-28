@@ -24,6 +24,11 @@ import type { SupervisorChannel } from "./api/system/updates.service";
 import type { VapidKeys } from "@groot/core/notification/webpush.crypto";
 import type { BackendItemSummary, BackendName, VaultBackend } from "./api/vault/backends/types";
 import type { OnePasswordConnector } from "./api/vault/backends/onepassword";
+import type { ExtractionState } from "./api/uploads/uploads.extraction";
+import type { Server } from "node:http";
+import type { DerivedKey } from "./crypto/secret-box";
+import type { ImageProcessor } from "@tiny-agents/agent";
+import type { ErrorReporter } from "@groot/core/errors";
 import type { BackendStatus, CredentialSubmitted } from "../shared/api/vault";
 
 export interface App {
@@ -67,6 +72,12 @@ export interface App {
     };
   };
   submittingRequests: Map<number, Promise<CredentialSubmitted>>;
+  uploadExtraction: ExtractionState;
+  derivedKeys: Map<string, DerivedKey>;
+  upgradePatterns: WeakMap<Server, RegExp[]>;
+  sandboxKeyFiles: Map<string, string>;
+  imageProcessor?: Promise<ImageProcessor>;
+  errorReporter?: ErrorReporter;
   modelRuntime?: Pick<AgentRuntime, "applyModelConfig">;
   modelListeners: Set<() => void>;
   updatesChannel?: SupervisorChannel;
@@ -96,6 +107,17 @@ function emptyApp(): App {
     vaultStepUps: new Map(),
     vault: { backendStatus: new Map(), appValues: new Map() },
     submittingRequests: new Map(),
+    uploadExtraction: {
+      queue: [],
+      jobs: new Map(),
+      cancelled: new Set(),
+      active: 0,
+      idle: Promise.resolve(),
+      cache: new Map(),
+    },
+    derivedKeys: new Map(),
+    upgradePatterns: new WeakMap(),
+    sandboxKeyFiles: new Map(),
     modelListeners: new Set(),
     updateStatus: null,
     updatesUnlisten: () => {},

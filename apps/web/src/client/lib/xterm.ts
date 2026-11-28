@@ -1,7 +1,8 @@
 import type { Terminal, ITheme, ITerminalOptions, ITerminalInitOnlyOptions } from "@xterm/xterm";
 import type { WebglAddon } from "@xterm/addon-webgl";
 import type { IClipboardProvider } from "@xterm/addon-clipboard";
-import { copyText, isMac } from "./clipboard";
+import { copyText } from "./clipboard";
+import { isMac } from "./platform";
 
 export interface TerminalSize {
   cols: number;
@@ -159,6 +160,14 @@ function terminalTheme(dark: boolean): ITheme {
   };
 }
 
+function disposeTornDown(what: string, part: { dispose(): void } | undefined): void {
+  try {
+    part?.dispose();
+  } catch (error) {
+    console.debug(`The ${what} threw while being disposed; it is discarded either way`, error);
+  }
+}
+
 function openLink(event: MouseEvent, uri: string): void {
   if (!(event.metaKey || event.ctrlKey)) return;
   let url: URL;
@@ -240,16 +249,12 @@ export async function createTerminal(
   try {
     webgl = new WebglAddonClass();
     webgl.onContextLoss(() => {
-      try {
-        webgl?.dispose();
-      } catch {}
+      disposeTornDown("WebGL renderer", webgl);
       webgl = undefined;
     });
     term.loadAddon(webgl);
   } catch {
-    try {
-      webgl?.dispose();
-    } catch {}
+    disposeTornDown("WebGL renderer", webgl);
     webgl = undefined;
   }
 
@@ -356,9 +361,7 @@ export async function createTerminal(
     dispose() {
       if (disposed) return;
       disposed = true;
-      try {
-        term.dispose();
-      } catch {}
+      disposeTornDown("terminal", term);
     },
   };
 }

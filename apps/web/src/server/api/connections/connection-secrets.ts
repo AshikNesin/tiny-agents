@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { and, eq } from "drizzle-orm";
 import { connections, db, vaultAuditEvents, vaultItems } from "../../db";
 import {
@@ -33,8 +34,14 @@ export function sealOAuthState(connectionId: string, state: unknown): string {
 export function openOAuthState<T>(
   connectionId: string,
   stored: string | null | undefined,
+  schema: z.ZodType<T>,
 ): T | undefined {
-  return openJson<T>(stored, binding(connectionId, "oauth_enc"));
+  return openJson(
+    "A connection's sealed OAuth state",
+    stored,
+    binding(connectionId, "oauth_enc"),
+    schema,
+  );
 }
 
 export interface OwnSecretTarget {
@@ -180,7 +187,9 @@ export async function resealConnectionSecrets(): Promise<number> {
       ? [
           db
             .update(connections)
-            .set({ oauthEnc: sealOAuthState(row.id, openOAuthState(row.id, row.oauthEnc)) })
+            .set({
+              oauthEnc: sealOAuthState(row.id, openOAuthState(row.id, row.oauthEnc, z.unknown())),
+            })
             .where(and(eq(connections.id, row.id), eq(connections.oauthEnc, row.oauthEnc)))
             .returning({ id: connections.id }),
         ]

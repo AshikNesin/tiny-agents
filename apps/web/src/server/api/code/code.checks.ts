@@ -1,4 +1,5 @@
 import { Boom } from "@groot/core/errors";
+import { logger } from "@groot/core/logger";
 import { GitHubError } from "@tiny-agents/github";
 import type { CheckLogView } from "../../../shared/api/code";
 import { codeGitHub } from "./code.github";
@@ -66,7 +67,8 @@ export async function checkLog(threadId: string, jobId: number): Promise<CheckLo
   const repo = repoOf(found.project);
   const view = { name: check.name, url: check.url };
   if (check.state === "pending") {
-    const job = await github.job(repo, jobId).catch(() => {
+    const job = await github.job(repo, jobId).catch((error: unknown) => {
+      logger.warn({ error, jobId }, "Code: GitHub did not report a check's progress");
       throw Boom.badGateway("GitHub did not say how the check is going.");
     });
     if (!job.completed) {

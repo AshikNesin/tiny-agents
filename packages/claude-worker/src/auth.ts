@@ -1,3 +1,5 @@
+import { parseJson } from "@tiny-agents/std";
+import { z } from "zod";
 import { spawn } from "node:child_process";
 import { assertNoOverrides } from "./guards";
 
@@ -61,15 +63,17 @@ export type CommandRunner = (
   env: Record<string, string | undefined>,
 ) => Promise<{ code: number; stdout: string; stderr: string }>;
 
+const authStatusSchema = z.looseObject({
+  loggedIn: z.unknown().optional(),
+  authMethod: z.unknown().optional(),
+  subscriptionType: z.unknown().optional(),
+});
+
 export function parseAuthStatus(stdout: string): ClaudeAuthStatus {
   const trimmed = stdout.trim();
   if (!trimmed.startsWith("{")) return { loggedIn: false };
   try {
-    const payload = JSON.parse(trimmed) as {
-      loggedIn?: unknown;
-      authMethod?: unknown;
-      subscriptionType?: unknown;
-    };
+    const payload = parseJson("Claude Code's sign-in status", trimmed, authStatusSchema);
     return {
       loggedIn: payload.loggedIn === true,
       authMethod: typeof payload.authMethod === "string" ? payload.authMethod : undefined,

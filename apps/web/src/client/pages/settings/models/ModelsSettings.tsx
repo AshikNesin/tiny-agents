@@ -21,7 +21,14 @@ import { EditConnectionDialog } from "./EditConnectionDialog";
 
 function ModelsSettingsBody() {
   const loadModels = useBotsStore((s) => s.loadModels);
-  const { data, refresh: reload } = useModelSettings(loadModels);
+  const settings = useModelSettings(loadModels);
+  const reload = settings.refresh;
+  const data =
+    settings.status === "ready"
+      ? settings.data
+      : settings.status === "failed"
+        ? (settings.last ?? null)
+        : null;
   const accounts = data?.accounts ?? null;
   const templates = useMemo(() => data?.templates ?? [], [data]);
   const roles = data?.roles ?? null;

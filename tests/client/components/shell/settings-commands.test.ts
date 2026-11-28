@@ -1,10 +1,8 @@
-import { afterEach, describe, expect, it, vi } from "vite-plus/test";
+import { describe, expect, it } from "vite-plus/test";
 import { settingsCommandGroup } from "@/components/shell/settings-commands";
-import { updatesApi } from "@/lib/updates-api";
+import { ApiFailure, fakeApi } from "../../fakes/api";
 
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
-
-afterEach(() => vi.restoreAllMocks());
 
 describe("the ⌘K Settings group", () => {
   it("opens each of the owner's sections, and can check for updates", () => {
@@ -55,12 +53,15 @@ describe("the ⌘K Settings group", () => {
   });
 
   it("checks for updates, then opens Updates even when the server refuses", async () => {
-    const check = vi.spyOn(updatesApi, "check").mockRejectedValue(new Error("409"));
+    const api = fakeApi();
+    api.post("/system/update/check", () => {
+      throw new ApiFailure(409, "An update is already running", "CONFLICT");
+    });
     const opened: string[] = [];
     const group = settingsCommandGroup(false, false, (to) => opened.push(to));
     group.items.find((i) => i.label === "Check for updates")!.onSelect();
     await flush();
-    expect(check).toHaveBeenCalledTimes(1);
+    expect(api.sent("POST", "/system/update/check")).toHaveLength(1);
     expect(opened).toEqual(["/settings/updates"]);
   });
 });

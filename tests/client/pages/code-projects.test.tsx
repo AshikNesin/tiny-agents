@@ -1,5 +1,5 @@
 import React from "react";
-import { render as renderBare, screen } from "@testing-library/react";
+import { render as renderBare, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { ConfirmProvider } from "@groot/ui/primitives";
@@ -7,42 +7,65 @@ import { MemoryRouter } from "react-router-dom";
 import { CodeSettingsSection } from "@/pages/code/CodeSettings";
 import { useCodeStore } from "@/store/code";
 import type { HarnessInfo } from "@/lib/code/api";
-import { usePeopleStore } from "@/store/people";
+import type { GitHubStatus, ProjectView } from "../../../apps/web/src/shared/api/code";
+import { FIXED_NOW } from "../../test-clock";
+import { fakeApi } from "../fakes/api";
 import { AppQueryProvider } from "../query-provider";
+import { signedInAs } from "../fakes/viewer";
 
 const render = (ui: Parameters<typeof renderBare>[0]) =>
   renderBare(ui, { wrapper: AppQueryProvider });
 
 const toastError = vi.fn();
-const appRepositories = vi.fn();
-const create = vi.fn();
 
 vi.mock("sonner", () => ({
   toast: { success: vi.fn(), error: (...args: unknown[]) => toastError(...args) },
 }));
 
-vi.mock("@/lib/code/projects", async (importOriginal) => {
-  const original = await importOriginal<typeof import("@/lib/code/projects")>();
-  return {
-    ...original,
-    useProjects: () => ({ projects: [], reload: () => {} }),
-    projectsApi: {
-      ...original.projectsApi,
-      github: () =>
-        Promise.resolve({
-          credential: "gh",
-          tokenHandle: null,
-          app: { slug: "tiny-agents", name: "tiny-agents", webhooks: false },
-          sandbox: true,
-          tools: { git: true, gh: true },
-          login: "ashiknesin",
-          error: null,
-        }),
-      appRepositories: (...args: unknown[]) => appRepositories(...args),
-      create: (...args: unknown[]) => create(...args),
+const github: GitHubStatus = {
+  credential: "gh",
+  tokenHandle: null,
+  app: { slug: "tiny-agents", name: "tiny-agents", webhooks: false },
+  sandbox: true,
+  tools: { git: true, gh: true },
+  login: "ashiknesin",
+  error: null,
+};
+
+const created: ProjectView = {
+  id: "p1",
+  name: "tiny-agents",
+  repo: { owner: "AshikNesin", name: "tiny-agents" },
+  transport: "app",
+  baseBranch: "main",
+  checkoutPath: "/work/AshikNesin--tiny-agents/checkout",
+  defaultInstanceId: null,
+  defaultModel: null,
+  chatBotId: null,
+  settings: {
+    scripts: {},
+    archiveOnMerge: true,
+    draftPulls: true,
+    branchPrefix: "ta/",
+    protectedPaths: [],
+    workflowInstructions: "",
+    instructions: "",
+    autofix: {
+      triggers: { checks: true, reviews: true, conflicts: true },
+      trustedBots: [],
+      hourlyLimit: 6,
+      noOwnerLimit: 10,
+      passMinutes: 20,
+      onByDefault: false,
     },
-  };
-});
+  },
+  createdAt: FIXED_NOW,
+};
+
+const installed = (names: string[]) =>
+  names.map((fullName) => ({ fullName, installationId: 1, private: false }));
+
+let api: ReturnType<typeof fakeApi>;
 
 const shelley: HarnessInfo = {
   id: "shelley",
@@ -62,14 +85,15 @@ function open() {
 }
 
 beforeEach(() => {
-  usePeopleStore.setState({ role: "owner" });
   useCodeStore.setState({ harnesses: [shelley], statuses: {} });
-  appRepositories.mockResolvedValue([
-    { fullName: "AshikNesin/30DaysOfWebDev", installationId: 1, private: false },
-    { fullName: "AshikNesin/tiny-agents", installationId: 1, private: false },
-    { fullName: "AshikNesin/404less", installationId: 1, private: false },
-  ]);
-  create.mockResolvedValue({});
+  api = fakeApi();
+  signedInAs(api, "owner");
+  api.get("/code/projects", (): ProjectView[] => []);
+  api.get("/code/github", () => github);
+  api.get("/code/github/app/repositories", () =>
+    installed(["AshikNesin/30DaysOfWebDev", "AshikNesin/tiny-agents", "AshikNesin/404less"]),
+  );
+  api.post("/code/projects", () => created);
 });
 
 describe("New project with the GitHub App", () => {
@@ -86,7 +110,8 @@ describe("New project with the GitHub App", () => {
     await user.keyboard("{Enter}");
     expect(trigger).toHaveTextContent("AshikNesin/tiny-agents");
     await user.click(screen.getByTestId("code-project-create"));
-    expect(create).toHaveBeenCalledWith(
+    await waitFor(() => expect(api.sent("POST", "/code/projects")).toHaveLength(1));
+    expect(api.sent("POST", "/code/projects")[0]!.body).toEqual(
       expect.objectContaining({ repo: "AshikNesin/tiny-agents", transport: "app" }),
     );
   });
@@ -107,7 +132,7 @@ describe("New project with the GitHub App", () => {
   });
 
   it("says so when the App is installed on nothing yet", async () => {
-    appRepositories.mockResolvedValue([]);
+    api.get("/code/github/app/repositories", () => installed([]));
     open();
     expect(await screen.findByRole("switch", { name: "Use the GitHub App" })).toBeChecked();
     expect(await screen.findByText(/Install the App on a repository first/)).toBeInTheDocument();

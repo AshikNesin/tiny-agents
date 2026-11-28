@@ -1,8 +1,6 @@
 import { readFileSync } from "node:fs";
 import micromatch from "micromatch";
 
-export const BASELINE_PATH = "scripts/lint/comment-baseline.json";
-
 const COMMENT_FILES = /\.(?:[cm]?[jt]sx?|kts?|css)$/;
 
 export const OUT_OF_SCOPE = [
@@ -124,8 +122,4 @@ async function commentValues(file, source = readFileSync(file, "utf8")) {
 
 export async function countComments(file, source) {
   return (await commentValues(file, source)).filter((value) => !isKeptComment(value)).length;
-}
-
-export function readBaseline(text = readFileSync(BASELINE_PATH, "utf8")) {
-  return JSON.parse(text);
 }

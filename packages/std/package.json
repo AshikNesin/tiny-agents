@@ -1,0 +1,13 @@
+{
+  "name": "@tiny-agents/std",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Helpers every tiny-agents package needs, written once: reading untyped values, stored JSON, waiting. No workspace dependencies, so any package and the Claude worker bundle can import it.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "zod": "^4.6.7"
+  }
+}

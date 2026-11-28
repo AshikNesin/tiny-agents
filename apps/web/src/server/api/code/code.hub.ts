@@ -47,6 +47,8 @@ export interface HubOptions {
   listDebounceMs?: number;
 }
 
+const queueMovesOnAfterAFailureItsCallerSees = (): undefined => undefined;
+
 export function createCodeHub(options: HubOptions): CodeHub {
   const byId = new Map(options.instances.map((i) => [i.id, i]));
   const debounceMs = options.listDebounceMs ?? 300;
@@ -174,10 +176,7 @@ export function createCodeHub(options: HubOptions): CodeHub {
     viewers: (threadId) => viewerCounts.get(threadId) ?? 0,
     serial(key, work) {
       const next = (queues.get(key) ?? Promise.resolve()).then(work);
-      const settled = next.then(
-        () => undefined,
-        () => undefined,
-      );
+      const settled = next.then(() => undefined, queueMovesOnAfterAFailureItsCallerSees);
       queues.set(key, settled);
       void settled.then(() => {
         if (queues.get(key) === settled) queues.delete(key);

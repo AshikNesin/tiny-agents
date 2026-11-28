@@ -4,7 +4,9 @@ import { Bot, Menu } from "lucide-react";
 import { Button } from "@groot/ui/button";
 import { chatBots, useBotsStore } from "../../store/bots";
 import { useUiStore } from "../../store/ui";
-import { useViewerRole } from "../../store/people";
+import { useViewer, viewerRole } from "../../queries/viewer";
+import { toast } from "sonner";
+import { errorMessage } from "../../lib/errors";
 import { landingBotId, rememberLastBot } from "../../lib/last-bot";
 import { useFocusParam } from "../../lib/focus-param";
 import { ChatPane } from "../../components/ChatPane";
@@ -28,7 +30,8 @@ export function ChatWorkspace() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const allBots = useBotsStore((s) => s.bots);
-  const owner = useViewerRole() === "owner";
+  const role = viewerRole(useViewer());
+  const owner = role === "owner";
   const bots = useMemo(() => chatBots(allBots, owner), [allBots, owner]);
   const loading = useBotsStore((s) => s.loading);
   const models = useBotsStore((s) => s.models);
@@ -60,7 +63,9 @@ export function ChatWorkspace() {
   const fullBot = useBotsStore((s) => (currentId ? (s.fullBots[currentId] ?? null) : null));
   useEffect(() => {
     if (!currentId) return;
-    void loadBot(currentId, { fresh: true }).catch(() => undefined);
+    void loadBot(currentId, { fresh: true }).catch((error: unknown) =>
+      toast.error(errorMessage(error, "Failed to load the bot")),
+    );
   }, [currentId, currentConversation, loadBot]);
 
   const noBots = bots.length === 0 && !loading;
@@ -72,11 +77,11 @@ export function ChatWorkspace() {
   }, [currentId]);
 
   useEffect(() => {
-    if (!loaded || currentId || projectId) return;
+    if (role === "loading" || !loaded || currentId || projectId) return;
     if (!desktop && !botId) return;
     const target = desktop ? landingBotId(bots) : null;
     navigate(target ? `/chats/${target}` : "/chats", { replace: true });
-  }, [loaded, currentId, projectId, desktop, botId, bots, navigate]);
+  }, [role, loaded, currentId, projectId, desktop, botId, bots, navigate]);
 
   if (projectId) {
     return (

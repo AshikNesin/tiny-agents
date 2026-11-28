@@ -18,7 +18,8 @@ const SSH_PORT = 2240;
 const URL_BASE = `http://localhost:${PORT}`;
 process.env.TA_URL = URL_BASE;
 process.env.TZ = "Asia/Kolkata";
-const { open, api, dumpCss, snap, verify } = await import("./snaplib.mjs");
+const { open, api, dumpCss, snap, verify, signalGroupIfRunning, serverReady, apiAnswer } =
+  await import("./snaplib.mjs");
 const D = await import("./travel-director.mjs");
 
 const REPO = path.resolve(import.meta.dirname, "../../../..");
@@ -61,15 +62,9 @@ async function answers(port) {
 async function stopGroup(pid, marker) {
   if (!pid || !alive(pid)) return;
   if (!owns(pid, marker)) return log(`pid ${pid} is not ours; not killing it`);
-  try {
-    process.kill(-pid, "SIGTERM");
-  } catch {}
+  signalGroupIfRunning(pid, "SIGTERM");
   for (let i = 0; i < 150 && alive(pid); i++) await sleep(100);
-  if (alive(pid)) {
-    try {
-      process.kill(-pid, "SIGKILL");
-    } catch {}
-  }
+  if (alive(pid)) signalGroupIfRunning(pid, "SIGKILL");
 }
 
 async function down() {
@@ -82,7 +77,9 @@ async function down() {
   }
   try {
     execFileSync("pkill", ["-KILL", "-u", VM_USER]);
-  } catch {}
+  } catch (error) {
+    if (error.status !== 1) throw error;
+  }
   rmSync(STATE, { recursive: true, force: true });
   rmSync(`/home/${VM_USER}/data`, { recursive: true, force: true });
   rmSync(`/home/${VM_USER}/.config`, { recursive: true, force: true });
@@ -288,10 +285,7 @@ async function up() {
     if (!alive(child.pid))
       throw new Error("the server exited during boot; see data/verify/travel/server.log");
     if (i > 240) throw new Error("the server was not ready after 240 s");
-    const ready = await fetch(`${URL_BASE}/ready`)
-      .then((r) => r.json())
-      .catch(() => undefined);
-    if (ready?.ready) break;
+    if (await serverReady(URL_BASE)) break;
     await sleep(1000);
   }
   return offset;
@@ -308,18 +302,18 @@ async function call(method, url, body, headers = {}) {
     },
     ...(body ? { body: JSON.stringify(body) } : {}),
   });
-  const json = await res.json().catch(() => ({}));
-  if (!res.ok)
-    throw new Error(`${method} ${url} -> ${res.status} ${JSON.stringify(json).slice(0, 300)}`);
-  return json.data ?? json;
+  return apiAnswer(`${method} ${url}`, res.ok, res.status, await res.text());
 }
 
 async function until(what, check, timeout = 90_000) {
   const deadline = Date.now() + timeout;
   for (;;) {
-    const value = await check().catch(() => undefined);
+    let failure;
+    const value = await check().catch((error) => {
+      failure = error;
+    });
     if (value) return value;
-    if (Date.now() > deadline) throw new Error(`timed out waiting for ${what}`);
+    if (Date.now() > deadline) throw new Error(`timed out waiting for ${what}`, { cause: failure });
     await sleep(500);
   }
 }
@@ -451,7 +445,7 @@ async function stage(mode) {
     .first();
   await card.waitFor();
   const panel = page.getByTestId("browser-panel");
-  if (await panel.isVisible().catch(() => false))
+  if (await panel.isVisible())
     await page.getByRole("button", { name: "Close browser panel" }).click();
   await shoot(owner, "travel-waiting");
 
@@ -489,7 +483,7 @@ async function stage(mode) {
     "the approval to settle",
     async () => (await botEntry(bot.id)).approvals === 0 && !(await botEntry(bot.id)).replying,
   );
-  if (await panel.isVisible().catch(() => false))
+  if (await panel.isVisible())
     await page.getByRole("button", { name: "Close browser panel" }).click();
   await page.waitForTimeout(800);
   await shoot(owner, "travel-approved");
@@ -532,7 +526,7 @@ for (const mode of modes) {
     for (const s of sessions)
       await s.page
         .screenshot({ path: path.join(STATE, `failure-${s.mode}-${sessions.indexOf(s)}.png`) })
-        .catch(() => {});
+        .catch((failure) => log(`could not save a failure screenshot for ${s.mode}:`, failure));
     throw error;
   }
 }

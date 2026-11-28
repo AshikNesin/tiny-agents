@@ -6,26 +6,17 @@ import { act } from "react";
 import { MemoryRouter } from "react-router-dom";
 import { TerminalPage } from "@/pages/terminal/Terminal";
 import { GrootUIProvider } from "@groot/ui";
-import { ApiError } from "@groot/shell/lib/api";
 import type { TerminalHandle } from "@/lib/xterm";
 import type { TerminalConnection } from "@/lib/terminal-ws";
+import type { Deleted } from "../../../apps/web/src/shared/api/common";
+import type { TerminalList, TerminalSession } from "../../../apps/web/src/shared/api/terminal";
+import { ApiFailure, fakeApi } from "../fakes/api";
+import { AppQueryProvider } from "../query-provider";
 
-const listMock = vi.fn();
-const createMock = vi.fn();
-const removeMock = vi.fn();
-
-vi.mock("@/lib/terminal-api", async (importOriginal) => {
-  const original = await importOriginal<typeof import("@/lib/terminal-api")>();
-  return {
-    ...original,
-    terminalApi: {
-      list: (...args: unknown[]) => listMock(...args),
-      create: (...args: unknown[]) => createMock(...args),
-      remove: (...args: unknown[]) => removeMock(...args),
-      ticket: vi.fn(),
-    },
-  };
-});
+let api: ReturnType<typeof fakeApi>;
+const sessionsAre = (list: TerminalList) => api.get("/terminal/sessions", () => list);
+const closes = (name: string) =>
+  api.sent("DELETE", `/terminal/sessions/${name}`).map((request) => request.query.get("force"));
 
 const connections: {
   handlers: { onData: (bytes: Uint8Array) => void; onStateChange: (state: string) => void };
@@ -90,12 +81,12 @@ function fakeTerminal(): TerminalHandle {
   } as unknown as TerminalHandle;
 }
 
-const ready = (sessions: unknown[]) => ({
+const ready = (sessions: TerminalSession[]): TerminalList => ({
   status: { kind: "ready" },
   sessions,
 });
 
-const session = (n: number, process: string | null = null) => ({
+const session = (n: number, process: string | null = null): TerminalSession => ({
   name: `ta-term-${n}`,
   process,
   attached: false,
@@ -105,11 +96,13 @@ const session = (n: number, process: string | null = null) => ({
 function mount() {
   return render(
     <React.StrictMode>
-      <MemoryRouter>
-        <GrootUIProvider>
-          <TerminalPage />
-        </GrootUIProvider>
-      </MemoryRouter>
+      <AppQueryProvider>
+        <MemoryRouter>
+          <GrootUIProvider>
+            <TerminalPage />
+          </GrootUIProvider>
+        </MemoryRouter>
+      </AppQueryProvider>
     </React.StrictMode>,
   );
 }
@@ -128,14 +121,15 @@ beforeEach(() => {
   connections.length = 0;
   window.localStorage.clear();
   createTerminalMock.mockImplementation(async () => fakeTerminal());
-  listMock.mockResolvedValue(ready([]));
-  createMock.mockResolvedValue(session(1));
-  removeMock.mockResolvedValue({ deleted: true });
+  api = fakeApi();
+  sessionsAre(ready([]));
+  api.post("/terminal/sessions", () => session(1));
+  api.delete("/terminal/sessions/:name", (): Deleted => ({ deleted: true }));
 });
 
 describe("Terminal page", () => {
   it("renders the unconfigured empty state", async () => {
-    listMock.mockResolvedValue({ status: { kind: "unconfigured" }, sessions: [] });
+    sessionsAre({ status: { kind: "unconfigured" }, sessions: [] });
     mount();
     expect(await screen.findByText("Sandbox not configured")).toBeTruthy();
     expect(screen.getByText(/SANDBOX_HOST/)).toBeTruthy();
@@ -143,7 +137,7 @@ describe("Terminal page", () => {
   });
 
   it("renders tmux-missing with the install command", async () => {
-    listMock.mockResolvedValue({
+    sessionsAre({
       status: { kind: "tmux-missing", installCommand: "sudo apt install tmux" },
       sessions: [],
     });
@@ -153,7 +147,7 @@ describe("Terminal page", () => {
   });
 
   it("renders unreachable as an error state with retry", async () => {
-    listMock.mockResolvedValue({
+    sessionsAre({
       status: { kind: "unreachable", message: "SSH connection refused" },
       sessions: [],
     });
@@ -168,11 +162,11 @@ describe("Terminal page", () => {
     const user = userEvent.setup({ pointerEventsCheck: 0 });
     await screen.findByText("No tabs open");
     await user.click(screen.getByRole("button", { name: "Open your first tab" }));
-    await waitFor(() => expect(createMock).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(api.sent("POST", "/terminal/sessions")).toHaveLength(1));
   });
 
   it("renders tabs from the list with the process suffix", async () => {
-    listMock.mockResolvedValue(ready([session(1, "vim"), session(2)]));
+    sessionsAre(ready([session(1, "vim"), session(2)]));
     mount();
     const tab1 = await findTab(1);
     expect(within(tab1).getByText("1")).toBeTruthy();
@@ -183,7 +177,7 @@ describe("Terminal page", () => {
   });
 
   it("shows the connecting dot until a view reports live", async () => {
-    listMock.mockResolvedValue(ready([session(1)]));
+    sessionsAre(ready([session(1)]));
     mount();
     await findTab(1);
     const dot = () => screen.getByTestId("terminal-tab-status-ta-term-1");
@@ -195,8 +189,8 @@ describe("Terminal page", () => {
   });
 
   it("says it is connecting while the first list is in flight", async () => {
-    let answer!: (value: unknown) => void;
-    listMock.mockReturnValue(new Promise((resolve) => (answer = resolve)));
+    let answer!: (value: TerminalList) => void;
+    api.get("/terminal/sessions", () => new Promise<TerminalList>((resolve) => (answer = resolve)));
     mount();
     expect(await screen.findByText("Connecting to sandbox…")).toBeTruthy();
     expect(screen.queryByText("No tabs open")).toBeNull();
@@ -205,7 +199,7 @@ describe("Terminal page", () => {
   });
 
   it("shows Connecting to sandbox in the pane until the first pty bytes", async () => {
-    listMock.mockResolvedValue(ready([session(1)]));
+    sessionsAre(ready([session(1)]));
     mount();
     expect(await screen.findByTestId("terminal-connecting-ta-term-1")).toBeTruthy();
     await waitFor(() => expect(connections.length).toBeGreaterThan(0));
@@ -216,7 +210,7 @@ describe("Terminal page", () => {
   });
 
   it("switches the active tab on click", async () => {
-    listMock.mockResolvedValue(ready([session(1), session(2)]));
+    sessionsAre(ready([session(1), session(2)]));
     mount();
     const tab1 = await findTab(1);
     await waitFor(() => expect(connections.length).toBe(2));
@@ -237,28 +231,21 @@ describe("Terminal page", () => {
   });
 
   it("closes a tab on × without a dialog", async () => {
-    listMock.mockResolvedValue(ready([session(1)]));
+    sessionsAre(ready([session(1)]));
     mount();
     await findTab(1);
     const user = userEvent.setup({ pointerEventsCheck: 0 });
     await user.click(screen.getByTestId("terminal-close-ta-term-1"));
-    await waitFor(() => expect(removeMock).toHaveBeenCalledWith("ta-term-1", false));
+    await waitFor(() => expect(closes("ta-term-1")).toEqual([null]));
     expect(screen.queryByRole("alertdialog")).toBeNull();
   });
 
   it("confirms with the process name and force-closes on 409", async () => {
-    listMock.mockResolvedValue(ready([session(1, "vim")]));
-    removeMock
-      .mockRejectedValueOnce(
-        new ApiError({
-          status: 409,
-          code: "CONFLICT",
-          message: "ta-term-1 is running vim.",
-          details: { process: "vim" },
-          url: "/terminal/sessions/ta-term-1",
-        }),
-      )
-      .mockResolvedValueOnce({ deleted: true });
+    sessionsAre(ready([session(1, "vim")]));
+    api.delete("/terminal/sessions/:name", ({ query }): Deleted => {
+      if (query.get("force") === "1") return { deleted: true };
+      throw new ApiFailure(409, "ta-term-1 is running vim.", "CONFLICT", { process: "vim" });
+    });
     mount();
     await findTab(1);
     const user = userEvent.setup({ pointerEventsCheck: 0 });
@@ -268,16 +255,16 @@ describe("Terminal page", () => {
     expect(screen.getByText(/vim is running/)).toBeTruthy();
 
     await user.click(screen.getByRole("button", { name: "Force close" }));
-    await waitFor(() => expect(removeMock).toHaveBeenCalledWith("ta-term-1", true));
+    await waitFor(() => expect(closes("ta-term-1")).toEqual([null, "1"]));
   });
 
   it("falls forward to the first tab when the active one disappears", async () => {
-    listMock.mockResolvedValue(ready([session(1), session(2)]));
+    sessionsAre(ready([session(1), session(2)]));
     mount();
     await findTab(1);
     await waitFor(() => expect(connections.length).toBe(2));
 
-    listMock.mockResolvedValue(ready([session(2)]));
+    sessionsAre(ready([session(2)]));
     window.dispatchEvent(new Event("focus"));
     await waitFor(() =>
       expect(screen.getByTestId("terminal-tab-ta-term-2").getAttribute("aria-selected")).toBe(
@@ -289,7 +276,7 @@ describe("Terminal page", () => {
 
 describe("Terminal keys panel", () => {
   async function mountLive(n = 1) {
-    listMock.mockResolvedValue(ready([session(n)]));
+    sessionsAre(ready([session(n)]));
     mount();
     await findTab(n);
     await waitFor(() => expect(connections.length).toBe(1));
@@ -425,7 +412,7 @@ describe("Terminal keys panel", () => {
 
 describe("Terminal full screen", () => {
   it("enters via the Fullscreen API and exits with its events", async () => {
-    listMock.mockResolvedValue(ready([session(1)]));
+    sessionsAre(ready([session(1)]));
     mount();
     await findTab(1);
     const user = userEvent.setup({ pointerEventsCheck: 0 });
@@ -471,7 +458,7 @@ describe("Terminal full screen", () => {
   });
 
   it("selects the first tab in the same render that shows it", async () => {
-    listMock.mockResolvedValue(ready([session(1)]));
+    sessionsAre(ready([session(1)]));
     const unselected: string[] = [];
     const observer = new MutationObserver(() => {
       const tab = document.querySelector('[data-testid="terminal-tab-ta-term-1"]');
@@ -486,7 +473,7 @@ describe("Terminal full screen", () => {
   });
 
   it("falls back to CSS full screen without the Fullscreen API", async () => {
-    listMock.mockResolvedValue(ready([session(1)]));
+    sessionsAre(ready([session(1)]));
     mount();
     await findTab(1);
     const user = userEvent.setup({ pointerEventsCheck: 0 });

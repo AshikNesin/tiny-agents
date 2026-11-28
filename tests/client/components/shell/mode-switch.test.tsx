@@ -13,6 +13,13 @@ import { useBotsStore } from "@/store/bots";
 import { useUiStore } from "@/store/ui";
 import { sidebarCommand } from "@/components/shell/sidebar-command";
 import type { HarnessInfo } from "@/lib/code/api";
+import type {
+  InboxPullView,
+  ProjectView,
+  PullReviewView,
+  ReviewInboxSettings,
+} from "../../../../apps/web/src/shared/api/code";
+import { fakeApi } from "../../fakes/api";
 import { AppQueryProvider } from "../../query-provider";
 
 const render = (ui: Parameters<typeof renderBare>[0]) =>
@@ -21,17 +28,6 @@ const render = (ui: Parameters<typeof renderBare>[0]) =>
 vi.mock("sonner", () => ({
   toast: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn(), message: vi.fn() }),
 }));
-
-vi.mock("@groot/shell/lib/api", async (importOriginal) => {
-  const original = await importOriginal<typeof import("@groot/shell/lib/api")>();
-  return {
-    ...original,
-    apiClient: Object.assign(Object.create(original.apiClient) as typeof original.apiClient, {
-      get: async () => [],
-      post: async () => ({}),
-    }),
-  };
-});
 
 const shelley: HarnessInfo = {
   id: "shelley",
@@ -60,6 +56,18 @@ function renderAt(path: string) {
 const modes = () => within(screen.getByRole("navigation", { name: "Mode" }));
 
 beforeEach(() => {
+  const api = fakeApi();
+  api.get("/code/projects", (): ProjectView[] => []);
+  api.get("/code/reviews", (): PullReviewView[] => []);
+  api.get("/code/reviews/inbox", (): InboxPullView[] => []);
+  api.get("/code/reviews/settings", (): ReviewInboxSettings => ({
+    repos: "all",
+    direct: true,
+    drafts: false,
+    bots: false,
+    mute: [],
+    limit: 50,
+  }));
   useCodeStore.setState({ harnesses: [shelley], statuses: {}, threads: [] });
   useBotsStore.setState({ bots: [] });
   useUiStore.setState({ lastPath: { chat: "/chats", code: "/code" } });

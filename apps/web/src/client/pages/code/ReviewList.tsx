@@ -87,12 +87,22 @@ export function ReviewList({
     "Could not read your review list settings.",
   );
   const [showAll, setShowAll] = useState(false);
-  const allAsked = (inbox.data ?? []).filter(asksForYou);
-  const limit = settings.data?.limit ?? allAsked.length;
+  const inboxPulls =
+    inbox.status === "ready" ? inbox.data : inbox.status === "failed" ? inbox.last : undefined;
+  const openReviews =
+    open.status === "ready" ? open.data : open.status === "failed" ? open.last : undefined;
+  const storedSettings =
+    settings.status === "ready"
+      ? settings.data
+      : settings.status === "failed"
+        ? settings.last
+        : undefined;
+  const allAsked = (inboxPulls ?? []).filter(asksForYou);
+  const limit = storedSettings?.limit ?? allAsked.length;
   const asked = showAll ? allAsked : allAsked.slice(0, limit);
   const hidden = allAsked.length - asked.length;
   const inInbox = new Set(allAsked.map((pull) => pull.url));
-  const others = (open.data ?? []).filter((review) => !inInbox.has(review.url));
+  const others = (openReviews ?? []).filter((review) => !inInbox.has(review.url));
 
   const openPull = async (pull: InboxPullView) => {
     if (pull.reviewId) {
@@ -220,12 +230,12 @@ export function ReviewList({
           </div>
         ))}
       </div>
-      {inbox.loadError && (
+      {inbox.status === "failed" && (
         <p role="status" className="text-muted-foreground px-2 py-1 text-xs">
           {inbox.loadError}
         </p>
       )}
-      {!inbox.loadError && inbox.data && open.data && asked.length + others.length === 0 && (
+      {inbox.status === "ready" && openReviews && asked.length + others.length === 0 && (
         <p className="text-muted-foreground px-2 py-1 text-xs">Nothing waits for your review.</p>
       )}
     </section>

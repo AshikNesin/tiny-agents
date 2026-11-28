@@ -271,8 +271,8 @@ A project is a GitHub repository cloned on the sandbox
 [ADR 0022](../adr/0022-github-through-gh-or-a-token.md)). Code's settings
 are sections of the app's Settings, in a **Code** group shown once a harness
 is set up (`CodeSettings.tsx`, `pages/settings/sections.ts`). **Settings** at
-the foot of the list opens Projects, and an old `/code/settings` link lands
-on the same section:
+the foot of the list opens Projects, and the Android app's
+`/code/settings/projects` link lands on the same section:
 
 - **GitHub** (`/settings/github`). Either save a fine-grained token
   for the project's repositories (kept as an `app` vault item for the

@@ -1,6 +1,7 @@
 import { lookup } from "node:dns/promises";
 import { and, count, desc, eq, inArray, ne, sql } from "drizzle-orm";
 import { Boom } from "@groot/core/errors";
+import { logger } from "@groot/core/logger";
 import type {
   PushOutcome,
   PushSubscriptionStore,
@@ -33,7 +34,10 @@ async function checkEndpoint(endpoint: string): Promise<URL> {
     throw Boom.badRequest("The push endpoint is on a private address");
   }
   const host = url.hostname.replace(/^\[|\]$/g, "");
-  const addresses = await lookup(host, { all: true }).catch(() => []);
+  const addresses = await lookup(host, { all: true }).catch((error: unknown) => {
+    logger.debug({ error, host }, "Push: the endpoint's host did not resolve");
+    throw Boom.badRequest("The push endpoint's host doesn't resolve");
+  });
   if (addresses.length === 0) throw Boom.badRequest("The push endpoint's host doesn't resolve");
   if (addresses.some((entry) => isPrivateAddress(entry.address))) {
     throw Boom.badRequest("The push endpoint resolves to a private address");

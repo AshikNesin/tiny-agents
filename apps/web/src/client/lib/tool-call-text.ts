@@ -1,4 +1,5 @@
 import type { ChatToolCall } from "./chat-types";
+import { formatDuration } from "./format";
 import { viewOf } from "./tool-call-view";
 
 export type ToolLabels = Record<string, string>;
@@ -171,10 +172,9 @@ export function credentialRequestText(
   now = Date.now(),
 ): { title: string; description: string } {
   const { credentials } = call;
-  let host = credentials.origin;
-  try {
-    host = new URL(credentials.origin).host;
-  } catch {}
+  const host = URL.canParse(credentials.origin)
+    ? new URL(credentials.origin).host
+    : credentials.origin;
   return {
     title: `${botName} needs you on ${host}`,
     description: `${credentials.title}. What you type is filled into the page and never shown to ${botName}.${expiryText(call.expiresAt, now)}`,
@@ -196,21 +196,11 @@ export function approvalNote(
   return lead;
 }
 
-export function formatDuration(ms: number): string {
-  return ms < 1000 ? `${Math.max(1, Math.round(ms))}ms` : `${(ms / 1000).toFixed(1)}s`;
-}
-
-export function formatWait(ms: number): string {
-  const seconds = Math.round(ms / 1000);
-  if (seconds < 60) return `${Math.max(1, seconds)}s`;
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return seconds % 60 ? `${minutes}m ${seconds % 60}s` : `${minutes}m`;
-  return minutes % 60 ? `${Math.floor(minutes / 60)}h ${minutes % 60}m` : `${minutes / 60}h`;
-}
-
 export function durationText(call: ChatToolCall): string | undefined {
   if (call.durationMs === undefined) return undefined;
-  const waited = call.waitedMs ? ` · waited ${formatWait(call.waitedMs)} for you` : "";
+  const waited = call.waitedMs
+    ? ` · waited ${formatDuration(call.waitedMs, { precision: "seconds" })} for you`
+    : "";
   return `${formatDuration(call.durationMs)}${waited}`;
 }
 

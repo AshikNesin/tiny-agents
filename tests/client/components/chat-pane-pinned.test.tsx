@@ -7,74 +7,75 @@
  * composer, the file-drop overlay, the two confirmations, the bot menu
  * opened on Chat history by `?history=1`, and the live-view toggle and tabs
  * in each state (no computer, a computer, the bot using either). Recorded on
- * the one-file pane before it was split (docs/rewrite/PLAN.md row 5.6), so
- * the split must render each the same. The live panels are stand-ins (their
- * own pins are live-panel-surfaces.test.tsx); markdown is a stand-in; the
- * bot stream is a fake (fakes/sse.ts).
+ * the one-file pane before it was split, so the split must render each the
+ * same. The live panels are the real ones
+ * over a faked noVNC; markdown is a stand-in; the bot stream is a fake
+ * (fakes/sse.ts) and the server is fakeApi().
  */
 import React from "react";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { MemoryRouter } from "react-router-dom";
+import { ConfirmProvider } from "@groot/ui/primitives";
 import { ChatPane } from "@/components/ChatPane";
 import { useBotsStore } from "@/store/bots";
 import { chatSessions } from "@/store/chats";
-import { usePeopleStore } from "@/store/people";
-import type { Bot } from "../../../apps/web/src/shared/api/bots";
+import type { Bot, YoloState } from "../../../apps/web/src/shared/api/bots";
+import type { BrowserStatus, ComputerStatus } from "../../../apps/web/src/shared/api/live";
 import type { CatalogModel } from "../../../apps/web/src/shared/api/models";
 import type { ChatMessage, QueuedMessage } from "@/lib/chat-types";
 import { botStream } from "../fakes/sse";
 import { markup, outline } from "../dom-outline";
 import { AppQueryProvider } from "../query-provider";
+import { chatBackend } from "./chat-backend";
+import { signedInAs, viewerLoaded } from "../fakes/viewer";
 
-const api = vi.hoisted(() => ({
-  computerStatus: vi.fn(),
-  setYolo: vi.fn(),
-  reset: vi.fn(),
-}));
-
-vi.mock("@/lib/bots-api", () => ({
-  botsApi: {
-    send: vi.fn().mockResolvedValue(undefined),
-    abort: vi.fn().mockResolvedValue(undefined),
-    reset: (...args: unknown[]) => api.reset(...args),
-    withdraw: vi.fn().mockResolvedValue(undefined),
-    list: vi.fn().mockResolvedValue([]),
-    read: vi.fn().mockResolvedValue(undefined),
-    capabilities: vi.fn().mockResolvedValue([]),
-    pastChats: vi.fn().mockResolvedValue([]),
-    computerStatus: (...args: unknown[]) => api.computerStatus(...args),
-    setYolo: (...args: unknown[]) => api.setYolo(...args),
-    uploadUrl: (id: string) => `/api/v1/uploads/${id}/content`,
-  },
-}));
 vi.mock("@/lib/sse", async () => (await import("../fakes/sse")).sseModule);
 vi.mock("streamdown", () => ({
   Streamdown: ({ children }: { children?: React.ReactNode }) => (
     <div data-stand-in="streamdown">{children}</div>
   ),
 }));
-vi.mock("@/components/BrowserPanel", () => ({
-  BrowserPanel: ({ tabs, onClose }: { tabs?: React.ReactNode; onClose: () => void }) => (
-    <aside data-stand-in="browser-panel">
-      {tabs}
-      <button type="button" onClick={onClose}>
-        Close browser stand-in
-      </button>
-    </aside>
+vi.mock("@/lib/novnc", () => ({
+  createRfb: vi.fn(async () =>
+    Object.assign(new EventTarget(), {
+      viewOnly: true,
+      focus: vi.fn(),
+      disconnect: vi.fn(),
+      sendKey: vi.fn(),
+      clipboardPasteFrom: vi.fn(),
+    }),
   ),
 }));
-vi.mock("@/components/ComputerPanel", () => ({
-  ComputerPanel: ({ tabs, onClose }: { tabs?: React.ReactNode; onClose: () => void }) => (
-    <aside data-stand-in="computer-panel">
-      {tabs}
-      <button type="button" onClick={onClose}>
-        Close computer stand-in
-      </button>
-    </aside>
-  ),
-}));
+
+const browserClosed: BrowserStatus = {
+  active: false,
+  profile: "shared",
+  url: null,
+  driver: null,
+  mode: null,
+  scale: null,
+  starting: false,
+  phase: null,
+  error: null,
+};
+
+const computerOff: ComputerStatus = {
+  configured: true,
+  setupHint: null,
+  active: false,
+  profile: "shared",
+  driver: null,
+  width: 1280,
+  height: 800,
+  takeover: null,
+  starting: false,
+  phase: null,
+  error: null,
+};
+
+let api: ReturnType<typeof chatBackend>;
 
 const model: CatalogModel = {
   id: "test-model",
@@ -158,17 +159,21 @@ function seed({ providers = [] }: { providers?: { enabled: boolean }[] } = {}) {
   chatSessions.store.setState({ sessions: {} });
 }
 
-function mount(
+async function mount(
   bot: Bot = HOST,
   { canAnswer = true, path = "/chats/host" }: { canAnswer?: boolean; path?: string } = {},
 ) {
-  return render(
+  const view = render(
     <AppQueryProvider>
-      <MemoryRouter initialEntries={[path]}>
-        <ChatPane bot={bot} models={[model]} canAnswer={canAnswer} onEditBot={() => {}} />
-      </MemoryRouter>
+      <ConfirmProvider>
+        <MemoryRouter initialEntries={[path]}>
+          <ChatPane bot={bot} models={[model]} canAnswer={canAnswer} onEditBot={() => {}} />
+        </MemoryRouter>
+      </ConfirmProvider>
     </AppQueryProvider>,
   );
+  await viewerLoaded(api);
+  return view;
 }
 
 function open(messages: ChatMessage[], busy = false, queued: QueuedMessage[] = []) {
@@ -189,24 +194,24 @@ function pin(name?: string) {
 const user = userEvent.setup();
 
 beforeEach(() => {
-  api.computerStatus.mockReset().mockResolvedValue({ configured: false });
-  api.setYolo.mockReset().mockResolvedValue({ on: true });
-  api.reset.mockReset();
-  usePeopleStore.setState({ role: "owner" });
+  api = chatBackend(HOST);
+  api.get("/bots/host/browser", () => browserClosed);
+  api.put("/bots/host/yolo", (): YoloState => ({ on: true, approved: [] }));
+  signedInAs(api, "owner");
   localStorage.clear();
 });
 
 describe("ChatPane, pinned", () => {
   it("before the first snapshot", async () => {
     seed();
-    mount();
+    await mount();
     await settle();
     pin();
   });
 
   it("an empty chat", async () => {
     seed();
-    mount();
+    await mount();
     open([]);
     await settle();
     pin();
@@ -214,7 +219,7 @@ describe("ChatPane, pinned", () => {
 
   it("a conversation", async () => {
     seed();
-    mount();
+    await mount();
     open([done("u1", "user", "hi"), done("a1", "assistant", "hello")]);
     await settle();
     pin();
@@ -222,8 +227,8 @@ describe("ChatPane, pinned", () => {
 
   it("a guest's pane", async () => {
     seed();
-    usePeopleStore.setState({ role: "guest" });
-    mount();
+    signedInAs(api, "guest");
+    await mount();
     open([done("u1", "user", "hi")]);
     botStream("host").send({ type: "yolo", on: true });
     await settle();
@@ -232,7 +237,7 @@ describe("ChatPane, pinned", () => {
 
   it("no model is set up", async () => {
     seed();
-    mount(HOST, { canAnswer: false });
+    await mount(HOST, { canAnswer: false });
     open([]);
     await settle();
     pin();
@@ -240,7 +245,7 @@ describe("ChatPane, pinned", () => {
 
   it("no model can run", async () => {
     seed({ providers: [{ enabled: true }] });
-    mount(HOST, { canAnswer: false });
+    await mount(HOST, { canAnswer: false });
     open([]);
     await settle();
     pin();
@@ -248,7 +253,7 @@ describe("ChatPane, pinned", () => {
 
   it("the bot's model is not in the catalog", async () => {
     seed();
-    mount({ ...HOST, modelId: "gone" });
+    await mount({ ...HOST, modelId: "gone" });
     open([]);
     await settle();
     pin();
@@ -256,7 +261,7 @@ describe("ChatPane, pinned", () => {
 
   it("a shared chat", async () => {
     seed();
-    mount({ ...HOST, guestIds: [5] });
+    await mount({ ...HOST, guestIds: [5] });
     open([]);
     await settle();
     pin();
@@ -264,7 +269,7 @@ describe("ChatPane, pinned", () => {
 
   it("YOLO on", async () => {
     seed();
-    mount();
+    await mount();
     open([done("u1", "user", "hi")]);
     botStream("host").send({ type: "yolo", on: true });
     await settle();
@@ -273,7 +278,7 @@ describe("ChatPane, pinned", () => {
 
   it("messages held over the composer", async () => {
     seed();
-    mount();
+    await mount();
     open([done("u1", "user", "hi")], true, [
       { requestId: "q1", mode: "steer", text: "this too" },
       {
@@ -297,7 +302,7 @@ describe("ChatPane, pinned", () => {
 
   it("the file-drop overlay", async () => {
     seed();
-    mount();
+    await mount();
     open([]);
     await settle();
     const pane = screen.getByRole("banner").parentElement!;
@@ -313,7 +318,7 @@ describe("ChatPane, pinned", () => {
 
   it("the YOLO confirmation", async () => {
     seed();
-    mount();
+    await mount();
     open([done("u1", "user", "hi")]);
     await settle();
     await user.click(screen.getByRole("button", { name: "YOLO" }));
@@ -323,7 +328,7 @@ describe("ChatPane, pinned", () => {
 
   it("?history=1 opens the bot menu on Chat history", async () => {
     seed();
-    mount(HOST, { path: "/chats/host?history=1" });
+    await mount(HOST, { path: "/chats/host?history=1" });
     open([]);
     await settle();
     await settle();
@@ -332,62 +337,68 @@ describe("ChatPane, pinned", () => {
 
   it("a computer: the toggle, then the tabs", async () => {
     seed();
-    api.computerStatus.mockResolvedValue({ configured: true });
-    mount();
+    api.get("/bots/host/computer", () => computerOff);
+    await mount();
     open([]);
     await settle();
     pin("closed");
     await user.click(screen.getByTestId("live-view-toggle"));
+    await settle();
     pin("browser in front");
     await user.click(screen.getByTestId("live-view-tab-computer"));
+    await settle();
     pin("computer in front");
     await user.click(screen.getByTestId("live-view-toggle"));
+    await settle();
     pin("closed again");
   });
 
   it("the bot using the browser leaves its panel closed and lights the toggle", async () => {
     seed();
-    mount();
+    await mount();
     open([using("browser_navigate")]);
     await settle();
-    expect(document.querySelector("[data-stand-in=browser-panel]")).toBeNull();
+    expect(document.querySelector("[data-testid=browser-panel]")).toBeNull();
     pin("closed while in use");
     await user.click(screen.getByTestId("live-view-toggle"));
+    await settle();
     pin("opened from the toggle");
   });
 
   it("the bot using the computer, with a computer", async () => {
     seed();
-    api.computerStatus.mockResolvedValue({ configured: true });
-    mount();
+    api.get("/bots/host/computer", () => computerOff);
+    await mount();
     open([using("computer_click")]);
     await settle();
-    expect(document.querySelector("[data-stand-in=computer-panel]")).toBeNull();
+    expect(document.querySelector("[data-testid=computer-panel]")).toBeNull();
     pin("closed while in use");
     await user.click(screen.getByTestId("live-view-toggle"));
+    await settle();
     pin("opened from the toggle");
   });
 
   it("a takeover request leaves the computer closed", async () => {
     seed();
-    mount();
+    await mount();
     open([using("computer_request_takeover", "awaiting_takeover")]);
     await settle();
-    expect(document.querySelector("[data-stand-in=computer-panel]")).toBeNull();
+    expect(document.querySelector("[data-testid=computer-panel]")).toBeNull();
     pin();
   });
 
   it("the transcript's Open computer brings the computer up", async () => {
     seed();
-    mount();
+    await mount();
     open([done("u1", "user", "hi")]);
     await settle();
     act(() => {
       window.dispatchEvent(new Event("tiny-agents:show-computer"));
     });
     await waitFor(() =>
-      expect(document.querySelector("[data-stand-in=computer-panel]")).toBeTruthy(),
+      expect(document.querySelector("[data-testid=computer-panel]")).toBeTruthy(),
     );
+    await settle();
     pin();
   });
 });

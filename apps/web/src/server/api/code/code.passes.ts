@@ -1,3 +1,5 @@
+import { parseEach, parseJson } from "@tiny-agents/std";
+import { z } from "zod";
 import { logger } from "@groot/core/logger";
 import { notificationService } from "@groot/core/notification/notification.service";
 import type { HarnessInstance, TurnOutcome } from "@tiny-agents/code/server";
@@ -37,6 +39,18 @@ interface ReportEntry {
   reason?: string;
 }
 
+const reportSchema = z.looseObject({
+  items: z.array(
+    z.looseObject({
+      id: z.string(),
+      status: z.enum(["fixed", "declined"]),
+      reason: z.unknown().optional(),
+    }),
+  ),
+});
+
+const passItemSchema = z.looseObject({ id: z.string(), kind: z.string() });
+
 function parseReport(text: string): ReportEntry[] | undefined {
   const blocks = [
     ...text.matchAll(new RegExp("```" + REPORT_FENCE + "\\s*\\n([\\s\\S]*?)```", "g")),
@@ -44,19 +58,11 @@ function parseReport(text: string): ReportEntry[] | undefined {
   const last = blocks.at(-1)?.[1];
   if (!last) return undefined;
   try {
-    const value = JSON.parse(last) as { items?: unknown };
-    if (!Array.isArray(value.items)) return undefined;
-    const entries: ReportEntry[] = [];
-    for (const raw of value.items as Array<Record<string, unknown>>) {
-      if (typeof raw?.id !== "string") return undefined;
-      if (raw.status !== "fixed" && raw.status !== "declined") return undefined;
-      entries.push({
-        id: raw.id,
-        status: raw.status,
-        ...(typeof raw.reason === "string" ? { reason: raw.reason.slice(0, 2000) } : {}),
-      });
-    }
-    return entries;
+    return parseJson("An Auto-fix report", last, reportSchema).items.map((raw) => ({
+      id: raw.id,
+      status: raw.status,
+      ...(typeof raw.reason === "string" ? { reason: raw.reason.slice(0, 2000) } : {}),
+    }));
   } catch {
     return undefined;
   }
@@ -121,10 +127,16 @@ function notifyNeedsYou(pull: CodePullRow, reason: string) {
   notificationService.notify(codePullUpdate(pull, "needs_input", reason));
 }
 
+function logUnreadThread(error: unknown, threadId: string, wanted: string): undefined {
+  logger.warn({ error, threadId }, `Auto-fix: could not read the thread for ${wanted}`);
+}
+
 async function threadCost(threadId: string): Promise<number | null> {
   const target = codeHub()?.resolve(threadId);
   if (!target) return null;
-  const snapshot = await target.instance.getThread(target.nativeId).catch(() => undefined);
+  const snapshot = await target.instance
+    .getThread(target.nativeId)
+    .catch((error: unknown) => logUnreadThread(error, threadId, "its cost"));
   return snapshot && snapshot.costUsd > 0 ? snapshot.costUsd : null;
 }
 
@@ -159,7 +171,13 @@ async function withLogs(
       fetched += 1;
       const log = await github
         .jobLogTail(repoOf(project), item.jobId, LOG_TAIL_CHARS)
-        .catch(() => undefined);
+        .catch((error: unknown) => {
+          logger.warn(
+            { error, job: item.jobId },
+            "Auto-fix: could not fetch a failing check's log",
+          );
+          return undefined;
+        });
       return log ? { ...item, log } : item;
     }),
   );
@@ -238,7 +256,9 @@ async function lastAnswer(ctx: PassContext, outcome?: TurnOutcome): Promise<stri
     const snapshot = await ctx.instance.getThread(ctx.nativeId);
     const last = [...snapshot.items].reverse().find((item) => item.kind === "assistant");
     if (last && last.kind === "assistant") return last.text;
-  } catch {}
+  } catch (error) {
+    logUnreadThread(error, ctx.pull.threadId, "the pass's answer");
+  }
   return outcome?.text ?? "";
 }
 
@@ -265,14 +285,22 @@ export async function finishPass(pass: CodeAutofixPass, outcome?: TurnOutcome): 
     return;
   }
   if (!pass.startSha || head === pass.startSha) {
-    const dirty = (await ws.uncommitted(worktree).catch(() => [])).length;
+    const dirty = await ws
+      .uncommitted(worktree)
+      .then((files) => files.length > 0)
+      .catch((error: unknown) => {
+        logger.warn({ error, pull: pull.id }, "Auto-fix: git could not list uncommitted changes");
+        return null;
+      });
     return stop(
       pass,
       pull,
       "no_progress",
-      dirty
-        ? "The pass left uncommitted changes and made no commit; nothing was pushed."
-        : "The pass made no commit.",
+      dirty === null
+        ? "The pass made no commit, and git could not say whether it left uncommitted changes."
+        : dirty
+          ? "The pass left uncommitted changes and made no commit; nothing was pushed."
+          : "The pass made no commit.",
     );
   }
   const changed = await ws.changedPaths(worktree, pass.startSha, head);
@@ -305,7 +333,12 @@ export async function finishPass(pass: CodeAutofixPass, outcome?: TurnOutcome): 
   }
 
   const github = await services.client(ctx.project);
-  const items = (JSON.parse(pass.items) as Array<{ id: string; kind: string }>) ?? [];
+  const items = parseEach(
+    parseJson("An Auto-fix pass's items", pass.items, z.array(z.unknown()).nullable()) ?? [],
+    passItemSchema,
+    (_value, problem) =>
+      logger.warn({ problem }, "Skipped an Auto-fix pass item that does not fit its shape"),
+  );
   const report = parseReport(await lastAnswer(ctx, outcome));
   const short = pushed.slice(0, 7);
   try {
@@ -343,7 +376,9 @@ export async function timeOutPass(pass: CodeAutofixPass): Promise<void> {
   const pull = await getPull(pass.pullId);
   if (!pull) return;
   const target = codeHub()?.resolve(pull.threadId);
-  await target?.instance.interrupt(target.nativeId).catch(() => undefined);
+  await target?.instance.interrupt(target.nativeId).catch((error: unknown) => {
+    logger.warn({ error, pull: pull.id }, "Auto-fix: could not interrupt a pass that ran too long");
+  });
   const minutes = projectSettings((await projectThread(pull.threadId))?.project.settings ?? "{}")
     .autofix.passMinutes;
   await stop(pass, pull, "timed_out", `The pass ran past ${minutes} minutes and was stopped.`);

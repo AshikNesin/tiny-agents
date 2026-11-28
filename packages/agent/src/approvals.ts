@@ -23,6 +23,7 @@ import {
   type WaitInfo,
   type WaitTracker,
 } from "./waiting";
+import { record } from "@tiny-agents/std";
 
 export { isUnattendedConversation };
 
@@ -59,11 +60,6 @@ export interface ApprovalView {
   result?: unknown;
   interrupted?: boolean;
 }
-
-const record = (value: unknown): Record<string, unknown> | undefined =>
-  value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : undefined;
 
 const APPROVAL_STATES: ReadonlySet<string> = new Set([
   "pending",

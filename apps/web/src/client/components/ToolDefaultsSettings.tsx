@@ -16,14 +16,13 @@ export function ToolDefaultsSettings() {
   const saved = useToolPermissions();
   const save = useSaveToolPermissions();
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
-  if (toolkits.loadError || saved.loadError) {
-    return (
-      <p className="text-muted-foreground py-6 text-center text-sm">
-        {toolkits.loadError ?? saved.loadError}
-      </p>
-    );
+  if (toolkits.status === "failed") {
+    return <p className="text-muted-foreground py-6 text-center text-sm">{toolkits.loadError}</p>;
   }
-  if (!toolkits.data || !saved.data) {
+  if (saved.status === "failed") {
+    return <p className="text-muted-foreground py-6 text-center text-sm">{saved.loadError}</p>;
+  }
+  if (toolkits.status === "loading" || saved.status === "loading") {
     return <p className="text-muted-foreground py-6 text-center text-sm">Loading…</p>;
   }
   const permissions = saved.data.permissions;

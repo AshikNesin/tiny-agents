@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import { and, eq } from "drizzle-orm";
-import { memoryLedger } from "../../../../apps/web/src/server/api/bots/memories.ledger";
+import { memoryLedger } from "../../../../apps/web/src/server/api/memories/memories.ledger";
 import { bots, db, memories } from "../../../../apps/web/src/server/db";
 import type { MemoryStatus } from "../../../../apps/web/src/shared/machines/memory";
 import { resetAppTables, seedBot } from "../../fixtures";

@@ -19,8 +19,13 @@ export function TerminalPane({ threadId, place }: { threadId: string; place: str
     "Could not open a terminal.",
     { enabled: !name },
   );
-  const openedName = opened.data?.name;
-  const error = opened.loadError;
+  const openedName =
+    opened.status === "ready"
+      ? opened.data.name
+      : opened.status === "failed"
+        ? opened.last?.name
+        : undefined;
+  const error = opened.status === "failed" ? opened.loadError : null;
 
   useEffect(() => {
     if (!name && openedName) remember(threadId, openedName);

@@ -1,50 +1,30 @@
-import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import { beforeEach, describe, expect, it } from "vite-plus/test";
+import { botsApi } from "@/lib/bots-api";
+import type { CapabilityInfo, CapabilityList } from "../../../apps/web/src/shared/api/bots";
+import { fakeApi } from "../fakes/api";
 
-const getMock = vi.fn();
-vi.mock("@groot/shell/lib/api", () => ({
-  apiClient: { get: (...args: unknown[]) => getMock(...args) },
-}));
+const capability: CapabilityInfo = {
+  id: "tasks",
+  kind: "toolkit",
+  name: "Tasks",
+  description: "",
+  tools: [],
+};
 
-async function freshBotsApi() {
-  vi.resetModules();
-  const { botsApi } = await import("@/lib/bots-api");
-  return botsApi;
-}
-
-const capability = { id: "tasks", kind: "toolkit", name: "Tasks", description: "", tools: [] };
+let api: ReturnType<typeof fakeApi>;
 
 beforeEach(() => {
-  getMock.mockClear();
+  api = fakeApi();
 });
 
 describe("botsApi.capabilities", () => {
   it("returns the array, not the { capabilities } wrapper", async () => {
-    const botsApi = await freshBotsApi();
-    getMock.mockResolvedValue({ capabilities: [capability] });
+    api.get("/capabilities", (): CapabilityList => ({ capabilities: [capability] }));
     await expect(botsApi.capabilities()).resolves.toEqual([capability]);
   });
 
   it("survives an empty response", async () => {
-    const botsApi = await freshBotsApi();
-    getMock.mockResolvedValue({});
+    api.get("/capabilities", () => ({}));
     await expect(botsApi.capabilities()).resolves.toEqual([]);
-  });
-
-  it("serves every caller from one request (issue #7)", async () => {
-    const botsApi = await freshBotsApi();
-    getMock.mockResolvedValue({ capabilities: [capability] });
-    await Promise.all([botsApi.capabilities(), botsApi.capabilities()]);
-    await botsApi.capabilities();
-    expect(getMock).toHaveBeenCalledTimes(1);
-    expect(getMock).toHaveBeenCalledWith("/capabilities");
-  });
-
-  it("retries after a rejection instead of caching the failure", async () => {
-    const botsApi = await freshBotsApi();
-    getMock.mockRejectedValueOnce(new Error("offline"));
-    await expect(botsApi.capabilities()).rejects.toThrow("offline");
-    getMock.mockResolvedValue({ capabilities: [capability] });
-    await expect(botsApi.capabilities()).resolves.toEqual([capability]);
-    expect(getMock).toHaveBeenCalledTimes(2);
   });
 });

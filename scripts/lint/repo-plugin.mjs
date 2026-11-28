@@ -1,6 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
-import path from "node:path";
-import { BASELINE_PATH, isGenerated, isKeptComment } from "./comments.mjs";
+import { isGenerated, isKeptComment } from "./comments.mjs";
 
 const jsxName = (node) =>
   node.type === "JSXElement" && node.openingElement.name.type === "JSXIdentifier"
@@ -52,7 +50,7 @@ const renderedElements = (node) => {
 };
 
 const LOAD_IN_EFFECT_MESSAGE =
-  "R15: load request/response data with useResource from apps/web/src/client/queries/resource.ts (writes: useMutation), not a fetch, an `xxxApi.` call or a `load…`/`fetch…` helper in useEffect. A hand-rolled load needs its own cancel flag, busy reset and refresh after a change, and agents kept missing one (issue #412). A live stream or socket is not a resource: list the file in R15's except in scripts/lint/boundaries.ts with the reason.";
+  "R15: load request/response data with useResource from apps/web/src/client/queries/resource.ts (writes: useMutation), not a fetch, an `xxxApi.` call or a `load…`/`fetch…` helper in useEffect. A hand-rolled load needs its own cancel flag, busy reset and refresh after a change, and agents kept missing one (issue #412). A poll is `refetchInterval` on the resource. A live stream subscribes with subscribeSse, whose path comes from an `xxxApi.…Path()` builder; that is not a load.";
 
 const EFFECT_HOOKS = new Set(["useEffect", "useLayoutEffect"]);
 
@@ -74,7 +72,8 @@ const isLoadCall = (node) => {
   return (
     callee.type === "MemberExpression" &&
     callee.object.type === "Identifier" &&
-    callee.object.name.endsWith("Api")
+    callee.object.name.endsWith("Api") &&
+    !(callee.property.type === "Identifier" && /(Path|Url)$/.test(callee.property.name))
   );
 };
 
@@ -93,6 +92,25 @@ const CASTS = new Set(["TSAsExpression", "TSTypeAssertion"]);
 
 const unparenthesized = (node) =>
   node.type === "ParenthesizedExpression" ? unparenthesized(node.expression) : node;
+
+const MAX_SOURCE_LINES = 800;
+
+const FILE_TOO_LONG_MESSAGE = (lines) =>
+  `R24: this file has ${lines} lines; the limit is ${MAX_SOURCE_LINES}. Long files are where agents kept adding one more thing and where review findings clustered. Move a group of functions or components that change together into a sibling module named for what it does (a server feature uses <feature>.<role>.ts), and keep the entry point here.`;
+
+const CLIENT_INTERVAL_MESSAGE =
+  "R23: re-read server data with `refetchInterval` on useResource (apps/web/src/client/queries/resource.ts), which stops with the component and pauses in a hidden tab. A hand-rolled setInterval poll outlived its component more than once.";
+
+const JSON_PARSE_CAST_MESSAGE =
+  "R22: JSON.parse returns whatever was stored or sent, and a cast compiles any shape. Read it with `parseJson(what, text, schema)` from @tiny-agents/std, and a list of rows with `parseEach`, so a wrong shape fails where it is read.";
+
+const isJsonParse = (node) =>
+  node?.type === "CallExpression" &&
+  node.callee.type === "MemberExpression" &&
+  node.callee.object.type === "Identifier" &&
+  node.callee.object.name === "JSON" &&
+  node.callee.property.type === "Identifier" &&
+  node.callee.property.name === "parse";
 
 const DOUBLE_CAST_MESSAGE =
   "R6: a cast through unknown compiles any shape, so a wrong stored value surfaces later as a wrong value. Use packages/agent/src/durable-json.ts: `durableMemo(key, schema)` to read and keep a task memo, `parseStored(key, value, schema)` for a document field, `toJson(value)` to store one. For anything else, type it so it compiles: a typed list, a `Pick` of the api.";
@@ -146,37 +164,9 @@ const staticString = (node, lookup) => {
 };
 
 const NO_COMMENTS_MESSAGE =
-  "R16: code carries no comments (ADR 0028). Say it in a name, a type or a test; record a decision in docs/adr/. The ratchet in scripts/lint/comment-baseline.json lets old comments stay until they go, and only shrinks.";
+  "R16: code carries no comments (ADR 0028). Say it in a name, a type or a test; record a decision in docs/adr/.";
 
-const baselines = new Map();
-
-const allowedBy = (baselinePath) => (cwd, file) => {
-  const key = `${cwd}\0${baselinePath}`;
-  if (!baselines.has(key)) {
-    const baseline = path.join(cwd, baselinePath);
-    baselines.set(key, existsSync(baseline) ? JSON.parse(readFileSync(baseline, "utf8")) : {});
-  }
-  return baselines.get(key)[path.relative(cwd, file).replaceAll("\\", "/")] ?? 0;
-};
-
-const allowedComments = allowedBy(BASELINE_PATH);
-
-export const SILENT_FALLBACK_BASELINE = "scripts/lint/silent-fallback-baseline.json";
-
-const fallbackBaselines = new Map();
-
-const allowedSilentFallbacks = (cwd, file) => {
-  if (!fallbackBaselines.has(cwd)) {
-    const baseline = path.join(cwd, SILENT_FALLBACK_BASELINE);
-    fallbackBaselines.set(
-      cwd,
-      existsSync(baseline) ? JSON.parse(readFileSync(baseline, "utf8")) : {},
-    );
-  }
-  return fallbackBaselines.get(cwd)[path.relative(cwd, file).replaceAll("\\", "/")] ?? {};
-};
-
-export const fallbackSite = (text) => text.replace(/\s+/g, " ").trim();
+const fallbackSite = (text) => text.replace(/\s+/g, " ").trim();
 
 const SILENT_FALLBACK_MESSAGE =
   "R17: this drops the error and carries on as if the call worked. Agents shipped this three times: a DNS lookup failure let the browser through (#445), an auto-dismiss failure left a question pending (#469), and a slow `chromium --version` sent a HeadlessChrome user agent (#494). Handle the failure, rethrow it, or catch into a function whose name says why ignoring it is safe (`.catch(ignoreClosedSocket)`).";
@@ -255,12 +245,16 @@ const insertTable = (node) =>
 const MODULE_SCOPES = new Set(["module", "global"]);
 
 const MODULE_STATE_MESSAGE =
-  "R12: module state belongs in the App root (apps/web/src/server/app-root.ts); see docs/rewrite/DECISIONS.md D8";
+  "R12: module state belongs in the App root (apps/web/src/server/app-root.ts): add a field to App and read it through app(). A constant lookup is declared `const NAME: ReadonlySet<T> = new Set([...])` (or ReadonlyMap).";
 
 const COLLECTIONS = new Set(["Map", "Set", "WeakMap", "WeakSet"]);
+const READONLY_COLLECTIONS = new Set(["ReadonlySet", "ReadonlyMap"]);
+
+const declaredReadonly = (id) =>
+  READONLY_COLLECTIONS.has(id?.typeAnnotation?.typeAnnotation?.typeName?.name);
 
 const API_TYPE_EXPORT_MESSAGE =
-  "R13: an API's request and response types live once, in apps/web/src/shared/api/<area>.ts, where the server's handlers use them too (docs/rewrite/README.md §4.5). Declare the type there and import it here; its other readers import it from there as well.";
+  "R13: an API's request and response types live once, in apps/web/src/shared/api/<area>.ts, where the server's handlers use them too (ADR 0051). Declare the type there and import it here; its other readers import it from there as well.";
 
 const TYPE_DECLARATIONS = new Set(["TSInterfaceDeclaration", "TSTypeAliasDeclaration"]);
 
@@ -283,26 +277,23 @@ const isCollection = (node) => {
   );
 };
 
-const boundNames = (pattern) => {
-  switch (pattern?.type) {
-    case "Identifier":
-      return [pattern.name];
-    case "ObjectPattern":
-      return pattern.properties.flatMap((p) =>
-        boundNames(p.type === "RestElement" ? p.argument : p.value),
-      );
-    case "ArrayPattern":
-      return pattern.elements.flatMap(boundNames);
-    case "RestElement":
-      return boundNames(pattern.argument);
-    case "AssignmentPattern":
-      return boundNames(pattern.left);
-    default:
-      return [];
-  }
-};
-
 const FUNCTIONS = new Set(["FunctionDeclaration", "FunctionExpression", "ArrowFunctionExpression"]);
+
+const FIRST_PARTY_MOCK_MESSAGE =
+  "R21: fake the network with fakeApi() from tests/client/fakes/api.ts and render the real module; a mocked first-party module skips the envelope, the error mapping and the real `*-api.ts`, store or component, so the test passes whether or not they work (docs/guides/testing.md). Only a third-party package, or a transport jsdom cannot run that R21's allow in scripts/lint/boundaries.ts lists, is mocked.";
+
+const FIRST_PARTY_SPECIFIER = /^(@\/|@groot\/|@tiny-agents\/|\.)/;
+const CLIENT_ALIAS = "@/";
+const CLIENT_ROOT = "/apps/web/src/client/";
+
+const mockAllowed = (specifier, allow) =>
+  allow.some(
+    (entry) =>
+      specifier === entry ||
+      (specifier.startsWith(".") &&
+        entry.startsWith(CLIENT_ALIAS) &&
+        specifier.endsWith(CLIENT_ROOT + entry.slice(CLIENT_ALIAS.length))),
+  );
 
 export default {
   meta: { name: "repo" },
@@ -326,18 +317,51 @@ export default {
         };
       },
     },
-    "no-module-state": {
+    "no-first-party-mock": {
       meta: { schema: [{ type: "object" }] },
       create(context) {
-        const file = context.filename.replaceAll("\\", "/");
-        const allowed = new Set(
-          (context.options[0]?.allow ?? []).flatMap((entry) => {
-            const at = entry.lastIndexOf(":");
-            return file === entry.slice(0, at) || file.endsWith(`/${entry.slice(0, at)}`)
-              ? [entry.slice(at + 1)]
-              : [];
-          }),
-        );
+        const allow = context.options[0]?.allow ?? [];
+        const firstParty = (specifier) =>
+          typeof specifier === "string" &&
+          FIRST_PARTY_SPECIFIER.test(specifier) &&
+          !mockAllowed(specifier, allow);
+        const imported = new Set();
+        const viCall = (node) =>
+          node.callee.type === "MemberExpression" &&
+          node.callee.object.type === "Identifier" &&
+          node.callee.object.name === "vi" &&
+          node.callee.property.type === "Identifier"
+            ? node.callee.property.name
+            : undefined;
+        const rootName = (node) => {
+          let root = node;
+          while (root?.type === "MemberExpression") root = root.object;
+          return root?.type === "Identifier" ? root.name : undefined;
+        };
+        return {
+          ImportDeclaration(node) {
+            if (node.importKind === "type" || !firstParty(node.source.value)) return;
+            for (const specifier of node.specifiers) {
+              if (specifier.importKind !== "type") imported.add(specifier.local.name);
+            }
+          },
+          CallExpression(node) {
+            const called = viCall(node);
+            const [target] = node.arguments;
+            const mocksModule =
+              (called === "mock" || called === "doMock") &&
+              target?.type === "Literal" &&
+              firstParty(target.value);
+            const spiesOnImport = called === "spyOn" && imported.has(rootName(target));
+            if (mocksModule || spiesOnImport) {
+              context.report({ node, message: FIRST_PARTY_MOCK_MESSAGE });
+            }
+          },
+        };
+      },
+    },
+    "no-module-state": {
+      create(context) {
         return {
           VariableDeclaration(node) {
             const parent =
@@ -345,7 +369,7 @@ export default {
             if (parent.type !== "Program") return;
             for (const declarator of node.declarations) {
               if (node.kind === "const" && !isCollection(declarator.init)) continue;
-              if (boundNames(declarator.id).every((name) => allowed.has(name))) continue;
+              if (node.kind === "const" && declaredReadonly(declarator.id)) continue;
               context.report({ node: declarator, message: MODULE_STATE_MESSAGE });
             }
           },
@@ -360,8 +384,7 @@ export default {
             const comments = context.sourceCode
               .getAllComments()
               .filter((comment) => comment.type !== "Shebang" && !isKeptComment(comment.value));
-            const allowed = allowedComments(context.cwd ?? process.cwd(), context.filename);
-            for (const comment of comments.slice(allowed)) {
+            for (const comment of comments) {
               context.report({ loc: comment.loc, message: NO_COMMENTS_MESSAGE });
             }
           },
@@ -376,23 +399,9 @@ export default {
         return {
           CatchClause: collect,
           CallExpression: collect,
-          "Program:exit"(program) {
-            const allowed = allowedSilentFallbacks(context.cwd ?? process.cwd(), context.filename);
-            const seen = new Map();
+          "Program:exit"() {
             for (const { node, site } of found) {
-              const count = (seen.get(site) ?? 0) + 1;
-              seen.set(site, count);
-              if (count > (allowed[site] ?? 0)) {
-                context.report({ node, message: `${SILENT_FALLBACK_MESSAGE} Site: \`${site}\`` });
-              }
-            }
-            for (const [site, count] of Object.entries(allowed)) {
-              if ((seen.get(site) ?? 0) < count) {
-                context.report({
-                  node: program,
-                  message: `R17: ${SILENT_FALLBACK_BASELINE} allows ${count} of \`${site}\` here but the file has ${seen.get(site) ?? 0}. Lower or delete that entry to lock in the cut; the baseline only shrinks.`,
-                });
-              }
+              context.report({ node, message: `${SILENT_FALLBACK_MESSAGE} Site: \`${site}\`` });
             }
           },
         };
@@ -591,6 +600,44 @@ export default {
             }
           },
         };
+      },
+    },
+    "max-source-lines": {
+      create(context) {
+        return {
+          Program(node) {
+            const lines = context.sourceCode.lines.length;
+            if (lines > MAX_SOURCE_LINES) {
+              context.report({ node, message: FILE_TOO_LONG_MESSAGE(lines) });
+            }
+          },
+        };
+      },
+    },
+    "no-client-interval": {
+      create(context) {
+        return {
+          CallExpression(node) {
+            const callee = node.callee;
+            const name =
+              callee.type === "Identifier"
+                ? callee.name
+                : callee.type === "MemberExpression" && callee.property.type === "Identifier"
+                  ? callee.property.name
+                  : null;
+            if (name === "setInterval") context.report({ node, message: CLIENT_INTERVAL_MESSAGE });
+          },
+        };
+      },
+    },
+    "no-json-parse-cast": {
+      create(context) {
+        const check = (node) => {
+          const inner = unparenthesized(node.expression);
+          const parsed = inner.type === "AwaitExpression" ? inner.argument : inner;
+          if (isJsonParse(parsed)) context.report({ node, message: JSON_PARSE_CAST_MESSAGE });
+        };
+        return { TSAsExpression: check, TSTypeAssertion: check };
       },
     },
     "no-double-cast": {

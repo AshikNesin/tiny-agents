@@ -1,5 +1,7 @@
 import { RefreshCw } from "lucide-react";
+import { toast } from "sonner";
 import type { CommandGroupEntry } from "@groot/shell/components/CommandPalette";
+import { errorMessage } from "../../lib/errors";
 import { updatesApi } from "../../lib/updates-api";
 import { settingsSectionsFor } from "../../pages/settings/sections";
 
@@ -30,7 +32,9 @@ export function settingsCommandGroup(
               onSelect: () => {
                 void updatesApi
                   .check()
-                  .catch(() => undefined)
+                  .catch((error: unknown) =>
+                    toast.error(errorMessage(error, "Could not check for updates.")),
+                  )
                   .finally(() => navigate("/settings/updates"));
               },
             },

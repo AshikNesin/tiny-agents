@@ -7,45 +7,32 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { BrowserRouter } from "react-router-dom";
 import { ChatPane } from "@/components/ChatPane";
-import { usePeopleStore } from "@/store/people";
-import type { Bot } from "../../../apps/web/src/shared/api/bots";
+import type { ToolChoice } from "@tiny-agents/code/contracts";
+import type { Bot, SendMessageBody } from "../../../apps/web/src/shared/api/bots";
+import type { Skill } from "../../../apps/web/src/shared/api/skills";
 import type { CatalogModel } from "../../../apps/web/src/shared/api/models";
 import { AppQueryProvider } from "../query-provider";
+import { chatBackend } from "./chat-backend";
+import { signedInAs } from "../fakes/viewer";
 
-const sendMock = vi.fn().mockResolvedValue(undefined);
+vi.mock("@/lib/sse", async () => (await import("../fakes/sse")).sseModule);
 
-vi.mock("@/lib/bots-api", () => ({
-  botsApi: {
-    send: (...args: unknown[]) => sendMock(...args),
-    abort: vi.fn(),
-    reset: vi.fn(),
-    read: vi.fn(),
-    capabilities: vi.fn().mockResolvedValue([]),
-    pastChats: vi.fn().mockResolvedValue([]),
-    tools: vi.fn().mockResolvedValue([
-      {
-        name: "mcp__github__list_issues",
-        label: "List issues",
-        description: "Open issues",
-        connection: { slug: "github", name: "GitHub" },
-      },
-    ]),
-  },
-}));
+const skill = (id: string, name: string, description: string): Skill => ({
+  id,
+  name,
+  description,
+  body: "",
+  files: [],
+  source: "manual",
+  sourceUrl: null,
+  allBots: false,
+  botIds: [],
+  createdAt: "2026-11-01T00:00:00.000Z",
+  updatedAt: "2026-11-01T00:00:00.000Z",
+});
 
-vi.mock("@/lib/skills-api", () => ({
-  skillsApi: {
-    list: vi.fn().mockResolvedValue([
-      { id: "s1", name: "show-me", description: "Explain it visually" },
-      { id: "s2", name: "shopping", description: "Not this bot's" },
-      { id: "s3", name: "summarize", description: "Summarize the thread" },
-    ]),
-  },
-}));
-
-vi.mock("@/lib/sse", () => ({
-  subscribeSse: vi.fn(() => ({ close: () => undefined })),
-}));
+let api: ReturnType<typeof chatBackend>;
+const sends = () => api.sent<SendMessageBody>("POST", "/bots/host/messages");
 
 const model: CatalogModel = {
   id: "test-model",
@@ -105,9 +92,22 @@ function renderPane() {
 const user = userEvent.setup();
 
 beforeEach(() => {
-  sendMock.mockClear();
+  api = chatBackend(HOST);
+  signedInAs(api, "owner");
+  api.get("/skills", (): Skill[] => [
+    skill("s1", "show-me", "Explain it visually"),
+    skill("s2", "shopping", "Not this bot's"),
+    skill("s3", "summarize", "Summarize the thread"),
+  ]);
+  api.get("/bots/host/tools", (): ToolChoice[] => [
+    {
+      name: "mcp__github__list_issues",
+      label: "List issues",
+      description: "Open issues",
+      connection: { slug: "github", name: "GitHub" },
+    },
+  ]);
   localStorage.clear();
-  usePeopleStore.setState({ role: "owner" });
 });
 
 describe("ChatPane slash skills", () => {
@@ -125,8 +125,8 @@ describe("ChatPane slash skills", () => {
     expect(composer.value).toBe("/show-me ");
     await user.type(composer, "draw the repo{Enter}");
 
-    await waitFor(() => expect(sendMock).toHaveBeenCalled());
-    expect(sendMock.mock.calls[0]![2]).toBe("/show-me draw the repo");
+    await waitFor(() => expect(sends()).toHaveLength(1));
+    expect(sends()[0]!.body.text).toBe("/show-me draw the repo");
   });
 
   it("lists the bot's tools on / and sends a picked connection with the message", async () => {
@@ -144,9 +144,9 @@ describe("ChatPane slash skills", () => {
     expect(screen.getByTestId("tool-chips")).toHaveTextContent("GitHub (all tools)");
 
     await user.type(composer, "what is open?{Enter}");
-    await waitFor(() => expect(sendMock).toHaveBeenCalled());
-    expect(sendMock.mock.calls[0]![2]).toBe("what is open?");
-    expect(sendMock.mock.calls[0]![6]).toEqual(["mcp__github__*"]);
+    await waitFor(() => expect(sends()).toHaveLength(1));
+    expect(sends()[0]!.body.text).toBe("what is open?");
+    expect(sends()[0]!.body.tools).toEqual(["mcp__github__*"]);
     expect(screen.queryByTestId("tool-chips")).not.toBeInTheDocument();
   });
 });

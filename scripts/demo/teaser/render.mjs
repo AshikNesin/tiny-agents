@@ -3,7 +3,11 @@ import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 
 const require = createRequire(import.meta.url);
-const { chromium } = await import("playwright-core").catch(() => require("playwright"));
+const playwrightInstead = (error) => {
+  if (error.code !== "ERR_MODULE_NOT_FOUND") throw error;
+  return require("playwright");
+};
+const { chromium } = await import("playwright-core").catch(playwrightInstead);
 
 const FPS = Number(process.env.FPS ?? 60);
 const OUT = process.env.FRAMES_DIR ?? "tmp/demo/teaser-frames";

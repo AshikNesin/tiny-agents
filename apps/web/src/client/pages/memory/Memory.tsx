@@ -15,7 +15,7 @@ import { Input } from "@groot/ui/input";
 import { Textarea } from "@groot/ui/textarea";
 import { Label } from "@groot/ui/label";
 import { Card } from "@groot/ui/card";
-import { EmptyState, ErrorState } from "@groot/ui/empty-state";
+import { EmptyState } from "@groot/ui/empty-state";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@groot/ui/select";
 import { SkeletonList } from "@groot/ui/loading-skeleton";
 import { metaLabelClass } from "@groot/ui/typography";
@@ -28,6 +28,7 @@ import type { BotListEntry } from "../../../shared/api/bots";
 import type { MemoryCategory, MemoryRecord } from "../../../shared/api/memories";
 import { CATEGORY_ORDER } from "../../lib/bots-api";
 import { errorMessage } from "../../lib/errors";
+import { ResourceView } from "../../components/ResourceView";
 import {
   useMemories,
   useMemoryEnabled,
@@ -141,7 +142,14 @@ function BotsWithoutMemories({
 }
 
 export function MemoryPage() {
-  const { data, loadError, refresh } = useMemories();
+  const resource = useMemories();
+  const { refresh } = resource;
+  const data =
+    resource.status === "ready"
+      ? resource.data
+      : resource.status === "failed"
+        ? (resource.last ?? null)
+        : null;
   const bots = data?.bots ?? null;
   const memories = useMemo(() => data?.memories ?? {}, [data]);
   const memoryEnabled = useMemoryEnabled(bots ?? []);
@@ -210,58 +218,56 @@ export function MemoryPage() {
         maxLength={200}
       />
 
-      {loadError ? (
-        <ErrorState
-          title="Couldn't load memories"
-          description={loadError}
-          action={
-            <Button variant="outline" onClick={() => void refresh()}>
-              Retry
-            </Button>
-          }
-        />
-      ) : bots === null ? (
-        <SkeletonList rows={3} leading="circle" secondaryLine />
-      ) : bots.length === 0 ? (
-        <EmptyState
-          icon={Brain}
-          title="No bots yet"
-          description="Create a bot first; its memories will appear here."
-        />
-      ) : searching && filtered.size === 0 ? (
-        <EmptyState
-          icon={Search}
-          title="No matching memories"
-          description={`Nothing matches "${query.trim()}". Try a different search.`}
-        />
-      ) : (
-        <>
-          {withMemories.map((bot) => (
-            <BotMemorySection
-              key={bot.id}
-              bot={bot}
-              rows={filtered.get(bot.id) ?? []}
-              memoryEnabled={memoryEnabled[bot.id]}
-              busy={busyId !== null && busyId.startsWith(bot.id)}
-              archivedOpen={archivedOpen[bot.id] ?? false}
-              onArchivedOpen={(open) => setArchivedOpen((prev) => ({ ...prev, [bot.id]: open }))}
-              onToggle={(on) => toggleMemory(bot.id, on)}
-              onAdd={() => setEditor({ botId: bot.id, botName: bot.name, memory: null })}
-              onEdit={(memory) => setEditor({ botId: bot.id, botName: bot.name, memory })}
-              onDelete={(memory) => void remove(memory)}
+      <ResourceView
+        resource={resource}
+        failedTitle="Couldn't load memories"
+        loading={<SkeletonList rows={3} leading="circle" secondaryLine />}
+      >
+        {(ready) =>
+          ready.bots.length === 0 ? (
+            <EmptyState
+              icon={Brain}
+              title="No bots yet"
+              description="Create a bot first; its memories will appear here."
             />
-          ))}
-          {withoutMemories.length > 0 && (
-            <BotsWithoutMemories
-              bots={withoutMemories}
-              memoryEnabled={memoryEnabled}
-              busyId={busyId}
-              onAdd={(bot) => setEditor({ botId: bot.id, botName: bot.name, memory: null })}
-              onToggle={(botId, on) => toggleMemory(botId, on)}
+          ) : searching && filtered.size === 0 ? (
+            <EmptyState
+              icon={Search}
+              title="No matching memories"
+              description={`Nothing matches "${query.trim()}". Try a different search.`}
             />
-          )}
-        </>
-      )}
+          ) : (
+            <>
+              {withMemories.map((bot) => (
+                <BotMemorySection
+                  key={bot.id}
+                  bot={bot}
+                  rows={filtered.get(bot.id) ?? []}
+                  memoryEnabled={memoryEnabled[bot.id]}
+                  busy={busyId !== null && busyId.startsWith(bot.id)}
+                  archivedOpen={archivedOpen[bot.id] ?? false}
+                  onArchivedOpen={(open) =>
+                    setArchivedOpen((prev) => ({ ...prev, [bot.id]: open }))
+                  }
+                  onToggle={(on) => toggleMemory(bot.id, on)}
+                  onAdd={() => setEditor({ botId: bot.id, botName: bot.name, memory: null })}
+                  onEdit={(memory) => setEditor({ botId: bot.id, botName: bot.name, memory })}
+                  onDelete={(memory) => void remove(memory)}
+                />
+              ))}
+              {withoutMemories.length > 0 && (
+                <BotsWithoutMemories
+                  bots={withoutMemories}
+                  memoryEnabled={memoryEnabled}
+                  busyId={busyId}
+                  onAdd={(bot) => setEditor({ botId: bot.id, botName: bot.name, memory: null })}
+                  onToggle={(botId, on) => toggleMemory(botId, on)}
+                />
+              )}
+            </>
+          )
+        }
+      </ResourceView>
 
       <MemoryEditor
         editor={editor}
@@ -327,7 +333,7 @@ function BotMemorySection({
           />
         </div>
       </div>
-      {!memoryEnabled && (
+      {memoryEnabled === false && (
         <p className="mt-1 text-xs text-muted-foreground">
           Off. This bot no longer learns from chats or uses what it knows.
         </p>

@@ -1,3 +1,5 @@
+import { parseJson } from "@tiny-agents/std";
+import { z } from "zod";
 import { createHash } from "node:crypto";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { Boom } from "@groot/core/errors";
@@ -14,13 +16,13 @@ import {
   initialExtraction,
   startExtraction,
 } from "./uploads.extraction";
-import { sniffFile, SniffError, TEXT_EXTENSIONS } from "./uploads.sniff";
+import { extensionOf, sniffFile, SniffError, TEXT_EXTENSIONS } from "./uploads.sniff";
 import type { StoredUpload, UploadMeta, UploadStatus } from "../../../shared/api/uploads";
 
 const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
 const MAX_FILE_BYTES = 25 * 1024 * 1024;
 
-const ALLOWED_EXTENSIONS = new Set([
+const ALLOWED_EXTENSIONS: ReadonlySet<string> = new Set([
   "png",
   "jpg",
   "jpeg",
@@ -66,11 +68,6 @@ function sanitizeName(name: string): string {
   // oxlint-disable-next-line no-control-regex
   const trimmed = name.replace(/[\r\n"\\/\x00-\x1f]/g, "_").trim();
   return trimmed.slice(0, 200) || "file";
-}
-
-function extensionOf(name: string): string {
-  const dot = name.lastIndexOf(".");
-  return dot === -1 ? "" : name.slice(dot + 1).toLowerCase();
 }
 
 function checkExtension(name: string): void {
@@ -185,6 +182,21 @@ function toRef(row: {
   };
 }
 
+const uploadMetaSchema: z.ZodType<UploadMeta> = z.looseObject({
+  format: z.enum(["text", "pdf", "document", "spreadsheet", "slides", "archive"]),
+  pages: z.number().optional(),
+  sheets: z.number().optional(),
+  lines: z.number().optional(),
+  entries: z.number().optional(),
+  chars: z.number(),
+  truncated: z.boolean().optional(),
+  title: z.string().optional(),
+  author: z.string().optional(),
+  valid: z.boolean().optional(),
+  imagePages: z.number().optional(),
+  suspicious: z.string().optional(),
+});
+
 export async function uploadStatus(id: string): Promise<UploadStatus> {
   const found = await findUpload(id);
   if (!found) throw Boom.notFound("Unknown upload");
@@ -193,7 +205,9 @@ export async function uploadStatus(id: string): Promise<UploadStatus> {
     ref: toRef(row),
     status: row.extractStatus,
     ...(row.extractError ? { error: row.extractError } : {}),
-    ...(row.extractMeta ? { meta: JSON.parse(row.extractMeta) as UploadMeta } : {}),
+    ...(row.extractMeta
+      ? { meta: parseJson("An upload's extraction details", row.extractMeta, uploadMetaSchema) }
+      : {}),
   };
 }
 

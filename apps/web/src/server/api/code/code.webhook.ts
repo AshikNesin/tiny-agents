@@ -1,10 +1,10 @@
-import { Hono } from "hono";
+import { parseJson } from "@tiny-agents/std";
+import { routes } from "../routes";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { z } from "zod";
 import { env } from "@groot/core/env";
 import { logger } from "@groot/core/logger";
 import { and, eq } from "drizzle-orm";
-import type { AppEnv } from "@groot/core/types";
 import { Boom } from "@groot/core/errors";
 import { ok } from "@groot/core/utils/api-response.utils";
 import { routeBodyLimit } from "@groot/core/middlewares/body-limit.middleware";
@@ -12,18 +12,29 @@ import { verifyWebhook } from "@tiny-agents/github";
 import { codePrEvents, codeProjects, codePullRequests, db, type CodePullRow } from "../../db";
 import type { AppContext } from "@groot/core/types";
 import { completeInstall, completeManifest, FLOW_COOKIE, webhookSecret } from "./code.github";
-import { armReconcile } from "./code.pulls";
+import { armReconcile } from "./code.pulls.reconcile";
 
 const HINT_DELAY_MS = 5_000;
 
-interface Payload {
-  repository?: { full_name?: string };
-  pull_request?: { number?: number };
-  issue?: { number?: number; pull_request?: unknown };
-  check_run?: { head_sha?: string; pull_requests?: Array<{ number?: number }> };
-  check_suite?: { head_sha?: string; pull_requests?: Array<{ number?: number }> };
-  sha?: string;
-}
+const numberedSchema = z.looseObject({ number: z.number().nullish() });
+
+const checkedSchema = z.looseObject({
+  head_sha: z.string().nullish(),
+  pull_requests: z.array(numberedSchema).nullish(),
+});
+
+const payloadSchema = z.looseObject({
+  repository: z.looseObject({ full_name: z.string().nullish() }).nullish(),
+  pull_request: numberedSchema.nullish(),
+  issue: z
+    .looseObject({ number: z.number().nullish(), pull_request: z.unknown().optional() })
+    .nullish(),
+  check_run: checkedSchema.nullish(),
+  check_suite: checkedSchema.nullish(),
+  sha: z.string().nullish(),
+});
+
+type Payload = z.infer<typeof payloadSchema>;
 
 async function pullsOf(payload: Payload): Promise<CodePullRow[]> {
   const [owner, name] = (payload.repository?.full_name ?? "").split("/");
@@ -52,7 +63,7 @@ async function pullsOf(payload: Payload): Promise<CodePullRow[]> {
   return open.filter((p) => numbers.has(p.number) || (p.headSha !== null && shas.has(p.headSha)));
 }
 
-const router = new Hono<AppEnv>();
+const router = routes();
 
 const COOKIE_PATH = "/api/v1/code/github";
 
@@ -97,13 +108,14 @@ for (const kind of ["callback", "installed"] as const) {
 
 router.post(
   "/code/github/webhook",
+  "public",
   routeBodyLimit(10 * 1024 * 1024, {
     onError: () => {
       throw Boom.entityTooLarge("Webhook payloads are limited to 10 MB");
     },
   }),
   async (c) => {
-    const secret = await webhookSecret().catch(() => undefined);
+    const secret = await webhookSecret();
     if (!secret) throw Boom.notFound("No GitHub App is set up.");
     const body = await c.req.text();
     if (!(await verifyWebhook(secret, body, c.req.header("x-hub-signature-256")))) {
@@ -115,7 +127,7 @@ router.post(
       throw Boom.badRequest("Not a GitHub delivery");
     let payload: Payload;
     try {
-      payload = JSON.parse(body) as Payload;
+      payload = parseJson("A GitHub webhook payload", body, payloadSchema);
     } catch {
       throw Boom.badRequest("The payload is not JSON");
     }
@@ -131,4 +143,4 @@ router.post(
   },
 );
 
-export default router;
+export default router.hono;

@@ -187,7 +187,7 @@ describe("Code watcher", () => {
     expect(pushed[0]!.title).toBe("⚠️ Fake hit an error in fix");
   });
 
-  it("reconciles a hand-off whose thread id is bare (before ADR 0011) with the legacy instance", async () => {
+  it("reconciles a hand-off migration 0040 gave its Shelley prefix, with no thread row", async () => {
     stop();
     hub.stop();
     const shelley = fakeHarness("shelley");
@@ -202,7 +202,7 @@ describe("Code watcher", () => {
       conversationId: "1",
       idempotencyKey: "k5",
       task: "t",
-      threadId: "cLegacy",
+      threadId: "shelley:cLegacy",
     });
     hub.start();
     await eventually(() => expect(delivered).toHaveLength(1));

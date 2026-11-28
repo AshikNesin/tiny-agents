@@ -1,3 +1,5 @@
+import { parseJson } from "@tiny-agents/std";
+import type { z } from "zod";
 import { badGateway, HarnessError } from "../../server/errors";
 
 interface ShelleyConfig {
@@ -58,7 +60,7 @@ export async function shelleyFetch(
     throw badGateway(`Shelley is unreachable at ${config.url}: ${reason}`);
   }
   if (!response.ok) {
-    const text = (await response.text().catch(() => "")).trim().slice(0, 500);
+    const text = await failureText(response);
     const message = `Shelley answered ${response.status}${text ? `: ${text}` : ""}`;
     if (response.status >= 400 && response.status < 500) {
       throw new HarnessError(response.status, message);
@@ -68,16 +70,24 @@ export async function shelleyFetch(
   return response;
 }
 
-export async function shelleyJson<T = unknown>(
+async function failureText(response: Response): Promise<string> {
+  try {
+    return (await response.text()).trim().slice(0, 500);
+  } catch (error) {
+    return `its body could not be read (${error instanceof Error ? error.message : String(error)})`;
+  }
+}
+
+export async function shelleyJson<T>(
   path: string,
   init: ShelleyRequest,
   deps: ShelleyDeps,
+  schema: z.ZodType<T>,
 ): Promise<T> {
   const response = await shelleyFetch(path, init, deps);
   const text = await response.text();
-  if (!text) return {} as T;
   try {
-    return JSON.parse(text) as T;
+    return parseJson(`Shelley's answer to ${path.split("?")[0]}`, text || "{}", schema);
   } catch {
     throw badGateway("Shelley returned something that is not JSON");
   }
@@ -86,6 +96,7 @@ export async function shelleyJson<T = unknown>(
 export async function readSseFrames(
   body: ReadableStream<Uint8Array>,
   onFrame: (event: unknown) => void,
+  onFrameFailure: (error: unknown, data: string) => void,
 ): Promise<void> {
   const reader = body.getReader();
   const decoder = new TextDecoder();
@@ -107,7 +118,9 @@ export async function readSseFrames(
       if (!data) continue;
       try {
         onFrame(JSON.parse(data));
-      } catch {}
+      } catch (error) {
+        onFrameFailure(error, data);
+      }
     }
   }
 }

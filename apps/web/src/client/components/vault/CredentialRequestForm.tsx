@@ -7,6 +7,7 @@ import { Input } from "@groot/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@groot/ui/select";
 import { monoClass } from "@groot/ui/typography";
 import type { CredentialRequestView } from "../../../shared/api/vault";
+import { hostOf } from "../../lib/format";
 import { apiError } from "../../lib/vault-api";
 import { useVaultMutations } from "../../queries/vault";
 import { Switch } from "@groot/ui/switch";
@@ -14,14 +15,6 @@ import { SecretInput } from "./SecretInput";
 
 const MASKED = new Set(["password", "otp", "card_number", "cvc"]);
 const IDENTIFIERS = new Set(["username", "email", "tel"]);
-
-function hostOf(origin: string): string {
-  try {
-    return new URL(origin).host;
-  } catch {
-    return origin;
-  }
-}
 
 function minutesLeft(expiresAt: number): string {
   const minutes = Math.max(0, Math.ceil((expiresAt - Date.now()) / 60_000));

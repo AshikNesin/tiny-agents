@@ -55,27 +55,6 @@ const DRIVER_HOMES = [
 ];
 
 const SERVER = "apps/web/src/server";
-const R12_ALLOWED = [
-  "crypto/secret-box.ts:derived",
-  "api/uploads/uploads.extraction.ts:cache",
-  "api/uploads/uploads.prepare.ts:processor",
-  "api/bots/sandbox-host.ts:keyFiles",
-  "api/ws/upgrade.ts:upgradePatterns",
-  "db/index.ts:connections",
-  "api/uploads/uploads.extraction.ts:runner",
-  "api/uploads/uploads.extraction.ts:jobs",
-  "api/uploads/uploads.extraction.ts:cancelled",
-  "api/uploads/uploads.extraction.ts:active",
-  "api/uploads/uploads.extraction.ts:idle",
-  "api/uploads/uploads.extraction.ts:markIdle",
-  "entry.node.ts:captureException",
-  "api/bots/rfb-view-only.ts:FORWARD",
-  "api/bots/memories.store.ts:GENERIC_WORDS",
-  "api/uploads/uploads.sniff.ts:TEXT_EXTENSIONS",
-  "api/uploads/uploads.service.ts:ALLOWED_EXTENSIONS",
-  "api/routines/routines.runs.ts:CREDENTIAL_TOOLS",
-].map((entry) => `${SERVER}/${entry}`);
-
 const BOUNDARY_RULES: BoundaryRule[] = [
   {
     id: "R1",
@@ -259,7 +238,7 @@ const BOUNDARY_RULES: BoundaryRule[] = [
         {
           regex: "^@earendil-works/pi-durable(/|$)|^@tiny-agents/agent(/|$)|(^|/)agent/src(/|$)",
           message:
-            "R11: @tiny-agents/models imports neither pi-durable nor @tiny-agents/agent (docs/rewrite/DECISIONS.md D7). Move the pi-durable-free code it needs into packages/models, or have the caller pass it in.",
+            "R11: @tiny-agents/models imports neither pi-durable nor @tiny-agents/agent (ADR 0047). Move the pi-durable-free code it needs into packages/models, or have the caller pass it in.",
         },
       ],
     },
@@ -305,7 +284,7 @@ const BOUNDARY_RULES: BoundaryRule[] = [
         {
           regex: "^@earendil-works/pi-durable(/|$)|^@tiny-agents/agent(/|$)|(^|/)agent/src(/|$)",
           message:
-            "R11: @tiny-agents/sandbox imports neither pi-durable nor @tiny-agents/agent (docs/rewrite/DECISIONS.md D7). Move the pi-durable-free code it needs into packages/sandbox, or have the caller pass it in.",
+            "R11: @tiny-agents/sandbox imports neither pi-durable nor @tiny-agents/agent (ADR 0047). Move the pi-durable-free code it needs into packages/sandbox, or have the caller pass it in.",
         },
       ],
     },
@@ -327,22 +306,6 @@ const BOUNDARY_RULES: BoundaryRule[] = [
     kind: "plugin",
     scope: "apps/web/src/client/**",
     rule: "repo/no-load-in-effect",
-    except: [
-      "apps/web/src/client/components/ChatHistoryMenu.tsx",
-      "apps/web/src/client/components/ClaudePlanStatus.tsx",
-      "apps/web/src/client/components/FilePreview.tsx",
-      "apps/web/src/client/components/PeopleSettings.tsx",
-      "apps/web/src/client/components/PhoneNotificationSettings.tsx",
-      "apps/web/src/client/components/bot-dialog/use-bot-dialog-lists.ts",
-      "apps/web/src/client/components/browser/VncView.tsx",
-      "apps/web/src/client/components/ui/hooks/use-highlighted-code.ts",
-      "apps/web/src/client/components/chat-pane/live-views.tsx",
-      "apps/web/src/client/lib/use-tool-labels.ts",
-      "apps/web/src/client/pages/terminal/Terminal.tsx",
-      "apps/web/src/client/store/use-updates.ts",
-      "apps/web/src/client/lib/code/use-live-changes.ts",
-      "apps/web/src/client/lib/code/use-thread.ts",
-    ],
     enabled: true,
   },
   {
@@ -383,7 +346,7 @@ const BOUNDARY_RULES: BoundaryRule[] = [
     restrict: {
       patterns: [
         {
-          regex: "^@tiny-agents/claude-worker(/|$)|(^|/)bots/claude-worker$",
+          regex: "^@tiny-agents/claude-worker(/|$)|(^|/)sandbox/claude-worker$",
           message:
             "R14: the app's Code layer serves every harness (ADR 0011, ADR 0025). Only code.registry.ts names the Claude worker; shared git and diff logic goes in @tiny-agents/git, harness-specific behaviour behind the HarnessInstance contract.",
         },
@@ -403,7 +366,16 @@ const BOUNDARY_RULES: BoundaryRule[] = [
     kind: "plugin",
     scope: "**",
     rule: "repo/no-silent-fallback",
-    except: [...OUT_OF_SCOPE, "tests/**", "**/*.test.ts", "**/*.test.tsx"],
+    except: [
+      ...OUT_OF_SCOPE,
+      "tests/**",
+      "**/*.test.ts",
+      "**/*.test.tsx",
+      "packages/core/**",
+      "packages/jobs/**",
+      "packages/shell/**",
+      "packages/ui/**",
+    ],
     enabled: true,
   },
   {
@@ -413,6 +385,23 @@ const BOUNDARY_RULES: BoundaryRule[] = [
     rule: "repo/no-check-then-insert",
     except: ["**/*.test.ts"],
     enabled: true,
+  },
+  {
+    id: "R20",
+    kind: "import",
+    scope: "apps/web/src/server/api/**",
+    except: ["apps/web/src/server/api/routes.ts"],
+    enabled: true,
+    restrict: {
+      paths: [
+        {
+          name: "hono",
+          importNames: ["Hono"],
+          message:
+            "R20: declare routes with routes() from apps/web/src/server/api/routes.ts. Its post, put, patch and delete take the route's access tier, so a write route cannot be mounted without one.",
+        },
+      ],
+    },
   },
   {
     id: "R13",
@@ -426,8 +415,54 @@ const BOUNDARY_RULES: BoundaryRule[] = [
     kind: "plugin",
     scope: `${SERVER}/**/*.ts`,
     rule: "repo/no-module-state",
-    options: { allow: R12_ALLOWED },
     except: ["**/*.test.ts"],
+    enabled: true,
+  },
+  ...["components", "pages", "store", "queries"].map((dir): BoundaryRule => ({
+    id: "R23",
+    kind: "plugin",
+    scope: `apps/web/src/client/${dir}/**`,
+    rule: "repo/no-client-interval",
+    enabled: true,
+  })),
+  ...[
+    "apps/web/src/**",
+    "packages/agent/src/**",
+    "packages/claude-worker/src/**",
+    "packages/code/src/**",
+    "packages/git/src/**",
+    "packages/github/src/**",
+    "packages/models/src/**",
+    "packages/sandbox/src/**",
+    "packages/std/src/**",
+  ].map((scope): BoundaryRule => ({
+    id: "R24",
+    kind: "plugin",
+    scope,
+    rule: "repo/max-source-lines",
+    enabled: true,
+  })),
+  {
+    id: "R22",
+    kind: "plugin",
+    scope: "**/src/**",
+    rule: "repo/no-json-parse-cast",
+    except: [
+      "**/*.test.ts",
+      "**/*.test.tsx",
+      "packages/core/**",
+      "packages/jobs/**",
+      "packages/shell/**",
+      "packages/ui/**",
+    ],
+    enabled: true,
+  },
+  {
+    id: "R21",
+    kind: "plugin",
+    scope: "tests/client/**",
+    rule: "repo/no-first-party-mock",
+    options: { allow: ["@/lib/sse", "@/lib/novnc", "@/lib/xterm", "@/lib/terminal-ws"] },
     enabled: true,
   },
 ];

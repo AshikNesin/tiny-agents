@@ -7,7 +7,7 @@ import {
 } from "@tiny-agents/sandbox/computer";
 import { DEFAULT_BROWSER_PROFILES_DIR } from "@tiny-agents/sandbox/browser";
 import { browserTargetForBot, browserTargetForConversation } from "./browser.targets";
-import { sandboxConnection, sandboxEndpoint, unquoteEnv } from "./sandbox-host";
+import { sandboxConnection, sandboxEndpoint, unquoteEnv } from "../sandbox/sandbox-host";
 import { appEnv, type AppEnv } from "../../env";
 import { app } from "../../app-root";
 

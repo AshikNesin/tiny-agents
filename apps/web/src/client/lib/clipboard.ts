@@ -1,11 +1,30 @@
+import { toast } from "sonner";
+import { isMac } from "./platform";
+
 export async function copyText(text: string): Promise<boolean> {
-  if (window.isSecureContext && navigator.clipboard?.writeText) {
-    try {
-      await navigator.clipboard.writeText(text);
-      return true;
-    } catch {}
-  }
+  if (window.isSecureContext && (await clipboardTook(text))) return true;
   return legacyCopy(text);
+}
+
+async function clipboardTook(text: string): Promise<boolean> {
+  if (!navigator.clipboard?.writeText) return false;
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch (error) {
+    ignoreClipboardRefusal(error);
+    return false;
+  }
+}
+
+export function ignoreClipboardRefusal(error: unknown): void {
+  if (error instanceof DOMException && error.name === "NotAllowedError") return;
+  console.warn("The clipboard failed for a reason other than a refusal", error);
+}
+
+export function sayClipboardReadRefused(error: unknown): void {
+  ignoreClipboardRefusal(error);
+  toast.error("Could not read the clipboard. Allow clipboard access and try again.");
 }
 
 function legacyCopy(text: string): boolean {
@@ -44,12 +63,4 @@ export async function readClipboardText(): Promise<ClipboardReadResult> {
 
 export function pasteShortcut(): string {
   return isMac() ? "⌘V" : "Ctrl+V";
-}
-
-export function isMac(): boolean {
-  const platform =
-    (navigator as Navigator & { userAgentData?: { platform?: string } }).userAgentData?.platform ??
-    navigator.platform ??
-    "";
-  return /mac|iphone|ipad|ipod/i.test(platform);
 }

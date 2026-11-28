@@ -25,11 +25,7 @@ export function useMemoryEnabled(bots: BotListEntry[]): Record<string, boolean |
   return useQueries({
     queries: bots.map((bot) => ({
       queryKey: memoryEnabledKey(bot.id),
-      queryFn: () =>
-        botsApi
-          .get(bot.id)
-          .then((full) => full.memoryEnabled)
-          .catch(() => true),
+      queryFn: () => botsApi.get(bot.id).then((full) => full.memoryEnabled),
       ...RESOURCE_QUERY,
       staleTime: Infinity,
     })),

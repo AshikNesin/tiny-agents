@@ -9,6 +9,7 @@ import { routinesApi } from "../lib/routines-api";
 import { RESOURCE_MUTATION, useResource } from "./resource";
 
 const RECENT_RUNS = 10;
+const AWAITING_POLL_MS = 4_000;
 
 export const useRoutines = () =>
   useResource(
@@ -21,6 +22,10 @@ export const useRoutines = () =>
       return { routines, runs: recent.runs };
     },
     "Failed to load routines",
+    {
+      refetchInterval: (query) =>
+        query.state.data?.runs.some((run) => run.status === "awaiting") ? AWAITING_POLL_MS : false,
+    },
   );
 
 export function useRoutineMutations() {

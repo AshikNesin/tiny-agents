@@ -8,20 +8,12 @@ import React from "react";
 import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import { vaultApi } from "@/lib/vault-api";
 import { StepUpProvider, useStepUp } from "@/components/vault/StepUp";
+import { fakeApi } from "../fakes/api";
+import type { StepUpToken } from "../../../apps/web/src/shared/api/vault";
 
-const confirmMock = vi.fn();
-let fresh = false;
-
-vi.mock("@/lib/vault-api", () => ({
-  hasStepUp: () => fresh,
-  apiError: (_error: unknown, fallback: string) => fallback,
-  StepUpRequiredError: class extends Error {},
-  vaultApi: {
-    confirmWithPassword: (...args: unknown[]) => confirmMock(...args),
-    confirmWithPasskey: vi.fn(),
-  },
-}));
+let api: ReturnType<typeof fakeApi>;
 
 let run!: ReturnType<typeof useStepUp>["run"];
 function Probe() {
@@ -30,15 +22,16 @@ function Probe() {
 }
 
 beforeEach(() => {
-  fresh = false;
-  confirmMock.mockReset();
+  vaultApi.forgetStepUp();
+  api = fakeApi();
 });
 
 describe("StepUpProvider", () => {
   it("one confirmation answers two concurrent asks", async () => {
-    confirmMock.mockImplementation(async () => {
-      fresh = true;
-    });
+    api.post("/vault/step-up", (): StepUpToken => ({
+      token: "step-up-1",
+      expiresAt: Date.now() + 300_000,
+    }));
     render(
       <StepUpProvider>
         <Probe />
@@ -55,7 +48,9 @@ describe("StepUpProvider", () => {
     await user.type(screen.getByLabelText("Password"), "hunter2");
     await user.click(screen.getByRole("button", { name: "Confirm" }));
     expect(await results).toEqual(["one", "two"]);
-    expect(confirmMock).toHaveBeenCalledTimes(1);
+    expect(api.sent("POST", "/vault/step-up").map((request) => request.body)).toEqual([
+      { password: "hunter2" },
+    ]);
     expect(first).toHaveBeenCalledTimes(1);
     expect(second).toHaveBeenCalledTimes(1);
   });

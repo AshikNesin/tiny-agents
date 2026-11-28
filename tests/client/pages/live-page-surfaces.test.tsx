@@ -9,8 +9,7 @@
  * takeover request, the Apps and Keys menus), plus each reset's confirm and
  * toast, each failed open's toast, the deep link (Browser only), and the
  * poll's cadence. Recorded on the two separate pages before they became one
- * (docs/rewrite/PLAN.md row 5.5), so the shared page must render each state
- * the same. noVNC is faked.
+ * so the shared page must render each state the same. noVNC is faked.
  */
 import React from "react";
 import { act, render, screen, waitFor, within } from "@testing-library/react";
@@ -25,12 +24,16 @@ import type {
   Desktop,
   DesktopApps,
   DesktopList,
+  DriverBody,
+  LiveStarting,
+  OpenAppBody,
   PageBrowser,
   PageBrowserList,
+  VncTicket,
 } from "../../../apps/web/src/shared/api/live";
-import { browserPageApi } from "@/lib/browser-page-api";
-import { computerApi } from "@/lib/computer-api";
 import { createRfb } from "@/lib/novnc";
+import { ApiFailure, fakeApi } from "../fakes/api";
+import { AppQueryProvider } from "../query-provider";
 import { markup, outline } from "../dom-outline";
 
 const fakes = vi.hoisted(() => ({ rfbs: [] as EventTarget[] }));
@@ -120,48 +123,60 @@ const desktops = (list: Desktop[], configured = true, setupHint?: string): Deskt
   desktops: list,
 });
 
-function mockBrowsers(list: PageBrowserList | Promise<PageBrowserList>) {
+const unexplained = () => {
+  throw new ApiFailure(500, "");
+};
+
+function serve<List>(surface: "browser" | "computer", list: List | Promise<List>, scale: number) {
+  const api = fakeApi();
+  api.get(`/${surface}`, () => list);
+  api.post(`/${surface}/:profile/driver`, ({ body }) => ({ driver: (body as DriverBody).driver }));
+  api.post(`/${surface}/:profile/start`, (): LiveStarting => ({ starting: true }));
+  api.post(`/${surface}/:profile/vnc-ticket`, ({ params }): VncTicket => ({
+    path: `/api/v1/${surface}/${params.profile}/vnc?ticket=t1`,
+    scale,
+  }));
+  api.delete(`/${surface}/:profile`, () => ({ reset: true }));
   return {
-    list: vi.spyOn(browserPageApi, "list").mockImplementation(() => Promise.resolve(list)),
-    driver: vi.spyOn(browserPageApi, "driver").mockResolvedValue(undefined as never),
-    start: vi.spyOn(browserPageApi, "start").mockResolvedValue({ starting: true }),
-    ticket: vi.spyOn(browserPageApi, "ticket").mockImplementation(async (profile) => ({
-      path: `/api/v1/browser/${profile}/vnc?ticket=t1`,
-      scale: 2,
-    })),
-    resize: vi.spyOn(browserPageApi, "resize").mockResolvedValue(undefined as never),
-    reset: vi.spyOn(browserPageApi, "reset").mockResolvedValue(undefined as never),
+    api,
+    tickets: () =>
+      api.requests
+        .filter((request) => request.path.endsWith("/vnc-ticket"))
+        .map((request) => request.params.profile),
+    resets: (profile: string) => api.sent("DELETE", `/${surface}/${profile}`),
   };
 }
 
-function mockDesktops(list: DesktopList | Promise<DesktopList>) {
-  return {
-    list: vi.spyOn(computerApi, "list").mockImplementation(() => Promise.resolve(list)),
-    driver: vi.spyOn(computerApi, "driver").mockResolvedValue(undefined as never),
-    start: vi.spyOn(computerApi, "start").mockResolvedValue({ starting: true }),
-    ticket: vi.spyOn(computerApi, "ticket").mockImplementation(async (profile) => ({
-      path: `/api/v1/computer/${profile}/vnc?ticket=t1`,
-      scale: 1,
-    })),
-    apps: vi.spyOn(computerApi, "apps").mockResolvedValue({
-      apps: [
-        { id: "org.xfce.mousepad", name: "Mousepad" },
-        { id: "firefox", name: "Firefox" },
-      ],
-    }),
-    openApp: vi.spyOn(computerApi, "openApp").mockResolvedValue(undefined as never),
-    reset: vi.spyOn(computerApi, "reset").mockResolvedValue(undefined as never),
-  };
+function browserBackend(list: PageBrowserList | Promise<PageBrowserList>) {
+  const served = serve("browser", list, 2);
+  served.api.post("/browser/:profile/resize", ({ body }) => body);
+  return served;
+}
+
+function desktopBackend(list: DesktopList | Promise<DesktopList>) {
+  const served = serve("computer", list, 1);
+  served.api.get("/computer/:profile/apps", (): DesktopApps => ({
+    apps: [
+      { id: "org.xfce.mousepad", name: "Mousepad" },
+      { id: "firefox", name: "Firefox" },
+    ],
+  }));
+  served.api.post("/computer/:profile/apps", ({ body }) => ({
+    opened: (body as OpenAppBody).id,
+  }));
+  return served;
 }
 
 function mount(which: "browser" | "computer", path = `/${which}`) {
   const Page = which === "browser" ? BrowserPage : ComputerPage;
   return render(
-    <MemoryRouter initialEntries={[path]}>
-      <GrootUIProvider>
-        <Page />
-      </GrootUIProvider>
-    </MemoryRouter>,
+    <AppQueryProvider>
+      <MemoryRouter initialEntries={[path]}>
+        <GrootUIProvider>
+          <Page />
+        </GrootUIProvider>
+      </MemoryRouter>
+    </AppQueryProvider>,
   );
 }
 
@@ -196,20 +211,20 @@ afterEach(() => vi.restoreAllMocks());
 
 describe("Browser page states", () => {
   it("loading", () => {
-    mockBrowsers(new Promise(() => undefined));
+    browserBackend(new Promise(() => undefined));
     mount("browser");
     pin();
   });
 
   it("failed to load", async () => {
-    vi.spyOn(browserPageApi, "list").mockRejectedValue({});
+    fakeApi().get("/browser", unexplained);
     mount("browser");
     await screen.findByText("Couldn't load the browsers");
     pin();
   });
 
   it("no live browser on this server, with a hint", async () => {
-    mockBrowsers(
+    browserBackend(
       browsers([browserItem({ active: false, mode: null })], false, "Set SANDBOX_HOST."),
     );
     mount("browser");
@@ -218,14 +233,14 @@ describe("Browser page states", () => {
   });
 
   it("no live browser on this server, without a hint", async () => {
-    mockBrowsers(browsers([browserItem({ active: false, mode: null })], false));
+    browserBackend(browsers([browserItem({ active: false, mode: null })], false));
     mount("browser");
     await screen.findByTestId("browser-page-setup");
     pin();
   });
 
   it("closed, nobody on it yet, beside a starting and a failed tab", async () => {
-    mockBrowsers(
+    browserBackend(
       browsers([
         browserItem({ active: false, driver: null, mode: null, bots: [] }),
         scoutBrowser({ starting: true, phase: "starting" }),
@@ -238,14 +253,14 @@ describe("Browser page states", () => {
   });
 
   it("starting", async () => {
-    mockBrowsers(browsers([browserItem({ active: false, mode: null, starting: true })]));
+    browserBackend(browsers([browserItem({ active: false, mode: null, starting: true })]));
     mount("browser");
     await screen.findByText("Starting the browser");
     pin();
   });
 
   it("first-run setup", async () => {
-    mockBrowsers(
+    browserBackend(
       browsers([browserItem({ active: false, mode: null, starting: true, phase: "installing" })]),
     );
     mount("browser");
@@ -254,28 +269,28 @@ describe("Browser page states", () => {
   });
 
   it("failed to start", async () => {
-    mockBrowsers(browsers([browserItem({ active: false, mode: null, error: "Chrome crashed" })]));
+    browserBackend(browsers([browserItem({ active: false, mode: null, error: "Chrome crashed" })]));
     mount("browser");
     await screen.findByTestId("browser-page-error");
     pin();
   });
 
   it("headless", async () => {
-    mockBrowsers(browsers([browserItem({ mode: "headless" })]));
+    browserBackend(browsers([browserItem({ mode: "headless" })]));
     mount("browser");
     await screen.findByText("This browser is headless");
     pin();
   });
 
   it("connecting", async () => {
-    mockBrowsers(browsers([browserItem(), scoutBrowser()]));
+    browserBackend(browsers([browserItem(), scoutBrowser()]));
     mount("browser");
     await viewerCreated();
     pin();
   });
 
   it("live, bots driving", async () => {
-    mockBrowsers(browsers([browserItem(), scoutBrowser()]));
+    browserBackend(browsers([browserItem(), scoutBrowser()]));
     mount("browser");
     await connect();
     await screen.findByTestId("browser-page-take");
@@ -283,7 +298,7 @@ describe("Browser page states", () => {
   });
 
   it("live, one bot on it driving", async () => {
-    mockBrowsers(browsers([browserItem({ bots: [ALPHA] })]));
+    browserBackend(browsers([browserItem({ bots: [ALPHA] })]));
     mount("browser");
     await connect();
     await screen.findByTestId("browser-page-take");
@@ -291,14 +306,14 @@ describe("Browser page states", () => {
   });
 
   it("live, the owner driving", async () => {
-    mockBrowsers(browsers([browserItem({ driver: "human" }), scoutBrowser()]));
+    browserBackend(browsers([browserItem({ driver: "human" }), scoutBrowser()]));
     mount("browser");
     await connect();
     pin();
   });
 
   it("a bot's own browser, by deep link", async () => {
-    mockBrowsers(
+    browserBackend(
       browsers([browserItem(), scoutBrowser({ active: true, driver: "agent", mode: "vnc" })]),
     );
     mount("browser", "/browser?profile=bot-b3");
@@ -310,34 +325,34 @@ describe("Browser page states", () => {
 
 describe("Computer page states", () => {
   it("loading", () => {
-    mockDesktops(new Promise(() => undefined));
+    desktopBackend(new Promise(() => undefined));
     mount("computer");
     pin();
   });
 
   it("failed to load", async () => {
-    vi.spyOn(computerApi, "list").mockRejectedValue({});
+    fakeApi().get("/computer", unexplained);
     mount("computer");
     await screen.findByText("Couldn't load the computer");
     pin();
   });
 
   it("no computer on this server, with a hint", async () => {
-    mockDesktops(desktops([desktopItem({ active: false })], false, "Set SANDBOX_HOST."));
+    desktopBackend(desktops([desktopItem({ active: false })], false, "Set SANDBOX_HOST."));
     mount("computer");
     await screen.findByTestId("computer-page-setup");
     pin();
   });
 
   it("no computer on this server, without a hint", async () => {
-    mockDesktops(desktops([desktopItem({ active: false })], false));
+    desktopBackend(desktops([desktopItem({ active: false })], false));
     mount("computer");
     await screen.findByTestId("computer-page-setup");
     pin();
   });
 
   it("off, nobody on it yet, beside a starting and a failed tab", async () => {
-    mockDesktops(
+    desktopBackend(
       desktops([
         desktopItem({ active: false, driver: null, bots: [] }),
         scoutDesktop({ starting: true, phase: "starting" }),
@@ -350,35 +365,35 @@ describe("Computer page states", () => {
   });
 
   it("starting", async () => {
-    mockDesktops(desktops([desktopItem({ active: false, starting: true })]));
+    desktopBackend(desktops([desktopItem({ active: false, starting: true })]));
     mount("computer");
     await screen.findByText("Starting the desktop");
     pin();
   });
 
   it("first-run setup", async () => {
-    mockDesktops(desktops([desktopItem({ active: false, starting: true, phase: "installing" })]));
+    desktopBackend(desktops([desktopItem({ active: false, starting: true, phase: "installing" })]));
     mount("computer");
     await screen.findByText("Setting up the computer on the VM");
     pin();
   });
 
   it("failed to start", async () => {
-    mockDesktops(desktops([desktopItem({ active: false, error: "Xvfb died" })]));
+    desktopBackend(desktops([desktopItem({ active: false, error: "Xvfb died" })]));
     mount("computer");
     await screen.findByTestId("computer-page-error");
     pin();
   });
 
   it("connecting", async () => {
-    mockDesktops(desktops([desktopItem(), scoutDesktop()]));
+    desktopBackend(desktops([desktopItem(), scoutDesktop()]));
     mount("computer");
     await viewerCreated();
     pin();
   });
 
   it("live, bots driving", async () => {
-    mockDesktops(desktops([desktopItem(), scoutDesktop()]));
+    desktopBackend(desktops([desktopItem(), scoutDesktop()]));
     mount("computer");
     await connect();
     await screen.findByTestId("computer-page-take");
@@ -386,7 +401,7 @@ describe("Computer page states", () => {
   });
 
   it("live, the owner driving at a bot's request", async () => {
-    mockDesktops(
+    desktopBackend(
       desktops([
         desktopItem({ driver: "human", takeover: "Sign in to Mail" }),
         scoutDesktop({ takeover: "Approve the prompt" }),
@@ -398,18 +413,21 @@ describe("Computer page states", () => {
   });
 
   it("ignores a ?profile= link", async () => {
-    const api = mockDesktops(desktops([desktopItem(), scoutDesktop({ active: true })]));
+    const served = desktopBackend(desktops([desktopItem(), scoutDesktop({ active: true })]));
     mount("computer", "/computer?profile=bot-b3");
     await connect();
-    expect(api.ticket).toHaveBeenCalledWith("shared");
+    expect(served.tickets()).toEqual(["shared"]);
     expect(screen.getByTestId("computer-tab-shared")).toHaveAttribute("aria-selected", "true");
     expect(window.localStorage.getItem("tiny-agents:computer-desktop")).toBeNull();
   });
 
   it("the Apps menu, loading, listed and empty", async () => {
     let answer: (apps: DesktopApps) => void = () => undefined;
-    const api = mockDesktops(desktops([desktopItem({ driver: "human" })]));
-    api.apps.mockReturnValueOnce(new Promise((resolve) => (answer = resolve)));
+    const { api } = desktopBackend(desktops([desktopItem({ driver: "human" })]));
+    api.get.once(
+      "/computer/:profile/apps",
+      () => new Promise<DesktopApps>((resolve) => (answer = resolve)),
+    );
     mount("computer");
     await connect();
     await user().click(screen.getByTestId("computer-apps"));
@@ -417,33 +435,37 @@ describe("Computer page states", () => {
     expect(outline(menu)).toMatchSnapshot("loading");
     await act(async () => answer({ apps: [{ id: "org.xfce.mousepad", name: "Mousepad" }] }));
     expect(outline(await screen.findByRole("menu"))).toMatchSnapshot("listed");
-    expect(api.apps).toHaveBeenCalledWith("shared");
+    expect(api.sent("GET", "/computer/shared/apps")).toHaveLength(1);
     await user().click(screen.getByRole("menuitem", { name: "Mousepad" }));
-    await waitFor(() => expect(api.openApp).toHaveBeenCalledWith("shared", "org.xfce.mousepad"));
+    await waitFor(() =>
+      expect(api.sent("POST", "/computer/shared/apps").map((request) => request.body)).toEqual([
+        { id: "org.xfce.mousepad" },
+      ]),
+    );
     expect(vi.mocked(toast.success).mock.calls).toMatchSnapshot("opened");
 
-    api.apps.mockResolvedValueOnce({ apps: [] });
+    api.get.once("/computer/:profile/apps", (): DesktopApps => ({ apps: [] }));
     await user().click(screen.getByTestId("computer-apps"));
     await screen.findByText("No apps found.");
     expect(outline(await screen.findByRole("menu"))).toMatchSnapshot("empty");
   });
 
   it("the Apps menu, when listing or opening fails", async () => {
-    const api = mockDesktops(desktops([desktopItem({ driver: "human" })]));
-    api.openApp.mockRejectedValue({});
+    const { api } = desktopBackend(desktops([desktopItem({ driver: "human" })]));
+    api.post("/computer/:profile/apps", unexplained);
     mount("computer");
     await connect();
     await user().click(screen.getByTestId("computer-apps"));
     await user().click(await screen.findByRole("menuitem", { name: "Firefox" }));
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Could not open Firefox"));
-    api.apps.mockRejectedValueOnce({});
+    api.get.once("/computer/:profile/apps", unexplained);
     await user().click(screen.getByTestId("computer-apps"));
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Could not list the apps"));
     expect(await screen.findByText("No apps found.")).toBeInTheDocument();
   });
 
   it("the Keys menu", async () => {
-    mockDesktops(desktops([desktopItem({ driver: "human" })]));
+    desktopBackend(desktops([desktopItem({ driver: "human" })]));
     mount("computer");
     await connect();
     await user().click(screen.getByTestId("computer-keys"));
@@ -463,88 +485,92 @@ describe("the pages' actions", () => {
 
   for (const [kind, what, entry] of resets) {
     it(`resets the ${kind} (${what})`, async () => {
-      const api =
+      const served =
         kind === "browser"
-          ? mockBrowsers(browsers([entry as PageBrowser]))
-          : mockDesktops(desktops([entry as Desktop]));
+          ? browserBackend(browsers([entry as PageBrowser]))
+          : desktopBackend(desktops([entry as Desktop]));
       mount(kind);
       await connect();
       await user().click(screen.getByTestId(`${kind}-page-reset`));
       const dialog = await screen.findByRole("alertdialog");
       expect(outline(dialog)).toMatchSnapshot();
       await user().click(within(dialog).getByRole("button", { name: "Reset" }));
-      await waitFor(() => expect(api.reset).toHaveBeenCalledWith(entry.profile));
+      await waitFor(() => expect(served.resets(entry.profile)).toHaveLength(1));
       expect(vi.mocked(toast.success).mock.calls).toMatchSnapshot();
       await screen.findByTestId(`${kind}-page-open`);
     });
   }
 
   it("says when a browser could not be opened", async () => {
-    const api = mockBrowsers(browsers([browserItem({ active: false, mode: null })]));
-    api.start.mockRejectedValue({});
+    const { api } = browserBackend(browsers([browserItem({ active: false, mode: null })]));
+    api.post("/browser/:profile/start", unexplained);
     mount("browser");
     await user().click(await screen.findByTestId("browser-page-open"));
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Failed to open the browser"));
   });
 
   it("says when a desktop could not be started", async () => {
-    const api = mockDesktops(desktops([desktopItem({ active: false })]));
-    api.start.mockRejectedValue({});
+    const { api } = desktopBackend(desktops([desktopItem({ active: false })]));
+    api.post("/computer/:profile/start", unexplained);
     mount("computer");
     await user().click(await screen.findByTestId("computer-page-open"));
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Failed to start the desktop"));
   });
 
   it("switches browsers, forgetting the deep link", async () => {
-    const api = mockBrowsers(
+    const served = browserBackend(
       browsers([browserItem(), scoutBrowser({ active: true, driver: "agent", mode: "vnc" })]),
     );
     mount("browser", "/browser?profile=bot-b3");
     await connect();
     await user().click(screen.getByTestId("browser-tab-shared"));
-    await waitFor(() => expect(api.ticket).toHaveBeenLastCalledWith("shared"));
+    await waitFor(() => expect(served.tickets().at(-1)).toBe("shared"));
     expect(window.localStorage.getItem("tiny-agents:browser-page-profile")).toBe("shared");
   });
 
   it("switches desktops and remembers the choice", async () => {
-    const api = mockDesktops(desktops([desktopItem(), scoutDesktop({ active: true })]));
+    const served = desktopBackend(desktops([desktopItem(), scoutDesktop({ active: true })]));
     mount("computer");
     await connect();
     await user().click(screen.getByTestId("computer-tab-bot-b3"));
-    await waitFor(() => expect(api.ticket).toHaveBeenLastCalledWith("bot-b3"));
+    await waitFor(() => expect(served.tickets().at(-1)).toBe("bot-b3"));
     expect(window.localStorage.getItem("tiny-agents:computer-desktop")).toBe("bot-b3");
   });
 });
 
 describe("the pages' poll", () => {
-  function polls() {
-    const spy = vi.spyOn(window, "setInterval");
-    return () => spy.mock.calls.map(([, ms]) => ms).filter((ms) => ms === 1500 || ms === 3000);
-  }
+  const pass = (ms: number) => act(() => vi.advanceTimersByTimeAsync(ms));
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval", "setTimeout", "clearTimeout"] });
+  });
 
   it("polls the browsers every 1.5s while any of them starts, not just the one shown", async () => {
-    const delays = polls();
-    mockBrowsers(browsers([browserItem(), scoutBrowser({ starting: true })]));
+    const { api } = browserBackend(browsers([browserItem(), scoutBrowser({ starting: true })]));
     mount("browser");
-    await connect();
-    expect(delays()[0]).toBe(3000);
-    await waitFor(() => expect(delays().at(-1)).toBe(1500));
+    await pass(0);
+    expect(api.sent("GET", "/browser")).toHaveLength(1);
+    await pass(1500);
+    expect(api.sent("GET", "/browser")).toHaveLength(2);
   });
 
   it("polls the desktops every 1.5s while any of them starts, not just the one shown", async () => {
-    const delays = polls();
-    mockDesktops(desktops([desktopItem(), scoutDesktop({ starting: true })]));
+    const { api } = desktopBackend(desktops([desktopItem(), scoutDesktop({ starting: true })]));
     mount("computer");
-    await connect();
-    expect(delays()[0]).toBe(3000);
-    await waitFor(() => expect(delays().at(-1)).toBe(1500));
+    await pass(0);
+    expect(api.sent("GET", "/computer")).toHaveLength(1);
+    await pass(1500);
+    expect(api.sent("GET", "/computer")).toHaveLength(2);
   });
 
   it("polls every 3s when nothing starts", async () => {
-    const delays = polls();
-    mockDesktops(desktops([desktopItem()]));
+    const { api } = desktopBackend(desktops([desktopItem()]));
     mount("computer");
-    await connect();
-    expect(new Set(delays())).toEqual(new Set([3000]));
+    await pass(0);
+    expect(api.sent("GET", "/computer")).toHaveLength(1);
+    await pass(1500);
+    expect(api.sent("GET", "/computer")).toHaveLength(1);
+    await pass(1500);
+    expect(api.sent("GET", "/computer")).toHaveLength(2);
   });
 });

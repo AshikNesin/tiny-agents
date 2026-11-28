@@ -27,7 +27,7 @@ import { APP_NAV, guestNav } from "./nav";
 import { settingsCommandGroup } from "./settings-commands";
 import { codeThreadGroup } from "./code-thread-commands";
 import { sidebarCommand } from "./sidebar-command";
-import { useViewerRole, usePeopleStore } from "../../store/people";
+import { useViewer, viewerRole } from "../../queries/viewer";
 import { BADGED_FAVICON, documentTitle, waitingCount } from "../../lib/attention";
 
 export function AppShell() {
@@ -58,15 +58,13 @@ export function AppShell() {
     return () => disconnectCode();
   }, [connectCode, disconnectCode]);
 
-  const loadPeople = usePeopleStore((s) => s.load);
-  const restricted = useViewerRole() !== "owner";
+  const restricted = viewerRole(useViewer()) !== "owner";
   useEffect(() => {
-    void loadPeople();
     void loadBots();
     void loadModels();
     connectActivity();
     return () => disconnectActivity();
-  }, [loadPeople, loadBots, loadModels, connectActivity, disconnectActivity]);
+  }, [loadBots, loadModels, connectActivity, disconnectActivity]);
 
   useEffect(() => {
     document.title = documentTitle(pathname, bots);

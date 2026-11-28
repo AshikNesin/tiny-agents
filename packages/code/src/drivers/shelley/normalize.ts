@@ -1,3 +1,5 @@
+import { parseEach, parseJson } from "@tiny-agents/std";
+import { z } from "zod";
 import {
   threadIdOf,
   type AssetRef,
@@ -7,7 +9,7 @@ import {
   type TranscriptItem,
 } from "../../contracts";
 import { firstLine, isImageFile, pick as pickFrom, record } from "../../server/items";
-import type { ShelleyMessage, ShelleyRow } from "./wire";
+import { opt, type ReportInvalid, type ShelleyMessage, type ShelleyRow } from "./wire";
 
 const TEXT = 2;
 const THINKING = 3;
@@ -43,10 +45,55 @@ export interface LiveState {
   progress?: Record<string, string>;
 }
 
-function parse<T>(raw: string | null | undefined): T | undefined {
+const optionalText = opt(z.string());
+const optionalFlag = opt(z.boolean());
+const optionalNumber = opt(z.number());
+
+const blockSchema: z.ZodType<Block> = z.object({
+  ID: optionalText,
+  Type: optionalNumber,
+  Text: optionalText,
+  Thinking: optionalText,
+  MediaType: optionalText,
+  ToolName: optionalText,
+  ToolInput: z.unknown().optional(),
+  ToolUseID: optionalText,
+  ToolError: optionalFlag,
+  ToolResult: opt(z.lazy(() => z.array(blockSchema))),
+  ToolUseStartTime: z.string().nullish(),
+  ToolUseEndTime: z.string().nullish(),
+  Display: z.unknown().optional(),
+  DisplayImageURL: optionalText,
+});
+
+const llmDataSchema: z.ZodType<LlmData> = z.object({
+  Content: opt(z.array(blockSchema)),
+  EndOfTurn: optionalFlag,
+  ErrorType: optionalText,
+  ErrorRetryable: optionalFlag,
+});
+
+const costSchema = z.looseObject({ cost_usd: z.number().optional() });
+
+const queuedSchema = z.looseObject({
+  id: z.string(),
+  created_at: optionalText,
+  llm: z
+    .looseObject({
+      Content: opt(z.array(z.looseObject({ Type: optionalNumber, Text: optionalText }))),
+    })
+    .nullish(),
+  user_data: z.looseObject({ sender_slug: optionalText }).nullish(),
+});
+
+function parse<T>(
+  what: string,
+  raw: string | null | undefined,
+  schema: z.ZodType<T>,
+): T | undefined {
   if (!raw) return undefined;
   try {
-    return JSON.parse(raw) as T;
+    return parseJson(what, raw, schema);
   } catch {
     return undefined;
   }
@@ -169,13 +216,15 @@ export function buildTranscript(
   let turnCost = 0;
 
   for (const message of sorted) {
-    const data = parse<LlmData>(message.llm_data) ?? {};
+    const data = parse("A Shelley message", message.llm_data, llmDataSchema) ?? {};
     const blocks = data.Content ?? [];
     const at = Date.parse(message.created_at);
 
     switch (message.type) {
       case "user": {
-        const userData = record(parse(message.user_data));
+        const userData = record(
+          parse("A Shelley message's sender", message.user_data, z.unknown()),
+        );
         const text = textOf(blocks);
         if (userData?.sender_relationship === "subagent") {
           items.push({
@@ -209,7 +258,11 @@ export function buildTranscript(
             forkAt: message.message_id,
           });
         }
-        const rawDisplays = parse<unknown>(message.display_data);
+        const rawDisplays = parse(
+          "A Shelley message's displays",
+          message.display_data,
+          z.unknown(),
+        );
         const displays = new Map(
           (Array.isArray(rawDisplays) ? (rawDisplays as DisplayEntry[]) : [])
             .filter((d) => d && typeof d.tool_use_id === "string")
@@ -224,7 +277,7 @@ export function buildTranscript(
         break;
       }
       case "agent": {
-        const usage = parse<{ cost_usd?: number }>(message.usage_data);
+        const usage = parse("A Shelley message's usage", message.usage_data, costSchema);
         if (usage?.cost_usd) turnCost += usage.cost_usd;
         blocks.forEach((block, i) => {
           const id = `${message.message_id}:${i}`;
@@ -346,23 +399,22 @@ export function totalCost(messages: Iterable<ShelleyMessage>): number {
   let sum = 0;
   for (const m of messages) {
     if (m.type !== "agent") continue;
-    sum += parse<{ cost_usd?: number }>(m.usage_data)?.cost_usd ?? 0;
+    sum += parse("A Shelley message's usage", m.usage_data, costSchema)?.cost_usd ?? 0;
   }
   return sum;
 }
 
 export function queuedMessages(
   row: Pick<ShelleyRow, "queued_messages"> | undefined,
+  report: ReportInvalid,
 ): QueuedMessage[] {
   if (!row?.queued_messages) return [];
   try {
-    const items = JSON.parse(row.queued_messages) as Array<{
-      id: string;
-      created_at?: string;
-      llm?: { Content?: Array<{ Type?: number; Text?: string }> };
-      user_data?: { sender_slug?: string; sender_relationship?: string };
-    }>;
-    if (!Array.isArray(items)) return [];
+    const items = parseEach(
+      parseJson("Shelley's queued messages", row.queued_messages, z.array(z.unknown())),
+      queuedSchema,
+      (_value, problem) => report("a queued Shelley message", problem),
+    );
     return items.map((item): QueuedMessage => ({
       id: item.id,
       text: (item.llm?.Content ?? [])
@@ -378,7 +430,7 @@ export function queuedMessages(
 }
 
 export function messageUserText(llmData: string): string | undefined {
-  const parsed = parse<LlmData>(llmData);
+  const parsed = parse("A Shelley message", llmData, llmDataSchema);
   const call = (parsed?.Content ?? []).find(
     (c) =>
       c.Type === TOOL_USE &&

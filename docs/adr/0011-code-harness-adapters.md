@@ -1,6 +1,9 @@
 # ADR 0011: The Code page talks to coding agents through harness adapters
 
-- Status: **accepted** (generalizes [0009](0009-shelley-is-the-coding-agent.md))
+- Status: **accepted** (generalizes [0009](0009-shelley-is-the-coding-agent.md));
+  its bare-id rule is superseded by
+  [0052](0052-thread-ids-always-carry-their-instance.md): every thread id
+  names its instance, and no id defaults to Shelley
 - Date: 2026-11-05
 
 ## Context

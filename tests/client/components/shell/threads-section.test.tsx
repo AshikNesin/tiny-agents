@@ -7,11 +7,12 @@ import { NO_CAPABILITIES } from "@tiny-agents/code/contracts";
 import { AppSidebar } from "@/components/shell/AppSidebar";
 import { useCodeStore } from "@/store/code";
 import { useBotsStore } from "@/store/bots";
-import { usePeopleStore } from "@/store/people";
 import { useUiStore } from "@/store/ui";
 import type { BotListEntry } from "../../../../apps/web/src/shared/api/bots";
 import type { HarnessInfo, ThreadSummary } from "@/lib/code/api";
 import { AppQueryProvider } from "../../query-provider";
+import { fakeApi } from "../../fakes/api";
+import { signedInAs, ViewerProbe, viewerShown } from "../../fakes/viewer";
 
 const render = (ui: Parameters<typeof renderBare>[0]) =>
   renderBare(ui, { wrapper: AppQueryProvider });
@@ -19,17 +20,6 @@ const render = (ui: Parameters<typeof renderBare>[0]) =>
 vi.mock("sonner", () => ({
   toast: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn(), message: vi.fn() }),
 }));
-
-vi.mock("@groot/shell/lib/api", async (importOriginal) => {
-  const original = await importOriginal<typeof import("@groot/shell/lib/api")>();
-  return {
-    ...original,
-    apiClient: Object.assign(Object.create(original.apiClient) as typeof original.apiClient, {
-      get: async () => [],
-      post: async () => ({}),
-    }),
-  };
-});
 
 const agent: HarnessInfo = {
   id: "demo",
@@ -63,20 +53,23 @@ function Where() {
   return <output data-testid="where">{useLocation().pathname}</output>;
 }
 
-const renderSidebar = () =>
+async function renderSidebar(role: "owner" | "guest" = "owner") {
+  signedInAs(fakeApi(), role);
   render(
     <ConfirmProvider>
       <MemoryRouter initialEntries={["/chats"]}>
         <Where />
+        <ViewerProbe />
         <Routes>
           <Route path="*" element={<AppSidebar />} />
         </Routes>
       </MemoryRouter>
     </ConfirmProvider>,
   );
+  await viewerShown(role);
+}
 
 beforeEach(() => {
-  usePeopleStore.setState({ role: "owner" });
   useBotsStore.setState({ bots: [] });
   useCodeStore.setState({
     harnesses: [agent],
@@ -98,14 +91,13 @@ beforeEach(() => {
   });
 });
 afterEach(() => {
-  usePeopleStore.setState(usePeopleStore.getInitialState());
   useUiStore.setState({ foldedSections: [] });
   window.localStorage.clear();
 });
 
 describe("threads in the chat sidebar", () => {
-  it("lists the threads that need you or still work, and who started each", () => {
-    renderSidebar();
+  it("lists the threads that need you or still work, and who started each", async () => {
+    await renderSidebar();
     const section = within(screen.getByRole("region", { name: "Threads" }));
     expect(section.getAllByRole("link").map((link) => link.textContent)).toEqual([
       "All threads",
@@ -115,7 +107,7 @@ describe("threads in the chat sidebar", () => {
     ]);
   });
 
-  it("lists project chats in their own Projects section, then Bots, then Threads", () => {
+  it("lists project chats in their own Projects section, then Bots, then Threads", async () => {
     const bot = (id: string, name: string, projectId: string | null): BotListEntry => ({
       id,
       conversationId: `c-${id}`,
@@ -133,7 +125,7 @@ describe("threads in the chat sidebar", () => {
       projectId,
     });
     useBotsStore.setState({ bots: [bot("b1", "Ada", null), bot("b2", "web", "p1")] });
-    renderSidebar();
+    await renderSidebar();
     const regions = screen.getAllByRole("region").map((r) => r.getAttribute("aria-label"));
     expect(regions).toEqual(["Projects", "Bots", "Threads"]);
     const projects = within(screen.getByRole("region", { name: "Projects" }));
@@ -146,7 +138,7 @@ describe("threads in the chat sidebar", () => {
     expect(bots.getByText("Ada")).toBeVisible();
   });
 
-  it("shows three projects and five threads, and More shows the rest", () => {
+  it("shows three projects and five threads, and More shows the rest", async () => {
     const projectBot = (i: number): BotListEntry => ({
       id: `pb${i}`,
       conversationId: `c-pb${i}`,
@@ -169,7 +161,7 @@ describe("threads in the chat sidebar", () => {
         thread(`t${i}`, { working: true, status: { group: "working", reason: null } }),
       ),
     });
-    renderSidebar();
+    await renderSidebar();
     const projects = within(screen.getByRole("region", { name: "Projects" }));
     expect(projects.getAllByRole("link")).toHaveLength(3);
     fireEvent.click(projects.getByRole("button", { name: "More (2)" }));
@@ -180,8 +172,8 @@ describe("threads in the chat sidebar", () => {
     expect(threads.getAllByRole("link", { name: /Thread t/ })).toHaveLength(7);
   });
 
-  it("folds and unfolds from its heading", () => {
-    renderSidebar();
+  it("folds and unfolds from its heading", async () => {
+    await renderSidebar();
     const section = within(screen.getByRole("region", { name: "Threads" }));
     const heading = section.getByRole("button", { name: "Threads" });
     fireEvent.click(heading);
@@ -191,8 +183,8 @@ describe("threads in the chat sidebar", () => {
     expect(section.getByRole("link", { name: /Thread fix/ })).toBeVisible();
   });
 
-  it("opens a thread in Code, and All threads opens the Code list", () => {
-    renderSidebar();
+  it("opens a thread in Code, and All threads opens the Code list", async () => {
+    await renderSidebar();
     const section = within(screen.getByRole("region", { name: "Threads" }));
     fireEvent.click(section.getByRole("link", { name: /Thread fix/ }));
     expect(screen.getByTestId("where")).toHaveTextContent("/code/t/fix");
@@ -200,15 +192,14 @@ describe("threads in the chat sidebar", () => {
     expect(screen.getByTestId("where")).toHaveTextContent(/^\/code$/);
   });
 
-  it("is not shown to a guest", () => {
-    usePeopleStore.setState({ role: "guest" });
-    renderSidebar();
+  it("is not shown to a guest", async () => {
+    await renderSidebar("guest");
     expect(screen.queryByRole("region", { name: "Threads" })).toBeNull();
   });
 
-  it("is not there when no coding agent is connected", () => {
+  it("is not there when no coding agent is connected", async () => {
     useCodeStore.setState({ harnesses: [] });
-    renderSidebar();
+    await renderSidebar();
     expect(screen.queryByRole("region", { name: "Threads" })).toBeNull();
   });
 });

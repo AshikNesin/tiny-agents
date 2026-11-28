@@ -8,7 +8,7 @@ import {
   sandboxEndpoint,
   sandboxHost,
   sandboxPrivateKey,
-} from "../../../../apps/web/src/server/api/bots/sandbox-host";
+} from "../../../../apps/web/src/server/api/sandbox/sandbox-host";
 import { appEnv } from "../../../../apps/web/src/server/env";
 
 describe("sandboxHost", () => {

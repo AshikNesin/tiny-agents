@@ -13,7 +13,8 @@ import type { Account, AccountModel } from "../../../../shared/api/models";
 import { useModelDiscovery, useModelMutations } from "../../../queries/models";
 import { ClaudePlanStatus } from "../../../components/ClaudePlanStatus";
 import { GatewayCustomProvidersDialog } from "./GatewayCustomProvidersDialog";
-import { accountStatus, hostOf, KIND_LABEL } from "./model-labels";
+import { hostOf } from "../../../lib/format";
+import { accountStatus, KIND_LABEL } from "./model-labels";
 import { AccountActions } from "./AccountActions";
 import { AddModel } from "./AddModel";
 import { ClaudePlanFallback, ClaudePlanMaxTurns } from "./ClaudePlanSettings";
@@ -36,7 +37,7 @@ function basePathWarning(account: Account, upstreamId: string): string | undefin
 function accountSummary(account: Account, accounts: Account[]): string {
   const via = account.viaProviderId
     ? `through ${accounts.find((a) => a.id === account.viaProviderId)?.name ?? "a gateway"}`
-    : hostOf(account.baseUrl);
+    : account.baseUrl && hostOf(account.baseUrl);
   const key = account.credential
     ? `${account.credential.hint ?? "key"} · ${BACKEND_LABEL[account.credential.backend]}`
     : undefined;

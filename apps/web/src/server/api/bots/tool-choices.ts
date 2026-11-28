@@ -1,9 +1,9 @@
 import { Boom } from "@groot/core/errors";
-import { mcpToolName, type McpToolInfo, type ToolPermission } from "@tiny-agents/agent";
+import { mcpToolName, type ToolPermission } from "@tiny-agents/agent";
 import type { ToolChoice } from "@tiny-agents/code/contracts";
 import type { ConnectionManager } from "../connections/connections.manager";
 import { connectionPick, TOOL_PICK } from "../../../shared/tool-picks";
-import { connectionTools, type ConnectionToolColumns } from "./bot-toolkits";
+import { connectionTools, type CachedTool, type ConnectionToolColumns } from "./bot-toolkits";
 
 type Permissions = Record<string, ToolPermission>;
 
@@ -15,7 +15,7 @@ export interface ChoosableConnection extends ConnectionToolColumns {
 
 export interface UsableTool {
   connection: ChoosableConnection;
-  tool: McpToolInfo;
+  tool: CachedTool;
   permission: ToolPermission;
 }
 

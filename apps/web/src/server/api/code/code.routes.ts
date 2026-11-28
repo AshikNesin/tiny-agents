@@ -1,7 +1,7 @@
 import { suggestNext } from "./code.suggest";
-import { Hono } from "hono";
+import { routes } from "../routes";
 import { z } from "zod";
-import type { AppContext, AppEnv } from "@groot/core/types";
+import type { AppContext } from "@groot/core/types";
 import { Boom, HttpError } from "@groot/core/errors";
 import { logger } from "@groot/core/logger";
 import { ok } from "@groot/core/utils/api-response.utils";
@@ -30,7 +30,8 @@ import {
 import { codeChanges } from "./code.changes";
 import { editorSshTarget } from "./code.editor";
 import { codeGitHub } from "./code.github";
-import { archiveCodeThread, noteOwnerInput } from "./code.pulls";
+import { noteOwnerInput } from "./code.pulls";
+import { archiveCodeThread } from "./code.pulls.reconcile";
 import { threadReview } from "./code.review";
 import { rewindThread, undoRewind } from "./code.rewind";
 import { startRun, stopRun } from "./code.runs";
@@ -38,7 +39,7 @@ import { decorateThreads, setAttention, threadKey, withThreadKeys } from "./code
 
 const UPLOAD_MAX_BYTES = 25 * 1024 * 1024;
 
-const router = new Hono<AppEnv>();
+const router = routes();
 
 function toHttp(error: unknown): never {
   if (error instanceof HarnessError) {
@@ -214,7 +215,7 @@ async function pickedTools(instance: HarnessInstance, picks: string[] = []) {
   return checkToolPicks(choices, picks);
 }
 
-router.post("/code/threads", async (c) => {
+router.post("/code/threads", "signedIn", async (c) => {
   const { tools: picks, ...body } = await parseBody(c, createSchema);
   const project = await getProject(body.projectId);
   const instanceId = body.instanceId ?? project.defaultInstanceId ?? undefined;
@@ -282,7 +283,7 @@ router.get("/code/threads/:id/changes", async (c) => {
   });
 });
 
-router.post("/code/threads/:id/seen", async (c) => {
+router.post("/code/threads/:id/seen", "signedIn", async (c) => {
   const { id } = thread(c);
   const { cursor } = await parseBody(c, z.object({ cursor: z.number().int().min(0) }));
   await markSeen(id, cursor);
@@ -299,7 +300,7 @@ const sendSchema = z.object({
   withReview: z.boolean().optional(),
 });
 
-router.post("/code/threads/:id/messages", async (c) => {
+router.post("/code/threads/:id/messages", "signedIn", async (c) => {
   const { instance, nativeId, id } = thread(c);
   const { withReview, tools: picks, ...body } = await parseBody(c, sendSchema);
   const tools = await pickedTools(instance, picks);
@@ -322,7 +323,7 @@ router.post("/code/threads/:id/messages", async (c) => {
   return ok(c, result);
 });
 
-router.post("/code/threads/:id/interrupt", async (c) => {
+router.post("/code/threads/:id/interrupt", "signedIn", async (c) => {
   const { instance, nativeId, id } = thread(c);
   await stopRun(id);
   await run(() => instance.interrupt(nativeId));
@@ -337,7 +338,7 @@ const answerSchema = z.union([
   z.object({ answers: z.record(z.string().max(500), z.string().max(10_000)) }),
 ]);
 
-router.post("/code/threads/:id/requests/:rid", async (c) => {
+router.post("/code/threads/:id/requests/:rid", "signedIn", async (c) => {
   const { instance, nativeId, id } = thread(c);
   const requestId = c.req.param("rid");
   if (!/^[A-Za-z0-9_.:-]{1,200}$/.test(requestId)) throw Boom.badRequest("Invalid request");
@@ -348,7 +349,7 @@ router.post("/code/threads/:id/requests/:rid", async (c) => {
   return ok(c, { answered: true });
 });
 
-router.post("/code/threads/:id/recover", async (c) => {
+router.post("/code/threads/:id/recover", "signedIn", async (c) => {
   const { instance, nativeId } = thread(c);
   const { action } = await parseBody(
     c,
@@ -361,7 +362,7 @@ router.post("/code/threads/:id/recover", async (c) => {
   return ok(c, { ok: true });
 });
 
-router.post("/code/threads/:id/queued/:qid/:action", async (c) => {
+router.post("/code/threads/:id/queued/:qid/:action", "signedIn", async (c) => {
   const { instance, nativeId } = thread(c);
   const action = c.req.param("action");
   const queuedId = c.req.param("qid");
@@ -371,7 +372,7 @@ router.post("/code/threads/:id/queued/:qid/:action", async (c) => {
   return ok(c, { ok: true });
 });
 
-router.post("/code/threads/:id/jobs/:job/kill", async (c) => {
+router.post("/code/threads/:id/jobs/:job/kill", "signedIn", async (c) => {
   const { instance, nativeId } = thread(c);
   const job = c.req.param("job");
   if (!/^[A-Za-z0-9_-]{1,128}$/.test(job)) throw Boom.badRequest("Invalid job");
@@ -385,7 +386,7 @@ const settingsSchema = z.strictObject({
   permissionMode: permissionMode.nullable().optional(),
 });
 
-router.post("/code/threads/:id/settings", async (c) => {
+router.post("/code/threads/:id/settings", "signedIn", async (c) => {
   const { instance, nativeId } = thread(c);
   const change = await parseBody(c, settingsSchema);
   if (
@@ -400,7 +401,7 @@ router.post("/code/threads/:id/settings", async (c) => {
   );
 });
 
-router.post("/code/threads/:id/suggest", async (c) => {
+router.post("/code/threads/:id/suggest", "signedIn", async (c) => {
   const { id } = thread(c);
   const input = await parseBody(
     c,
@@ -413,14 +414,14 @@ router.post("/code/threads/:id/suggest", async (c) => {
   return ok(c, { suggestion: await suggestNext(id, input) });
 });
 
-router.post("/code/threads/:id/archive", async (c) => {
+router.post("/code/threads/:id/archive", "signedIn", async (c) => {
   const { instance, id } = thread(c);
   const { archived } = await parseBody(c, z.object({ archived: z.boolean() }));
   need(instance, "archive", "archive");
   return ok(c, { moved: await run(() => archiveCodeThread(id, archived)) });
 });
 
-router.delete("/code/threads/:id", async (c) => {
+router.delete("/code/threads/:id", "signedIn", async (c) => {
   const { instance, nativeId, id } = thread(c);
   await run(() => need(instance, "remove", "delete threads")(nativeId));
   await onProjectThreadDeleted(id);
@@ -436,20 +437,20 @@ const rewindSchema = z.object({
   text: message,
 });
 
-router.post("/code/threads/:id/rewind", async (c) => {
+router.post("/code/threads/:id/rewind", "signedIn", async (c) => {
   const { id } = thread(c);
   const body = await parseBody(c, rewindSchema);
   return ok(c, await run(() => rewindThread(hub(), id, body)));
 });
 
-router.post("/code/threads/:id/rewind/undo", async (c) => {
+router.post("/code/threads/:id/rewind/undo", "signedIn", async (c) => {
   const { id } = thread(c);
   const { replaced } = await parseBody(c, z.object({ replaced: z.string().min(1).max(64) }));
   await run(() => undoRewind(hub(), id, replaced));
   return ok(c, { undone: true });
 });
 
-router.post("/code/threads/:id/rename", async (c) => {
+router.post("/code/threads/:id/rename", "signedIn", async (c) => {
   const { instance, nativeId, id } = thread(c);
   const { title } = await parseBody(c, z.object({ title: z.string().trim().min(1).max(200) }));
   await run(() => need(instance, "rename", "rename threads")(nativeId, title));
@@ -497,7 +498,7 @@ const uploadBodyLimit = routeBodyLimit(UPLOAD_MAX_BYTES, {
   },
 });
 
-router.post("/code/uploads/:instance", uploadBodyLimit, async (c) => {
+router.post("/code/uploads/:instance", "signedIn", uploadBodyLimit, async (c) => {
   const instance = harness(c);
   const filename = query(c, "filename")!;
   if (filename.length > 255 || /[/\\\0]/.test(filename)) throw Boom.badRequest("Invalid filename");
@@ -514,4 +515,4 @@ router.get("/code/harnesses/:instance/asset", async (c) => {
   return passthrough(await run(() => need(instance, "asset", "serve files")(ref)));
 });
 
-export default router;
+export default router.hono;

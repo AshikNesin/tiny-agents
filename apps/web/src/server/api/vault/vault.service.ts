@@ -1,3 +1,5 @@
+import { parseJson } from "@tiny-agents/std";
+import { z } from "zod";
 import { and, asc, eq } from "drizzle-orm";
 import { logger } from "@groot/core/logger";
 import {
@@ -33,17 +35,26 @@ const UNKNOWN_HANDLE = (handle: string) => `No vault item \`${handle}\`. Call va
 const parseList = (raw: string | null | undefined): string[] => {
   if (!raw) return [];
   try {
-    const value = JSON.parse(raw) as unknown;
-    return Array.isArray(value) ? value.filter((v): v is string => typeof v === "string") : [];
+    return parseJson("A vault item's list", raw, z.array(z.unknown())).filter(
+      (v): v is string => typeof v === "string",
+    );
   } catch {
     return [];
   }
 };
 
-const parseJson = <T>(raw: string | null | undefined): T | undefined => {
+const cardMetaSchema = z.object({ brand: z.string(), last4: z.string(), expiry: z.string() });
+const cardNameSchema = cardMetaSchema.omit({ expiry: true });
+const injectSchema = z.object({ as: z.literal("header"), name: z.string(), format: z.string() });
+
+const parseStored = <T>(
+  what: string,
+  raw: string | null | undefined,
+  schema: z.ZodType<T>,
+): T | undefined => {
   if (!raw) return undefined;
   try {
-    return JSON.parse(raw) as T;
+    return parseJson(what, raw, schema);
   } catch {
     return undefined;
   }
@@ -64,8 +75,8 @@ export function effectiveTools(row: Pick<VaultItemRow, "kind" | "toolsJson">): s
 }
 
 export function toMeta(row: VaultItemRow): VaultItemMeta {
-  const card = parseJson<{ brand: string; last4: string; expiry: string }>(row.cardMetaJson);
-  const inject = parseJson<VaultItemMeta["inject"]>(row.injectJson);
+  const card = parseStored("A vault card's details", row.cardMetaJson, cardMetaSchema);
+  const inject = parseStored("A vault item's header rule", row.injectJson, injectSchema);
   return {
     handle: row.handle,
     kind: row.kind as VaultKind,
@@ -301,7 +312,7 @@ export async function planUse(use: VaultUse, who: UseContext): Promise<VaultPlan
     ...(who.botName ? { bot: who.botName } : {}),
     ...(item.username ? { username: item.username } : {}),
   };
-  const meta = parseJson<{ brand: string; last4: string }>(item.cardMetaJson);
+  const meta = parseStored("A vault card's details", item.cardMetaJson, cardNameSchema);
   if (meta) card.card = { brand: meta.brand, last4: meta.last4 };
   return { ...approvalOf(item, use, who), unattended: who.unattended, card };
 }
@@ -444,7 +455,9 @@ async function markUsed(itemId: string, by: string | null): Promise<void> {
     .update(vaultItems)
     .set({ lastUsedAt: new Date(), lastUsedBy: by })
     .where(eq(vaultItems.id, itemId))
-    .catch(() => undefined);
+    .catch((error: unknown) => {
+      logger.warn({ error, itemId }, "Vault: could not record that an item was used");
+    });
 }
 
 export async function resolveConnectionSecret(

@@ -45,7 +45,7 @@ async function resetBrowserSessionsForTests() {
 import {
   redeemVncTicket,
   resetVncTicketsForTests,
-} from "../../../apps/web/src/server/api/bots/browser.vnc";
+} from "../../../apps/web/src/server/api/live/browser.vnc";
 
 const token = await authToken("browser-test@example.com");
 

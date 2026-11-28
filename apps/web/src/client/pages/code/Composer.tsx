@@ -33,20 +33,22 @@ import {
   canSend as draftCanSend,
   activeSkillToken,
   editText,
-  emptyDraft,
+  composerTextSchema,
+  EMPTY_TEXT,
   hasContent,
   outgoing,
-  withStaged,
   type ComposerDraft,
 } from "../../lib/composer-draft";
-import {
-  codeDraftKey,
-  prefersCoarsePointer,
-  readStoredDraft,
-  writeStoredDraft,
-} from "../../lib/composer-browser";
+import { codeDraftKey, prefersCoarsePointer } from "../../lib/composer-browser";
+import { useDraft } from "../../lib/use-draft";
 import { activeMentionToken } from "../../lib/mentions";
-import { canStageMore, stageUploads, unstageUpload, type Staging } from "../../lib/staged-uploads";
+import {
+  canStageMore,
+  stageUploads,
+  unstageUpload,
+  type StagedUpload,
+  type Staging,
+} from "../../lib/staged-uploads";
 import { ComposerSendIcon } from "../../components/composer-send-icon";
 import { ComposerChip } from "../../components/ComposerChip";
 import { slashEntries, toolPickLabel, type SlashKind } from "../../lib/slash-menu";
@@ -95,6 +97,11 @@ export interface ComposerProps {
   ): Promise<void>;
 }
 
+function noFileSuggestionsWhenSearchFails(error: unknown): never[] {
+  console.warn("File search failed; the @ menu shows no files.", error);
+  return [];
+}
+
 export function Composer({
   draftKey,
   harness,
@@ -119,11 +126,13 @@ export function Composer({
   const steers = caps.turns.steer;
   const commands = harness.commands;
   const name = harness.label;
-  const [draft, setDraft] = useState<ComposerDraft<string>>(() =>
-    emptyDraft(readStoredDraft(codeDraftKey(draftKey))),
-  );
-  const { text, staged: attachments } = draft;
-  const [sending, setSending] = useState(false);
+  const stored = useDraft(codeDraftKey(draftKey), composerTextSchema, EMPTY_TEXT);
+  const [attachments, setAttachments] = useState<StagedUpload<string>[]>([]);
+  const draft: ComposerDraft<string> = { ...stored.value, staged: attachments };
+  const { text } = draft;
+  const sending = stored.submitting;
+  const editDraft = (next: (current: string) => string) =>
+    stored.update((current) => editText(current, next(current.text)));
   const [skillsWanted, setSkillsWanted] = useState(false);
   const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
   const [selectedTools, setSelectedTools] = useState<string[]>([]);
@@ -138,17 +147,14 @@ export function Composer({
   const next = useNextMessage(threadId, working ? null : lastTurn, text);
 
   useEffect(() => {
-    setDraft(emptyDraft(readStoredDraft(codeDraftKey(draftKey))));
+    setAttachments([]);
     setSelectedSkills([]);
     setSelectedTools([]);
   }, [draftKey]);
-  useEffect(() => writeStoredDraft(codeDraftKey(draftKey), text), [draftKey, text]);
 
   useEffect(() => {
     if (!insert) return;
-    setDraft((prev) =>
-      editText(prev, prev.text.trim() ? `${prev.text.trimEnd()}\n${insert.text}` : insert.text),
-    );
+    editDraft((prev) => (prev.trim() ? `${prev.trimEnd()}\n${insert.text}` : insert.text));
     requestAnimationFrame(() => {
       area.current?.focus();
       const end = area.current?.value.length ?? 0;
@@ -186,7 +192,7 @@ export function Composer({
         .then((matches) =>
           matches.slice(0, 12).map((m) => ({ value: m.path, label: m.path, dir: m.isDir })),
         )
-        .catch(() => []);
+        .catch(noFileSuggestionsWhenSearchFails);
     },
     enabled: fileQuery !== null,
     placeholderData: keepPreviousData,
@@ -221,7 +227,7 @@ export function Composer({
   const staging: Staging<string> = {
     upload: (file) => codeApi.upload(harness.id, file),
     current: () => stagedRef.current,
-    update: (change) => setDraft((current) => withStaged(current, change)),
+    update: setAttachments,
     notify: (message) => toast.error(message),
   };
 
@@ -234,22 +240,21 @@ export function Composer({
   const send = async (queue: boolean) => {
     if (!canSend) return;
     const sent = outgoing(draft);
-    setSending(true);
     try {
-      await onSend(sent.body || "(see the attached files)", {
-        queue: queue || (working && !steers && canQueue),
-        skills: selectedSkills,
-        tools: selectedTools,
-        attachments: sent.attachments,
-      });
-      setDraft(emptyDraft());
+      const outcome = await stored.submit(() =>
+        onSend(sent.body || "(see the attached files)", {
+          queue: queue || (working && !steers && canQueue),
+          skills: selectedSkills,
+          tools: selectedTools,
+          attachments: sent.attachments,
+        }),
+      );
+      if (outcome === "busy") return;
+      setAttachments([]);
       setSelectedSkills([]);
       setSelectedTools([]);
-      writeStoredDraft(codeDraftKey(draftKey), "");
     } catch (error) {
       toast.error(errorMessage(error, "Could not send the message."));
-    } finally {
-      setSending(false);
     }
   };
 
@@ -266,7 +271,7 @@ export function Composer({
           pick.value,
         ]);
       const rest = text.slice(cursor).trimStart();
-      setDraft((current) => editText(current, rest));
+      editDraft(() => rest);
       setToken(undefined);
       placeCaretOnceRendered(rest, 0);
       return;
@@ -274,7 +279,7 @@ export function Composer({
     const replacement =
       token.kind === "/" ? `${pick.value} ` : `@${quoteRef(pick.value)}${pick.dir ? "" : " "}`;
     const next = text.slice(0, token.start) + replacement + text.slice(cursor);
-    setDraft((current) => editText(current, next));
+    editDraft(() => next);
     setToken(undefined);
     placeCaretOnceRendered(next, token.start + replacement.length);
   };
@@ -315,7 +320,7 @@ export function Composer({
     if (event.key === "Tab" && !event.shiftKey && next.full) {
       event.preventDefault();
       const full = next.full;
-      setDraft((current) => editText(current, full));
+      editDraft(() => full);
       requestAnimationFrame(() => area.current?.setSelectionRange(full.length, full.length));
       return;
     }
@@ -482,7 +487,8 @@ export function Composer({
                       : "Send a message…"))
             }
             onChange={(e) => {
-              setDraft((current) => editText(current, e.target.value));
+              const typed = e.target.value;
+              editDraft(() => typed);
               updateToken(e.target.value, e.target.selectionStart);
             }}
             onSelect={(e) => updateToken(e.currentTarget.value, e.currentTarget.selectionStart)}

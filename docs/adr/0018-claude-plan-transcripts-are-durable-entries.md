@@ -3,16 +3,14 @@
 - Status: **accepted** (amends [0014](0014-tool-gate-and-engine-seam.md) and
   [0008](0008-claude-code-engine.md))
 - Date: 2026-11-14
-- Rewrite: step 2.4, decisions D4 and D11 in
-  [the rewrite's decision log](../rewrite/DECISIONS.md); register rows C1,
-  C2, C3, C4 and C23 in [the behavior register](../rewrite/behavior-register.md)
+- Fixes: C1, C2, C3, C4 and C23, the rewrite's names for the bugs below
 
 ## Context
 
 ADR 0014 gave both engines one `AgentEngine` seam, but the Claude plan kept
 its transcript apart from the store: an in-memory `ChatMessage[]` per
 conversation, written whole to `<agent.db>.claude.json` after each change.
-That one choice caused a family of bugs the behavior register lists:
+That one choice caused a family of bugs:
 
 - `submit` had no request-id check (a retry duplicated the message), no
   queue (a second send overwrote the running turn), and it returned only when
@@ -81,8 +79,8 @@ message shape and ids (`u-<requestId>`, `a-<turnId>`) stay as they were.
 - A reply that finished with nothing in it is a message (empty, `done`), as
   on pi, so `finishedReplyTo` answers its request.
 - The chat projection is still written twice (pi's entries, the Claude
-  plan's entries). Step 2.2 of the rewrite merges them; D11 explains the
-  order.
+  plan's entries). Step 2.2 of the rewrite merged them after this landed,
+  so no adapter was written over the old in-memory transcript.
 - The worker protocol gains one client message (`tool_waiting`); an older
   worker answers it with a `bad_message` error the app ignores, and the app
   and worker ship together anyway.

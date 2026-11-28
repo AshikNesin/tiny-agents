@@ -11,6 +11,9 @@ import {
 
 const repo = { owner: "acme", name: "web" };
 
+const skipped: string[] = [];
+const githubClient = (api: GitHubApi) => createGitHubClient(api, (what) => void skipped.push(what));
+
 const SNAPSHOT = {
   repository: {
     mergeCommitAllowed: false,
@@ -196,7 +199,7 @@ const TRANSPORTS: Array<[string, () => GitHubApi]> = [
 
 describe.each(TRANSPORTS)("the client over %s", (_, transport) => {
   it("reads a PR snapshot in one query, as Code reads it", async () => {
-    const snapshot = await createGitHubClient(transport()).snapshot(repo, 7);
+    const snapshot = await githubClient(transport()).snapshot(repo, 7);
     expect(snapshot.state).toBe("open");
     expect(snapshot.headSha).toBe("bbb");
     expect(snapshot.mergeable).toBe("unknown");
@@ -218,7 +221,7 @@ describe.each(TRANSPORTS)("the client over %s", (_, transport) => {
   });
 
   it("opens a pull request", async () => {
-    const pr = await createGitHubClient(transport()).createPull(repo, {
+    const pr = await githubClient(transport()).createPull(repo, {
       head: "ta/x",
       base: "main",
       title: "T",
@@ -229,7 +232,7 @@ describe.each(TRANSPORTS)("the client over %s", (_, transport) => {
   });
 
   it("says what GitHub refused, with its status", async () => {
-    const error = await createGitHubClient(transport())
+    const error = await githubClient(transport())
       .merge(repo, 7, "squash")
       .catch((e: unknown) => e);
     expect(error).toBeInstanceOf(GitHubError);
@@ -265,13 +268,26 @@ describe("a check that ran more than once", () => {
       },
     );
     const gh = createGhTransport(fakeGh(() => ({ stdout: JSON.stringify({ data: raw }) })).exec);
-    const snapshot = await createGitHubClient(gh).snapshot(repo, 7);
+    const snapshot = await githubClient(gh).snapshot(repo, 7);
     expect(snapshot.checks.map((c) => [c.name, c.state, c.jobId])).toEqual([
       ["test", "failure", 42],
       ["lint", "pending", null],
       ["old", "neutral", null],
       ["deploy", "success", null],
     ]);
+  });
+});
+
+describe("a snapshot with a malformed check", () => {
+  it("fails the read instead of deciding on a snapshot that is missing a check", async () => {
+    const raw = structuredClone(SNAPSHOT);
+    const nodes = raw.repository.pullRequest.commits.nodes[0]!.commit.statusCheckRollup.contexts
+      .nodes as unknown[];
+    nodes.push({ __typename: "CheckRun", name: 7 });
+    const gh = createGhTransport(fakeGh(() => ({ stdout: JSON.stringify({ data: raw }) })).exec);
+    await expect(githubClient(gh).snapshot(repo, 7)).rejects.toThrow(
+      "GitHub's GraphQL data does not fit its shape",
+    );
   });
 });
 
@@ -288,6 +304,29 @@ describe("the review inbox", () => {
     author: { login: "maria" },
     reviews: { nodes: [] },
     ...extra,
+  });
+
+  it("still lists the inbox when GitHub sends one malformed pull request", async () => {
+    skipped.length = 0;
+    const fake = fakeFetch((_method, _path, body) => {
+      const { query } = body as { query: string };
+      if (!query.includes("ReviewInbox")) return json({ data: { viewer: { login: "ashik" } } });
+      return json({
+        data: {
+          requested: { nodes: [node(1), node(2, { title: null }), node(3)] },
+          reviewed: { nodes: [] },
+          authored: { nodes: [] },
+        },
+      });
+    });
+    const client = githubClient(
+      createHttpsTransport({ token: async () => "t0ken", fetch: fake.impl }),
+    );
+
+    const inbox = await client.reviewInbox();
+
+    expect(inbox.map((p) => p.number)).toEqual([1, 3]);
+    expect(skipped).toEqual(["a review inbox entry"]);
   });
 
   it("asks for the viewer's own reviews, and lists each PR once by its first reason", async () => {
@@ -313,7 +352,7 @@ describe("the review inbox", () => {
         },
       });
     });
-    const client = createGitHubClient(
+    const client = githubClient(
       createHttpsTransport({ token: async () => "t0ken", fetch: fake.impl }),
     );
 
@@ -361,7 +400,7 @@ describe("the review inbox", () => {
         },
       });
     });
-    const client = createGitHubClient(
+    const client = githubClient(
       createHttpsTransport({ token: async () => "t0ken", fetch: fake.impl }),
     );
 
@@ -399,7 +438,7 @@ describe("the review inbox", () => {
         },
       });
     });
-    const client = createGitHubClient(
+    const client = githubClient(
       createHttpsTransport({ token: async () => "t0ken", fetch: fake.impl }),
     );
 
@@ -422,7 +461,7 @@ describe("submitting a review", () => {
     const fake = fakeFetch(() =>
       json({ html_url: "https://github.com/acme/web/pull/7#pullrequestreview-1" }, 200),
     );
-    const client = createGitHubClient(
+    const client = githubClient(
       createHttpsTransport({ token: async () => "t0ken", fetch: fake.impl }),
     );
     const out = await client.submitReview(repo, 7, {
@@ -462,7 +501,7 @@ describe("submitting a review", () => {
 describe("the gh transport", () => {
   it("sends request bodies on stdin, never on the command line", async () => {
     const gh = fakeGh(() => ({ stdout: JSON.stringify({ id: 5 }) }));
-    await createGitHubClient(createGhTransport(gh.exec)).comment(repo, 7, "secret-ish body");
+    await githubClient(createGhTransport(gh.exec)).comment(repo, 7, "secret-ish body");
     expect(gh.calls[0]?.command).toBe(
       `gh api --method POST /repos/acme/web/issues/7/comments --input -`,
     );
@@ -473,7 +512,7 @@ describe("the gh transport", () => {
     const missing = createGhTransport(
       fakeGh(() => ({ stdout: "", stderr: "", exitCode: 127 })).exec,
     );
-    await expect(createGitHubClient(missing).viewer()).rejects.toThrow("gh is not installed");
+    await expect(githubClient(missing).viewer()).rejects.toThrow("gh is not installed");
     const signedOut = createGhTransport(
       fakeGh(() => ({
         stdout: "",
@@ -481,7 +520,7 @@ describe("the gh transport", () => {
         exitCode: 4,
       })).exec,
     );
-    await expect(createGitHubClient(signedOut).viewer()).rejects.toThrow("gh is not signed in");
+    await expect(githubClient(signedOut).viewer()).rejects.toThrow("gh is not signed in");
   });
 
   it("surfaces GraphQL errors", async () => {
@@ -490,16 +529,16 @@ describe("the gh transport", () => {
       stderr: "gh: Resource not accessible",
       exitCode: 1,
     }));
-    await expect(
-      createGitHubClient(createGhTransport(gh.exec)).resolveThread("T_1"),
-    ).rejects.toThrow("Resource not accessible by integration");
+    await expect(githubClient(createGhTransport(gh.exec)).resolveThread("T_1")).rejects.toThrow(
+      "Resource not accessible by integration",
+    );
   });
 });
 
 describe("the HTTPS transport", () => {
   it("signs each request with the token", async () => {
     const fake = fakeFetch(() => json({ data: { viewer: { login: "owner" } } }));
-    const client = createGitHubClient(
+    const client = githubClient(
       createHttpsTransport({ token: async () => "t0ken", fetch: fake.impl }),
     );
     expect(await client.viewer()).toEqual({ login: "owner" });
@@ -599,5 +638,13 @@ describe("convertManifest", () => {
     });
     expect(fake.calls[0]?.auth).toBeNull();
     await expect(convertManifest("used", { fetch: fake.impl })).rejects.toThrow("Not Found");
+  });
+
+  it("says what GitHub answered when the failure is not JSON", async () => {
+    const { convertManifest } = await import("../../../packages/github/src/index");
+    const fake = fakeFetch(() => new Response("upstream connect error", { status: 502 }));
+    await expect(convertManifest("abc", { fetch: fake.impl })).rejects.toThrow(
+      "GitHub answered 502: upstream connect error",
+    );
   });
 });

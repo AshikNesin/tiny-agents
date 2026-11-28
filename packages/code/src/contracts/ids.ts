@@ -19,19 +19,11 @@ export function threadIdOf(instanceId: InstanceId, nativeId: string): ThreadId {
   return `${instanceId}:${nativeId}`;
 }
 
-export const LEGACY_INSTANCE_ID: InstanceId = "shelley";
-
 export function parseThreadId(
   id: string,
-  legacyInstanceId?: InstanceId,
 ): { instanceId: InstanceId; nativeId: string } | undefined {
   const at = id.indexOf(":");
-  if (at < 0) {
-    return legacyInstanceId !== undefined && isNativeId(id)
-      ? { instanceId: legacyInstanceId, nativeId: id }
-      : undefined;
-  }
-  if (at === 0) return undefined;
+  if (at <= 0) return undefined;
   const instanceId = id.slice(0, at);
   const nativeId = id.slice(at + 1);
   if (!isInstanceId(instanceId) || !isNativeId(nativeId)) return undefined;

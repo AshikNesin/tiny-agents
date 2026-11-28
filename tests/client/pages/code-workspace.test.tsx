@@ -17,7 +17,20 @@ import { OpenProjectChat } from "@/pages/code/ProjectChat";
 import { useCodeStore } from "@/store/code";
 import { useUiStore } from "@/store/ui";
 import { useCommandPaletteStore } from "@groot/shell/store/command-palette";
-import type { HarnessInfo, ThreadSnapshot, ThreadSummary } from "@/lib/code/api";
+import type { HarnessInfo, ModelOption, ThreadSnapshot, ThreadSummary } from "@/lib/code/api";
+import type { Bot, BotListEntry } from "../../../apps/web/src/shared/api/bots";
+import type {
+  CheckpointView,
+  InboxPullView,
+  ProjectView,
+  PullReviewView,
+  ReviewFile,
+  ReviewInboxSettings,
+  ReviewTerminal,
+  ThreadPullsView,
+} from "../../../apps/web/src/shared/api/code";
+import type { Deleted } from "../../../apps/web/src/shared/api/common";
+import { fakeApi } from "../fakes/api";
 import { AppQueryProvider } from "../query-provider";
 import { streamAt } from "../fakes/sse";
 
@@ -35,55 +48,66 @@ vi.mock("sonner", () => ({
 }));
 vi.mock("@/lib/sse", async () => (await import("../fakes/sse")).sseModule);
 
-const posts = vi.hoisted(() => [] as Array<{ path: string; body: unknown }>);
-const deletes = vi.hoisted(() => [] as string[]);
-const asked = vi.hoisted(() => [] as unknown[]);
-const openReviews = vi.hoisted(() => [] as unknown[]);
-const inboxLimit = vi.hoisted(() => ({ value: 10 }));
-const more = vi.hoisted(() => ({
-  projects: [] as unknown[],
-  creating: null as Promise<unknown> | null,
-}));
-vi.mock("@groot/shell/lib/api", async (importOriginal) => {
-  const original = await importOriginal<typeof import("@groot/shell/lib/api")>();
-  return {
-    ...original,
-    apiClient: Object.assign(Object.create(original.apiClient) as typeof original.apiClient, {
-      get: async (path: string) =>
-        path === "/code/projects"
-          ? [project, ...more.projects]
-          : path === "/code/reviews/inbox"
-            ? asked
-            : path === "/code/reviews"
-              ? openReviews
-              : path === "/code/reviews/settings"
-                ? {
-                    repos: "all",
-                    direct: true,
-                    drafts: false,
-                    bots: false,
-                    mute: [],
-                    limit: inboxLimit.value,
-                  }
-                : [],
-      delete: async (path: string) => {
-        deletes.push(path);
-        return { deleted: true };
-      },
-      post: async (path: string, body: unknown) => {
-        posts.push({ path, body });
-        if (path === "/code/reviews") return { id: "rv9" };
-        if (path === "/code/projects/p1/chat") return projectBot;
-        if (path.endsWith("/suggest")) {
-          const typed = (body as { typed?: string }).typed;
-          return { suggestion: typed ? `${typed} the tests first` : "Get it merged to main" };
-        }
-        if (path === "/code/threads" && more.creating) return more.creating;
-        return path === "/code/threads" ? { threadId: "new1" } : { status: "accepted" };
-      },
-    }),
-  };
-});
+let api: ReturnType<typeof fakeApi>;
+const asked: InboxPullView[] = [];
+const openReviews: PullReviewView[] = [];
+const inboxLimit = { value: 10 };
+const more: { projects: ProjectView[]; creating: Promise<{ threadId: string }> | null } = {
+  projects: [],
+  creating: null,
+};
+const posts = () =>
+  api.requests
+    .filter((request) => request.method === "POST")
+    .map(({ path, body }) => ({ path, body }));
+const deletes = () =>
+  api.requests.filter((request) => request.method === "DELETE").map((request) => request.path);
+
+function serve() {
+  api = fakeApi();
+  api.get("/code/projects", () => [project, ...more.projects]);
+  api.get("/code/reviews/inbox", () => asked);
+  api.get("/code/reviews", () => openReviews);
+  api.get("/code/reviews/settings", (): ReviewInboxSettings => ({
+    repos: "all",
+    direct: true,
+    drafts: false,
+    bots: false,
+    mute: [],
+    limit: inboxLimit.value,
+  }));
+  api.get("/bots", (): BotListEntry[] => []);
+  api.get("/code/harnesses/:instanceId/models", (): ModelOption[] => []);
+  api.get("/code/threads/:id", ({ params }) =>
+    snapshot({ ...thread(params.id!), id: decodeURIComponent(params.id!) }),
+  );
+  api.get("/code/threads/:id/checkpoints", (): CheckpointView[] => []);
+  api.get("/code/threads/:id/review/files", (): ReviewFile[] => []);
+  api.get("/code/threads/:id/files", (): string[] => []);
+  api.get("/code/threads/:id/pr", (): ThreadPullsView => ({
+    project,
+    branch: "ta/fix",
+    active: null,
+    earlier: [],
+    ahead: 0,
+    uncommitted: 0,
+    landed: null,
+  }));
+  api.post("/code/threads/:id/seen", () => ({ status: "accepted" }));
+  api.post("/code/threads/:id/interrupt", () => ({ status: "accepted" }));
+  api.post("/code/threads/:id/archive", ({ params }) => ({
+    moved: [decodeURIComponent(params.id!)],
+  }));
+  api.post("/code/threads/:id/terminal", (): ReviewTerminal => ({ name: "ta-term-1" }));
+  api.delete("/code/threads/:id", (): Deleted => ({ deleted: true }));
+  api.post("/code/reviews", () => review("rv9", 9));
+  api.post("/code/projects/p1/chat", () => projectBot);
+  api.post("/code/threads/:id/suggest", ({ body }) => {
+    const typed = (body as { typed?: string }).typed;
+    return { suggestion: typed ? `${typed} the tests first` : "Get it merged to main" };
+  });
+  api.post("/code/threads", () => more.creating ?? { threadId: "new1" });
+}
 
 const agent: HarnessInfo = {
   id: "demo",
@@ -171,20 +195,37 @@ const reviewed = thread("ccc", {
   status: { group: "review", reason: null },
 });
 const done = thread("dddd", { status: { group: "done", reason: null } });
-const project = {
+const project: ProjectView = {
   id: "p1",
   name: "web",
   repo: { owner: "acme", name: "web" },
-  transport: "gh" as const,
+  transport: "gh",
   baseBranch: "main",
   checkoutPath: "/code/acme--web/checkout",
   defaultInstanceId: "demo",
   defaultModel: null,
-  settings: {},
+  chatBotId: null,
+  settings: {
+    scripts: {},
+    archiveOnMerge: true,
+    draftPulls: true,
+    branchPrefix: "ta/",
+    protectedPaths: [],
+    workflowInstructions: "",
+    instructions: "",
+    autofix: {
+      triggers: { checks: true, reviews: true, conflicts: true },
+      trustedBots: [],
+      hourlyLimit: 6,
+      noOwnerLimit: 10,
+      passMinutes: 20,
+      onByDefault: false,
+    },
+  },
   createdAt: "2026-11-05T00:00:00Z",
 };
 
-const projectBot = vi.hoisted(() => ({
+const projectBot: Bot = {
   id: "lead",
   conversationId: "c-lead",
   name: "web",
@@ -209,9 +250,40 @@ const projectBot = vi.hoisted(() => ({
   connectionCapabilities: [],
   createdAt: "2026-11-05T00:00:00Z",
   updatedAt: "2026-11-05T00:00:00Z",
-}));
+};
 
-const pull = (number: number, over: Record<string, unknown> = {}) => ({
+const review = (
+  id: string,
+  number: number,
+  over: Partial<PullReviewView> = {},
+): PullReviewView => ({
+  id,
+  key: `acme/web#${number}`,
+  projectId: "p1",
+  repo: "acme/web",
+  number,
+  url: `https://github.com/acme/web/pull/${number}`,
+  title: `PR ${number}`,
+  author: "maria",
+  headRef: "feature",
+  baseRef: "main",
+  headSha: "abc",
+  fromFork: false,
+  mine: false,
+  reviewedSha: null,
+  threadId: null,
+  codingThreadId: null,
+  worktreeThreadId: null,
+  assistant: null,
+  archived: false,
+  updatedAt: "2026-11-17T09:00:00Z",
+  brief: null,
+  reviewing: false,
+  findings: [],
+  ...over,
+});
+
+const pull = (number: number, over: Partial<InboxPullView> = {}): InboxPullView => ({
   section: "needs",
   repo: "acme/web",
   number,
@@ -228,8 +300,7 @@ const pull = (number: number, over: Record<string, unknown> = {}) => ({
 });
 
 beforeEach(() => {
-  posts.length = 0;
-  deletes.length = 0;
+  serve();
   asked.length = 0;
   openReviews.length = 0;
   inboxLimit.value = 10;
@@ -237,7 +308,7 @@ beforeEach(() => {
     codeSidebarOpen: true,
     codePane: null,
     lastCodePane: "changes",
-    newThreadDraft: { text: "", projectId: "" },
+    draftsSending: [],
   });
   more.projects = [];
   more.creating = null;
@@ -312,7 +383,7 @@ describe("the Code workspace", () => {
     open(running);
     press("Escape");
     await waitFor(() =>
-      expect(posts.map((post) => post.path)).toContain("/code/threads/demo%3Abb/interrupt"),
+      expect(posts().map((post) => post.path)).toContain("/code/threads/demo%3Abb/interrupt"),
     );
   });
 
@@ -320,7 +391,7 @@ describe("the Code workspace", () => {
     renderAt("/code/t/demo%3Adddd");
     open(done);
     press("Escape");
-    expect(posts.filter((post) => post.path.endsWith("/interrupt"))).toEqual([]);
+    expect(posts().filter((post) => post.path.endsWith("/interrupt"))).toEqual([]);
   });
 
   it("1 opens the Changes pane and backslash closes it", async () => {
@@ -453,15 +524,58 @@ describe("the Code workspace", () => {
     expect(screen.getAllByRole("option").map((o) => o.textContent)).toEqual(["apiacme/api"]);
   });
 
-  it("clears a task as it starts, so leaving and coming back cannot send it twice", async () => {
+  it("keeps a task in the box while it starts, and leaving and coming back cannot send it twice", async () => {
     more.creating = new Promise(() => {});
     renderAt("/code");
     const box = await screen.findByRole("textbox", { name: "What should the agent do?" });
     await screen.findByText("web");
     fireEvent.change(box, { target: { value: "Fix the login callback" } });
     fireEvent.keyDown(box, { key: "Enter" });
-    await waitFor(() => expect(box).toHaveValue(""));
-    expect(posts.filter((post) => post.path === "/code/threads")).toHaveLength(1);
+    await waitFor(() =>
+      expect(posts().filter((post) => post.path === "/code/threads")).toHaveLength(1),
+    );
+    fireEvent.click(document.querySelector('[data-thread="demo:a"]')!);
+    await waitFor(() => expect(where()).toBe("/code/t/demo%3Aa"));
+    press("n");
+    const again = await screen.findByRole("textbox", { name: "What should the agent do?" });
+    expect(again).toHaveValue("Fix the login callback");
+    expect(screen.getByRole("button", { name: "Start" })).toBeDisabled();
+    fireEvent.keyDown(again, { key: "Enter" });
+    expect(posts().filter((post) => post.path === "/code/threads")).toHaveLength(1);
+  });
+
+  it("keeps an unsent task on the project it was written for when another project becomes the latest", async () => {
+    more.projects = [
+      { ...project, id: "p2", name: "api", repo: { owner: "acme", name: "api" } },
+      { ...project, id: "p3", name: "docs", repo: { owner: "acme", name: "docs" } },
+    ];
+    useCodeStore.setState({ threads: [thread("a", { projectId: "p3" })] });
+    renderAt("/code");
+    const box = await screen.findByRole("textbox", { name: "What should the agent do?" });
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Project" })).toHaveTextContent("docs"),
+    );
+    fireEvent.change(box, { target: { value: "Fix the login callback" } });
+    fireEvent.click(document.querySelector('[data-thread="demo:a"]')!);
+    await waitFor(() => expect(where()).toBe("/code/t/demo%3Aa"));
+    act(() => {
+      useCodeStore.setState({
+        threads: [
+          thread("a", { projectId: "p3" }),
+          thread("b", { projectId: "p2", updatedAt: "2026-11-06T00:00:00Z" }),
+        ],
+      });
+    });
+    press("n");
+    const again = await screen.findByRole("textbox", { name: "What should the agent do?" });
+    expect(again).toHaveValue("Fix the login callback");
+    fireEvent.keyDown(again, { key: "Enter" });
+    await waitFor(() =>
+      expect(posts().find((post) => post.path === "/code/threads")?.body).toMatchObject({
+        projectId: "p3",
+        message: "Fix the login callback",
+      }),
+    );
   });
 
   it("n focuses the new thread box, not a dialog; Enter starts the thread in the remembered project", async () => {
@@ -475,7 +589,7 @@ describe("the Code workspace", () => {
     fireEvent.change(box, { target: { value: "Fix the login callback" } });
     fireEvent.keyDown(box, { key: "Enter" });
     await waitFor(() => expect(where()).toBe("/code/t/new1"));
-    expect(posts.find((post) => post.path === "/code/threads")?.body).toMatchObject({
+    expect(posts().find((post) => post.path === "/code/threads")?.body).toMatchObject({
       projectId: "p1",
       instanceId: "demo",
       message: "Fix the login callback",
@@ -575,7 +689,7 @@ describe("the Code workspace", () => {
     );
     fireEvent.click(within(menu).getByRole("menuitem", { name: "Archive" }));
     await waitFor(() =>
-      expect(posts).toContainEqual({
+      expect(posts()).toContainEqual({
         path: "/code/threads/demo%3Accc/archive",
         body: { archived: true },
       }),
@@ -586,7 +700,7 @@ describe("the Code workspace", () => {
     expect(within(second).queryByRole("menuitem", { name: /Open PR/ })).toBeNull();
     fireEvent.click(within(second).getByRole("menuitem", { name: "Delete" }));
     fireEvent.click(await screen.findByRole("button", { name: "Delete" }));
-    await waitFor(() => expect(deletes).toEqual(["/code/threads/demo%3Aa"]));
+    await waitFor(() => expect(deletes()).toEqual(["/code/threads/demo%3Aa"]));
   });
 
   it("suggests the next message after a turn, Tab takes it, and typing asks for a completion", async () => {
@@ -603,7 +717,7 @@ describe("the Code workspace", () => {
     });
     const ghost = await screen.findByTestId("code-composer-suggestion");
     expect(ghost).toHaveTextContent("Get it merged to main");
-    const suggested = posts.find((post) => post.path.endsWith("/suggest"));
+    const suggested = posts().find((post) => post.path.endsWith("/suggest"));
     expect(suggested?.body).toEqual({
       user: "Add a thread menu",
       agent: "Pushed. Want me to open the PR and merge it?",
@@ -623,7 +737,7 @@ describe("the Code workspace", () => {
         ),
       { timeout: 3000 },
     );
-    expect(posts.filter((post) => post.path.endsWith("/suggest"))).toHaveLength(2);
+    expect(posts().filter((post) => post.path.endsWith("/suggest"))).toHaveLength(2);
   });
 
   it("a thread link lands on the thread", () => {
@@ -642,22 +756,12 @@ describe("reviews in the thread list", () => {
       pull(5, { repo: "other/lib", url: "https://github.com/other/lib/pull/5", projectId: null }),
     );
     openReviews.push(
-      {
-        id: "rv1",
-        number: 1,
-        title: "PR 1",
-        repo: "acme/web",
-        author: "maria",
-        url: "https://github.com/acme/web/pull/1",
-      },
-      {
-        id: "rv8",
-        number: 8,
-        title: "PR 8",
+      review("rv1", 1),
+      review("rv8", 8, {
         repo: "acme/api",
         author: "li",
         url: "https://github.com/acme/api/pull/8",
-      },
+      }),
     );
     renderAt("/code");
 
@@ -677,7 +781,7 @@ describe("reviews in the thread list", () => {
     fireEvent.click(screen.getByRole("button", { name: "Review #2 PR 2" }));
 
     expect(await screen.findByText("Review page")).toBeInTheDocument();
-    expect(posts).toEqual([
+    expect(posts()).toEqual([
       { path: "/code/reviews", body: { pr: "https://github.com/acme/web/pull/2" } },
     ]);
   });
@@ -712,6 +816,6 @@ describe("reviews in the thread list", () => {
     fireEvent.submit(link);
 
     expect(await screen.findByText("Review page")).toBeInTheDocument();
-    expect(posts).toEqual([{ path: "/code/reviews", body: { pr: "acme/web#7" } }]);
+    expect(posts()).toEqual([{ path: "/code/reviews", body: { pr: "acme/web#7" } }]);
   });
 });

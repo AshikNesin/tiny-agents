@@ -28,6 +28,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { cn } from "@groot/ui/lib/utils";
 import { PageLayout } from "@groot/shell/components/layout/PageLayout";
 import type { Task, TaskUpdateBody } from "../../../shared/api/tasks";
+import { taskLabels, taskMachine } from "../../../shared/machines/task";
 import { useSetTask, useTaskMutations, useTasks } from "../../queries/tasks";
 import { formatRelativeTime } from "@groot/shell/lib/date.utils";
 import { errorMessage } from "../../lib/errors";
@@ -94,7 +95,14 @@ function toLocalInput(iso: string | null): string {
 }
 
 export function Tasks() {
-  const { data: tasks, loadError, refresh } = useTasks();
+  const resource = useTasks();
+  const { refresh } = resource;
+  const tasks =
+    resource.status === "ready"
+      ? resource.data
+      : resource.status === "failed"
+        ? (resource.last ?? null)
+        : null;
   const setTask = useSetTask();
   const mutations = useTaskMutations();
   const [tab, setTab] = useState<Tab>("today");
@@ -169,7 +177,7 @@ export function Tasks() {
               void mutations.update
                 .mutateAsync({ id: task.id, input: { status: task.status } })
                 .then(refresh)
-                .catch(() => toast.error("Couldn't undo")),
+                .catch((error: unknown) => toast.error(errorMessage(error, "Couldn't undo"))),
           },
         });
       }
@@ -251,11 +259,11 @@ export function Tasks() {
         </p>
       )}
 
-      {loadError ? (
+      {resource.status === "failed" ? (
         <EmptyState
           icon={ListTodo}
           title="Couldn't load tasks"
-          description={loadError}
+          description={resource.loadError}
           variant="destructive"
           action={
             <Button variant="outline" onClick={() => void refresh()}>
@@ -263,7 +271,7 @@ export function Tasks() {
             </Button>
           }
         />
-      ) : tasks === null ? (
+      ) : resource.status === "loading" ? (
         <p className="text-muted-foreground py-8 text-center text-sm">Loading…</p>
       ) : list.length === 0 ? (
         <EmptyState
@@ -378,12 +386,6 @@ export function Tasks() {
   );
 }
 
-const STATUS_OPTIONS: { value: Task["status"]; label: string }[] = [
-  { value: "todo", label: "To do" },
-  { value: "in_progress", label: "In progress" },
-  { value: "done", label: "Done" },
-];
-
 const PRIORITY_OPTIONS: { value: Task["priority"]; label: string }[] = (
   ["low", "medium", "high", "urgent"] as const
 ).map((p) => ({ value: p, label: p[0].toUpperCase() + p.slice(1) }));
@@ -482,9 +484,9 @@ function TaskEditor({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent position="popper" className="max-h-72">
-                    {STATUS_OPTIONS.map((o) => (
-                      <SelectItem key={o.value} value={o.value}>
-                        {o.label}
+                    {taskMachine.states.map((status) => (
+                      <SelectItem key={status} value={status}>
+                        {taskLabels[status].label}
                       </SelectItem>
                     ))}
                   </SelectContent>

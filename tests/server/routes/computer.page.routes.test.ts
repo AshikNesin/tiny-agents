@@ -5,7 +5,7 @@ import { api, createTestApp } from "../helpers";
 import { authToken } from "../fixtures";
 import { db, bots } from "../../../apps/web/src/server/db";
 import { setComputerSessionsForTests } from "../../../apps/web/src/server/api/bots/computer.sessions";
-import { resetComputerVncTicketsForTests } from "../../../apps/web/src/server/api/bots/computer.vnc";
+import { resetComputerVncTicketsForTests } from "../../../apps/web/src/server/api/live/computer.vnc";
 import {
   createComputerSessions,
   type ComputerSessions,

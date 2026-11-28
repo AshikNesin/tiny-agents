@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { eq } from "drizzle-orm";
 import { db, tasks } from "../../../../apps/web/src/server/db";
-import * as service from "../../../../apps/web/src/server/api/tasks/task.service";
-import { taskStore } from "../../../../apps/web/src/server/api/tasks/task.store";
+import * as service from "../../../../apps/web/src/server/api/tasks/tasks.service";
+import { taskStore } from "../../../../apps/web/src/server/api/tasks/tasks.store";
 import { resetAppTables } from "../../fixtures";
 
 describe("tasks module", () => {

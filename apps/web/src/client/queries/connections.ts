@@ -13,8 +13,13 @@ import { RESOURCE_MUTATION, useResource, useSecretMutation } from "./resource";
 const connectionKey = (id: string) => ["connections", "detail", id] as const;
 const toolKey = (id: string, tool: string) => ["connections", "tool", id, tool] as const;
 
-export const useConnections = () =>
-  useResource(["connections", "list"], () => connectionsApi.list(), "Failed to load connections");
+export const useConnections = (options: { enabled?: boolean } = {}) =>
+  useResource(
+    ["connections", "list"],
+    () => connectionsApi.list(),
+    "Failed to load connections",
+    options,
+  );
 
 export const useConnection = (id: string) =>
   useResource(connectionKey(id), () => connectionsApi.get(id), "Failed to load connection");

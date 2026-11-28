@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import { and, eq, like } from "drizzle-orm";
-import { createMemoryStore } from "../../../../apps/web/src/server/api/bots/memories.store";
+import { createMemoryStore } from "../../../../apps/web/src/server/api/memories/memories.store";
 import { bots, db, memories, routines } from "../../../../apps/web/src/server/db";
 import { resetAppTables, seedBot as seedBotRow } from "../../fixtures";
 

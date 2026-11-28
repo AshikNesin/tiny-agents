@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
- * ARIA goldens (docs/rewrite/PLAN.md, Phase 0.6): the journeys' ARIA
- * snapshots from a frozen run (`ta-verify up --fixed-clock`) are the
- * browser-level baseline the rewrite must keep. Generated ids (cuid2, UUIDs,
+ * ARIA goldens: the journeys' ARIA snapshots from a frozen run
+ * (`ta-verify up --fixed-clock`) are the browser-level baseline a UI change
+ * must keep or record again. Generated ids (cuid2, UUIDs,
  * 24-hex uploads) are numbered by first appearance per file, as the server's
  * golden traces do.
  *

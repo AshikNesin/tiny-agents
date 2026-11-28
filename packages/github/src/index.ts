@@ -9,29 +9,26 @@ export {
   type ManifestApp,
 } from "./app-auth";
 export { createHttpsTransport, type HttpsTransportOptions } from "./https-transport";
-export {
-  checkOf,
-  createGitHubClient,
-  parseRepo,
-  repoSlug,
-  toSnapshot,
-  type Association,
-  type Author,
-  type AuthorType,
-  type Check,
-  type CheckState,
-  type GitHubClient,
-  type InboxFilter,
-  type InboxPull,
-  type IssueComment,
-  type JobStep,
-  type MergeMethod,
-  type PullRef,
-  type PullSnapshot,
-  type RepoRef,
-  type Review,
-  type ReviewComment,
-  type ReviewCommentInput,
-  type ReviewEvent,
-  type ReviewThread,
-} from "./client";
+export { createGitHubClient, type GitHubClient } from "./client";
+export { parseRepo, repoSlug } from "./repo";
+export { checkOf, toSnapshot } from "./snapshot";
+export type {
+  Association,
+  Author,
+  AuthorType,
+  Check,
+  CheckState,
+  InboxFilter,
+  InboxPull,
+  IssueComment,
+  JobStep,
+  MergeMethod,
+  PullRef,
+  PullSnapshot,
+  RepoRef,
+  Review,
+  ReviewComment,
+  ReviewCommentInput,
+  ReviewEvent,
+  ReviewThread,
+} from "./types";

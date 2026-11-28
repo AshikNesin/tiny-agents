@@ -1,3 +1,5 @@
+import { parseJson } from "@tiny-agents/std";
+import { z } from "zod";
 type Schema = Record<string, unknown>;
 
 type FieldKind = "string" | "number" | "integer" | "boolean" | "enum" | "json";
@@ -134,7 +136,7 @@ export function buildArgs(fields: SchemaField[], values: FieldValues): BuildResu
         break;
       case "json":
         try {
-          args[field.name] = JSON.parse(raw) as unknown;
+          args[field.name] = parseJson("A JSON argument", raw, z.unknown());
         } catch {
           errors[field.name] = "Enter valid JSON";
         }
@@ -162,7 +164,7 @@ export function parseArgsJson(
 ): { ok: true; args: Record<string, unknown> } | { ok: false; error: string } {
   if (text.trim() === "") return { ok: true, args: {} };
   try {
-    const value = JSON.parse(text) as unknown;
+    const value = parseJson("The arguments", text, z.unknown());
     if (!isSchema(value)) return { ok: false, error: "Arguments must be a JSON object" };
     return { ok: true, args: value };
   } catch (error) {

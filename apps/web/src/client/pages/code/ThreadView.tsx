@@ -39,7 +39,7 @@ import { RESOURCE_MUTATION } from "../../queries/resource";
 import { foldTurns, lastErrorId, turnStarts } from "../../lib/code/transcript";
 import { useCodeThread, type ThreadState } from "../../lib/code/use-thread";
 import { useCodeStore } from "../../store/code";
-import { useViewerRole } from "../../store/people";
+import { useViewer, viewerRole } from "../../queries/viewer";
 import { useCommentStore, useThreadComments } from "../../lib/code/comments";
 import { isDialogOpen, isEditable, useHotkey } from "@groot/ui/hotkeys";
 import { Composer } from "./Composer";
@@ -57,13 +57,9 @@ import {
   useHarnessModels,
   useArchive,
 } from "./controls";
-import {
-  StreamingTail,
-  TranscriptRow,
-  formatCost,
-  type TranscriptActions,
-  type TranscriptContext,
-} from "./Transcript";
+import { StreamingTail, TranscriptRow } from "./Transcript";
+import type { TranscriptActions, TranscriptContext } from "./transcript-context";
+import { formatCost } from "../../lib/format";
 
 function useMarkSeen(id: string, cursor: number) {
   const patchList = useCodeStore((s) => s.patch);
@@ -362,7 +358,7 @@ export function ThreadView({
   const row = thread ?? listRow;
   const models = useHarnessModels(harness.id);
   const archive = useArchive();
-  const owner = useViewerRole() === "owner";
+  const owner = viewerRole(useViewer()) === "owner";
   const comments = useThreadComments(id, owner);
   const commentsSent = useCommentStore((s) => s.sent);
   useMarkSeen(id, state.cursor);

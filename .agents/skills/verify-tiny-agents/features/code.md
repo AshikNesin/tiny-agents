@@ -15,7 +15,6 @@ The owner's coding workspace at `/code`: threads grouped by status on the left, 
 - `code-terminal` `4` (or `` ` ``) opens the work pane's Terminal tab, a shell in the thread's worktree.
 - `code-commands` `:` opens the command palette (the same one as ⌘K), which runs the page's commands and jumps to threads.
 - `code-keys` `?` lists every key; the command palette's `Code actions` group (`Chat actions` on the chat page) runs them.
-- `code-legacy-links` a link from before the rebuild (`/code/<thread id>`, with `/changes` or `/pr`) lands on `/code/t/<thread id>` with that pane.
 - `code-review-row` a pull request that waits for your review is a row under `Reviews` in the list; a click checks it out and opens `/code/reviews/<id>`. `v` takes a pasted link.
 - `code-agent-review` `r` has the agent review the pull request: a brief and findings. `y` adds a finding to your review as a pending comment, `d` dismisses it. `Shift+A` and `Shift+X` open Submit review on Approve or Request changes.
 - Not driven here: Code settings (`/settings/projects`, `/settings/github`, `/settings/reviews`), which `tests/client/pages/code-settings.test.tsx` covers.

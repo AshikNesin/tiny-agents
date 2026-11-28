@@ -11,7 +11,7 @@ import {
   issueVncTicket,
   redeemVncTicket,
   resetVncTicketsForTests,
-} from "../../../apps/web/src/server/api/bots/browser.vnc";
+} from "../../../apps/web/src/server/api/live/browser.vnc";
 import { setBrowserSessionsForTests } from "../../../apps/web/src/server/api/bots/browser.sessions";
 import { holdLiveAccess } from "../../../apps/web/src/server/api/people/live-access";
 import { openSse } from "../../../apps/web/src/server/api/bots/bots.sse";

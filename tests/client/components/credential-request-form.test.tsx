@@ -7,10 +7,16 @@
  */
 import React from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vite-plus/test";
+import { beforeEach, describe, expect, it } from "vite-plus/test";
 import { CredentialRequestForm } from "@/components/vault/CredentialRequestForm";
-import type { CredentialRequestView } from "../../../apps/web/src/shared/api/vault";
+import { StepUpProvider } from "@/components/vault/StepUp";
+import { vaultApi } from "@/lib/vault-api";
+import type {
+  CredentialRequestView,
+  CredentialSubmitted,
+} from "../../../apps/web/src/shared/api/vault";
 import { FIXED_NOW } from "../../test-clock";
+import { fakeApi } from "../fakes/api";
 import { AppQueryProvider } from "../query-provider";
 
 const REQUEST: CredentialRequestView = {
@@ -35,50 +41,41 @@ const REQUEST: CredentialRequestView = {
   liveOrigin: "https://www.amazon.in",
 };
 
-const api = vi.hoisted(() => ({
-  submitRequest: vi.fn(),
-  cancelRequest: vi.fn(),
-  gateRuns: { count: 0 },
-}));
-vi.mock("@/lib/vault-api", () => ({
-  apiError: (_e: unknown, f: string) => f,
-  hasStepUp: () => false,
-  StepUpRequiredError: class extends Error {},
-  vaultApi: { submitRequest: api.submitRequest, cancelRequest: api.cancelRequest },
-}));
-vi.mock("@/queries/vault", () => ({
-  useVaultMutations: () => ({
-    submitRequest: { mutateAsync: api.submitRequest },
-    cancelRequest: { mutateAsync: api.cancelRequest },
-  }),
-}));
-vi.mock("@/components/vault/StepUp", () => ({
-  useStepUp: () => ({
-    run: (work: () => Promise<unknown>) => {
-      api.gateRuns.count++;
-      return work();
-    },
-  }),
-}));
+const SUBMITTED: CredentialSubmitted = {
+  filled: ["email", "password"],
+  savedHandle: null,
+  saveFailed: false,
+};
+
+let api: ReturnType<typeof fakeApi>;
+
+beforeEach(() => {
+  vaultApi.forgetStepUp();
+  api = fakeApi();
+});
+
+const submits = () => api.sent("POST", "/vault/requests/7/submit");
 
 function mount(request: CredentialRequestView) {
   return render(
     <AppQueryProvider>
-      <CredentialRequestForm taskId={request.taskId} request={request} onSettled={() => {}} />
+      <StepUpProvider>
+        <CredentialRequestForm taskId={request.taskId} request={request} onSettled={() => {}} />
+      </StepUpProvider>
     </AppQueryProvider>,
   );
 }
 
 describe("credential request form gating", () => {
   it("submits a complete form on the request's own page", async () => {
-    api.submitRequest.mockResolvedValue({ filled: ["email", "password"], savedHandle: null });
+    api.post("/vault/requests/7/submit", () => SUBMITTED);
     mount(REQUEST);
     fireEvent.change(await screen.findByLabelText("Email*"), {
       target: { value: "ana@example.com" },
     });
     fireEvent.change(screen.getByLabelText("Password*"), { target: { value: "pw" } });
     fireEvent.submit(screen.getByRole("button", { name: "Continue" }).closest("form")!);
-    await waitFor(() => expect(api.submitRequest).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(submits()).toHaveLength(1));
   });
 
   it("does not submit a form whose page moved away from the origin", async () => {
@@ -90,37 +87,39 @@ describe("credential request form gating", () => {
     expect(screen.getByRole("button", { name: "Continue" })).toBeDisabled();
     fireEvent.submit(screen.getByRole("button", { name: "Continue" }).closest("form")!);
     await waitFor(() => expect(screen.getByText(/Nothing will be filled there/)).toBeTruthy());
-    expect(api.submitRequest).not.toHaveBeenCalled();
+    expect(submits()).toHaveLength(0);
   });
 
   it("sends a saving submit without asking to confirm it's you", async () => {
-    api.submitRequest.mockResolvedValue({ filled: ["email", "password"], savedHandle: null });
-    api.gateRuns.count = 0;
+    api.post("/vault/requests/7/submit", () => SUBMITTED);
     mount(REQUEST);
     fireEvent.change(await screen.findByLabelText("Email*"), {
       target: { value: "ana@example.com" },
     });
     fireEvent.change(screen.getByLabelText("Password*"), { target: { value: "pw" } });
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
-    await waitFor(() => expect(api.submitRequest).toHaveBeenCalledTimes(1));
-    expect(api.submitRequest).toHaveBeenCalledWith({
-      taskId: 7,
+    await waitFor(() => expect(submits()).toHaveLength(1));
+    expect(submits()[0]!.body).toEqual({
       values: { email: "ana@example.com", password: "pw" },
       save: true,
     });
-    expect(api.gateRuns.count).toBe(0);
+    expect(screen.queryByText("Confirm it's you")).toBeNull();
 
     fireEvent.change(screen.getByLabelText("Email*"), { target: { value: "ana@example.com" } });
     fireEvent.change(screen.getByLabelText("Password*"), { target: { value: "pw" } });
     fireEvent.click(screen.getByRole("switch", { name: "Save to vault" }));
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
-    await waitFor(() => expect(api.submitRequest).toHaveBeenCalledTimes(2));
-    expect(api.submitRequest).toHaveBeenLastCalledWith({
-      taskId: 7,
+    await waitFor(() => expect(submits()).toHaveLength(2));
+    expect(submits()[1]!.body).toEqual({
       values: { email: "ana@example.com", password: "pw" },
       save: false,
     });
-    expect(api.gateRuns.count).toBe(0);
+    expect(screen.queryByText("Confirm it's you")).toBeNull();
+    expect(api.sent("POST", "/vault/step-up")).toHaveLength(0);
+    expect(submits().map((request) => request.headers.get("X-Vault-Step-Up"))).toEqual([
+      null,
+      null,
+    ]);
   });
 
   it("accepts a plain username in a field the bot typed as email", async () => {

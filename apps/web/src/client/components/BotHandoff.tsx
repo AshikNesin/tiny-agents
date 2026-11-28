@@ -3,7 +3,7 @@ import { ArrowLeftRight, ChevronRight, Lock } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@groot/ui/dialog";
 import { cn } from "@groot/ui/lib/utils";
 import type { ChatToolCall } from "../lib/chat-types";
-import { formatDuration } from "../lib/tool-call-text";
+import { formatDuration } from "../lib/format";
 import { viewOf, type ToolPhase } from "../lib/tool-call-view";
 import { BotAvatar } from "./BotAvatar";
 

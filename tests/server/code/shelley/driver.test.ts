@@ -271,6 +271,14 @@ describe("Shelley harness", () => {
     expect(JSON.parse(forked.body.toString())).toEqual({ tags: ["release", "tiny-agents"] });
   });
 
+  it("still lists the archived conversations when Shelley sends one malformed row", async () => {
+    shelley.archived.push({ slug: "no id", archived: true, tags: '["tiny-agents"]' });
+    harness.start();
+    await shelley.waitForStreams(1);
+    const archived = await harness.listThreads("archived");
+    expect(archived.map((t) => t.nativeId)).toEqual(["cOld"]);
+  });
+
   it('lists and finds only conversations tagged "tiny-agents", with their subagents', async () => {
     shelley.rows.push(
       row("cB", { parent_conversation_id: "cA", tags: "[]" }),
@@ -279,7 +287,14 @@ describe("Shelley harness", () => {
       row("cBare", { tags: undefined }),
       row("cTheirKid", { parent_conversation_id: "cTheirs", tags: "[]" }),
     );
-    shelley.archived.push({ conversation_id: "cGone", slug: "gone", archived: true, tags: "[]" });
+    shelley.archived.push({
+      conversation_id: "cGone",
+      slug: "gone",
+      archived: true,
+      tags: "[]",
+      updated_at: "2026-11-05T00:00:00Z",
+      created_at: "2026-11-05T00:00:00Z",
+    });
     harness.start();
     await shelley.waitForStreams(1);
     const active = await harness.listThreads("active");
@@ -295,7 +310,14 @@ describe("Shelley harness", () => {
     await host.index.upsert({ instanceId: "shelley", nativeId: "cOurs" });
     await host.index.upsert({ instanceId: "shelley", nativeId: "cShelved" });
     shelley.rows.push(row("cOurs", { tags: '["wip"]' }), row("cTheirs", { tags: "[]" }));
-    shelley.archived.push({ conversation_id: "cShelved", slug: "s", archived: true, tags: "[]" });
+    shelley.archived.push({
+      conversation_id: "cShelved",
+      slug: "s",
+      archived: true,
+      tags: "[]",
+      updated_at: "2026-11-05T00:00:00Z",
+      created_at: "2026-11-05T00:00:00Z",
+    });
     harness.stop();
     harness = createShelleyHarness({
       url: shelley.url,

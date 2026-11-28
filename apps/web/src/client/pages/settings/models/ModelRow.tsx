@@ -3,7 +3,7 @@ import { Button } from "@groot/ui/button";
 import { Checkbox } from "@groot/ui/checkbox";
 import { monoClass, Text } from "@groot/ui/typography";
 import type { AccountModel } from "../../../../shared/api/models";
-import { formatTokens } from "./model-labels";
+import { formatTokens } from "../../../lib/format";
 
 export function ModelRow({
   model,
