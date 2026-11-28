@@ -6,6 +6,7 @@ import {
   type HostKeyStore,
   type SandboxConnection,
   type SshEndpoint,
+  sshMachine,
 } from "@tiny-agents/sandbox";
 import { appEnv, type AppEnv } from "../../env";
 import { app } from "../../app-root";
@@ -81,7 +82,7 @@ export function sandboxConnection(env: AppEnv = appEnv()): SandboxConnection | u
   const connections = app().sandboxConnections;
   let connection = connections.get(key);
   if (!connection) {
-    connection = createSandboxConnection(endpoint);
+    connection = createSandboxConnection(sshMachine(endpoint));
     connections.set(key, connection);
   }
   return connection;

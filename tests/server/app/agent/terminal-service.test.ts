@@ -4,6 +4,7 @@ import {
   createSandboxConnection,
   type SandboxConnection,
 } from "../../../../packages/sandbox/src/ssh/sandbox-connection";
+import { sshMachine } from "../../../../packages/sandbox/src/ssh/machine";
 import {
   fakePty,
   startFakeSandboxServer,
@@ -135,12 +136,14 @@ describe("terminal service (integration: real ssh2 client + fake SSH server)", (
         return fake;
       },
     );
-    connection = createSandboxConnection({
-      host: "127.0.0.1",
-      port: server.port,
-      user: "exedev",
-      hostKeys: createMemoryHostKeyStore(),
-    });
+    connection = createSandboxConnection(
+      sshMachine({
+        host: "127.0.0.1",
+        port: server.port,
+        user: "exedev",
+        hostKeys: createMemoryHostKeyStore(),
+      }),
+    );
     service = createTerminalService({ connection });
   });
 
@@ -250,7 +253,9 @@ describe("terminal service (integration: real ssh2 client + fake SSH server)", (
       }
       return { stderr: "unexpected", exitCode: 1 };
     });
-    const connection127 = createSandboxConnection({ host: "127.0.0.1", port: missing.port });
+    const connection127 = createSandboxConnection(
+      sshMachine({ host: "127.0.0.1", port: missing.port }),
+    );
     const service127 = createTerminalService({ connection: connection127 });
     expect(await service127.status()).toEqual({
       kind: "tmux-missing",

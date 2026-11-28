@@ -124,13 +124,13 @@ drive it ([ADR 0047](./adr/0047-sandbox-and-models-are-their-own-packages.md)). 
 `packages/sandbox/src/subpaths/`, listed in its `exports` and the root
 `tsconfig.json` `paths`.
 
-| Import                          | What it holds                                                                                                                                           |
-| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@tiny-agents/sandbox`          | `createSandboxConnection` and its types (ADR 0013), host keys, the SSH endpoint, the forwarding server, `shQuote`, the public-URL guards, `SecretValue` |
-| `@tiny-agents/sandbox/terminal` | `createTerminalService`, its errors, tmux session names                                                                                                 |
-| `@tiny-agents/sandbox/browser`  | Browser sessions, the Chromium and remote CDP transports, the URL and ref guards, the secret-fill types                                                 |
-| `@tiny-agents/sandbox/computer` | Desktop sessions, the X11 transport, desktop settings parsers                                                                                           |
-| `@tiny-agents/sandbox/testing`  | `startFakeSandboxServer`, an in-process SSH server for tests                                                                                            |
+| Import                          | What it holds                                                                                                                                                                    |
+| ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@tiny-agents/sandbox`          | `createSandboxConnection` and its types (ADR 0013), `sshMachine` (ADR 0054), host keys, the SSH endpoint, the forwarding server, `shQuote`, the public-URL guards, `SecretValue` |
+| `@tiny-agents/sandbox/terminal` | `createTerminalService`, its errors, tmux session names                                                                                                                          |
+| `@tiny-agents/sandbox/browser`  | Browser sessions, the Chromium and remote CDP transports, the URL and ref guards, the secret-fill types                                                                          |
+| `@tiny-agents/sandbox/computer` | Desktop sessions, the X11 transport, desktop settings parsers                                                                                                                    |
+| `@tiny-agents/sandbox/testing`  | `startFakeSandboxServer`, an in-process SSH server for tests                                                                                                                     |
 
 ## API surface
 

@@ -1,6 +1,6 @@
 # ADR 0013: One sandbox connection
 
-- Status: **accepted** (amends the tunnel in [0010](0010-claude-worker-runs-on-the-sandbox.md))
+- Status: **accepted** (amends the tunnel in [0010](0010-claude-worker-runs-on-the-sandbox.md); the endpoint amended by [0054](0054-a-sandbox-machine-below-the-connection.md))
 - Date: 2026-11-05
 
 ## Context

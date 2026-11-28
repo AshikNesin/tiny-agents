@@ -6,6 +6,7 @@ export {
   type SandboxExecResult,
   type SandboxFile,
 } from "./ssh/sandbox-connection";
+export { sshMachine, type SandboxMachine } from "./ssh/machine";
 export type { PtySize, PtyStream } from "./ssh/pty-stream";
 export {
   createMemoryHostKeyStore,

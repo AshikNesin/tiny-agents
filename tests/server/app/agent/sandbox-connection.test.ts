@@ -17,6 +17,7 @@ import {
   type SandboxConnection,
   type SandboxConnectionOptions,
 } from "../../../../packages/sandbox/src/ssh/sandbox-connection";
+import { sshMachine, type SandboxMachine } from "../../../../packages/sandbox/src/ssh/machine";
 import {
   fakePty,
   startFakeSandboxServer,
@@ -49,7 +50,7 @@ async function sandbox(
       : null,
   );
   const connection = createSandboxConnection(
-    { host: "127.0.0.1", port: server.port, ...options.endpoint },
+    sshMachine({ host: "127.0.0.1", port: server.port, ...options.endpoint }),
     options,
   );
   cleanups.push(() => server.close());
@@ -174,11 +175,65 @@ describe("sandbox connection: the retry rule", () => {
     await new Promise<void>((resolve) => closed.listen(0, "127.0.0.1", resolve));
     const port = (closed.address() as { port: number }).port;
     await new Promise<void>((resolve) => closed.close(() => resolve()));
-    const connection = createSandboxConnection({ host: "127.0.0.1", port });
+    const connection = createSandboxConnection(sshMachine({ host: "127.0.0.1", port }));
     cleanups.push(() => connection.close());
     await expect(connection.exec("ls")).rejects.toThrow(
       `Cannot reach the sandbox (connect ECONNREFUSED 127.0.0.1:${port}). Is it online and on the tailnet?`,
     );
+  });
+});
+
+describe("sandbox connection: machines", () => {
+  it("waits for the machine to be ready before it dials, and names it as the host", async () => {
+    let server: FakeSandboxServer | undefined;
+    const machine: SandboxMachine = {
+      label: "test-machine",
+      async ready() {
+        server ??= await startFakeSandboxServer(echo, null);
+      },
+      async dial() {
+        if (!server) throw new Error("dialed before the machine was ready");
+        return { host: "127.0.0.1", port: server.port };
+      },
+    };
+    const connection = createSandboxConnection(machine);
+    cleanups.push(() => server?.close());
+    cleanups.push(() => connection.close());
+    expect(connection.host).toBe("test-machine");
+    expect(text(await connection.exec("echo up"))).toBe("up");
+  });
+
+  it("asks a machine that was not ready once more before giving up", async () => {
+    const server = await startFakeSandboxServer(echo, null);
+    cleanups.push(() => server.close());
+    let attempts = 0;
+    const startsOnSecondTry: SandboxMachine = {
+      label: "slow-machine",
+      async ready() {
+        attempts++;
+        if (attempts === 1) throw new Error("VM is still starting");
+      },
+      async dial() {
+        return { host: "127.0.0.1", port: server.port };
+      },
+    };
+    const connection = createSandboxConnection(startsOnSecondTry);
+    cleanups.push(() => connection.close());
+    expect(text(await connection.exec("echo second try"))).toBe("second try");
+
+    const neverReady: SandboxMachine = {
+      label: "stuck-machine",
+      async ready() {
+        throw new Error("VM failed to start");
+      },
+      async dial() {
+        return { host: "127.0.0.1", port: server.port };
+      },
+    };
+    const stuck = createSandboxConnection(neverReady);
+    cleanups.push(() => stuck.close());
+    await expect(stuck.exec("ls")).rejects.toThrow("VM failed to start");
+    expect(server.connections).toBe(1);
   });
 });
 
