@@ -8,8 +8,7 @@
  * turns, a gateway's base-path warnings, Add a model), the default models,
  * the edit dialog for each kind of account, and the move-and-delete dialog
  * a model in use asks with. Recorded on the one-file page before it was
- * split (docs/rewrite/PLAN.md row 5.6), so the split must render each the
- * same.
+ * split, so the split must render each the same.
  */
 import React from "react";
 import { act, render, screen, waitFor, within } from "@testing-library/react";

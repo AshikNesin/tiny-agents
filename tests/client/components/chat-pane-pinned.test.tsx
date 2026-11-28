@@ -7,8 +7,8 @@
  * composer, the file-drop overlay, the two confirmations, the bot menu
  * opened on Chat history by `?history=1`, and the live-view toggle and tabs
  * in each state (no computer, a computer, the bot using either). Recorded on
- * the one-file pane before it was split (docs/rewrite/PLAN.md row 5.6), so
- * the split must render each the same. The live panels are the real ones
+ * the one-file pane before it was split, so the split must render each the
+ * same. The live panels are the real ones
  * over a faked noVNC; markdown is a stand-in; the bot stream is a fake
  * (fakes/sse.ts) and the server is fakeApi().
  */

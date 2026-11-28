@@ -6,8 +6,7 @@
  * divider, a person's bubble (mine, someone else's, failed, with
  * attachments), each peer card, and an assistant turn in each status with
  * each tool card and trace row, live and read-only. Recorded on the one-file
- * component before it was split (docs/rewrite/PLAN.md row 5.6), so the split
- * must render each the same. Markdown is a stand-in.
+ * component before it was split, so the split must render each the same. Markdown is a stand-in.
  */
 import React from "react";
 import { act, render, screen, waitFor } from "@testing-library/react";

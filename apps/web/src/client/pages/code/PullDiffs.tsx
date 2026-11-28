@@ -5,7 +5,8 @@ import { SearchSelect } from "@groot/ui/search-select";
 import type { ThreadCommenting } from "../../lib/code/comments";
 import type { PullReviewView } from "../../../shared/api/code";
 import type { FileConversations } from "./PullThreads";
-import { DiffWorkspace, type DiffView } from "./DiffWorkspace";
+import { DiffWorkspace } from "./DiffWorkspace";
+import type { DiffView } from "./use-diff-view";
 import { useReviewFiles } from "./use-review-files";
 
 type Scope = "base" | "review" | "mine";

@@ -11,7 +11,7 @@
  * connection: loading, failed, each status with and without tools, no bots,
  * bots, and its remove prompt for none, one and several bots. Recorded
  * before React Doctor's complexity findings on the three were split out
- * (docs/rewrite/PLAN.md row 5.6), so the split must render each the same.
+ * so the split must render each the same.
  * Markdown is a stand-in.
  */
 import React from "react";

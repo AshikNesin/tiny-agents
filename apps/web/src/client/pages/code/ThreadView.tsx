@@ -57,12 +57,8 @@ import {
   useHarnessModels,
   useArchive,
 } from "./controls";
-import {
-  StreamingTail,
-  TranscriptRow,
-  type TranscriptActions,
-  type TranscriptContext,
-} from "./Transcript";
+import { StreamingTail, TranscriptRow } from "./Transcript";
+import type { TranscriptActions, TranscriptContext } from "./transcript-context";
 import { formatCost } from "../../lib/format";
 
 function useMarkSeen(id: string, cursor: number) {

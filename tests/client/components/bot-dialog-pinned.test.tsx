@@ -7,8 +7,8 @@
  * Tools with its toolkits open, closed and not set up, the browser profile,
  * a search with and without matches, and connections; Skills and Sharing
  * empty and filled), and the inline delete confirmation. Recorded on the
- * one-file dialog before it was split (docs/rewrite/PLAN.md row 5.6), so the
- * split must render each the same.
+ * one-file dialog before it was split, so the split must render each the
+ * same.
  */
 import React from "react";
 import { act, render as renderPlain, screen, waitFor } from "@testing-library/react";

@@ -9,8 +9,7 @@
  * takeover request, the Apps and Keys menus), plus each reset's confirm and
  * toast, each failed open's toast, the deep link (Browser only), and the
  * poll's cadence. Recorded on the two separate pages before they became one
- * (docs/rewrite/PLAN.md row 5.5), so the shared page must render each state
- * the same. noVNC is faked.
+ * so the shared page must render each state the same. noVNC is faked.
  */
 import React from "react";
 import { act, render, screen, waitFor, within } from "@testing-library/react";

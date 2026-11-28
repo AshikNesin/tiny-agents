@@ -6,7 +6,7 @@ import { projectsApi } from "../../lib/code/projects";
 import { useRefreshOn, useResource } from "../../queries/resource";
 import { useSteadyKey } from "../../lib/code/use-live-changes";
 import type { ReviewFile } from "../../../shared/api/code";
-import { treeOrder } from "./DiffWorkspace";
+import { treeOrder } from "./workspace-file";
 
 export function useReviewFiles(
   threadId: string,

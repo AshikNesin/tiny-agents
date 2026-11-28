@@ -11,7 +11,9 @@ import { useRefreshOn, useResource } from "../../queries/resource";
 import { useThreadPulls } from "../../lib/code/use-thread-pulls";
 import type { CheckpointView } from "../../../shared/api/code";
 import type { ThreadCommenting } from "../../lib/code/comments";
-import { DiffViewButtons, DiffWorkspace, FilesButton, useDiffView } from "./DiffWorkspace";
+import { DiffViewButtons, FilesButton } from "./DiffViewButtons";
+import { DiffWorkspace } from "./DiffWorkspace";
+import { useDiffView } from "./use-diff-view";
 import { useReviewFiles } from "./use-review-files";
 
 export function ReviewPanel({

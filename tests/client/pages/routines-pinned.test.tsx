@@ -8,8 +8,7 @@
  * status; a card's actions while one runs; and the editor for a new routine
  * on each schedule tab (with its preview or error) and for an existing
  * routine of each schedule kind. Recorded on the one-file page before it
- * was split (docs/rewrite/PLAN.md row 5.6), so the split must render each
- * the same.
+ * was split, so the split must render each the same.
  */
 import React from "react";
 import { act, render, screen, within } from "@testing-library/react";

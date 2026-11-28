@@ -8,8 +8,8 @@
  * headless, connecting, live, driving, a bot's takeover request, a guest,
  * a bot with its own profile), plus each reset's confirm and toast, each
  * failed open's toast, and the poll's cadence. Recorded on the two separate
- * panels before they became one (docs/rewrite/PLAN.md row 5.5), so the
- * shared panel must render each state the same. noVNC is faked.
+ * panels before they became one, so the shared panel must render each state
+ * the same. noVNC is faked.
  */
 import React from "react";
 import { act, render, screen, waitFor } from "@testing-library/react";
