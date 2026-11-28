@@ -97,6 +97,11 @@ export interface ComposerProps {
   ): Promise<void>;
 }
 
+function noFileSuggestionsWhenSearchFails(error: unknown): never[] {
+  console.warn("File search failed; the @ menu shows no files.", error);
+  return [];
+}
+
 export function Composer({
   draftKey,
   harness,
@@ -187,7 +192,7 @@ export function Composer({
         .then((matches) =>
           matches.slice(0, 12).map((m) => ({ value: m.path, label: m.path, dir: m.isDir })),
         )
-        .catch(() => []);
+        .catch(noFileSuggestionsWhenSearchFails);
     },
     enabled: fileQuery !== null,
     placeholderData: keepPreviousData,

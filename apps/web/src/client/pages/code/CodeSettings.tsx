@@ -979,7 +979,7 @@ function ReviewListSettings() {
 const GITHUB_KEY = ["code", "github", "status"];
 
 function useGitHubStatus() {
-  const read = useResource(GITHUB_KEY, () => projectsApi.github().catch(() => null), "");
+  const read = useResource<GitHubStatus | null>(GITHUB_KEY, () => projectsApi.github(), "");
   const client = useQueryClient();
   const setStatus = useCallback(
     (next: GitHubStatus) => client.setQueryData<GitHubStatus | null>(GITHUB_KEY, next),

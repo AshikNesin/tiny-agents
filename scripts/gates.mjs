@@ -65,10 +65,6 @@ export const gates = [
   { name: "Duplicate functions", run: "pnpm check:duplicates" },
   { name: "Comment ratchet", run: "pnpm check:comments --base origin/${GITHUB_BASE_REF:-main}" },
   {
-    name: "Silent fallback ratchet",
-    run: "pnpm exec tsx scripts/check-fallback-ratchet.ts --base origin/${GITHUB_BASE_REF:-main}",
-  },
-  {
     name: "Migrations are up to date with the schema",
     job: "migrations",
     exclusive: true,

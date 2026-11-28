@@ -113,7 +113,7 @@ export const codeApi = {
         body: file,
       },
     );
-    const envelope = (await response.json().catch(() => ({}))) as {
+    const envelope = (await response.json().catch(uploadReplyUnreadable(response.status))) as {
       data?: { ref?: string };
       error?: { message?: string };
     };
@@ -123,6 +123,12 @@ export const codeApi = {
     return envelope.data.ref;
   },
 };
+
+const uploadReplyUnreadable =
+  (status: number) =>
+  (cause: unknown): never => {
+    throw new Error(`Upload failed (${status})`, { cause });
+  };
 
 export function threadPath(id: string): string {
   return `/code/t/${encodeURIComponent(id)}`;

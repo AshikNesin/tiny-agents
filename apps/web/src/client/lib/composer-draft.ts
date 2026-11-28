@@ -1,9 +1,17 @@
+import { z } from "zod";
 import { trackPickedMentions, type MentionToken, type PickedMention } from "./mentions";
 import { isUploading, readyRefs, type StagedUpload } from "./staged-uploads";
 
-export interface ComposerDraft<Ref> {
-  text: string;
-  picked: PickedMention[];
+export const composerTextSchema = z.object({
+  text: z.string(),
+  picked: z.array(z.object({ start: z.number(), botId: z.string(), name: z.string() })),
+});
+
+export type ComposerText = z.infer<typeof composerTextSchema>;
+
+export const EMPTY_TEXT: ComposerText = { text: "", picked: [] };
+
+export interface ComposerDraft<Ref> extends ComposerText {
   staged: StagedUpload<Ref>[];
 }
 
@@ -17,7 +25,7 @@ export function emptyDraft<Ref>(text = ""): ComposerDraft<Ref> {
   return { text, picked: [], staged: [] };
 }
 
-export function editText<Ref>(draft: ComposerDraft<Ref>, next: string): ComposerDraft<Ref> {
+export function editText<Draft extends ComposerText>(draft: Draft, next: string): Draft {
   if (next === draft.text) return draft;
   return {
     ...draft,
@@ -26,19 +34,12 @@ export function editText<Ref>(draft: ComposerDraft<Ref>, next: string): Composer
   };
 }
 
-export function withStaged<Ref>(
-  draft: ComposerDraft<Ref>,
-  change: (staged: StagedUpload<Ref>[]) => StagedUpload<Ref>[],
-): ComposerDraft<Ref> {
-  return { ...draft, staged: change(draft.staged) };
-}
-
-export function insertMention<Ref>(
-  draft: ComposerDraft<Ref>,
+export function insertMention<Draft extends ComposerText>(
+  draft: Draft,
   token: MentionToken,
   caret: number,
   chosen: { id: string; name: string },
-): { draft: ComposerDraft<Ref>; caret: number } {
+): { draft: Draft; caret: number } {
   const insertion = `@${chosen.name} `;
   const text = draft.text.slice(0, token.start) + insertion + draft.text.slice(caret);
   const picked = [
@@ -53,10 +54,10 @@ export function insertMention<Ref>(
   };
 }
 
-export function startMention<Ref>(
-  draft: ComposerDraft<Ref>,
+export function startMention<Draft extends ComposerText>(
+  draft: Draft,
   at: number,
-): { draft: ComposerDraft<Ref>; caret: number } {
+): { draft: Draft; caret: number } {
   const before = draft.text.slice(0, at);
   const insertion = before && !/\s$/.test(before) ? " @" : "@";
   const next = editText(draft, before + insertion + draft.text.slice(at));

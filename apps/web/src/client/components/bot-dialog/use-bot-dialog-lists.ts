@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import type { ConnectionSummary } from "../../../shared/api/connections";
 import type { SkillSummary } from "../../../shared/api/skills";
-import { useCapabilities } from "../../queries/bots";
+import { useCapabilities } from "../../queries/capabilities";
 import { useConnections } from "../../queries/connections";
 import { useGuests } from "../../queries/people";
 import type { Resource } from "../../queries/resource";
@@ -14,7 +14,7 @@ function listed<T>(resource: Resource<T[]>): T[] | undefined {
 }
 
 export function useBotDialogLists(open: boolean) {
-  const capabilities = listed(useCapabilities({ enabled: open }));
+  const capabilities = listed(useCapabilities("Failed to load toolkits", { enabled: open }));
   const allConnections = listed(useConnections({ enabled: open }));
   const allSkills = listed(useSkills({ enabled: open }));
   const allGuests = listed(useGuests({ enabled: open }));

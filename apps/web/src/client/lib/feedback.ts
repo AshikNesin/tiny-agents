@@ -14,8 +14,15 @@ declare global {
 export function openFeedback() {
   const feedbackBee = window.FeedbackBee;
   if (!feedbackBee?.version) {
-    toast.error("Feedback isn't available right now");
+    toast.error(FEEDBACK_UNAVAILABLE);
     return;
   }
-  feedbackBee.open().catch(() => toast.error("Feedback isn't available right now"));
+  feedbackBee.open().catch(sayFeedbackUnavailable);
+}
+
+const FEEDBACK_UNAVAILABLE = "Feedback isn't available right now";
+
+function sayFeedbackUnavailable(error: unknown): void {
+  console.error("The feedback widget failed to open", error);
+  toast.error(FEEDBACK_UNAVAILABLE);
 }

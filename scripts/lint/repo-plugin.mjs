@@ -176,22 +176,7 @@ const allowedBy = (baselinePath) => (cwd, file) => {
 
 const allowedComments = allowedBy(BASELINE_PATH);
 
-export const SILENT_FALLBACK_BASELINE = "scripts/lint/silent-fallback-baseline.json";
-
-const fallbackBaselines = new Map();
-
-const allowedSilentFallbacks = (cwd, file) => {
-  if (!fallbackBaselines.has(cwd)) {
-    const baseline = path.join(cwd, SILENT_FALLBACK_BASELINE);
-    fallbackBaselines.set(
-      cwd,
-      existsSync(baseline) ? JSON.parse(readFileSync(baseline, "utf8")) : {},
-    );
-  }
-  return fallbackBaselines.get(cwd)[path.relative(cwd, file).replaceAll("\\", "/")] ?? {};
-};
-
-export const fallbackSite = (text) => text.replace(/\s+/g, " ").trim();
+const fallbackSite = (text) => text.replace(/\s+/g, " ").trim();
 
 const SILENT_FALLBACK_MESSAGE =
   "R17: this drops the error and carries on as if the call worked. Agents shipped this three times: a DNS lookup failure let the browser through (#445), an auto-dismiss failure left a question pending (#469), and a slow `chromium --version` sent a HeadlessChrome user agent (#494). Handle the failure, rethrow it, or catch into a function whose name says why ignoring it is safe (`.catch(ignoreClosedSocket)`).";
@@ -425,23 +410,9 @@ export default {
         return {
           CatchClause: collect,
           CallExpression: collect,
-          "Program:exit"(program) {
-            const allowed = allowedSilentFallbacks(context.cwd ?? process.cwd(), context.filename);
-            const seen = new Map();
+          "Program:exit"() {
             for (const { node, site } of found) {
-              const count = (seen.get(site) ?? 0) + 1;
-              seen.set(site, count);
-              if (count > (allowed[site] ?? 0)) {
-                context.report({ node, message: `${SILENT_FALLBACK_MESSAGE} Site: \`${site}\`` });
-              }
-            }
-            for (const [site, count] of Object.entries(allowed)) {
-              if ((seen.get(site) ?? 0) < count) {
-                context.report({
-                  node: program,
-                  message: `R17: ${SILENT_FALLBACK_BASELINE} allows ${count} of \`${site}\` here but the file has ${seen.get(site) ?? 0}. Lower or delete that entry to lock in the cut; the baseline only shrinks.`,
-                });
-              }
+              context.report({ node, message: `${SILENT_FALLBACK_MESSAGE} Site: \`${site}\`` });
             }
           },
         };

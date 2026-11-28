@@ -48,7 +48,7 @@ it("fetches the catalog once and hands it to every later mount at once", async (
   const alongside = renderHook(() => useToolLabels(), { wrapper });
   await waitFor(() => expect(api.sent("GET", "/capabilities")).toHaveLength(1));
   failNow();
-  await waitFor(() => expect(client.getQueryState(["tool-labels"])?.status).toBe("error"));
+  await waitFor(() => expect(client.getQueryState(["capabilities"])?.status).toBe("error"));
   expect(failed.result.current).toEqual({ done: {}, ask: {} });
   expect(api.sent("GET", "/capabilities")).toHaveLength(1);
   failed.unmount();

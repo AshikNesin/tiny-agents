@@ -84,9 +84,7 @@ export function connectTerminal(
           ws.onmessage = null;
           ws.onclose = null;
           ws.onerror = null;
-          try {
-            ws.close();
-          } catch {}
+          ws.close();
           events.dropped();
         };
         const probe = () => {

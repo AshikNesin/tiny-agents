@@ -333,7 +333,7 @@ function BotMemorySection({
           />
         </div>
       </div>
-      {!memoryEnabled && (
+      {memoryEnabled === false && (
         <p className="mt-1 text-xs text-muted-foreground">
           Off. This bot no longer learns from chats or uses what it knows.
         </p>

@@ -8,6 +8,7 @@ import {
 } from "react";
 import { botVncTicket, resizeBotBrowser } from "../../lib/vnc-session";
 import { isMac, remapMetaChord, type KeyStroke } from "../../lib/browser-keys";
+import { ignoreClipboardRefusal, sayClipboardReadRefused } from "../../lib/clipboard";
 import { createRfb, type RfbClient } from "../../lib/novnc";
 import { reconnectingSocket } from "../../lib/reconnecting-socket";
 import { remoteWindowSize } from "../../lib/remote-window";
@@ -36,6 +37,10 @@ const RESIZE_DEBOUNCE_MS = 150;
 const FIT_RETRIES = 2;
 const FIT_RETRY_MS = 1000;
 const PASTE_SETTLE_MS = 80;
+
+function resizeFailedSoFitRetries(): boolean {
+  return false;
+}
 
 function socketUrl(path: string): string {
   const scheme = window.location.protocol === "https:" ? "wss" : "ws";
@@ -172,7 +177,7 @@ export const VncView = forwardRef<VncHandle, VncViewProps>(function VncView(
           });
           rfb.addEventListener("clipboard", (event) => {
             const text = (event as CustomEvent<{ text: string }>).detail.text;
-            void navigator.clipboard?.writeText(text).catch(() => {});
+            void navigator.clipboard?.writeText(text).catch(ignoreClipboardRefusal);
           });
           return rfb;
         },
@@ -210,10 +215,7 @@ export const VncView = forwardRef<VncHandle, VncViewProps>(function VncView(
         height: Math.max(240, Math.round(desktop.height)),
       };
       void (resizeRef.current ? resizeRef.current(size) : resizeBotBrowser(botId, size))
-        .then(
-          () => true,
-          () => false,
-        )
+        .then(() => true, resizeFailedSoFitRetries)
         .then((ok) => {
           inFlight = false;
           if (disposed) return;
@@ -250,7 +252,7 @@ export const VncView = forwardRef<VncHandle, VncViewProps>(function VncView(
       event.stopPropagation();
       if (event.type !== "keydown" || event.key === "Meta") return;
       if (event.key.toLowerCase() === "v" && !event.shiftKey) {
-        void paste().catch(() => {});
+        void paste().catch(sayClipboardReadRefused);
         return;
       }
       const strokes = remapMetaChord(event);

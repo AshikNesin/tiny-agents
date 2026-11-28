@@ -171,10 +171,9 @@ export function credentialRequestText(
   now = Date.now(),
 ): { title: string; description: string } {
   const { credentials } = call;
-  let host = credentials.origin;
-  try {
-    host = new URL(credentials.origin).host;
-  } catch {}
+  const host = URL.canParse(credentials.origin)
+    ? new URL(credentials.origin).host
+    : credentials.origin;
   return {
     title: `${botName} needs you on ${host}`,
     description: `${credentials.title}. What you type is filled into the page and never shown to ${botName}.${expiryText(call.expiresAt, now)}`,

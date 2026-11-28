@@ -41,7 +41,10 @@ export const useCodeStore = create<CodeState>((set, get) => ({
           else if (event.type === "list") set({ threads: event.threads });
         });
       })
-      .catch(() => set({ harnesses: [] }));
+      .catch((error: unknown) => {
+        console.error("Could not load the Code harnesses; Code stays hidden until reload", error);
+        set({ harnesses: [] });
+      });
   },
   disconnect() {
     refs = Math.max(0, refs - 1);

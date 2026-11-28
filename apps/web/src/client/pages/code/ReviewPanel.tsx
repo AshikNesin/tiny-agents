@@ -37,7 +37,7 @@ export function ReviewPanel({
   const { settledKey, reload, refresh, workspace } = useReviewFiles(threadId, scope, refreshKey);
   const checkpointList = useResource(
     ["code", "checkpoints", threadId],
-    () => projectsApi.checkpoints(threadId).catch((): CheckpointView[] => []),
+    () => projectsApi.checkpoints(threadId),
     "",
   );
   useRefreshOn(`${String(settledKey)}\u0000${reload}`, checkpointList.refresh);

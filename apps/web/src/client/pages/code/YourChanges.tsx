@@ -16,7 +16,7 @@ import { Spinner } from "../../components/ui/spinner";
 import { errorMessage } from "../../lib/errors";
 import { reviewsApi } from "../../lib/code/projects";
 import { threadPath } from "../../lib/code/api";
-import { githubCommentsKey, useCommentStore } from "../../lib/code/comments";
+import { githubCommentsKey, sayCommentsDidNotLoad, useCommentStore } from "../../lib/code/comments";
 import type { PullReviewView } from "../../../shared/api/code";
 
 const count = (n: number, one: string) => (n === 1 ? `1 ${one}` : `${n} ${one}s`);
@@ -109,7 +109,7 @@ export function YourChangesActions({
     setBusy("suggest");
     try {
       const { added, skipped } = await reviewsApi.suggest(review.id);
-      await load(githubCommentsKey(review.id)).catch(() => undefined);
+      await load(githubCommentsKey(review.id)).catch(sayCommentsDidNotLoad);
       toast.success(
         `${count(added, "suggestion")} added to your review.` +
           (skipped > 0

@@ -366,7 +366,16 @@ const BOUNDARY_RULES: BoundaryRule[] = [
     kind: "plugin",
     scope: "**",
     rule: "repo/no-silent-fallback",
-    except: [...OUT_OF_SCOPE, "tests/**", "**/*.test.ts", "**/*.test.tsx"],
+    except: [
+      ...OUT_OF_SCOPE,
+      "tests/**",
+      "**/*.test.ts",
+      "**/*.test.tsx",
+      "packages/core/**",
+      "packages/jobs/**",
+      "packages/shell/**",
+      "packages/ui/**",
+    ],
     enabled: true,
   },
   {

@@ -58,6 +58,10 @@ export const useCommentStore = create<CommentsState>((set, get) => ({
   },
 }));
 
+export function sayCommentsDidNotLoad(error: unknown): void {
+  toast.error(errorMessage(error, "Could not load your review comments."));
+}
+
 const NONE: ReviewDraft[] = [];
 
 export function useThreadComments(threadId: string | undefined, enabled = true): ReviewDraft[] {
@@ -65,7 +69,7 @@ export function useThreadComments(threadId: string | undefined, enabled = true):
   const comments = useCommentStore((s) => (threadId ? s.byThread[threadId] : undefined));
   useEffect(() => {
     if (!threadId || !enabled) return;
-    load(threadId).catch(() => undefined);
+    load(threadId).catch(sayCommentsDidNotLoad);
   }, [threadId, enabled, load]);
   return enabled ? (comments ?? NONE) : NONE;
 }

@@ -176,7 +176,7 @@ export function Tasks() {
               void mutations.update
                 .mutateAsync({ id: task.id, input: { status: task.status } })
                 .then(refresh)
-                .catch(() => toast.error("Couldn't undo")),
+                .catch((error: unknown) => toast.error(errorMessage(error, "Couldn't undo"))),
           },
         });
       }

@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { useConfirm, type ConfirmOptions } from "@groot/ui/primitives";
 import type { VncHandle, VncState } from "../components/browser/VncView";
+import { sayClipboardReadRefused } from "./clipboard";
 import { errorMessage } from "./errors";
 import { readStored, readStoredJson, writeStored } from "./browser-storage";
 import { useResource } from "../queries/resource";
@@ -52,7 +53,7 @@ export function useFullScreen(
   useEffect(() => {
     if (!fullscreen) return;
     const lock = keyboard();
-    void lock?.lock?.([...keys]).catch(() => undefined);
+    void lock?.lock?.([...keys]).catch(shortcutsStayWithTheBrowser);
     return () => lock?.unlock?.();
   }, [fullscreen, keys]);
 
@@ -67,7 +68,7 @@ export function useFullScreen(
         return;
       }
       setFullscreen(true);
-      ref.current?.requestFullscreen?.().catch(() => undefined);
+      ref.current?.requestFullscreen?.().catch(cssFullscreenStandsIn);
       return;
     }
     const element = ref.current;
@@ -75,10 +76,24 @@ export function useFullScreen(
       toast.error("Full screen is not available in this browser.");
       return;
     }
-    void element.requestFullscreen().catch(() => toast.error("Could not enter full screen."));
+    void element.requestFullscreen().catch(sayFullscreenRefused);
   };
 
   return { fullscreen, toggleFullscreen };
+}
+
+function shortcutsStayWithTheBrowser(error: unknown): void {
+  console.warn("Keyboard lock was refused, so the browser keeps its own shortcuts", error);
+}
+
+function cssFullscreenStandsIn(error: unknown): void {
+  if (error instanceof TypeError) return;
+  console.warn("Native full screen failed for a reason other than a refusal", error);
+}
+
+function sayFullscreenRefused(error: unknown): void {
+  if (!(error instanceof TypeError)) console.warn("Full screen failed", error);
+  toast.error("Could not enter full screen.");
 }
 
 export interface ConnectionInput {
@@ -362,9 +377,7 @@ export function useLiveView<S, I extends LiveItem>(adapter: LiveViewSource<S, I>
   };
 
   const paste = () => {
-    void vncRef.current?.paste().catch(() => {
-      toast.error("Could not read the clipboard. Allow clipboard access and try again.");
-    });
+    void vncRef.current?.paste().catch(sayClipboardReadRefused);
   };
 
   return {

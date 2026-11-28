@@ -87,6 +87,11 @@ function ambiguousMentionHint(names: string[]): string {
   return `More than one bot is named ${quoted}. Type @ and pick the one you mean from the list.`;
 }
 
+function draftComesBackWhenSendThrows(error: unknown): OwnerSendOutcome {
+  console.warn("Sending the message threw; its text is back in the composer.", error);
+  return "restored";
+}
+
 export interface ChatComposerHandle {
   stageFiles: (files: FileList | File[]) => void;
   focus: () => void;
@@ -360,7 +365,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
       mentions: mentions.ids,
       ...(picked.length > 0 ? { tools: picked } : {}),
       whenBusy,
-    }).catch((): OwnerSendOutcome => "restored");
+    }).catch(draftComesBackWhenSendThrows);
     if (outcome === "restored") {
       setTools((current) => [...new Set([...picked, ...current])]);
       stored.update((current) => {

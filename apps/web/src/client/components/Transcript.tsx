@@ -60,11 +60,9 @@ function useOlderPages(pages: TranscriptPages, timeline: TimelineItem[]) {
         el: viewport,
         distance: viewport.scrollHeight - viewport.scrollTop,
       };
-      void Promise.resolve(loadOlder())
-        .catch(() => undefined)
-        .finally(() => {
-          requested.current = false;
-        });
+      void Promise.resolve(loadOlder()).finally(() => {
+        requested.current = false;
+      });
     };
     const arm = () => {
       armed = true;

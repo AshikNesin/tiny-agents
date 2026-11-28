@@ -2,6 +2,27 @@ export interface SseConnection {
   close(): void;
 }
 
+function deliver(path: string, payload: string, onEvent: (event: unknown) => void): void {
+  let event: unknown;
+  try {
+    event = JSON.parse(payload);
+  } catch (error) {
+    console.warn(`Skipped an event from ${path} that was not JSON`, error);
+    return;
+  }
+  try {
+    onEvent(event);
+  } catch (error) {
+    console.error(`A listener for ${path} threw on an event; the stream stays open`, error);
+  }
+}
+
+function reportUnlessDropped(path: string, error: unknown): void {
+  if (error instanceof TypeError) return;
+  if (error instanceof DOMException && error.name === "AbortError") return;
+  console.error(`The event stream ${path} failed; reconnecting`, error);
+}
+
 export function subscribeSse(
   path: string,
   onEvent: (event: unknown) => void,
@@ -75,17 +96,15 @@ export function subscribeSse(
               for (const line of frame.split("\n")) {
                 if (line.startsWith("data:")) {
                   const payload = line.slice(5).trim();
-                  if (payload) {
-                    try {
-                      onEvent(JSON.parse(payload));
-                    } catch {}
-                  }
+                  if (payload) deliver(path, payload, onEvent);
                 }
               }
             }
           }
         }
-      } catch {}
+      } catch (error) {
+        reportUnlessDropped(path, error);
+      }
       controller.signal.removeEventListener("abort", stop);
       if (controller.signal.aborted) return;
       opts.onDrop?.();

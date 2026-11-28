@@ -8,14 +8,6 @@ export const usePastChatList = (botId: string) =>
     "Failed to load chats",
   );
 
-export const useCapabilities = (options: { enabled?: boolean } = {}) =>
-  useResource(
-    ["bots", "capabilities"],
-    () => botsApi.capabilities(),
-    "Failed to load toolkits",
-    options,
-  );
-
 export const useComputerStatus = (botId: string) =>
   useResource(
     ["bots", "computer", botId],

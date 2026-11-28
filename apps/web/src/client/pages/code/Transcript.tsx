@@ -28,6 +28,7 @@ import {
 import { toast } from "sonner";
 import { Button, monoClass } from "@groot/ui";
 import { cn } from "@groot/ui/lib/utils";
+import { ignoreClipboardRefusal } from "../../lib/clipboard";
 import { Markdown } from "../../lib/markdown";
 import { TypingIndicator, USER_PILL } from "../../components/ui/transcript-parts";
 import {
@@ -95,11 +96,16 @@ const failedTool = (call: ToolItem) =>
   call.status === "denied" ||
   (call.exitCode !== undefined && call.exitCode !== 0);
 
+function sayCopyRefused(error: unknown): void {
+  ignoreClipboardRefusal(error);
+  toast.error("Could not copy");
+}
+
 function copy(text: string) {
   void navigator.clipboard
     .writeText(text)
     .then(() => toast.success("Copied"))
-    .catch(() => toast.error("Could not copy"));
+    .catch(sayCopyRefused);
 }
 
 function Output({

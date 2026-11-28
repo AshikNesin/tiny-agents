@@ -1,6 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import type { ToolPermission, ToolPermissionsData } from "../../shared/api/bots";
 import { botsApi } from "../lib/bots-api";
+import { useCapabilities } from "./capabilities";
 import { useResource } from "./resource";
 
 const TOOL_PERMISSIONS_KEY = ["tool-permissions"] as const;
@@ -10,8 +11,7 @@ export const useToolPermissions = (enabled = true) =>
     enabled,
   });
 
-export const useToolkits = () =>
-  useResource(["capabilities"], () => botsApi.capabilities(), "Failed to load tools");
+export const useToolkits = () => useCapabilities("Failed to load tools");
 
 export function useSaveToolPermissions() {
   const client = useQueryClient();

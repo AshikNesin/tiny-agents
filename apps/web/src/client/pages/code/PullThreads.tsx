@@ -6,7 +6,7 @@ import { Spinner } from "../../components/ui/spinner";
 import { errorMessage } from "../../lib/errors";
 import { reviewsApi } from "../../lib/code/projects";
 import { useRefreshOn, useResource } from "../../queries/resource";
-import type { PullReviewView, PullThreadView, PullThreadsView } from "../../../shared/api/code";
+import type { PullReviewView, PullThreadView } from "../../../shared/api/code";
 import { CommentBody, CommentByline } from "./PullComments";
 import type { LineNote } from "./UnifiedDiff";
 
@@ -188,7 +188,7 @@ export function usePullConversations(
   const id = review?.id;
   const threads = useResource(
     ["code", "reviews", "threads", id],
-    () => reviewsApi.threads(id!).catch((): PullThreadsView | null => null),
+    () => reviewsApi.threads(id!),
     "",
     { enabled: Boolean(id) },
   );

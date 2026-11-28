@@ -5,6 +5,8 @@ import { Button } from "@groot/ui/button";
 import { chatBots, useBotsStore } from "../../store/bots";
 import { useUiStore } from "../../store/ui";
 import { useViewer, viewerRole } from "../../queries/viewer";
+import { toast } from "sonner";
+import { errorMessage } from "../../lib/errors";
 import { landingBotId, rememberLastBot } from "../../lib/last-bot";
 import { useFocusParam } from "../../lib/focus-param";
 import { ChatPane } from "../../components/ChatPane";
@@ -61,7 +63,9 @@ export function ChatWorkspace() {
   const fullBot = useBotsStore((s) => (currentId ? (s.fullBots[currentId] ?? null) : null));
   useEffect(() => {
     if (!currentId) return;
-    void loadBot(currentId, { fresh: true }).catch(() => undefined);
+    void loadBot(currentId, { fresh: true }).catch((error: unknown) =>
+      toast.error(errorMessage(error, "Failed to load the bot")),
+    );
   }, [currentId, currentConversation, loadBot]);
 
   const noBots = bots.length === 0 && !loading;
