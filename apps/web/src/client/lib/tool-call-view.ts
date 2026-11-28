@@ -12,7 +12,8 @@ type ToolCard =
   | "question"
   | "asked-questions"
   | "bot-handoff"
-  | "code-handoff";
+  | "code-handoff"
+  | "artifact";
 
 export interface ToolCallView {
   phase: ToolPhase;
@@ -79,6 +80,7 @@ function cardOf(call: ChatToolCall, readOnly: boolean): ToolCard | undefined {
   }
   if (call.name === "message_bot") return "bot-handoff";
   if (call.code) return "code-handoff";
+  if (call.artifact) return "artifact";
   return undefined;
 }
 

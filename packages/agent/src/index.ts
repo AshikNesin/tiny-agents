@@ -43,6 +43,16 @@ export type { SecretFillField } from "@tiny-agents/sandbox/browser";
 export { InvalidAnswersError } from "./toolkits/questions";
 export { createTasksToolkit, type TaskRecord, type TaskStore } from "./toolkits/tasks";
 export {
+  ARTIFACT_KINDS,
+  MAX_ARTIFACT_CHARS,
+  createArtifactsToolkit,
+  type ArtifactCommit,
+  type ArtifactKind,
+  type ArtifactRef,
+  type ArtifactSnapshot,
+  type ArtifactStore,
+} from "./toolkits/artifacts";
+export {
   createCodeToolkit,
   createProjectToolkit,
   type CodeHandoffRecord,

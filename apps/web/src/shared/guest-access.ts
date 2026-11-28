@@ -30,6 +30,9 @@ export const GUEST_ACCESS: Record<string, GuestFeature> = {
       },
     ],
   },
+  artifacts: {
+    api: [{ methods: READ, bot: /^\/artifacts\/[^/]+(\/versions\/\d+)?$/ }],
+  },
   liveViews: {
     api: [
       { methods: READ, bot: /^\/(browser|computer)$/ },

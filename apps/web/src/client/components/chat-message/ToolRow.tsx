@@ -12,6 +12,7 @@ import {
 import { useOwnerActions } from "../../lib/owner-actions";
 import { BotHandoff } from "../BotHandoff";
 import { CodeHandoffCard } from "../CodeHandoffCard";
+import { ArtifactCard } from "../artifacts/ArtifactCard";
 import {
   CodeBlock,
   CodeBlockContent,
@@ -163,6 +164,8 @@ export function ToolRow({
       return <BotHandoff call={call} botName={botName} />;
     case "code-handoff":
       return <CodeHandoffCard handoff={call.code!} />;
+    case "artifact":
+      return <ArtifactCard call={{ ...call, artifact: call.artifact! }} />;
   }
 
   const title = stepTitle(call, labels);

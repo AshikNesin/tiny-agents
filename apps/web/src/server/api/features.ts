@@ -5,6 +5,7 @@ import appSettingsRoutes from "@groot/core/settings/app-settings.routes";
 import notificationRoutes from "@groot/core/notification/notification.routes";
 import { jobRoutes } from "@groot/jobs/server/routes";
 import tasksRoutes from "./tasks/tasks.routes";
+import artifactsRoutes, { artifactFrameRouter } from "./artifacts/artifacts.routes";
 import routinesRoutes from "./routines/routines.routes";
 import { hookRouter as routineHookRoutes } from "./routines/routines.hooks";
 import botsRoutes from "./bots/bots.routes";
@@ -57,6 +58,7 @@ export const FEATURES: readonly Feature[] = [
   { name: "terminal", routes: terminalRoutes },
   { name: "uploads", routes: uploadsRoutes },
   { name: "tasks", routes: tasksRoutes },
+  { name: "artifacts", routes: artifactsRoutes, open: artifactFrameRouter },
   {
     name: "routines",
     routes: routinesRoutes,

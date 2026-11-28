@@ -12,6 +12,9 @@ import { useUiStore } from "../store/ui";
 import { useViewer, viewerRole } from "../queries/viewer";
 import { BrowserPanel } from "./BrowserPanel";
 import { ComputerPanel } from "./ComputerPanel";
+import { ArtifactPanel } from "./artifacts/ArtifactPanel";
+import { useArtifactFollow } from "./artifacts/use-artifact-follow";
+import { useArtifactPanel } from "../store/artifacts";
 import { ChatComposer, type ChatComposerHandle } from "./ChatComposer";
 import { ChatScrollerProvider, ChatSessionTranscript } from "./ChatSessionTranscript";
 import { LIVE_CHAT } from "../lib/chat-mode";
@@ -97,6 +100,8 @@ function ChatPaneBody({
   }, [canReset]);
 
   const live = useLiveViews(bot, messages);
+  useArtifactFollow(bot.id, messages, chat.health !== "loading");
+  const artifactOpen = useArtifactPanel((s) => s.open !== null);
 
   const [editing, setEditing] = useState<LastTurn | null>(null);
   const turn = owner && !busy ? lastTurn(messages) : null;
@@ -317,6 +322,9 @@ function ChatPaneBody({
           }
         />
       </div>
+      {artifactOpen && !live.showBrowser && !live.showComputer && (
+        <ArtifactPanel botId={bot.id} owner={owner} />
+      )}
       {live.showBrowser && (
         <BrowserPanel
           bot={bot}

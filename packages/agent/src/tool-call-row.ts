@@ -39,6 +39,7 @@ export function finishedToolRow(outcome: ToolOutcome): ToolCallRow {
   const approval = approved?.state;
   const sources = sourcesOf(details);
   const code = codeOf(details);
+  const artifact = artifactOf(details);
   const { questions, answers } = questionsOf(details);
   const credentials = credentialsOf(details);
   const takeover = takeoverOf(approved?.result ?? details);
@@ -61,6 +62,7 @@ export function finishedToolRow(outcome: ToolOutcome): ToolCallRow {
       : {}),
     ...(sources ? { sources } : {}),
     ...(code ? { code } : {}),
+    ...(artifact && !outcome.isError ? { artifact } : {}),
     ...(questions ? { questions } : {}),
     ...(answers ? { answers } : {}),
     ...(credentials ? { credentials } : {}),
@@ -160,6 +162,22 @@ function codeOf(details: unknown): ChatToolCall["code"] {
     cwd: typeof legacy.cwd === "string" ? legacy.cwd : null,
     url: legacy.url,
   };
+}
+
+function artifactOf(details: unknown): ChatToolCall["artifact"] {
+  const artifact = record(record(details)?.artifact);
+  if (
+    !artifact ||
+    typeof artifact.id !== "string" ||
+    typeof artifact.slug !== "string" ||
+    typeof artifact.title !== "string" ||
+    typeof artifact.kind !== "string" ||
+    typeof artifact.seq !== "number"
+  ) {
+    return undefined;
+  }
+  const { id, slug, title, kind, seq } = artifact;
+  return { id, slug, title, kind, seq };
 }
 
 function credentialExpiry(details: unknown): number | undefined {

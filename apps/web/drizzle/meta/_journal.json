@@ -288,6 +288,13 @@
       "when": 1795841644371,
       "tag": "0040_code_prefix_bare_thread_ids",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "6",
+      "when": 1795851987252,
+      "tag": "0041_add_artifacts",
+      "breakpoints": true
     }
   ]
 }

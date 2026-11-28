@@ -6,6 +6,7 @@ import type { AgentRuntime } from "@tiny-agents/agent";
 import { z } from "zod";
 import {
   db,
+  artifacts,
   botChats,
   botConnections,
   botGuests,
@@ -111,6 +112,7 @@ export const BOT_RESOURCES = {
     promptRevisions.botId,
     botGuests.botId,
     llmCalls.botId,
+    artifacts.botId,
   ),
   chat: released({
     capture: { shape: z.string(), read: (bot) => bot.conversationId },

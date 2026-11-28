@@ -383,6 +383,49 @@
             ]
           },
           {
+            "id": "artifacts",
+            "kind": "toolkit",
+            "name": "Artifacts",
+            "description": "Create and revise documents, diagrams and pages in a side panel",
+            "tools": [
+              {
+                "name": "create_artifact",
+                "label": "Created artifact",
+                "askLabel": "create an artifact",
+                "description": "Create a document in the side panel",
+                "allowByDefault": true
+              },
+              {
+                "name": "edit_artifact",
+                "label": "Edited artifact",
+                "askLabel": "edit an artifact",
+                "description": "Change part of an artifact",
+                "allowByDefault": true
+              },
+              {
+                "name": "rewrite_artifact",
+                "label": "Rewrote artifact",
+                "askLabel": "rewrite an artifact",
+                "description": "Replace an artifact's whole content",
+                "allowByDefault": true
+              },
+              {
+                "name": "read_artifact",
+                "label": "Read artifact",
+                "askLabel": "read an artifact",
+                "description": "Read an artifact's content",
+                "readOnly": true
+              },
+              {
+                "name": "list_artifacts",
+                "label": "Listed artifacts",
+                "askLabel": "list artifacts",
+                "description": "List this chat's artifacts",
+                "readOnly": true
+              }
+            ]
+          },
+          {
             "id": "routines",
             "kind": "toolkit",
             "name": "Routines",
