@@ -1,5 +1,6 @@
 import {
   AgentRuntime,
+  createArtifactsToolkit,
   createAttachmentsToolkit,
   createBotBuilderCapability,
   createBotsToolkit,
@@ -38,6 +39,7 @@ import {
 import { logger, setScrubber } from "@groot/core/logger";
 import { recordLlmCall } from "../traces/traces.calls";
 import { taskStore } from "../tasks/tasks.store";
+import { artifactStore } from "../artifacts/artifacts.store";
 import { codeStore } from "../code/code.bots";
 import { skillStore } from "../skills/skills.store";
 import { memoryStore } from "../memories/memories.store";
@@ -73,6 +75,7 @@ type RuntimeEnv = Readonly<Record<string, string | undefined>>;
 export function appStoreCapabilities(env: AppEnv = appEnv()) {
   return {
     tasks: createTasksToolkit(taskStore),
+    artifacts: createArtifactsToolkit(artifactStore),
     routines: createRoutinesToolkit(createRoutineStore()),
     skills: createSkillsCapability(skillStore),
     memory: createMemoryCapability(memoryStore),
@@ -102,6 +105,7 @@ function builtinCapabilities(env: AppEnv, config: ModelConfig): Capability[] {
     createBotBuilderCapability(createBotCreationStore()),
     own.tasks,
     own.routines,
+    own.artifacts,
     createWebToolkit({
       apiKey: unquote(env.TINYFISH_API_KEY),
       vault,
@@ -302,6 +306,34 @@ function fauxCodingCall(text: string): ToolCall | undefined {
   }
 }
 
+const FAUX_PAGE =
+  '<!doctype html><html><body style="font-family:sans-serif"><h1 id="t">Counter</h1>' +
+  '<button onclick="n.textContent=++c">Add</button> <span id="n">0</span>' +
+  "<p id=\"probe\"></p><script>var c=0;var p=document.getElementById('probe');" +
+  "try{p.textContent='cookie:'+document.cookie+' storage:'+localStorage.length}" +
+  "catch(e){p.textContent='blocked: '+e.name}</script></body></html>";
+
+function fauxArtifactCall(text: string): ToolCall | undefined {
+  const match = /^\/artifact\s+(html|markdown)(?:\s+v(\d+))?/.exec(text);
+  if (!match) return undefined;
+  const [, kind, base] = match;
+  const content =
+    kind === "html" ? FAUX_PAGE : `# Trip plan\n\n- Pack\n- ${base ? "Take the train" : "Fly"}\n`;
+  if (base) {
+    return fauxToolCall("rewrite_artifact", {
+      slug: `demo-${kind}`,
+      base_version: Number(base),
+      content,
+    });
+  }
+  return fauxToolCall("create_artifact", {
+    slug: `demo-${kind}`,
+    title: kind === "html" ? "Counter page" : "Trip plan",
+    kind,
+    content,
+  });
+}
+
 export async function openFauxAgentRuntime(
   storePath: string,
   options: Pick<RuntimeOptions, "onFatal" | "onReport"> & { env: RuntimeEnv },
@@ -384,6 +416,10 @@ export async function openFauxAgentRuntime(
         }),
       );
       return { ...call, stopReason: "toolUse" as const };
+    }
+    const artifact = fauxArtifactCall(text);
+    if (artifact && toolResults === 0) {
+      return { ...fauxAssistantMessage(artifact), stopReason: "toolUse" as const };
     }
     const newBot = /^\/newbot\s+(.+)/.exec(text);
     if (newBot && toolResults === 0) {

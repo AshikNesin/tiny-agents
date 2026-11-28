@@ -22,6 +22,7 @@ import { bool, createdAt, id, ms } from "./schema.columns";
 import { codeProjects } from "./schema.code";
 
 export * from "./schema.code";
+export * from "./schema.artifacts";
 
 export const tasks = sqliteTable(
   "tasks",

@@ -7,6 +7,7 @@ import type { ModelCatalog } from "@tiny-agents/models";
 export const BOT_TOOLKITS = [
   "tasks",
   "routines",
+  "artifacts",
   "web",
   "sandbox",
   "browser",

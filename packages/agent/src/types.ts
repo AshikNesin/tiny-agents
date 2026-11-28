@@ -52,6 +52,15 @@ export interface ChatToolCall {
   };
   questions?: OwnerQuestion[];
   answers?: OwnerAnswer[];
+  artifact?: ChatArtifactRef;
+}
+
+export interface ChatArtifactRef {
+  id: string;
+  slug: string;
+  title: string;
+  kind: string;
+  seq: number;
 }
 
 export interface ChatVaultUse {
