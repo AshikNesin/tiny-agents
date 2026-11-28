@@ -1,5 +1,12 @@
 # @groot/web
 
+## 0.5.7
+
+### Patch Changes
+
+- Updated dependencies [[`3d5b044`](https://github.com/AshikNesin/tiny-agents/commit/3d5b04442d27ae96146fc10f6968def874d87a99)]:
+  - @tiny-agents/code@0.4.0
+
 ## 0.5.6
 
 ### Patch Changes
