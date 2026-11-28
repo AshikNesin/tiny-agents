@@ -110,7 +110,10 @@ export function createMicrovmBridge(options: MicrovmBridgeOptions): Server {
   const sockets = new WebSocketServer({ noServer: true });
   server.on("upgrade", (req, socket, head) => {
     sockets.handleUpgrade(req, socket, head, (ws) => {
-      pipeToSsh(createWebSocketStream(ws), connect({ host: sshHost, port: options.sshPort }));
+      pipeToSsh(
+        createWebSocketStream(ws),
+        connect({ host: sshHost, port: options.sshPort, noDelay: true }),
+      );
     });
   });
   server.on("close", () => sockets.close());

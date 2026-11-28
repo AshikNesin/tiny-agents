@@ -3,6 +3,7 @@ import { createServer as createHttpServer, type Server } from "node:http";
 import { connect, createServer as createTcpServer } from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { PassThrough } from "node:stream";
 import { parseJson } from "../../../../packages/std/src/index";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import { z } from "zod";
@@ -237,7 +238,14 @@ function setup(clock = { now: Date.parse(FIXED_NOW) }) {
     cleanups.push(() => connection.close());
     return connection;
   };
-  return { aws, records, replaced, machine, connect, clock };
+  const target = async () => {
+    const m = machine(async () => new PassThrough());
+    await m.ready();
+    const { host, privateKey, sock } = await m.dial();
+    sock?.destroy();
+    return { vm: host, privateKey };
+  };
+  return { aws, records, replaced, machine, connect, target, clock };
 }
 
 describe("the MicroVM machine", () => {
@@ -251,51 +259,54 @@ describe("the MicroVM machine", () => {
   });
 
   it("reuses the saved VM and its key after a restart", async () => {
-    const { aws, connect, machine } = setup();
-    await connect().exec("echo first");
-    expect(text(await connect(machine()).exec("echo after restart"))).toBe("after restart");
+    const { aws, target } = setup();
+    const first = await target();
+    const afterRestart = await target();
+    expect(afterRestart).toEqual({ vm: "vm-1", privateKey: first.privateKey });
     expect(aws.calls.filter((c) => c.startsWith("run"))).toEqual(["run vm-1"]);
   });
 
   it("resumes a suspended VM before dialing it", async () => {
-    const { aws, connect, machine } = setup();
-    await connect().exec("echo first");
+    const { aws, target } = setup();
+    await target();
     aws.setState("vm-1", "SUSPENDED");
-    expect(text(await connect(machine()).exec("echo awake"))).toBe("awake");
+    expect((await target()).vm).toBe("vm-1");
     expect(aws.calls).toContain("resume vm-1");
     expect(aws.calls.filter((c) => c.startsWith("run"))).toEqual(["run vm-1"]);
   });
 
   it("starts a new VM when the saved one ends within 30 minutes, and reports the swap", async () => {
-    const { aws, connect, machine, replaced, records, clock } = setup();
-    await connect().exec("echo first");
+    const { aws, target, replaced, records, clock } = setup();
+    const first = await target();
     clock.now += 7.6 * HOUR_MS;
-    expect(text(await connect(machine()).exec("echo fresh"))).toBe("fresh");
+    const fresh = await target();
+    expect(fresh.vm).toBe("vm-2");
+    expect(fresh.privateKey).not.toBe(first.privateKey);
     expect(aws.calls.filter((c) => c.startsWith("run"))).toEqual(["run vm-1", "run vm-2"]);
     expect(replaced).toEqual(["vm-1 -> vm-2"]);
     expect(records.peek()).toMatchObject({ id: "vm-2" });
   });
 
   it("keeps a VM with more than 30 minutes left", async () => {
-    const { aws, connect, machine, clock } = setup();
-    await connect().exec("echo first");
+    const { aws, target, clock } = setup();
+    await target();
     clock.now += 7.4 * HOUR_MS;
-    await connect(machine()).exec("echo same");
+    expect((await target()).vm).toBe("vm-1");
     expect(aws.calls.filter((c) => c.startsWith("run"))).toEqual(["run vm-1"]);
   });
 
   it("starts a new VM when AWS no longer knows the saved one", async () => {
-    const { aws, connect, machine, replaced } = setup();
-    await connect().exec("echo first");
+    const { aws, target, replaced } = setup();
+    await target();
     aws.vms.delete("vm-1");
-    await connect(machine()).exec("echo replaced");
+    expect((await target()).vm).toBe("vm-2");
     expect(replaced).toEqual(["vm-1 -> vm-2"]);
   });
 
   it("waits for a pending VM to run before dialing", async () => {
-    const { aws, connect } = setup();
+    const { aws, target } = setup();
     aws.pendFor(3);
-    expect(text(await connect().exec("echo started"))).toBe("started");
+    expect((await target()).vm).toBe("vm-1");
     expect(aws.calls.filter((c) => c === "get vm-1").length).toBeGreaterThanOrEqual(3);
   });
 
