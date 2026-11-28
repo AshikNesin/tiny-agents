@@ -1,4 +1,6 @@
-import { GitHubError } from "./api";
+import { parseJson } from "@tiny-agents/std";
+import { z } from "zod";
+import { failureOf, GitHubError } from "./api";
 import type { RepoRef } from "./client";
 
 export interface AppAuthOptions {
@@ -45,10 +47,7 @@ export function createAppAuth(options: AppAuthOptions): AppAuth {
         "x-github-api-version": "2022-11-28",
       },
     });
-    if (!response.ok) {
-      const message = ((await response.json().catch(() => ({}))) as { message?: string }).message;
-      throw new GitHubError(message ?? `GitHub answered ${response.status}`, response.status);
-    }
+    if (!response.ok) throw await failureOf(response);
     return (await response.json()) as T;
   }
 
@@ -131,6 +130,25 @@ export interface ManifestApp {
   webhookSecret: string | null;
 }
 
+const manifestSchema = z.looseObject({
+  id: z.number().optional(),
+  slug: z.string().optional(),
+  name: z.string().optional(),
+  pem: z.string().optional(),
+  webhook_secret: z.string().nullish(),
+});
+
+function manifestBody(text: string, status: number): z.infer<typeof manifestSchema> {
+  try {
+    return parseJson("GitHub's manifest conversion", text, manifestSchema);
+  } catch (error) {
+    throw new GitHubError(
+      `GitHub answered ${status} with an app manifest that cannot be read: ${error instanceof Error ? error.message : String(error)}`,
+      status,
+    );
+  }
+}
+
 export async function convertManifest(
   code: string,
   options: { baseUrl?: string; fetch?: typeof fetch } = {},
@@ -143,16 +161,13 @@ export async function convertManifest(
       headers: { accept: "application/vnd.github+json", "x-github-api-version": "2022-11-28" },
     },
   );
-  const body = (await response.json().catch(() => ({}))) as {
-    id?: number;
-    slug?: string;
-    name?: string;
-    pem?: string;
-    webhook_secret?: string | null;
-    message?: string;
-  };
-  if (!response.ok || !body.id || !body.slug || !body.pem) {
-    throw new GitHubError(body.message ?? `GitHub answered ${response.status}`, response.status);
+  if (!response.ok) throw await failureOf(response);
+  const body = manifestBody(await response.text(), response.status);
+  if (!body.id || !body.slug || !body.pem) {
+    throw new GitHubError(
+      `GitHub answered ${response.status} without an app id, slug and key`,
+      response.status,
+    );
   }
   return {
     id: body.id,

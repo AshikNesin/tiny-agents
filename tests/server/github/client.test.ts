@@ -639,4 +639,12 @@ describe("convertManifest", () => {
     expect(fake.calls[0]?.auth).toBeNull();
     await expect(convertManifest("used", { fetch: fake.impl })).rejects.toThrow("Not Found");
   });
+
+  it("says what GitHub answered when the failure is not JSON", async () => {
+    const { convertManifest } = await import("../../../packages/github/src/index");
+    const fake = fakeFetch(() => new Response("upstream connect error", { status: 502 }));
+    await expect(convertManifest("abc", { fetch: fake.impl })).rejects.toThrow(
+      "GitHub answered 502: upstream connect error",
+    );
+  });
 });

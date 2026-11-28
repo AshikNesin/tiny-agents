@@ -25,6 +25,31 @@ export class GitHubError extends Error {
   }
 }
 
+const failureBodySchema = z.looseObject({ message: z.unknown().optional() });
+
+export function failureMessage(body: string, otherwise: string): string {
+  const text = body.trim();
+  if (!text) return otherwise;
+  try {
+    const { message } = parseJson("GitHub's error answer", text, failureBodySchema);
+    return typeof message === "string" && message ? message : otherwise;
+  } catch {
+    return `${otherwise}: ${text.slice(0, 200)}`;
+  }
+}
+
+function unreadableBody(error: unknown): string {
+  return `its body could not be read (${error instanceof Error ? error.message : String(error)})`;
+}
+
+export async function failureOf(response: Response): Promise<GitHubError> {
+  const body = await response.text().catch(unreadableBody);
+  return new GitHubError(
+    failureMessage(body, `GitHub answered ${response.status}`),
+    response.status,
+  );
+}
+
 const graphQlBodySchema = z.looseObject({
   data: z.unknown().optional(),
   errors: z

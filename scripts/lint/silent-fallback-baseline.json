@@ -190,19 +190,6 @@
   "apps/web/src/server/lifecycle.ts": {
     ".then(() => exit(1))": 1
   },
-  "packages/code/src/drivers/claude-code/driver.ts": {
-    ".catch(() => undefined)": 3
-  },
-  "packages/code/src/drivers/shelley/client.ts": {
-    ".catch(() => \"\")": 1,
-    "catch {}": 1
-  },
-  "packages/code/src/drivers/shelley/driver.ts": {
-    ".catch(() => [] as ShelleyModel[])": 1,
-    ".catch(() => [])": 2,
-    ".catch(() => null)": 3,
-    ".catch(() => undefined)": 1
-  },
   "packages/core/src/context.ts": {
     ".catch(() => undefined)": 1
   },
@@ -215,18 +202,6 @@
   "packages/core/src/notification/webpush.ts": {
     ".catch(() => undefined)": 1
   },
-  "packages/github/src/app-auth.ts": {
-    ".catch(() => ({}))": 2
-  },
-  "packages/github/src/gh-transport.ts": {
-    "catch {}": 1
-  },
-  "packages/github/src/https-transport.ts": {
-    "catch {}": 1
-  },
-  "packages/models/src/discovery.ts": {
-    "catch {}": 1
-  },
   "packages/shell/src/hooks/useSetupStatus.ts": {
     ".then(() => live && setNeedsSetup(false))": 1
   },
@@ -235,53 +210,5 @@
   },
   "packages/shell/src/store/auth.ts": {
     "catch {}": 1
-  },
-  "scripts/demo/faux-director.mjs": {
-    "catch {}": 1
-  },
-  "scripts/demo/launch/lib/film.js": {
-    ".catch(() => {})": 1
-  },
-  "scripts/demo/launch/tools/snaplib.mjs": {
-    ".catch(() => ({}))": 1,
-    ".catch(() => {})": 1,
-    "catch {}": 1
-  },
-  "scripts/demo/launch/tools/stage-code-server/registry.ts": {
-    "catch {}": 1
-  },
-  "scripts/demo/launch/tools/stage-code.mjs": {
-    ".catch(() => undefined)": 2,
-    ".catch(() => {})": 4,
-    "catch {}": 2
-  },
-  "scripts/demo/launch/tools/stage-inbox.mjs": {
-    ".catch(() => ({}))": 1,
-    ".catch(() => undefined)": 1,
-    ".catch(() => {})": 1
-  },
-  "scripts/demo/launch/tools/stage-montage.mjs": {
-    ".catch(() => {})": 2,
-    "catch {}": 1
-  },
-  "scripts/demo/launch/tools/stage-travel.mjs": {
-    ".catch(() => ({}))": 1,
-    ".catch(() => false)": 2,
-    ".catch(() => undefined)": 2,
-    ".catch(() => {})": 1,
-    "catch {}": 3
-  },
-  "scripts/demo/record.mjs": {
-    ".catch(() => undefined)": 1
-  },
-  "scripts/demo/teaser/render.mjs": {
-    ".catch(() => require(\"playwright\"))": 1
-  },
-  "scripts/lib/local-releases.ts": {
-    "catch {}": 1
-  },
-  "scripts/local.ts": {
-    ".catch(() => undefined)": 1,
-    ".then(() => false)": 1
   }
 }

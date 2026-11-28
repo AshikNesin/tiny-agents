@@ -60,7 +60,7 @@ export async function shelleyFetch(
     throw badGateway(`Shelley is unreachable at ${config.url}: ${reason}`);
   }
   if (!response.ok) {
-    const text = (await response.text().catch(() => "")).trim().slice(0, 500);
+    const text = await failureText(response);
     const message = `Shelley answered ${response.status}${text ? `: ${text}` : ""}`;
     if (response.status >= 400 && response.status < 500) {
       throw new HarnessError(response.status, message);
@@ -68,6 +68,14 @@ export async function shelleyFetch(
     throw badGateway(message);
   }
   return response;
+}
+
+async function failureText(response: Response): Promise<string> {
+  try {
+    return (await response.text()).trim().slice(0, 500);
+  } catch (error) {
+    return `its body could not be read (${error instanceof Error ? error.message : String(error)})`;
+  }
 }
 
 export async function shelleyJson<T>(
@@ -88,6 +96,7 @@ export async function shelleyJson<T>(
 export async function readSseFrames(
   body: ReadableStream<Uint8Array>,
   onFrame: (event: unknown) => void,
+  onFrameFailure: (error: unknown, data: string) => void,
 ): Promise<void> {
   const reader = body.getReader();
   const decoder = new TextDecoder();
@@ -109,7 +118,9 @@ export async function readSseFrames(
       if (!data) continue;
       try {
         onFrame(JSON.parse(data));
-      } catch {}
+      } catch (error) {
+        onFrameFailure(error, data);
+      }
     }
   }
 }

@@ -423,8 +423,20 @@ export function createShelleyHarness(options: ShelleyHarnessOptions): ShelleyHar
     return rows;
   }
 
+  const unread =
+    <T>(what: string, nativeId: string, fallback: T) =>
+    (error: unknown): T => {
+      host.logger.warn(`Could not read a Shelley thread's ${what}`, {
+        nativeId,
+        error: String(error),
+      });
+      return fallback;
+    };
+
   async function jobsOf(nativeId: string): Promise<BackgroundJob[]> {
-    const list = await json(lists.jobs, `${conv(nativeId)}/background-jobs`).catch(() => []);
+    const list = await json(lists.jobs, `${conv(nativeId)}/background-jobs`).catch(
+      unread("background jobs", nativeId, []),
+    );
     return list.map((job) => ({
       id: job.id,
       command: job.command ?? job.id,
@@ -434,7 +446,7 @@ export function createShelleyHarness(options: ShelleyHarnessOptions): ShelleyHar
 
   async function subagentCost(nativeId: string): Promise<number> {
     const usage = await json(lists.subagentUsage, `${conv(nativeId)}/subagent-usage`).catch(
-      () => null,
+      unread("subagent usage", nativeId, null),
     );
     return usage ? usage.reported_usd || usage.estimated_usd || 0 : 0;
   }
@@ -474,12 +486,14 @@ export function createShelleyHarness(options: ShelleyHarnessOptions): ShelleyHar
   async function load(nativeId: string): Promise<Loaded> {
     const [detail, children, rawSettings] = await Promise.all([
       json(lists.detail, conv(nativeId)),
-      json(lists.rows, `${conv(nativeId)}/subagents`).catch(() => []),
-      json(settingsSchema, `${conv(nativeId)}/settings`).catch(() => undefined),
+      json(lists.rows, `${conv(nativeId)}/subagents`).catch(unread("subagents", nativeId, [])),
+      json(settingsSchema, `${conv(nativeId)}/settings`).catch(
+        unread("settings", nativeId, undefined),
+      ),
     ]);
     const row = rowOf(nativeId, detail);
     const settings = settingsOf(rawSettings, row);
-    const models = await shelleyModels().catch(() => [] as ShelleyModel[]);
+    const models = await shelleyModels().catch(unread("model list", nativeId, []));
     const contextMax = models.find((m) => m.id === settings.model)?.max_context_tokens;
     return { detail, row, children, settings, contextMax };
   }
@@ -786,11 +800,11 @@ export function createShelleyHarness(options: ShelleyHarnessOptions): ShelleyHar
               json: { models },
             })
               .then((r) => r.costs ?? {})
-              .catch(() => null)
+              .catch(unread("model costs", nativeId, null))
           : Promise.resolve({}),
         json(lists.subagentUsage, `${conv(nativeId)}/subagent-usage`)
           .then((u) => u.per_model ?? [])
-          .catch(() => null),
+          .catch(unread("subagent usage", nativeId, null)),
       ]);
       return usageReport({ messages, costs, subagents });
     },

@@ -1,5 +1,5 @@
 import { randomBytes, randomUUID } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { logger } from "@groot/core/logger";
 import {
@@ -31,13 +31,14 @@ export * from "../../../../../apps/web/src/server/api/code/code.registry.ts";
 const DIR = process.env.STAGE_CODE_DIR!;
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+function allowedStep(): number {
+  const file = path.join(DIR, "gate");
+  return existsSync(file) ? Number(readFileSync(file, "utf8").trim()) || 0 : 0;
+}
+
 async function gate(step: number): Promise<void> {
   for (;;) {
-    let allowed = 0;
-    try {
-      allowed = Number(readFileSync(path.join(DIR, "gate"), "utf8").trim()) || 0;
-    } catch {}
-    if (allowed >= step) return;
+    if (allowedStep() >= step) return;
     // eslint-disable-next-line no-await-in-loop
     await sleep(100);
   }

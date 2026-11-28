@@ -162,10 +162,18 @@ export function createShelleyStream(options: StreamOptions): ShelleyStream {
         void refreshList();
         emit(connectedListeners, undefined);
         // eslint-disable-next-line react-doctor/async-await-in-loop
-        await readSseFrames(response.body, (frame) => {
-          armIdle();
-          handle(frame as ShelleyFrame);
-        });
+        await readSseFrames(
+          response.body,
+          (frame) => {
+            armIdle();
+            handle(frame as ShelleyFrame);
+          },
+          (error, data) =>
+            logger.warn("Skipped a Shelley stream frame that could not be handled", {
+              error: String(error),
+              frame: data.slice(0, 200),
+            }),
+        );
       } catch (error) {
         const abortReason = attempt.signal.reason;
         reason =

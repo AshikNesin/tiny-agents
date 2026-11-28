@@ -74,14 +74,15 @@ export async function releaseInfo(root: string, sha: string): Promise<UpdateRele
   const [full, subject, time] = (await git(root, ["show", "-s", "--format=%H%x00%s%x00%ct", sha]))
     .trim()
     .split("\0");
-  let version = "unknown";
-  try {
-    const manifest = JSON.parse(await git(root, ["show", `${full}:package.json`])) as {
-      version?: string;
-    };
-    version = manifest.version ?? version;
-  } catch {}
-  return { sha: full, version, subject, committedAt: Number(time) * 1000 };
+  const manifest = JSON.parse(await git(root, ["show", `${full}:package.json`])) as {
+    version?: string;
+  };
+  return {
+    sha: full,
+    version: manifest.version ?? "unknown",
+    subject,
+    committedAt: Number(time) * 1000,
+  };
 }
 
 export async function compare(

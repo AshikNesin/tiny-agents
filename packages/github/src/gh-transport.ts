@@ -1,6 +1,5 @@
-import { parseJson } from "@tiny-agents/std";
 import { z } from "zod";
-import { GitHubError, graphQlData, restData, type GitHubApi } from "./api";
+import { failureMessage, GitHubError, graphQlData, restData, type GitHubApi } from "./api";
 
 export interface ExecResult {
   stdout: string;
@@ -17,23 +16,15 @@ const SAFE_PATH = /^\/[A-Za-z0-9/_.%~-]+$/;
 
 const GH_TIMEOUT_MS = 60_000;
 
-const failureBodySchema = z.looseObject({ message: z.unknown().optional() });
-
 function failure(result: ExecResult): GitHubError {
   const status = /\(HTTP (\d{3})\)/.exec(result.stderr)?.[1];
-  let message = result.stderr.trim().replace(/^gh: /, "");
-  try {
-    const body = parseJson("gh's error answer", result.stdout, failureBodySchema);
-    if (typeof body.message === "string") message = body.message;
-  } catch {}
+  const stderr = result.stderr.trim().replace(/^gh: /, "");
+  let message = failureMessage(result.stdout, stderr || `gh exited with ${result.exitCode}`);
   if (result.exitCode === 127) message = "gh is not installed on the sandbox.";
   if (/auth login|not logged in/i.test(result.stderr)) {
     message = "gh is not signed in on the sandbox. Run `gh auth login` from the Terminal page.";
   }
-  return new GitHubError(
-    message || `gh exited with ${result.exitCode}`,
-    status ? Number(status) : undefined,
-  );
+  return new GitHubError(message, status ? Number(status) : undefined);
 }
 
 export function createGhTransport(exec: ExecPort): GitHubApi {

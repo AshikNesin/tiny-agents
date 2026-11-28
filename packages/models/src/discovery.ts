@@ -167,8 +167,9 @@ export function resolveCapabilities(
 function modelListBody(body: string, what: string): Record<string, unknown> {
   try {
     return parseJson("A model list", body, z.record(z.string(), z.unknown()));
-  } catch {}
-  throw new DiscoveryError("invalid", `${what} did not answer with a model list.`);
+  } catch {
+    throw new DiscoveryError("invalid", `${what} did not answer with a model list.`);
+  }
 }
 
 async function getJson(

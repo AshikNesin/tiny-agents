@@ -339,7 +339,7 @@ export function createClaudeCodeHarness(options: ClaudeCodeHarnessOptions): Clau
       if (!next) return;
       runtime.row = await host.index.upsert({ ...next, instanceId, nativeId: runtime.nativeId });
     });
-    runtime.writes = write.catch(() => undefined);
+    runtime.writes = Promise.allSettled([write]).then(() => undefined);
     return write;
   }
 
@@ -367,7 +367,7 @@ export function createClaudeCodeHarness(options: ClaudeCodeHarnessOptions): Clau
   }
 
   async function reload(runtime: Runtime): Promise<void> {
-    await runtime.loading?.catch(() => undefined);
+    await Promise.allSettled([runtime.loading]);
     runtime.history = undefined;
     runtime.live = [];
     runtime.liveIndex.clear();
@@ -855,7 +855,12 @@ export function createClaudeCodeHarness(options: ClaudeCodeHarnessOptions): Clau
 
     async outcome(nativeId) {
       const runtime = await runtimeOf(nativeId);
-      await loadHistory(runtime).catch(() => undefined);
+      await loadHistory(runtime).catch((error: unknown) =>
+        log.warn("Could not load a Claude Code thread's history for its outcome", {
+          nativeId,
+          error: String(error),
+        }),
+      );
       return outcomeOf(runtime);
     },
 

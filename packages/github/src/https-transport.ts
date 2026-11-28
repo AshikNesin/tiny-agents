@@ -1,5 +1,5 @@
 import type { z } from "zod";
-import { GitHubError, graphQlData, restData, type GitHubApi } from "./api";
+import { failureOf, GitHubError, graphQlData, restData, type GitHubApi } from "./api";
 
 export interface HttpsTransportOptions {
   token(): Promise<string>;
@@ -23,14 +23,7 @@ export function createHttpsTransport(options: HttpsTransportOptions): GitHubApi 
       body: body === undefined ? undefined : JSON.stringify(body),
       redirect: "follow",
     });
-    if (!response.ok) {
-      let message = `GitHub answered ${response.status}`;
-      try {
-        const json = (await response.json()) as { message?: string };
-        if (json.message) message = json.message;
-      } catch {}
-      throw new GitHubError(message, response.status);
-    }
+    if (!response.ok) throw await failureOf(response);
     return response;
   }
 

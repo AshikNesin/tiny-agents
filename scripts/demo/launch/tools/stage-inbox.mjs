@@ -8,7 +8,8 @@ import path from "node:path";
 const PORT = 3130;
 const URL_BASE = `http://localhost:${PORT}`;
 process.env.TA_URL = URL_BASE;
-const { open, api, dumpCss, snap, verify, SIZES } = await import("./snaplib.mjs");
+const { open, api, dumpCss, snap, verify, SIZES, ignoreNetworkStillBusy, serverReady, apiAnswer } =
+  await import("./snaplib.mjs");
 
 const REPO = path.resolve(import.meta.dirname, "../../../..");
 const STATE = path.join(REPO, "data/verify/inbox");
@@ -172,10 +173,7 @@ async function up() {
     if (!alive(child.pid))
       throw new Error("the server exited during boot; see data/verify/inbox/server.log");
     if (i > 240) throw new Error("the server was not ready after 240 s");
-    const ready = await fetch(`${URL_BASE}/ready`)
-      .then((r) => r.json())
-      .catch(() => undefined);
-    if (ready?.ready) break;
+    if (await serverReady(URL_BASE)) break;
     await sleep(1000);
   }
 }
@@ -190,10 +188,7 @@ async function call(method, url, body) {
     },
     ...(body ? { body: JSON.stringify(body) } : {}),
   });
-  const json = await res.json().catch(() => ({}));
-  if (!res.ok)
-    throw new Error(`${method} ${url} -> ${res.status} ${JSON.stringify(json).slice(0, 300)}`);
-  return json.data ?? json;
+  return apiAnswer(`${method} ${url}`, res.ok, res.status, await res.text());
 }
 
 async function until(what, check, timeout = 60_000) {
@@ -292,7 +287,7 @@ const approvalCard = (page, botName, ask) =>
 
 async function settle(page) {
   await page.evaluate(() => document.activeElement?.blur?.());
-  await page.waitForLoadState("networkidle", { timeout: 5_000 }).catch(() => {});
+  await page.waitForLoadState("networkidle", { timeout: 5_000 }).catch(ignoreNetworkStillBusy);
   await page.evaluate(() => document.fonts.ready);
   await page.waitForTimeout(600);
 }

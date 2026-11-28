@@ -34,8 +34,13 @@ cdp.on("Page.screencastFrame", ({ data, metadata, sessionId }) => {
   const file = `f${String(frames.length).padStart(6, "0")}.jpg`;
   writeFileSync(`${OUT}/${file}`, Buffer.from(data, "base64"));
   frames.push({ file, t: metadata.timestamp });
-  cdp.send("Page.screencastFrameAck", { sessionId }).catch(() => undefined);
+  cdp.send("Page.screencastFrameAck", { sessionId }).catch(ignoreClosedSession);
 });
+
+function ignoreClosedSession(error) {
+  if (/closed|detached/i.test(String(error?.message))) return;
+  console.warn("could not acknowledge a screencast frame:", error);
+}
 
 const REST = { x: 1660, y: 900 };
 let cur = { x: 1800, y: 1040 };

@@ -7,7 +7,8 @@ import path from "node:path";
 const PORT = 3160;
 const URL_ = `http://localhost:${PORT}`;
 process.env.TA_URL ??= URL_;
-const { open, api, dumpCss, snap, verify, ROOT } = await import("./snaplib.mjs");
+const { open, api, dumpCss, snap, verify, ROOT, ignoreNetworkStillBusy, signalGroupIfRunning } =
+  await import("./snaplib.mjs");
 
 const TOOLS = import.meta.dirname;
 const REPO = path.resolve(TOOLS, "../../../..");
@@ -305,9 +306,7 @@ async function stopOurs() {
   if (pgid && alive(pgid)) {
     if (!ours(pgid)) return log(`pid ${pgid} is not our server; not killing it`);
     log(`stopping our instance (process group ${pgid})`);
-    try {
-      process.kill(-pgid, "SIGTERM");
-    } catch {}
+    signalGroupIfRunning(pgid, "SIGTERM");
     for (let i = 0; i < 60 && alive(pgid); i++) await sleep(250);
     if (alive(pgid)) process.kill(-pgid, "SIGKILL");
   }
@@ -475,7 +474,7 @@ async function ensureResearcherChat(page) {
   const r = researcher(page);
   await page.goto(`/chats/${botIds.Researcher}`);
   await r.composer.waitFor();
-  await page.waitForLoadState("networkidle").catch(() => {});
+  await page.waitForLoadState("networkidle").catch(ignoreNetworkStillBusy);
   if (!(await r.banner.isVisible())) {
     await r.menuButton.click();
     await r.toggle.click();
@@ -659,7 +658,7 @@ for (const mode of MODES) {
     if (!want(name)) continue;
     await page.unrouteAll({ behavior: "ignoreErrors" });
     await stage(session);
-    await page.waitForLoadState("networkidle", { timeout: 3000 }).catch(() => {});
+    await page.waitForLoadState("networkidle", { timeout: 3000 }).catch(ignoreNetworkStillBusy);
     await page.mouse.move(0, 0);
     await dumpCss(page, mode);
     await snap(session, name);

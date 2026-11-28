@@ -31,16 +31,42 @@ export async function open(
   await page.getByLabel(/password/i).fill(password);
   await page.getByRole("button", { name: "Sign In", exact: true }).click();
   await page.waitForURL((u) => !u.pathname.startsWith("/login"));
-  await page.waitForLoadState("networkidle").catch(() => {});
+  await page.waitForLoadState("networkidle").catch(ignoreNetworkStillBusy);
   return { browser, ctx, page, mode };
+}
+
+export function ignoreNetworkStillBusy(error) {
+  if (error?.name !== "TimeoutError") throw error;
+}
+
+export function signalGroupIfRunning(pid, signal) {
+  try {
+    process.kill(-pid, signal);
+  } catch (error) {
+    if (error.code !== "ESRCH") throw error;
+  }
+}
+
+export async function serverReady(base) {
+  try {
+    const res = await fetch(`${base}/ready`);
+    return Boolean((await res.json()).ready);
+  } catch (error) {
+    if (error instanceof TypeError || error instanceof SyntaxError) return false;
+    throw error;
+  }
+}
+
+export function apiAnswer(what, ok, status, text) {
+  if (!ok) throw new Error(`${what} -> ${status} ${text.slice(0, 300)}`);
+  if (!text.trim()) return {};
+  const json = JSON.parse(text);
+  return json.data ?? json;
 }
 
 export async function api(page, method, url, body) {
   const res = await page.request.fetch(`/api/v1${url}`, { method, data: body });
-  const json = await res.json().catch(() => ({}));
-  if (!res.ok())
-    throw new Error(`${method} ${url} -> ${res.status()} ${JSON.stringify(json).slice(0, 300)}`);
-  return json.data ?? json;
+  return apiAnswer(`${method} ${url}`, res.ok(), res.status(), await res.text());
 }
 
 export async function dumpCss(page, mode) {
@@ -182,7 +208,9 @@ export async function snap({ page, mode }, name) {
         if (a.name !== "width" && a.name !== "height") img.setAttribute(a.name, a.value);
       try {
         img.src = live[i].toDataURL("image/png");
-      } catch {}
+      } catch (error) {
+        img.dataset.canvasUnreadable = String(error);
+      }
       c.replaceWith(img);
     });
     clone.querySelectorAll("script, noscript, link, style, iframe").forEach((n) => n.remove());
