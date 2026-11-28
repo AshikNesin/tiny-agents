@@ -13,12 +13,20 @@ if [ ! -f "$KEY" ]; then
   ssh-keygen -q -t ed25519 -N "" -C tiny-agents-sandbox -f "$KEY"
 fi
 
-SRC=/etc/tiny-agents/authorized_keys
-if [ ! -s "$SRC" ]; then
-  echo "No public key at $SRC: run \`pnpm sandbox:up\`, which creates data/sandbox/id_ed25519.pub." >&2
-  exit 1
+# On an AWS Lambda MicroVM the app sends each VM its own public key in the
+# run hook, which the bridge writes into authorized-keys; the bridge also
+# carries SSH over the VM's HTTPS endpoint (port 8080).
+if [ "${SANDBOX_MICROVM:-0}" = 1 ]; then
+  mkdir -p /etc/ssh/authorized-keys
+  /opt/tiny-agents/claude-worker/node/bin/node /usr/local/lib/tiny-agents/microvm-bridge.mjs </dev/null &
+else
+  SRC=/etc/tiny-agents/authorized_keys
+  if [ ! -s "$SRC" ]; then
+    echo "No public key at $SRC: run \`pnpm sandbox:up\`, which creates data/sandbox/id_ed25519.pub." >&2
+    exit 1
+  fi
+  install -m 644 -o root -g root "$SRC" /etc/ssh/authorized-keys/exedev
 fi
-install -m 644 -o root -g root "$SRC" /etc/ssh/authorized-keys/exedev
 
 # The X socket dir must be world-writable for each profile's display.
 mkdir -p /tmp/.X11-unix && chmod 1777 /tmp/.X11-unix
