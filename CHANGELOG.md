@@ -1,5 +1,11 @@
 # tiny-agents
 
+## 1.9.1
+
+### Patch Changes
+
+- [#638](https://github.com/AshikNesin/tiny-agents/pull/638) [`183b103`](https://github.com/AshikNesin/tiny-agents/commit/183b1035ab459e1a138ffc54d001e6cc27c0dc43) Thanks [@AshikNesin](https://github.com/AshikNesin)! - The browser works again in the local Docker sandbox on Apple Silicon. A sandbox home volume from before the browser stack moved to v2 has no v2 marker, so the app reran the stack install, which stopped on arm64 before checking that the image already has Chromium. The install now checks the architecture only when it has to download Chrome.
+
 ## 1.9.0
 
 ### Minor Changes
