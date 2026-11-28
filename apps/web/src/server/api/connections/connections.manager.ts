@@ -62,6 +62,10 @@ const MAX_BACKOFF_MS = 5 * 60_000;
 const CONNECT_WAIT_MS = 15_000;
 const CALL_WAIT_MS = 30_000;
 
+function logFailedClose(error: unknown, connection: string): void {
+  logger.debug({ error, connection }, "Connections: an MCP connection did not close cleanly");
+}
+
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms).unref?.());
 
 export class ConnectionManager {
@@ -126,7 +130,7 @@ export class ConnectionManager {
     this.#set(id, { status: "connecting" });
     const previous = live.connection;
     live.connection = undefined;
-    await previous?.close().catch(() => undefined);
+    await previous?.close().catch((error: unknown) => logFailedClose(error, id));
     if (stale()) return;
     let connection: McpConnection | undefined;
     try {
@@ -147,7 +151,7 @@ export class ConnectionManager {
         },
       });
       if (stale()) {
-        await connection.close().catch(() => undefined);
+        await connection.close().catch((error: unknown) => logFailedClose(error, id));
         return;
       }
       live.connection = connection;
@@ -354,7 +358,7 @@ export class ConnectionManager {
       clearTimeout(live.retry);
       const connection = live.connection;
       live.connection = undefined;
-      await connection?.close().catch(() => undefined);
+      await connection?.close().catch((error: unknown) => logFailedClose(error, id));
     }
     this.#withdraw(slug);
     await this.#reconcile(botIds);
@@ -388,7 +392,9 @@ export class ConnectionManager {
     for (const listener of this.#listeners) {
       try {
         listener(id, state);
-      } catch {}
+      } catch (error) {
+        logger.warn({ error, connection: id }, "Connections: a state listener threw");
+      }
     }
   }
 }

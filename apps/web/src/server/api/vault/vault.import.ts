@@ -32,12 +32,13 @@ export interface VaultImportReport {
 const entrySchema = z.looseObject({ policy: z.string(), sealed: z.string().startsWith("v2:") });
 
 function parseEntry(raw: string): { policy: string; sealed: string } {
-  let entry: z.infer<typeof entrySchema> | undefined;
+  let entry: z.infer<typeof entrySchema>;
   try {
     const inner = parseJson("A pre-Q4 vault entry's wrapping", raw, z.string());
     entry = parseJson("A pre-Q4 vault entry", inner, entrySchema);
-  } catch {}
-  if (!entry) throw new Error("not a vault entry in the pre-Q4 format");
+  } catch (error) {
+    throw new Error("not a vault entry in the pre-Q4 format", { cause: error });
+  }
   return { policy: entry.policy, sealed: entry.sealed };
 }
 

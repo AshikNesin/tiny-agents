@@ -84,7 +84,9 @@ export function createSideCaller(runtime: SideCallRuntime): SideCaller {
           },
           { signal },
         );
-        call.catch(() => undefined);
+        call.catch((error: unknown) =>
+          logger.debug({ ...fields, error }, `${label}: the model call rejected`),
+        );
         const reply = await Promise.race([call, deadline]);
         if (reply === TIMED_OUT) {
           await trace({ outcome: "timeout" });

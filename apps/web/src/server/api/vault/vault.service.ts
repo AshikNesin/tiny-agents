@@ -455,7 +455,9 @@ async function markUsed(itemId: string, by: string | null): Promise<void> {
     .update(vaultItems)
     .set({ lastUsedAt: new Date(), lastUsedBy: by })
     .where(eq(vaultItems.id, itemId))
-    .catch(() => undefined);
+    .catch((error: unknown) => {
+      logger.warn({ error, itemId }, "Vault: could not record that an item was used");
+    });
 }
 
 export async function resolveConnectionSecret(

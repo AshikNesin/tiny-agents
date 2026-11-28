@@ -279,7 +279,11 @@ export function convertKeyvEntry(entry: {
         return value.slice(1);
       }),
     );
-  } catch {
+  } catch (error) {
+    logger.warn(
+      { error, key: entry.key },
+      "Skipped a keyv entry the old database stored unreadably",
+    );
     return undefined;
   }
   const expires = typeof parsed.expires === "number" ? new Date(parsed.expires) : null;

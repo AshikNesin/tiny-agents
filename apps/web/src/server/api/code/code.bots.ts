@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import type { CodeHandoffRecord, CodeStore } from "@tiny-agents/agent";
 import { Boom } from "@groot/core/errors";
+import { logger } from "@groot/core/logger";
 import {
   HarnessError,
   type HarnessInstance,
@@ -320,7 +321,10 @@ export const codeStore: CodeStore = {
             deletions: f.deletions,
           })),
         )
-        .catch(() => undefined);
+        .catch((error: unknown) => {
+          logger.warn({ error, threadId: input.threadId }, "Code: could not list a thread's diff");
+          return undefined;
+        });
     }
     return {
       harness: instance.label,

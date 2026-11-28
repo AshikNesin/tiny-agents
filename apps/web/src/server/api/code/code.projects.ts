@@ -92,7 +92,9 @@ export function projectSettings(raw: string): ProjectSettings {
   let value: z.infer<typeof storedSettingsSchema> = {};
   try {
     value = parseJson("A project's settings", raw, storedSettingsSchema);
-  } catch {}
+  } catch (error) {
+    logger.warn({ error }, "Code: a project's stored settings are unreadable; using the defaults");
+  }
   const d = DEFAULT_PROJECT_SETTINGS;
   return {
     scripts: { ...d.scripts, ...value.scripts },
@@ -318,7 +320,13 @@ export async function scriptsFor(
   ws: Workspace,
   path: string,
 ): Promise<ProjectScripts> {
-  const checkedIn = await ws.readScripts(path).catch(() => ({}));
+  const checkedIn = await ws.readScripts(path).catch((error: unknown): ProjectScripts => {
+    logger.warn(
+      { error, path },
+      "Code: could not read the checked-in scripts; using the project's",
+    );
+    return {};
+  });
   return { ...checkedIn, ...projectSettings(project.settings).scripts };
 }
 
@@ -384,7 +392,10 @@ export async function startProjectThread(
   }
   const startCheckpoint = await ws
     .checkpoint(path, checkpointRef(branch, 0))
-    .catch(() => undefined);
+    .catch((error: unknown) => {
+      logger.warn({ error, path }, "Code: could not take the thread's starting checkpoint");
+      return undefined;
+    });
   const { branch: _branch, tools = [], ...create } = input;
   let created: { nativeId: string };
   try {
@@ -395,7 +406,12 @@ export async function startProjectThread(
       model: input.model ?? projectModel(project, instance.id),
     });
   } catch (error) {
-    await ws.removeWorktree(project.checkoutPath, path).catch(() => undefined);
+    await ws.removeWorktree(project.checkoutPath, path).catch((cleanup: unknown) => {
+      logger.warn(
+        { error: cleanup, path },
+        "Code: could not remove the worktree of a failed start",
+      );
+    });
     throw error;
   }
   await applyTitle(instance, created.nativeId, names?.title ?? branchTitle(branch));

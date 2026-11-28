@@ -2,6 +2,7 @@ import { parseJson } from "@tiny-agents/std";
 import { z } from "zod";
 import { load as loadYaml } from "js-yaml";
 import type { AttachmentContent } from "@tiny-agents/agent";
+import { logger } from "@groot/core/logger";
 import { listGzip, listTar, listTgz, listZip, type ArchiveListing } from "./uploads.archive";
 import {
   docxToMarkdown,
@@ -220,7 +221,9 @@ async function extractPdf(bytes: Uint8Array): Promise<ExtractResult> {
         }
       };
       walk((await pdf.getOutline()) as OutlineNode[] | null, 0);
-    } catch {}
+    } catch (error) {
+      logUnreadPdfPart(error, "outline");
+    }
     let title: string | undefined;
     let author: string | undefined;
     try {
@@ -231,7 +234,9 @@ async function extractPdf(bytes: Uint8Array): Promise<ExtractResult> {
         title = info.Title.trim().slice(0, 300);
       if (typeof info?.Author === "string" && info.Author.trim())
         author = info.Author.trim().slice(0, 200);
-    } catch {}
+    } catch (error) {
+      logUnreadPdfPart(error, "metadata");
+    }
     return {
       status: "ready",
       content: { format: "pdf", pages, ...(outline.length ? { outline } : {}) },
@@ -246,8 +251,12 @@ async function extractPdf(bytes: Uint8Array): Promise<ExtractResult> {
       },
     };
   } finally {
-    await pdf.cleanup().catch(() => undefined);
+    await pdf.cleanup().catch((error: unknown) => logUnreadPdfPart(error, "cleanup"));
   }
+}
+
+function logUnreadPdfPart(error: unknown, part: "outline" | "metadata" | "cleanup"): void {
+  logger.debug({ error, part }, "Uploads: a PDF's text was extracted without this part");
 }
 
 function slidesResult(slides: Slide[]): ExtractResult {

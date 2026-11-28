@@ -4,6 +4,7 @@ import type { AppContext } from "@groot/core/types";
 import { ok } from "@groot/core/utils/api-response.utils";
 import { parseBody, parseStringParam, requireUser } from "@groot/core/utils/controller.utils";
 import { Boom } from "@groot/core/errors";
+import { logger } from "@groot/core/logger";
 import * as botsService from "../bots/bots.service";
 import { browserTargetForBot } from "../bots/browser.targets";
 import { knownProfile } from "../bots/profiles";
@@ -148,13 +149,17 @@ function badGateway(error: unknown, fallback: string): never {
   throw Boom.badGateway(error instanceof Error ? error.message : fallback);
 }
 
+function logFailedStart(error: unknown, route: string): void {
+  logger.warn({ error, route }, "Live: the session did not start");
+}
+
 function register(router: Routes, surface: LiveSurface<LiveEntry>, a: Addressing): void {
   router.post(`${a.base}/start`, "signedIn", async (c) => {
     const { at } = await a.resolve(c);
     surface
       .ops()
       .start(at)
-      .catch(() => {});
+      .catch((error: unknown) => logFailedStart(error, a.base));
     return ok<LiveStarting>(c, { starting: true });
   });
 
@@ -165,7 +170,9 @@ function register(router: Routes, surface: LiveSurface<LiveEntry>, a: Addressing
     const view = live && surface.view(live);
     if (!live || (!view && a.noViewIsNotRunning)) throw Boom.notFound(a.notRunning);
     if (!view) throw Boom.conflict(surface.noView);
-    if (a.opensTabForTicket) await ops.start(at).catch(() => {});
+    if (a.opensTabForTicket) {
+      await ops.start(at).catch((error: unknown) => logFailedStart(error, a.base));
+    }
     const ticket = a.issueTicket({
       userId: requireUser(c).userId,
       at,

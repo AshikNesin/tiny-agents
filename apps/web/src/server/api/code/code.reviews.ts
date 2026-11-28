@@ -72,6 +72,12 @@ function parsePullRef(input: string): { repo: RepoRef; number: number } | undefi
 export const reviewPath = (project: CodeProjectRow, number: number) =>
   `${project.checkoutPath.replace(/\/checkout$/, "")}/reviews/pr-${number}`;
 
+function viewerUnknown(error: unknown): never {
+  throw Boom.badGateway(
+    `GitHub did not say who you are: ${error instanceof Error ? error.message : String(error)}`,
+  );
+}
+
 function lastReviewed(pr: PullSnapshot, login: string): string | null {
   const mine = pr.reviews
     .filter((r) => r.commit && r.author.login.toLowerCase() === login.toLowerCase())
@@ -108,7 +114,10 @@ async function threadWorktreeAt(
   const thread = await db.query.codeThreads.findFirst({ where: eq(codeThreads.id, threadId) });
   if (!thread?.worktree || thread.branch !== pr.headRef) return undefined;
   if (!(await ws.exists(thread.worktree))) return undefined;
-  const at = await ws.headSha(thread.worktree).catch(() => undefined);
+  const at = await ws.headSha(thread.worktree).catch((error: unknown) => {
+    logger.warn({ error, threadId }, "Code: could not read the coding thread's head for a review");
+    return undefined;
+  });
   return at === head ? thread.worktree : undefined;
 }
 
@@ -201,7 +210,7 @@ async function checkOutPull(
     );
   }
   const [viewer, ws] = await Promise.all([
-    github.viewer().catch(() => undefined),
+    github.viewer().catch(viewerUnknown),
     services.workspace(project),
   ]);
   const own = reviewPath(project, pr.number);
@@ -231,8 +240,8 @@ async function checkOutPull(
     baseRef: pr.baseRef,
     headSha,
     fromFork: pr.fromFork,
-    mine: !!viewer && !!pr.author && viewer.login.toLowerCase() === pr.author.toLowerCase(),
-    ...(viewer ? { reviewedSha: lastReviewed(pr, viewer.login) } : {}),
+    mine: !!pr.author && viewer.login.toLowerCase() === pr.author.toLowerCase(),
+    reviewedSha: lastReviewed(pr, viewer.login),
     worktree: path,
     archivedAt: null,
     updatedAt: new Date(),
@@ -622,16 +631,12 @@ export async function pushReview(id: string, message: string): Promise<PushedRev
       `@${pr.author ?? row.author}'s fork does not allow edits from maintainers, so you cannot push to it. Post your changes as suggestions instead.`,
     );
   }
-  const [dirty, head, viewer] = await Promise.all([
-    ws.uncommitted(worktree),
-    ws.headSha(worktree),
-    github.viewer().catch(() => undefined),
-  ]);
+  const [dirty, head] = await Promise.all([ws.uncommitted(worktree), ws.headSha(worktree)]);
   if (dirty.length === 0 && head === row.headSha) {
     throw Boom.badRequest("You have not changed anything in this pull request.");
   }
   if (dirty.length > 0) {
-    const login = viewer?.login ?? "tiny-agents";
+    const { login } = await github.viewer().catch(viewerUnknown);
     await ws
       .commitAll(worktree, message, {
         name: login,

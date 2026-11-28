@@ -1,4 +1,5 @@
 import { unzipSync } from "fflate";
+import { logger } from "@groot/core/logger";
 import { sniffImage } from "./uploads.prepare";
 import { startsWith, type ExtractKind } from "./uploads.text";
 
@@ -123,7 +124,12 @@ function zipEntryNames(bytes: Uint8Array): string[] {
         return false;
       },
     });
-  } catch {}
+  } catch (error) {
+    logger.debug(
+      { error, listed: names.length },
+      "Uploads: a zip's entries could not all be listed",
+    );
+  }
   return names;
 }
 

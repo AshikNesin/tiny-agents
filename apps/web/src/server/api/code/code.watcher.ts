@@ -164,7 +164,11 @@ export function startCodeWatcher(deps: WatcherDeps): () => void {
     key: string,
   ) {
     const id = threadKey(instance.id, nativeId);
-    const title = (await hub.list().catch(() => [])).find((t) => t.id === id)?.title ?? nativeId;
+    const threads = await hub.list().catch((error: unknown) => {
+      logError(error, id, "reading the thread's title");
+      return [];
+    });
+    const title = threads.find((t) => t.id === id)?.title ?? nativeId;
     await reportToProject(id, {
       key: `attention-${key}`,
       from: instance.label,

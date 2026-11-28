@@ -2,6 +2,7 @@ import { parseJson } from "@tiny-agents/std";
 import { z } from "zod";
 import { and, eq, inArray } from "drizzle-orm";
 import { storageService } from "@groot/core/storage";
+import { HttpError } from "@groot/core/errors";
 import { logger } from "@groot/core/logger";
 import type { AttachmentContent } from "@tiny-agents/agent";
 import { db, uploads, type Upload } from "../../db";
@@ -241,9 +242,19 @@ async function finish(
           ),
         )
         .returning({ id: uploads.id })
-        .catch(() => []);
+        .catch((error: unknown) => {
+          logger.warn(
+            { error, uploadId, status: data.extractStatus },
+            "Uploads: could not record how an extraction ended",
+          );
+          return [];
+        });
   if (updated.length === 0 && data.extractStatus === "ready") {
-    await storageService.deleteFiles({ filePaths: [extractKey(uploadId)] }).catch(() => undefined);
+    await storageService
+      .deleteFiles({ filePaths: [extractKey(uploadId)] })
+      .catch((error: unknown) => {
+        logger.warn({ error, uploadId }, "Uploads: could not delete an unused extraction");
+      });
   }
 }
 
@@ -302,7 +313,10 @@ export async function loadContent(uploadId: string): Promise<AttachmentContent |
     state().cache.set(uploadId, content);
     if (state().cache.size > CACHE_SIZE) state().cache.delete(state().cache.keys().next().value!);
     return content;
-  } catch {
+  } catch (error) {
+    if (!(error instanceof HttpError && error.statusCode === 404)) {
+      logger.warn({ error, uploadId }, "Uploads: the stored extraction is unreadable");
+    }
     return undefined;
   }
 }

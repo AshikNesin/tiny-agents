@@ -1,10 +1,11 @@
 import { and, eq, gt, inArray, isNotNull, isNull, type SQL } from "drizzle-orm";
 import { createId } from "@groot/core/utils/id.utils";
 import { logger } from "@groot/core/logger";
-import { addJob, cancelJob } from "@groot/jobs/server/queue";
+import { addJob } from "@groot/jobs/server/queue";
 import type { SendJobOptions } from "@groot/jobs/server/types";
 import { z } from "zod";
 import { db, jobs, routineRuns, routines } from "../../db";
+import { cancelPendingJob } from "../pending-jobs";
 import {
   isClockSchedule,
   nextOccurrence,
@@ -39,10 +40,7 @@ async function queueFireJob(routineId: string, scheduledFor: Date, now: Date): P
 }
 
 export async function cancelFireJob(jobId: string | null | undefined): Promise<void> {
-  if (!jobId) return;
-  try {
-    await cancelJob(jobId);
-  } catch {}
+  if (jobId) await cancelPendingJob(jobId);
 }
 
 const handleIs = (jobId: string | null): SQL =>

@@ -133,7 +133,9 @@ export async function reloadModels(): Promise<void> {
   for (const listener of app().modelListeners) {
     try {
       listener();
-    } catch {}
+    } catch (error) {
+      logger.warn({ error }, "Models: a change listener threw after a reload");
+    }
   }
 }
 

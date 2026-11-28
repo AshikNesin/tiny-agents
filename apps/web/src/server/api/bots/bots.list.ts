@@ -1,6 +1,7 @@
 import { desc, eq } from "drizzle-orm";
 import { isSkipReply, type AgentRuntime, type AttachmentRef } from "@tiny-agents/agent";
 import { stripPeerEnvelope } from "@tiny-agents/agent/peer-envelope";
+import { logger } from "@groot/core/logger";
 import { db, bots } from "../../db";
 import type { Viewer } from "../people/access";
 import { guestReadMarkers } from "../people/people.service";
@@ -87,7 +88,9 @@ async function recordReply(
       .update(bots)
       .set({ lastMessagePreview: preview || null, lastActivityAt: new Date(last.createdAt) })
       .where(eq(bots.conversationId, conversationId));
-  } catch {}
+  } catch (error) {
+    logger.warn({ error, conversationId }, "Bot list: could not record the last reply");
+  }
 }
 
 export function botListStep(): SettledStep {

@@ -100,7 +100,10 @@ export function createLifecycle(options: LifecycleOptions): Lifecycle {
       first = false;
       void stop(`${signal} received`).then(
         (clean) => exit(clean ? 0 : 1),
-        () => exit(1),
+        (error: unknown) => {
+          log.warn({ error }, "Shutdown failed; exiting with an error");
+          exit(1);
+        },
       );
     };
     for (const signal of signals) process.on(signal, onSignal);

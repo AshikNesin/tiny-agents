@@ -1,6 +1,7 @@
 import type { AppContext } from "@groot/core/types";
 import { requireUser } from "@groot/core/utils/controller.utils";
 import { Boom } from "@groot/core/errors";
+import { logger } from "@groot/core/logger";
 import { holdLiveAccess } from "../people/live-access";
 import type { PingEvent, StreamErrorEvent } from "../../../shared/bot-stream";
 import { app } from "../../app-root";
@@ -15,6 +16,11 @@ const SSE_HEADERS = {
   Connection: "keep-alive",
   "X-Accel-Buffering": "no",
 } as const;
+
+function ignoreStreamAlreadyClosed(error: unknown): void {
+  if (error instanceof TypeError) return;
+  logger.warn({ error }, "SSE: could not close a stream");
+}
 
 export interface SseStream<E> {
   write(event: E): void;
@@ -55,7 +61,9 @@ export function openSse<E>(
     for (const listener of listeners.splice(0)) {
       try {
         listener();
-      } catch {}
+      } catch (error) {
+        logger.warn({ error, userId }, "SSE: a close listener threw");
+      }
     }
   };
 
@@ -85,7 +93,9 @@ export function openSse<E>(
         finish();
         try {
           controller?.close();
-        } catch {}
+        } catch (error) {
+          ignoreStreamAlreadyClosed(error);
+        }
       },
     } satisfies SseStream<E | PingEvent | StreamErrorEvent>,
     { userId },

@@ -1,5 +1,6 @@
 import { and, eq, gte, isNotNull, sql } from "drizzle-orm";
 import { Boom } from "@groot/core/errors";
+import { logger } from "@groot/core/logger";
 import { db, botMessages, llmCalls, routineRuns } from "../../db";
 import { getAgentRuntime } from "../bots/bots.runtime";
 import { listLlmCalls } from "./traces.calls";
@@ -113,12 +114,17 @@ async function sessionRows(filter?: TraceSessionFilter): Promise<SessionRow[]> {
   return rows.sort((a, b) => b.lastAt - a.lastAt);
 }
 
+function usageUnknown(error: unknown): null {
+  logger.warn({ error }, "Traces: could not read a session's usage");
+  return null;
+}
+
 async function withUsage(row: SessionRow): Promise<TraceSession> {
   const runtime = getAgentRuntime();
   const { botModelId, ...session } = row;
   const modelId = botModelId ?? runtime.catalog.forRole("bot_default")?.id;
   const engine = modelId ? runtime.catalog.route(modelId)?.engine : undefined;
-  const usage = await runtime.usage(Number(row.id)).catch(() => null);
+  const usage = await runtime.usage(Number(row.id)).catch(usageUnknown);
   return { ...session, harness: engine === "claude-code" ? "claude-plan" : "pi", usage };
 }
 
@@ -142,7 +148,8 @@ export async function getSession(conversationId: string): Promise<TraceSessionDe
   if (!row) throw Boom.notFound("No such session");
   const trace = await getAgentRuntime()
     .trace(Number(conversationId))
-    .catch(() => {
+    .catch((error: unknown) => {
+      logger.warn({ error, conversationId }, "Traces: could not load a session's trace");
       throw Boom.notFound("This session is no longer stored");
     });
   return { session: await withUsage(row), trace };
@@ -180,7 +187,7 @@ export async function summary(): Promise<TraceSummary> {
   const active = (await sessionRows()).filter((row) => row.lastAt >= since);
   const runtime = getAgentRuntime();
   const usages = await Promise.all(
-    active.map((row) => runtime.usage(Number(row.id)).catch(() => null)),
+    active.map((row) => runtime.usage(Number(row.id)).catch(usageUnknown)),
   );
   let costUsd = 0;
   let tokens = 0;

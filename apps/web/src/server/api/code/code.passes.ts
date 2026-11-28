@@ -127,10 +127,16 @@ function notifyNeedsYou(pull: CodePullRow, reason: string) {
   notificationService.notify(codePullUpdate(pull, "needs_input", reason));
 }
 
+function logUnreadThread(error: unknown, threadId: string, wanted: string): undefined {
+  logger.warn({ error, threadId }, `Auto-fix: could not read the thread for ${wanted}`);
+}
+
 async function threadCost(threadId: string): Promise<number | null> {
   const target = codeHub()?.resolve(threadId);
   if (!target) return null;
-  const snapshot = await target.instance.getThread(target.nativeId).catch(() => undefined);
+  const snapshot = await target.instance
+    .getThread(target.nativeId)
+    .catch((error: unknown) => logUnreadThread(error, threadId, "its cost"));
   return snapshot && snapshot.costUsd > 0 ? snapshot.costUsd : null;
 }
 
@@ -165,7 +171,13 @@ async function withLogs(
       fetched += 1;
       const log = await github
         .jobLogTail(repoOf(project), item.jobId, LOG_TAIL_CHARS)
-        .catch(() => undefined);
+        .catch((error: unknown) => {
+          logger.warn(
+            { error, job: item.jobId },
+            "Auto-fix: could not fetch a failing check's log",
+          );
+          return undefined;
+        });
       return log ? { ...item, log } : item;
     }),
   );
@@ -244,7 +256,9 @@ async function lastAnswer(ctx: PassContext, outcome?: TurnOutcome): Promise<stri
     const snapshot = await ctx.instance.getThread(ctx.nativeId);
     const last = [...snapshot.items].reverse().find((item) => item.kind === "assistant");
     if (last && last.kind === "assistant") return last.text;
-  } catch {}
+  } catch (error) {
+    logUnreadThread(error, ctx.pull.threadId, "the pass's answer");
+  }
   return outcome?.text ?? "";
 }
 
@@ -271,14 +285,22 @@ export async function finishPass(pass: CodeAutofixPass, outcome?: TurnOutcome): 
     return;
   }
   if (!pass.startSha || head === pass.startSha) {
-    const dirty = (await ws.uncommitted(worktree).catch(() => [])).length;
+    const dirty = await ws
+      .uncommitted(worktree)
+      .then((files) => files.length > 0)
+      .catch((error: unknown) => {
+        logger.warn({ error, pull: pull.id }, "Auto-fix: git could not list uncommitted changes");
+        return null;
+      });
     return stop(
       pass,
       pull,
       "no_progress",
-      dirty
-        ? "The pass left uncommitted changes and made no commit; nothing was pushed."
-        : "The pass made no commit.",
+      dirty === null
+        ? "The pass made no commit, and git could not say whether it left uncommitted changes."
+        : dirty
+          ? "The pass left uncommitted changes and made no commit; nothing was pushed."
+          : "The pass made no commit.",
     );
   }
   const changed = await ws.changedPaths(worktree, pass.startSha, head);
@@ -354,7 +376,9 @@ export async function timeOutPass(pass: CodeAutofixPass): Promise<void> {
   const pull = await getPull(pass.pullId);
   if (!pull) return;
   const target = codeHub()?.resolve(pull.threadId);
-  await target?.instance.interrupt(target.nativeId).catch(() => undefined);
+  await target?.instance.interrupt(target.nativeId).catch((error: unknown) => {
+    logger.warn({ error, pull: pull.id }, "Auto-fix: could not interrupt a pass that ran too long");
+  });
   const minutes = projectSettings((await projectThread(pull.threadId))?.project.settings ?? "{}")
     .autofix.passMinutes;
   await stop(pass, pull, "timed_out", `The pass ran past ${minutes} minutes and was stopped.`);

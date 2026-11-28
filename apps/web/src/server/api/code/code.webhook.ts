@@ -115,7 +115,7 @@ router.post(
     },
   }),
   async (c) => {
-    const secret = await webhookSecret().catch(() => undefined);
+    const secret = await webhookSecret();
     if (!secret) throw Boom.notFound("No GitHub App is set up.");
     const body = await c.req.text();
     if (!(await verifyWebhook(secret, body, c.req.header("x-hub-signature-256")))) {

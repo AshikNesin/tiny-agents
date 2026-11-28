@@ -9,7 +9,7 @@ import { eq, inArray } from "drizzle-orm";
 import { Boom } from "@groot/core/errors";
 import { logger } from "@groot/core/logger";
 import { notificationService } from "@groot/core/notification/notification.service";
-import { addJob, cancelJob } from "@groot/jobs/server/queue";
+import { addJob } from "@groot/jobs/server/queue";
 import { registerJobHandler } from "@groot/jobs/server/worker";
 import {
   GitHubError,
@@ -39,6 +39,7 @@ import {
   stateHash,
   type AutofixSettings,
 } from "./code.autofix";
+import { cancelPendingJob } from "../pending-jobs";
 import { checkpointTurn } from "./code.checkpoints";
 import { codeGitHub } from "./code.github";
 import { codeHub } from "./code.hub";
@@ -110,7 +111,19 @@ async function ownerLoginOf(
   github: Pick<GitHubClient, "viewer">,
 ): Promise<string | null> {
   if (project.transport === "app") return null;
-  return (await github.viewer().catch(() => undefined))?.login ?? null;
+  return (await github.viewer()).login;
+}
+
+function logUnreadTurn(error: unknown, pullId: string): undefined {
+  logger.warn({ error, pull: pullId }, "Code: could not read how the Auto-fix turn ended");
+}
+
+function logUnrefreshed(error: unknown, threadId: string): undefined {
+  logger.warn({ error, threadId }, "Code: could not refresh the thread's pull request from GitHub");
+}
+
+function logUnknownOwner(error: unknown, threadId: string): undefined {
+  logger.warn({ error, threadId }, "Code: could not tell who owns the thread's pull request");
 }
 
 function logUntoldProjectChat(error: unknown, threadId: string) {
@@ -157,7 +170,11 @@ export async function publish(
     )
       .viewer()
       .then((viewer) => viewer.login)
-      .catch(() => "tiny-agents");
+      .catch((error: unknown) => {
+        throw Boom.badGateway(
+          `GitHub did not say who you are, so nothing was committed: ${githubMessage(error)}`,
+        );
+      });
     await ws
       .commitAll(thread.worktree, thread.title?.trim() || `Changes on ${thread.branch}`, {
         name: login,
@@ -258,7 +275,7 @@ export async function linkPull(threadId: string, number: number): Promise<CodePu
 export async function unlinkPull(threadId: string): Promise<void> {
   const open = await openPullOf(threadId);
   if (!open) throw Boom.notFound("The thread has no open pull request.");
-  if (open.pendingJobId) await cancelJob(open.pendingJobId).catch(() => undefined);
+  if (open.pendingJobId) await cancelPendingJob(open.pendingJobId);
   await deletePull(open.id);
 }
 
@@ -541,7 +558,9 @@ async function reconcile(pullId: string, now = Date.now()): Promise<number | nul
   const running = await runningPass(pull.id);
   if (running?.status === "running") {
     const target = codeHub()?.resolve(pull.threadId);
-    const outcome = await target?.instance.outcome(target.nativeId).catch(() => undefined);
+    const outcome = await target?.instance
+      .outcome(target.nativeId)
+      .catch((error: unknown) => logUnreadTurn(error, pullId));
     if (
       outcome &&
       !outcome.working &&
@@ -552,7 +571,13 @@ async function reconcile(pullId: string, now = Date.now()): Promise<number | nul
     }
   }
 
-  const ownerLogin = await ownerLoginOf(project, github);
+  let ownerLogin: string | null;
+  try {
+    ownerLogin = await ownerLoginOf(project, github);
+  } catch (error) {
+    logger.warn({ error, pull: pullId }, "Code: could not tell who owns a linked pull request");
+    return 5 * 60_000;
+  }
   let lastPushAt: number | null = null;
   for (let step = 0; step < 3; step += 1) {
     const passes = await passesOf(pull.id);
@@ -686,13 +711,13 @@ export async function armReconcile(
         for (const job of rows) {
           const data = job.data as { pullId?: string } | null;
           if (job.id !== jobId && job.name === RECONCILE_JOB && data?.pullId === pullId) {
-            await cancelJob(job.id).catch(() => undefined);
+            await cancelPendingJob(job.id);
           }
         }
       }
       return jobId;
     }
-    await cancelJob(jobId).catch(() => undefined);
+    await cancelPendingJob(jobId);
     return undefined;
   };
   const hub = codeHub();
@@ -730,7 +755,9 @@ export async function onTurnEnded(threadId: string, outcome: TurnOutcome): Promi
   );
   const open = await openPullOf(threadId);
   if (!open) {
-    if (await projectThread(threadId)) await linkByBranch(threadId).catch(() => undefined);
+    if (await projectThread(threadId)) {
+      await linkByBranch(threadId).catch((error: unknown) => logUnrefreshed(error, threadId));
+    }
     return;
   }
   const pass = await runningPass(open.id);
@@ -739,19 +766,20 @@ export async function onTurnEnded(threadId: string, outcome: TurnOutcome): Promi
 
 async function pullView(
   row: CodePullRow,
-  ownerLogin: string | null,
+  owner: { login: string | null } | undefined,
   settings: AutofixSettings,
 ): Promise<PullView> {
   const snapshot = cachedSnapshot(row);
   const passes = await passesOf(row.id);
-  const ignored = snapshot
-    ? ignoredItems({
-        snapshot,
-        appCommentIds: await appCommentIds(row.id),
-        ownerLogin,
-        settings,
-      })
-    : [];
+  const ignored =
+    snapshot && owner
+      ? ignoredItems({
+          snapshot,
+          appCommentIds: await appCommentIds(row.id),
+          ownerLogin: owner.login,
+          settings,
+        })
+      : [];
   return {
     id: row.id,
     number: row.number,
@@ -798,8 +826,15 @@ function passItems(raw: string): Array<{ id: string; title: string }> {
   }
 }
 
-const countUnknownWhenGitFails = (): null => null;
-const landingUnknownWhenGitFails = (): null => null;
+function countUnknownWhenGitFails(error: unknown): null {
+  logger.warn({ error }, "Code: git could not read a thread's worktree");
+  return null;
+}
+
+function landingUnknownWhenGitFails(error: unknown): null {
+  logger.warn({ error }, "Code: git could not tell whether a thread's work landed");
+  return null;
+}
 
 export async function pushBase(threadId: string): Promise<void> {
   const { thread, project } = await requireProjectThread(threadId);
@@ -828,8 +863,8 @@ export async function threadPulls(threadId: string, fresh = true): Promise<Threa
   const { project, thread } = found;
   if (fresh) {
     const open = await openPullOf(threadId);
-    if (open) await reconcileNow(open.id).catch(() => undefined);
-    else await linkByBranch(threadId).catch(() => undefined);
+    const refreshed = open ? reconcileNow(open.id) : linkByBranch(threadId);
+    await refreshed.catch((error: unknown) => logUnrefreshed(error, threadId));
   }
   const rows = await pullsOf(threadId);
   const active = rows.find((r) => r.state === "open") ?? null;
@@ -861,15 +896,17 @@ export async function threadPulls(threadId: string, fresh = true): Promise<Threa
       ahead = await ws.commitsSince(worktree, lastMerged.headSha).catch(countUnknownWhenGitFails);
     }
   }
-  const ownerLogin = await codeGitHub()
-    .client(project)
-    .then((github) => ownerLoginOf(project, github))
-    .catch(() => null);
+  const owner = active
+    ? await codeGitHub()
+        .client(project)
+        .then(async (github) => ({ login: await ownerLoginOf(project, github) }))
+        .catch((error: unknown) => logUnknownOwner(error, threadId))
+    : undefined;
   const settings = autofixSettings(project.settings);
   return {
     project: projectView(project),
     branch: thread.branch,
-    active: active ? await pullView(active, ownerLogin, settings) : null,
+    active: active ? await pullView(active, owner, settings) : null,
     earlier: rows
       .filter((r) => r !== active)
       .map((r) => ({

@@ -3,6 +3,7 @@ import { randomBytes } from "node:crypto";
 import { and, eq, isNotNull } from "drizzle-orm";
 import { env } from "@groot/core/env";
 import { Boom } from "@groot/core/errors";
+import { logger } from "@groot/core/logger";
 import type {
   OAuthClientInformationMixed,
   OAuthClientMetadata,
@@ -126,7 +127,12 @@ export async function connectionForState(state: string): Promise<string | undefi
   for (const row of rows) {
     try {
       if (openOAuthState(row.id, row.oauthEnc, oauthStateSchema)?.state === state) return row.id;
-    } catch {}
+    } catch (error) {
+      logger.warn(
+        { error, connection: row.id },
+        "OAuth: a connection's stored state is unreadable",
+      );
+    }
   }
   return undefined;
 }
