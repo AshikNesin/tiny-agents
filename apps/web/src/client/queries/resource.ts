@@ -53,7 +53,7 @@ export type Resource<T> = { refresh: () => Promise<void> } & (
 
 export type ResourceOptions<T> = Pick<
   UseQueryOptions<T, Error, T, QueryKey>,
-  "structuralSharing" | "placeholderData" | "enabled"
+  "structuralSharing" | "placeholderData" | "enabled" | "refetchInterval"
 >;
 
 export function useResource<T>(
