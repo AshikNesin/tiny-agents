@@ -1,6 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
-import path from "node:path";
-import { BASELINE_PATH, isGenerated, isKeptComment } from "./comments.mjs";
+import { isGenerated, isKeptComment } from "./comments.mjs";
 
 const jsxName = (node) =>
   node.type === "JSXElement" && node.openingElement.name.type === "JSXIdentifier"
@@ -166,20 +164,7 @@ const staticString = (node, lookup) => {
 };
 
 const NO_COMMENTS_MESSAGE =
-  "R16: code carries no comments (ADR 0028). Say it in a name, a type or a test; record a decision in docs/adr/. The ratchet in scripts/lint/comment-baseline.json lets old comments stay until they go, and only shrinks.";
-
-const baselines = new Map();
-
-const allowedBy = (baselinePath) => (cwd, file) => {
-  const key = `${cwd}\0${baselinePath}`;
-  if (!baselines.has(key)) {
-    const baseline = path.join(cwd, baselinePath);
-    baselines.set(key, existsSync(baseline) ? JSON.parse(readFileSync(baseline, "utf8")) : {});
-  }
-  return baselines.get(key)[path.relative(cwd, file).replaceAll("\\", "/")] ?? 0;
-};
-
-const allowedComments = allowedBy(BASELINE_PATH);
+  "R16: code carries no comments (ADR 0028). Say it in a name, a type or a test; record a decision in docs/adr/.";
 
 const fallbackSite = (text) => text.replace(/\s+/g, " ").trim();
 
@@ -399,8 +384,7 @@ export default {
             const comments = context.sourceCode
               .getAllComments()
               .filter((comment) => comment.type !== "Shebang" && !isKeptComment(comment.value));
-            const allowed = allowedComments(context.cwd ?? process.cwd(), context.filename);
-            for (const comment of comments.slice(allowed)) {
+            for (const comment of comments) {
               context.report({ loc: comment.loc, message: NO_COMMENTS_MESSAGE });
             }
           },

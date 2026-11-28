@@ -7,8 +7,8 @@ and `pnpm build` green.
 | Slice | What it makes impossible                                   | Status |
 | ----- | ---------------------------------------------------------- | ------ |
 | 0     | A groot sync rewriting the child's gates and lint rules    | done   |
-| 1     | A write route without an access tier                       | open   |
-| 2     | A resource that is still loading read as a value           | open   |
+| 1     | A write route without an access tier                       | done   |
+| 2     | A resource that is still loading read as a value           | done   |
 | 3     | A client test that mocks the module it covers              | done   |
 | 4     | Server data loaded outside `useResource`                   | done   |
 | 5     | An unsent draft lost on remount                            | done   |

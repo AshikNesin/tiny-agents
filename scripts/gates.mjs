@@ -63,7 +63,7 @@ export const gates = [
   { name: "pnpm policy", run: "pnpm check:pnpm-policy" },
   { name: "Old modules", run: "pnpm check:old-modules" },
   { name: "Duplicate functions", run: "pnpm check:duplicates" },
-  { name: "Comment ratchet", run: "pnpm check:comments --base origin/${GITHUB_BASE_REF:-main}" },
+  { name: "No comments", run: "pnpm check:comments" },
   {
     name: "Migrations are up to date with the schema",
     job: "migrations",

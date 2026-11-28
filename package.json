@@ -65,8 +65,7 @@
     "check:pnpm-policy": "tsx scripts/check-pnpm-policy.ts",
     "check:old-modules": "tsx scripts/check-old-modules.ts",
     "check:duplicates": "tsx scripts/check-duplicate-functions.ts",
-    "check:comments": "tsx scripts/check-comment-ratchet.ts",
-    "comments:ratchet": "tsx scripts/check-comment-ratchet.ts --write",
+    "check:comments": "tsx scripts/check-comments.ts",
     "dev:portless": "NODE_ENV=development PORTLESS_PORT=8888 portless run --name $npm_package_name tsx scripts/dev.ts",
     "check:action-pinning": "tsx scripts/check-action-pinning.ts"
   },
