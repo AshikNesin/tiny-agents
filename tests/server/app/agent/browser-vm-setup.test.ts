@@ -54,7 +54,7 @@ describe("browser VM setup commands", () => {
     expect(["ready", "missing"]).toContain(out);
   });
 
-  it("installs under a lock, only on amd64, from the official Chrome package", () => {
+  it("installs under a lock, from the official Chrome package on amd64", () => {
     const script = installStackCommand();
     expect(script).toContain("flock 9");
     expect(script).toContain("tigervnc-standalone-server");
@@ -63,6 +63,23 @@ describe("browser VM setup commands", () => {
       "https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb",
     );
     expect(script.indexOf("echo ready")).toBeLessThan(script.indexOf("apt-get update"));
+  });
+
+  it("finishes installing on an arm64 sandbox that already has Chrome", () => {
+    const bin = join(dir, "bin");
+    mkdirSync(bin);
+    const stub = (name: string, body: string) =>
+      writeFileSync(join(bin, name), `#!/bin/sh\n${body}\n`, { mode: 0o755 });
+    stub("dpkg", "echo arm64");
+    stub("sudo", "exit 0");
+    stub("google-chrome-stable", "exit 0");
+    stub("Xtigervnc", "exit 0");
+    const out = execSync(installStackCommand(), {
+      encoding: "utf8",
+      env: { ...process.env, HOME: dir, PATH: `${bin}:${process.env.PATH}` },
+    }).trim();
+    expect(out).toBe("installed");
+    expect(existsSync(join(dir, ".tiny-agents", "browser-stack-v2"))).toBe(true);
   });
 
   it("launches VNC and CDP on loopback only, with no VNC password", () => {

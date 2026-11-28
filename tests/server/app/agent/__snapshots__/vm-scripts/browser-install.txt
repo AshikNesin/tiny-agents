@@ -5,12 +5,12 @@ mkdir -p "$HOME/.tiny-agents"
 exec 9>"$HOME/.tiny-agents/browser-stack.lock"
 flock 9
 [ -f "$MARK" ] && command -v Xtigervnc >/dev/null 2>&1 && command -v google-chrome-stable >/dev/null 2>&1 && { echo ready; exit 0; }
-ARCH="$(dpkg --print-architecture)"
-[ "$ARCH" = amd64 ] || { echo "Unsupported VM architecture: $ARCH (Chrome needs amd64)" >&2; exit 1; }
 export DEBIAN_FRONTEND=noninteractive
 sudo -n apt-get update -qq
 sudo -n apt-get install -y -qq --no-install-recommends tigervnc-standalone-server tigervnc-common fonts-liberation fonts-dejavu-core fonts-noto-color-emoji ca-certificates curl
 if ! command -v google-chrome-stable >/dev/null 2>&1; then
+  ARCH="$(dpkg --print-architecture)"
+  [ "$ARCH" = amd64 ] || { echo "Unsupported VM architecture: $ARCH (Chrome needs amd64)" >&2; exit 1; }
   TMP="$(mktemp -d)"
   curl -fsSL -o "$TMP/chrome.deb" https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
   sudo -n apt-get install -y -qq "$TMP/chrome.deb"
