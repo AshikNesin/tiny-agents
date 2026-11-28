@@ -94,6 +94,17 @@ const CASTS = new Set(["TSAsExpression", "TSTypeAssertion"]);
 const unparenthesized = (node) =>
   node.type === "ParenthesizedExpression" ? unparenthesized(node.expression) : node;
 
+const JSON_PARSE_CAST_MESSAGE =
+  "R22: JSON.parse returns whatever was stored or sent, and a cast compiles any shape. Read it with `parseJson(what, text, schema)` from @tiny-agents/std, and a list of rows with `parseEach`, so a wrong shape fails where it is read.";
+
+const isJsonParse = (node) =>
+  node?.type === "CallExpression" &&
+  node.callee.type === "MemberExpression" &&
+  node.callee.object.type === "Identifier" &&
+  node.callee.object.name === "JSON" &&
+  node.callee.property.type === "Identifier" &&
+  node.callee.property.name === "parse";
+
 const DOUBLE_CAST_MESSAGE =
   "R6: a cast through unknown compiles any shape, so a wrong stored value surfaces later as a wrong value. Use packages/agent/src/durable-json.ts: `durableMemo(key, schema)` to read and keep a task memo, `parseStored(key, value, schema)` for a document field, `toJson(value)` to store one. For anything else, type it so it compiles: a typed list, a `Pick` of the api.";
 
@@ -625,6 +636,16 @@ export default {
             }
           },
         };
+      },
+    },
+    "no-json-parse-cast": {
+      create(context) {
+        const check = (node) => {
+          const inner = unparenthesized(node.expression);
+          const parsed = inner.type === "AwaitExpression" ? inner.argument : inner;
+          if (isJsonParse(parsed)) context.report({ node, message: JSON_PARSE_CAST_MESSAGE });
+        };
+        return { TSAsExpression: check, TSTypeAssertion: check };
       },
     },
     "no-double-cast": {

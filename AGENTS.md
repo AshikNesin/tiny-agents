@@ -7,7 +7,7 @@ and `pnpm verify:static` runs the gates CI runs. Guides start at
 
 ## Rules and their enforcers
 
-R1 to R21 are lint rules in `scripts/lint/boundaries.ts`, run by `pnpm check`.
+R1 to R22 are lint rules in `scripts/lint/boundaries.ts`, run by `pnpm check`.
 
 | Rule                                                                                                                                                                                                          | Enforcer                                                                         |
 | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
@@ -31,6 +31,7 @@ R1 to R21 are lint rules in `scripts/lint/boundaries.ts`, run by `pnpm check`.
 | A managed-path change adds a changeset or `.no-release/` reason.                                                                                                                                              | `pnpm check:changesets`                                                          |
 | Remove a kit export only in a major, after a deprecation.                                                                                                                                                     | `scripts/check-kit-exports.ts`                                                   |
 | Code features work for every harness: shared git and diff logic lives in `packages/git`; only `code.registry.ts` names a harness's package.                                                                   | R14                                                                              |
+| JSON text is read with `parseJson` or `parseEach` from `@tiny-agents/std` and a schema, never `JSON.parse(x) as T`.                                                                                           | R22                                                                              |
 | `packages/agent` parses stored JSON with `durable-json.ts`.                                                                                                                                                   | R6, R6b                                                                          |
 | No transactions in `packages/`; sync ones are fine in `apps/`.                                                                                                                                                | R7                                                                               |
 | Never read a row, `await`, then insert into its table: use `onConflictDoNothing()` on a unique index, or one sync `db.transaction()` in `apps/`.                                                              | R19                                                                              |

@@ -281,6 +281,17 @@ const FIXTURES: Record<string, Fixture> = {
     source: "export const f = (x: string) => <number>(<unknown>x);\n",
     rules: ["R6"],
   },
+  "apps/web/src/server/api/r22-fail.ts": {
+    source:
+      "interface Row { id: string }\nexport const read = (text: string) => JSON.parse(text) as Row;\nexport const list = (text: string) => (JSON.parse(text)) as Row[];\n",
+    rules: ["R22", "R22"],
+    mentions: "parseJson(what, text, schema)",
+  },
+  "packages/sandbox/src/r22-pass.ts": {
+    source:
+      "export const read = (text: string): unknown => JSON.parse(text);\nexport const cast = (value: unknown) => value as string;\n",
+    rules: [],
+  },
   "packages/agent/src/r6-pass.ts": {
     source: "export const f = (x: unknown) => x as string;\n",
     rules: [],

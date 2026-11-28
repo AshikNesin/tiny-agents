@@ -426,6 +426,21 @@ const BOUNDARY_RULES: BoundaryRule[] = [
     enabled: true,
   },
   {
+    id: "R22",
+    kind: "plugin",
+    scope: "**/src/**",
+    rule: "repo/no-json-parse-cast",
+    except: [
+      "**/*.test.ts",
+      "**/*.test.tsx",
+      "packages/core/**",
+      "packages/jobs/**",
+      "packages/shell/**",
+      "packages/ui/**",
+    ],
+    enabled: true,
+  },
+  {
     id: "R21",
     kind: "plugin",
     scope: "tests/client/**",

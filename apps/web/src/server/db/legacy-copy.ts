@@ -1,3 +1,5 @@
+import { parseJson } from "@tiny-agents/std";
+import { z } from "zod";
 import {
   closeSync,
   cpSync,
@@ -230,7 +232,9 @@ function convertRow(table: Table, row: Record<string, unknown>): Record<string, 
     const isJson = column.columnType === "SQLiteTextJson" || mode === "json";
     if (mode === "timestamp_ms" || mode === "timestamp") out[field] = toDate(value);
     else if (mode === "boolean") out[field] = toBoolean(value);
-    else if (isJson) out[field] = typeof value === "string" ? JSON.parse(value) : value;
+    else if (isJson)
+      out[field] =
+        typeof value === "string" ? parseJson("A legacy JSON column", value, z.unknown()) : value;
     else if (sqlType === "blob")
       out[field] = Buffer.isBuffer(value) ? value : Buffer.from(value as Uint8Array);
     else if (sqlType === "integer")
@@ -257,17 +261,24 @@ function toBoolean(value: unknown): boolean {
   return value === true || value === 1 || value === 1n || value === "1" || value === "true";
 }
 
+const keyvEntrySchema = z.looseObject({
+  value: z.unknown().optional(),
+  expires: z.number().nullish(),
+});
+
 export function convertKeyvEntry(entry: {
   key: string;
   value: string;
 }): { key: string; value: string; expiresAt: Date | null } | undefined {
-  let parsed: { value?: unknown; expires?: number | null };
+  let parsed: z.infer<typeof keyvEntrySchema>;
   try {
-    parsed = JSON.parse(entry.value, (_key, value: unknown) => {
-      if (typeof value !== "string" || !value.startsWith(":")) return value;
-      if (value.startsWith(":base64:")) return Buffer.from(value.slice(8), "base64");
-      return value.slice(1);
-    }) as { value?: unknown; expires?: number | null };
+    parsed = keyvEntrySchema.parse(
+      JSON.parse(entry.value, (_key, value: unknown) => {
+        if (typeof value !== "string" || !value.startsWith(":")) return value;
+        if (value.startsWith(":base64:")) return Buffer.from(value.slice(8), "base64");
+        return value.slice(1);
+      }),
+    );
   } catch {
     return undefined;
   }
