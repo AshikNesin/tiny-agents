@@ -5,7 +5,7 @@ import {
   type BrowserSessions,
   type BrowserTransport,
 } from "@tiny-agents/sandbox/browser";
-import { sandboxConnection, sandboxEndpoint, unquoteEnv } from "./sandbox-host";
+import { sandboxConnection, sandboxEndpoint, unquoteEnv } from "../sandbox/sandbox-host";
 import { appEnv, type AppEnv } from "../../env";
 import { app } from "../../app-root";
 

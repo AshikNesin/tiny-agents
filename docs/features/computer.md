@@ -29,8 +29,9 @@ App ──────┴──────────────────�
    packages/sandbox/src/computer-x11.ts              the SSH/xdotool/scrot transport
    packages/sandbox/src/computer-vm-setup.ts         install + launch scripts (shared launch lock)
    apps/web/src/server/api/live/live.routes.ts       status / start / vnc-ticket / driver / apps / reset
-   apps/web/src/server/api/bots/computer.*           the session manager's setup + WS bridge
-   apps/web/src/server/api/bots/desktop.vnc.ts       the VNC bridge the browser and the computer share
+   apps/web/src/server/api/bots/computer.sessions.ts the session manager's setup
+   apps/web/src/server/api/live/computer.vnc.ts      the computer's WS bridge
+   apps/web/src/server/api/live/desktop.vnc.ts       the VNC bridge the browser and the computer share
    apps/web/src/client/components/live/              LivePanel + LivePage; the computer's copy in surfaces.tsx
 ```
 

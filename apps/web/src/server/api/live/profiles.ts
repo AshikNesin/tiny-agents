@@ -2,7 +2,7 @@ import { asc, eq } from "drizzle-orm";
 import { parseStringParam } from "@groot/core/utils/controller.utils";
 import { Boom } from "@groot/core/errors";
 import { db, bots } from "../../db";
-import { ownBrowserProfile, SHARED_BROWSER_PROFILE } from "./browser.targets";
+import { ownBrowserProfile, SHARED_BROWSER_PROFILE } from "../bots/browser.targets";
 
 export interface ProfileEntry {
   profile: string;

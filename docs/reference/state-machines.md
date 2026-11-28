@@ -31,7 +31,7 @@ lost.
 | Routine run   | [`routine-run.ts`](../../apps/web/src/shared/machines/routine-run.ts)                     | `routine_runs.status`            | `routines.runs.ts`            |
 | Memory        | [`memory.ts`](../../apps/web/src/shared/machines/memory.ts)                               | `memories.status`                | `memories.ledger.ts`          |
 | Extraction    | [`extraction.ts`](../../apps/web/src/shared/machines/extraction.ts)                       | `uploads.extract_status`         | `uploads.extraction.ts`       |
-| Task          | [`task.ts`](../../apps/web/src/shared/machines/task.ts)                                   | `tasks.status`                   | `task.service.ts`             |
+| Task          | [`task.ts`](../../apps/web/src/shared/machines/task.ts)                                   | `tasks.status`                   | `tasks.service.ts`            |
 | Hand-off      | [`handoff.ts`](../../apps/web/src/shared/machines/handoff.ts)                             | `code_handoffs.status`           | `code.store.ts`               |
 | Auto-fix      | [`autofix.ts`](../../apps/web/src/shared/machines/autofix.ts)                             | `code_pull_requests.loop_status` | `code.pulls.store.ts`         |
 | Auto-fix pass | [`autofix-pass.ts`](../../apps/web/src/shared/machines/autofix-pass.ts)                   | `code_autofix_passes.status`     | `code.pulls.store.ts`         |

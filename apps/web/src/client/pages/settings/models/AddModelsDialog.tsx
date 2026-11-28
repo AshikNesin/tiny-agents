@@ -32,7 +32,8 @@ import {
   CustomProvidersEditor,
   type CustomProvider,
 } from "./CustomProvidersEditor";
-import { formatTokens, KIND_LABEL, KINDS } from "./model-labels";
+import { formatTokens } from "../../../lib/format";
+import { KIND_LABEL, KINDS } from "./model-labels";
 
 type Kind = ModelEndpoint["kind"];
 type ImageInput = "auto" | "yes" | "no";

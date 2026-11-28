@@ -27,7 +27,7 @@ import { TerminalView, type TerminalControls } from "./TerminalView";
 import { TerminalKeysPanel } from "./TerminalKeysPanel";
 import { errorMessage } from "../../lib/errors";
 import { DEFAULT_FONT_SIZE, MAX_FONT_SIZE, MIN_FONT_SIZE } from "../../lib/xterm";
-import { isMac } from "../../lib/clipboard";
+import { isMac } from "../../lib/platform";
 import { useFullScreen } from "../../lib/live-view";
 import { readStored, writeStored } from "../../lib/browser-storage";
 

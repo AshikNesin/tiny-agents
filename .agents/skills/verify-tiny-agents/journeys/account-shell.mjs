@@ -149,13 +149,6 @@ await journey("account-shell", async ({ page, step, proof, cleanup, api, stamp }
         "Configuration",
         "Updates",
       ]);
-      // An old `?tab=claude` link (from the tabbed settings) lands on Models.
-      await page.goto("/settings?tab=claude");
-      await expect(page).toHaveURL(/\/settings\/models$/);
-      await expect(sections.getByRole("link", { name: "Models" })).toHaveAttribute(
-        "aria-current",
-        "page",
-      );
     },
   );
   await proof("settings-sections");

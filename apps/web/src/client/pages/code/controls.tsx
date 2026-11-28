@@ -10,7 +10,10 @@ import {
 } from "@groot/ui/search-select";
 import { errorMessage } from "../../lib/errors";
 import { useResource } from "../../queries/resource";
-import { autofixMachine, type AutofixStatus } from "../../../shared/machines/autofix";
+import { autofixLabels, autofixMachine } from "../../../shared/machines/autofix";
+import type { StatusLabel } from "../../../shared/machines/status-label";
+import { formatTokens } from "../../lib/format";
+import { STATUS_TONE } from "../../lib/status-tone";
 import {
   codeApi,
   threadPath,
@@ -41,11 +44,6 @@ export const DEFAULT = "default";
 
 function modelLabel(model: ModelOption | undefined, fallback = ""): string {
   return model?.label || model?.id || fallback;
-}
-
-function formatTokens(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(n % 1_000_000 ? 1 : 0)}M`;
-  return `${Math.round(n / 1000)}k`;
 }
 
 export function ModelPicker({
@@ -305,19 +303,9 @@ export function useArchive() {
   );
 }
 
-export const AUTOFIX_STATUS: Record<AutofixStatus, { label: string; tone: string }> = {
-  watching: { label: "Watching", tone: "text-muted-foreground" },
-  fixing: { label: "Fixing", tone: "text-foreground" },
-  needs_input: { label: "Needs you", tone: "text-warning" },
-  green: { label: "Checks pass", tone: "text-success" },
-  paused: { label: "Paused", tone: "text-muted-foreground" },
-  merged: { label: "Merged", tone: "text-muted-foreground" },
-  off: { label: "Off", tone: "text-muted-foreground" },
-};
-
-export function pullState(loop: string): { label: string; tone: string } | null {
+export function pullState(loop: string): StatusLabel | null {
   if (!autofixMachine.is(loop) || loop === "watching" || loop === "off") return null;
-  return AUTOFIX_STATUS[loop];
+  return autofixLabels[loop];
 }
 
 export function PullChip({
@@ -335,7 +323,7 @@ export function PullChip({
       title={`Pull request #${pr.number}${state ? ` (${state})` : ""}`}
       className={cn(
         "bg-muted inline-flex h-5 shrink-0 items-center gap-0.5 rounded-md px-1 text-[11px] font-medium tabular-nums",
-        pullState(pr.loop)?.tone ?? "text-muted-foreground",
+        STATUS_TONE[pullState(pr.loop)?.tone ?? "neutral"].text,
         className,
       )}
     >

@@ -7,7 +7,7 @@ import {
   issueComputerVncTicket,
   issueDesktopVncTicket,
   resetComputerVncTicketsForTests,
-} from "../../../apps/web/src/server/api/bots/computer.vnc";
+} from "../../../apps/web/src/server/api/live/computer.vnc";
 import { setComputerSessionsForTests } from "../../../apps/web/src/server/api/bots/computer.sessions";
 import {
   createComputerSessions,

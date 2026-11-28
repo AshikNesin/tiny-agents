@@ -1,5 +1,5 @@
 import type { TaskRecord, TaskStore } from "@tiny-agents/agent";
-import { createTask, listTasks, removeTask, updateTask, type TaskRow } from "./task.service";
+import { createTask, listTasks, removeTask, updateTask, type TaskRow } from "./tasks.service";
 
 function toRecord(row: TaskRow): TaskRecord {
   return {

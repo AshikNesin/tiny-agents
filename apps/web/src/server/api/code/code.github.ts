@@ -18,7 +18,7 @@ import {
 import type { SandboxConnection } from "@tiny-agents/sandbox";
 import { db, vaultItems } from "../../db";
 import { app } from "../../app-root";
-import { sandboxConnection } from "../bots/sandbox-host";
+import { sandboxConnection } from "../sandbox/sandbox-host";
 import { createAppCredential, deleteItemRow } from "../vault/vault.admin.service";
 import { resolveGitHubToken } from "../vault/vault.service";
 import { createWorkspace, type Workspace } from "./code.workspace";

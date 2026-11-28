@@ -4,7 +4,7 @@ import { conversationOwner, type ConversationOwner } from "./bots.owner";
 import { createDeliveries } from "./bots.delivery";
 import { botListStep } from "./bots.list";
 import { turnBudgetOf } from "./bots.messaging";
-import { memoryCaptureStep } from "./memories.runner";
+import { memoryCaptureStep } from "../memories/memories.runner";
 import type { SideCaller } from "./side-call";
 import { routineRunsStep } from "../routines/routines.watcher";
 import { runNotificationsStep, type Notifier } from "../notifications/notifications.wiring";

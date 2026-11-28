@@ -37,7 +37,9 @@ import { pullStage } from "../../lib/code/pull-stage";
 import type { MergeMethod, PullView, ThreadPullsView } from "../../../shared/api/code";
 import { PullChecks } from "./PullChecks";
 import { PullComments } from "./PullComments";
-import { AUTOFIX_STATUS } from "./controls";
+import { autofixLabels } from "../../../shared/machines/autofix";
+import type { StatusLabels } from "../../../shared/machines/status-label";
+import { StatusBadge } from "../../components/StatusBadge";
 
 const OUTCOME_LABEL: Record<string, string> = {
   pushed: "Pushed",
@@ -457,31 +459,24 @@ export function PullPanel({
   );
 }
 
-const STATE_TONE: Record<string, string> = {
-  open: "bg-success/10 text-success",
-  draft: "bg-muted text-muted-foreground",
-  queued: "bg-warning/10 text-warning",
-  merged: "bg-primary/10 text-primary",
-  closed: "bg-destructive/10 text-destructive",
+type PullBadgeState = PullView["state"] | "draft" | "queued";
+
+const PULL_STATE_LABELS: StatusLabels<PullBadgeState> = {
+  open: { label: "Open", tone: "success" },
+  draft: { label: "Draft", tone: "neutral" },
+  queued: { label: "Queued", tone: "warning" },
+  merged: { label: "Merged", tone: "accent" },
+  closed: { label: "Closed", tone: "danger" },
 };
 
 function StateBadge({ pr }: { pr: PullView }) {
-  const state =
+  const state: PullBadgeState =
     pr.state === "open" && pr.snapshot?.inMergeQueue
       ? "queued"
       : pr.state === "open" && pr.draft
         ? "draft"
         : pr.state;
-  return (
-    <span
-      className={cn(
-        "rounded-full px-2 py-0.5 text-[11px] font-medium capitalize",
-        STATE_TONE[state],
-      )}
-    >
-      {state}
-    </span>
-  );
+  return <StatusBadge status={state} labels={PULL_STATE_LABELS} />;
 }
 
 function ActivePull({
@@ -630,9 +625,12 @@ function ActivePull({
           >
             <span className="min-w-0 flex-1 font-medium">Auto-fix</span>
             {pr.autofix && (
-              <span className={cn("text-xs", AUTOFIX_STATUS[pr.loop.status].tone)}>
-                {AUTOFIX_STATUS[pr.loop.status].label}
-              </span>
+              <StatusBadge
+                plain
+                status={pr.loop.status}
+                labels={autofixLabels}
+                className="text-xs"
+              />
             )}
             <Switch
               checked={pr.autofix}

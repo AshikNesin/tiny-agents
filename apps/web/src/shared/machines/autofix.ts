@@ -1,4 +1,5 @@
 import { defineMachine } from "../state-machine";
+import type { StatusLabels } from "./status-label";
 
 export const autofixMachine = defineMachine({
   name: "code PR Auto-fix",
@@ -16,3 +17,13 @@ export const autofixMachine = defineMachine({
 });
 
 export type AutofixStatus = (typeof autofixMachine.states)[number];
+
+export const autofixLabels: StatusLabels<AutofixStatus> = {
+  watching: { label: "Watching", tone: "neutral" },
+  fixing: { label: "Fixing", tone: "strong" },
+  needs_input: { label: "Needs you", tone: "warning" },
+  green: { label: "Checks pass", tone: "success" },
+  paused: { label: "Paused", tone: "neutral" },
+  merged: { label: "Merged", tone: "neutral" },
+  off: { label: "Off", tone: "neutral" },
+};

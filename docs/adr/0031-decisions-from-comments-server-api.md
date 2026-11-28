@@ -65,7 +65,7 @@ counts as unattended, which only ever refuses more.
 
 ## Owner-only writes refuse every turn the owner did not start
 
-`bots/memories.store.ts`, `bots/self-improve.store.ts`,
+`memories/memories.store.ts`, `bots/self-improve.store.ts`,
 `bots/bot-builder.store.ts`, `bots/chats.service.ts`. Memory writes, prompt
 changes and new bots happen only in the owner's own turn in a chat no guest
 shares, even when the tool is set to Always allow, because a planted memory
@@ -88,8 +88,8 @@ while it was off is never remembered.
 
 ## Memory capture keeps its window moving and its prompt cheap
 
-`bots/memories.runner.ts`, `bots/memories.ledger.ts`, `bots/memories.store.ts`,
-`bots/memories.schema.ts`. A window with too little owner text still advances
+`memories/memories.runner.ts`, `memories/memories.ledger.ts`, `memories/memories.store.ts`,
+`memories/memories.schema.ts`. A window with too little owner text still advances
 the watermark, so chatter never piles into a later window it no longer
 relates to; a capture capped to its newest characters still ends at the
 window's end, so an oversized history is never retried forever. The capture
@@ -118,7 +118,7 @@ takes the owner's defaults, and a value Chrome would not accept falls back.
 
 ## Live desktops and terminals are relayed, never read
 
-`bots/desktop.vnc.ts`, `bots/rfb-view-only.ts`, `terminal/terminal.ws.ts`,
+`live/desktop.vnc.ts`, `live/rfb-view-only.ts`, `terminal/terminal.ws.ts`,
 `ws/upgrade.ts`. VNC and pty bytes are relayed untouched and never logged:
 they hold everything the owner types during a takeover. A guest's viewer runs
 behind a filter that forwards only the RFB messages that ask for pictures and
@@ -136,7 +136,7 @@ a missing tab already ends with tmux's reason and a 1000 close.
 
 ## Sandbox settings fail soft
 
-`apps/web/src/server/api/bots/sandbox-host.ts`. A `SANDBOX_SSH_KEY_FILE` that
+`apps/web/src/server/api/sandbox/sandbox-host.ts`. A `SANDBOX_SSH_KEY_FILE` that
 cannot be read is logged once, not thrown: a bad path must not take the whole
 runtime down, and the sandbox tools then fail their SSH auth until it is
 fixed. Production keeps the verified MagicDNS name as the default host, so an
@@ -144,7 +144,7 @@ empty value there still reaches the VM; elsewhere empty means no sandbox.
 
 ## The Claude worker's dev bundler stays out of production
 
-`apps/web/src/server/api/bots/claude-worker.ts`. The dev path imports esbuild
+`apps/web/src/server/api/sandbox/claude-worker.ts`. The dev path imports esbuild
 through a variable specifier so the production bundle, which never takes that
 path, does not pull in a dev dependency. Do not turn it into a literal
 import.

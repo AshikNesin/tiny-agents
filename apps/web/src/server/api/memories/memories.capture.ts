@@ -1,4 +1,4 @@
-import type { SettledStep } from "./bots.settled";
+import type { SettledStep } from "../bots/bots.settled";
 import { logger } from "@groot/core/logger";
 import {
   extractionResultSchema,

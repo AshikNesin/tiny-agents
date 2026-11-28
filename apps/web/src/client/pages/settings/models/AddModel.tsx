@@ -4,7 +4,7 @@ import type { DiscoveredModel } from "../../../../shared/api/models";
 import { useModelDiscovery } from "../../../queries/models";
 import { SearchSelect, type SearchSelectOption } from "@groot/ui/search-select";
 import { errorMessage } from "../../../lib/errors";
-import { formatTokens } from "./model-labels";
+import { formatTokens } from "../../../lib/format";
 
 export function AddModel({
   accountId,

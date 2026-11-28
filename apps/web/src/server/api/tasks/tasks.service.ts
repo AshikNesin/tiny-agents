@@ -3,7 +3,7 @@ import { Boom } from "@groot/core/errors";
 import { db, tasks } from "../../db";
 import type { TaskStatus } from "../../../shared/machines/task";
 import type { TaskData, TaskPriority } from "../../../shared/api/tasks";
-import type { CreateTaskDTO, UpdateTaskDTO } from "./task.schema";
+import type { CreateTaskDTO, UpdateTaskDTO } from "./tasks.schema";
 
 export type TaskRow = TaskData;
 

@@ -72,7 +72,7 @@ import {
   splitProjectPreamble,
   splitReviewCard,
 } from "../../../shared/code-messages";
-import { formatDuration } from "../../lib/code/format";
+import { formatCost, formatDuration } from "../../lib/format";
 import { PatchView, diffStats } from "./UnifiedDiff";
 
 export interface TranscriptActions {
@@ -85,10 +85,6 @@ export interface TranscriptActions {
 export interface TranscriptContext {
   instanceId: string;
   rows: ThreadSummary[];
-}
-
-export function formatCost(usd: number): string {
-  return usd < 0.01 ? `$${usd.toFixed(3)}` : `$${usd.toFixed(2)}`;
 }
 
 const failedTool = (call: ToolItem) =>

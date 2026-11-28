@@ -1,4 +1,5 @@
 import { defineMachine } from "../state-machine";
+import type { StatusLabels } from "./status-label";
 
 export const taskMachine = defineMachine({
   name: "task",
@@ -12,3 +13,9 @@ export const taskMachine = defineMachine({
 });
 
 export type TaskStatus = (typeof taskMachine.states)[number];
+
+export const taskLabels: StatusLabels<TaskStatus> = {
+  todo: { label: "To do", tone: "neutral" },
+  in_progress: { label: "In progress", tone: "info" },
+  done: { label: "Done", tone: "success" },
+};

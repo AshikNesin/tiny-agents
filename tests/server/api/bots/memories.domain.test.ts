@@ -5,7 +5,7 @@ import {
   MEMORY_MAX_ACTIVE,
   MEMORY_RENDER_CHAR_CAP,
   renderMemoryBlock,
-} from "../../../../apps/web/src/server/api/bots/memories.domain";
+} from "../../../../apps/web/src/server/api/memories/memories.domain";
 
 const base = {
   id: "m1",

@@ -26,9 +26,9 @@ import type { ClaudeWorkerLocator } from "@tiny-agents/agent/claude-worker";
 import { appEnv, type AppEnv } from "../../env";
 import { TOOL_SEARCH_TOOLKIT } from "../bots/bot-toolkits";
 import { ownerToolPermissions } from "../bots/tool-permissions";
-import { sharedClaudeWorkerLocator } from "../bots/claude-worker";
+import { sharedClaudeWorkerLocator } from "../sandbox/claude-worker";
 import { agentRuntimeReady, getAgentRuntime } from "../bots/bots.runtime";
-import { sandboxConnection } from "../bots/sandbox-host";
+import { sandboxConnection } from "../sandbox/sandbox-host";
 import type { SandboxConnection } from "@tiny-agents/sandbox";
 import { threadIndex } from "./code.store";
 import {

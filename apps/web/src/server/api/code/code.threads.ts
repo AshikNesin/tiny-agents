@@ -1,7 +1,6 @@
 import { and, asc, desc, eq, isNotNull } from "drizzle-orm";
 import { createId } from "@groot/core/utils/id.utils";
 import {
-  LEGACY_INSTANCE_ID,
   parseThreadId,
   threadIdOf,
   type InstanceEvent,
@@ -35,7 +34,7 @@ export function threadRef(id: string): ThreadRef | undefined {
     .from(codeThreads)
     .where(eq(codeThreads.id, id))
     .get();
-  return row ?? parseThreadId(id, LEGACY_INSTANCE_ID);
+  return row ?? parseThreadId(id);
 }
 
 export function threadKey(instanceId: string, nativeId: string): string {
@@ -258,7 +257,7 @@ function keyOfSummary(thread: ThreadSummary): ThreadSummary {
 }
 
 function appId(harnessThreadId: string): string {
-  const parsed = parseThreadId(harnessThreadId, LEGACY_INSTANCE_ID);
+  const parsed = parseThreadId(harnessThreadId);
   return parsed ? threadKey(parsed.instanceId, parsed.nativeId) : harnessThreadId;
 }
 

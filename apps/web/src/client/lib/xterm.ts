@@ -1,7 +1,8 @@
 import type { Terminal, ITheme, ITerminalOptions, ITerminalInitOnlyOptions } from "@xterm/xterm";
 import type { WebglAddon } from "@xterm/addon-webgl";
 import type { IClipboardProvider } from "@xterm/addon-clipboard";
-import { copyText, isMac } from "./clipboard";
+import { copyText } from "./clipboard";
+import { isMac } from "./platform";
 
 export interface TerminalSize {
   cols: number;

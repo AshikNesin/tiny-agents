@@ -2,7 +2,6 @@ import { onModelsChanged } from "../models/models.config";
 import { routes } from "../routes";
 import { ok } from "@groot/core/utils/api-response.utils";
 import { parseBody, parseQuery, parseStringParam } from "@groot/core/utils/controller.utils";
-import { z } from "zod";
 import { Boom } from "@groot/core/errors";
 import { getAgentRuntime } from "./bots.runtime";
 import { getConnectionManager } from "../connections/connections.manager";
@@ -32,6 +31,7 @@ import {
   chatHistorySchema,
   createBotSchema,
   pinBotSchema,
+  rewindChatSchema,
   yoloSchema,
   updateBotSchema,
   sendMessageSchema,
@@ -187,7 +187,7 @@ router.post("/bots/:id/reset", "signedIn", async (c) => {
 
 router.post("/bots/:id/rewind", "signedIn", async (c) => {
   const id = parseStringParam(c.req.param("id"), "id");
-  const { at } = await parseBody(c, z.object({ at: z.string().trim().min(1).max(64) }));
+  const { at } = await parseBody(c, rewindChatSchema);
   return ok(c, await chatsService.rewindChat(id, at));
 });
 

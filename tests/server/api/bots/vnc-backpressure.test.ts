@@ -7,7 +7,7 @@ import { WebSocket } from "ws";
 import {
   attachVncBridge,
   type VncTarget,
-} from "../../../../apps/web/src/server/api/bots/desktop.vnc";
+} from "../../../../apps/web/src/server/api/live/desktop.vnc";
 import { createTicketStore } from "../../../../apps/web/src/server/api/ws/upgrade";
 import { createTestApp, signIn } from "../../helpers";
 

@@ -60,10 +60,10 @@ import {
 import {
   StreamingTail,
   TranscriptRow,
-  formatCost,
   type TranscriptActions,
   type TranscriptContext,
 } from "./Transcript";
+import { formatCost } from "../../lib/format";
 
 function useMarkSeen(id: string, cursor: number) {
   const patchList = useCodeStore((s) => s.patch);

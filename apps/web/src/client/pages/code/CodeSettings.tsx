@@ -1,14 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import type { CodeSettingsSectionId } from "../settings/sections";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  Link,
-  Navigate,
-  useLocation,
-  useNavigate,
-  useParams,
-  useSearchParams,
-} from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
   ArrowLeft,
   ChevronDown,
@@ -173,14 +166,6 @@ const list = (text: string) =>
 
 export const projectSettingsPath = (id: string) =>
   `/settings/projects?project=${encodeURIComponent(id)}`;
-
-export function LegacyCodeSettings() {
-  const { section, projectId } = useParams();
-  const { search } = useLocation();
-  if (projectId) return <Navigate to={projectSettingsPath(projectId)} replace />;
-  const target = section === "github" || section === "reviews" ? section : "projects";
-  return <Navigate to={`/settings/${target}${search}`} replace />;
-}
 
 export function CodeSettingsSection({ section }: { section: CodeSettingsSectionId }) {
   const [searchParams] = useSearchParams();

@@ -6,7 +6,6 @@ import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { ConfirmProvider } from "@groot/ui/primitives";
 import { NO_CAPABILITIES } from "@tiny-agents/code/contracts";
 import { CodeWorkspace } from "@/pages/code/Workspace";
-import { LegacyCodeSettings } from "@/pages/code/CodeSettings";
 import { SettingsPage } from "@/pages/settings/SettingsPage";
 import { useBotsStore } from "@/store/bots";
 import { useCodeStore } from "@/store/code";
@@ -154,11 +153,6 @@ function renderAt(path: string) {
           {["/code", "/code/new", "/code/:conversationId"].map((p) => (
             <Route key={p} path={p} element={<CodeWorkspace />} />
           ))}
-          {["/code/settings", "/code/settings/:section", "/code/settings/projects/:projectId"].map(
-            (p) => (
-              <Route key={p} path={p} element={<LegacyCodeSettings />} />
-            ),
-          )}
           <Route path="/settings/*" element={<SettingsPage />} />
         </Routes>
         <Where />
@@ -194,14 +188,6 @@ describe("Code settings", () => {
     for (const name of ["Models", "Projects", "GitHub", "Reviews"]) {
       expect(within(nav).getByRole("link", { name: new RegExp(name) })).toBeInTheDocument();
     }
-  });
-
-  it("sends an old Code settings link to the same page in Settings", async () => {
-    renderAt("/code/settings/projects/p1");
-    await waitFor(() =>
-      expect(screen.getByTestId("where")).toHaveTextContent("/settings/projects?project=p1"),
-    );
-    expect(await screen.findByRole("textbox", { name: "Base branch" })).toHaveValue("main");
   });
 
   it("keeps a deep link while Code's agents are still loading", async () => {

@@ -1,4 +1,5 @@
 import type { ChatToolCall } from "./chat-types";
+import { formatDuration } from "./format";
 import { viewOf } from "./tool-call-view";
 
 export type ToolLabels = Record<string, string>;
@@ -195,21 +196,11 @@ export function approvalNote(
   return lead;
 }
 
-export function formatDuration(ms: number): string {
-  return ms < 1000 ? `${Math.max(1, Math.round(ms))}ms` : `${(ms / 1000).toFixed(1)}s`;
-}
-
-export function formatWait(ms: number): string {
-  const seconds = Math.round(ms / 1000);
-  if (seconds < 60) return `${Math.max(1, seconds)}s`;
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return seconds % 60 ? `${minutes}m ${seconds % 60}s` : `${minutes}m`;
-  return minutes % 60 ? `${Math.floor(minutes / 60)}h ${minutes % 60}m` : `${minutes / 60}h`;
-}
-
 export function durationText(call: ChatToolCall): string | undefined {
   if (call.durationMs === undefined) return undefined;
-  const waited = call.waitedMs ? ` · waited ${formatWait(call.waitedMs)} for you` : "";
+  const waited = call.waitedMs
+    ? ` · waited ${formatDuration(call.waitedMs, { precision: "seconds" })} for you`
+    : "";
   return `${formatDuration(call.durationMs)}${waited}`;
 }
 

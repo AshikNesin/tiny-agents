@@ -7,7 +7,7 @@ import { app } from "../../app-root";
 import { bots, db, memories } from "../../db";
 import { memoryCategorySchema, memoryTextSchema } from "./memories.domain";
 import { memoryLedger, type MemoryRow } from "./memories.ledger";
-import type { SideCaller } from "./side-call";
+import type { SideCaller } from "../bots/side-call";
 import { ownerDisplayName } from "../people/people.service";
 
 const MEMORY_TIDY_JOB = "memory-tidy";

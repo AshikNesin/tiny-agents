@@ -232,14 +232,14 @@
       "step": "1.2"
     },
     {
-      "file": "apps/web/src/server/api/bots/claude-worker.ts",
+      "file": "apps/web/src/server/api/sandbox/claude-worker.ts",
       "names": ["shared"],
       "replacedBy": "apps/web/src/server/app-root.ts",
       "note": "the Claude worker (App.claudeWorker)",
       "step": "1.2"
     },
     {
-      "file": "apps/web/src/server/api/bots/sandbox-host.ts",
+      "file": "apps/web/src/server/api/sandbox/sandbox-host.ts",
       "names": ["hostKeys", "connections"],
       "replacedBy": "apps/web/src/server/app-root.ts",
       "note": "App.sandboxHostKeys, App.sandboxConnections",

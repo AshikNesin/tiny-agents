@@ -8,7 +8,7 @@ import {
   issueVncTicket,
   redeemVncTicket,
   resetVncTicketsForTests,
-} from "../../../apps/web/src/server/api/bots/browser.vnc";
+} from "../../../apps/web/src/server/api/live/browser.vnc";
 import {
   createBrowserSessions,
   type BrowserSession,

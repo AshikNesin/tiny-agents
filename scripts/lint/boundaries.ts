@@ -346,7 +346,7 @@ const BOUNDARY_RULES: BoundaryRule[] = [
     restrict: {
       patterns: [
         {
-          regex: "^@tiny-agents/claude-worker(/|$)|(^|/)bots/claude-worker$",
+          regex: "^@tiny-agents/claude-worker(/|$)|(^|/)sandbox/claude-worker$",
           message:
             "R14: the app's Code layer serves every harness (ADR 0011, ADR 0025). Only code.registry.ts names the Claude worker; shared git and diff logic goes in @tiny-agents/git, harness-specific behaviour behind the HarnessInstance contract.",
         },

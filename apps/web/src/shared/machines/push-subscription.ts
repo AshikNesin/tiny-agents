@@ -1,4 +1,5 @@
 import { defineMachine } from "../state-machine";
+import type { StatusLabels } from "./status-label";
 
 export const pushSubscriptionMachine = defineMachine({
   name: "push subscription",
@@ -12,3 +13,9 @@ export const pushSubscriptionMachine = defineMachine({
 });
 
 export type PushSubscriptionStatus = (typeof pushSubscriptionMachine.states)[number];
+
+export const pushSubscriptionLabels: StatusLabels<PushSubscriptionStatus> = {
+  active: { label: "Receiving", tone: "success" },
+  failing: { label: "Failing", tone: "warning" },
+  revoked: { label: "Signed out", tone: "danger" },
+};

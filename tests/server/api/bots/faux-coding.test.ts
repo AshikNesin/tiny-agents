@@ -6,7 +6,7 @@ import {
   closeAgentRuntime,
   openFauxAgentRuntime,
 } from "../../../../apps/web/src/server/api/bots/bots.runtime";
-import { closeSandboxConnections } from "../../../../apps/web/src/server/api/bots/sandbox-host";
+import { closeSandboxConnections } from "../../../../apps/web/src/server/api/sandbox/sandbox-host";
 import { TEST_MODEL } from "../../../../packages/agent/src/testing";
 import { codingSelection } from "../../../../packages/agent/src/toolkits/coding";
 import { startFakeSandboxServer } from "../../../../packages/sandbox/src/testing-ssh-server";

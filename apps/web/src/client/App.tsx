@@ -29,7 +29,7 @@ import { VaultPage } from "./pages/vault/Vault";
 import { TerminalPage } from "./pages/terminal";
 import { ComputerPage } from "./pages/computer";
 import { BrowserPage } from "./pages/browser";
-import { CodeWorkspace, LegacyCodeSettings, OpenProjectChat, OpenReviewLink } from "./pages/code";
+import { CodeWorkspace, OpenProjectChat, OpenReviewLink } from "./pages/code";
 import { AppShell } from "./components/shell/AppShell";
 import { BrandMark } from "./components/shell/BrandMark";
 import { APP_NAV, guestNav } from "./components/shell/nav";
@@ -145,14 +145,14 @@ export const appRoutes: RouteObject[] = [
               { path: "/code/new", element: <CodeWorkspace /> },
               { path: "/code/t/:threadId", element: <CodeWorkspace /> },
               { path: "/code/p/:projectId", element: <OpenProjectChat /> },
-              { path: "/code/reviews", element: <Navigate to="/code" replace /> },
               { path: "/code/reviews/:reviewId", element: <CodeWorkspace /> },
               { path: "/code/review", element: <OpenReviewLink /> },
               { path: "/code/review/:owner/:repo/:number", element: <OpenReviewLink /> },
               { path: "/code/review/:owner/:repo/pull/:number/*", element: <OpenReviewLink /> },
-              { path: "/code/settings", element: <LegacyCodeSettings /> },
-              { path: "/code/settings/:section", element: <LegacyCodeSettings /> },
-              { path: "/code/settings/projects/:projectId", element: <LegacyCodeSettings /> },
+              {
+                path: "/code/settings/projects",
+                element: <Navigate to="/settings/projects" replace />,
+              },
               { path: "/routines", element: <Routines /> },
               { path: "/skills", element: <SkillsPage /> },
               { path: "/skills/:id", element: <SkillsPage /> },

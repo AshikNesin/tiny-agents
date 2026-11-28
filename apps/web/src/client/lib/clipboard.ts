@@ -1,4 +1,5 @@
 import { toast } from "sonner";
+import { isMac } from "./platform";
 
 export async function copyText(text: string): Promise<boolean> {
   if (window.isSecureContext && (await clipboardTook(text))) return true;
@@ -62,12 +63,4 @@ export async function readClipboardText(): Promise<ClipboardReadResult> {
 
 export function pasteShortcut(): string {
   return isMac() ? "⌘V" : "Ctrl+V";
-}
-
-export function isMac(): boolean {
-  const platform =
-    (navigator as Navigator & { userAgentData?: { platform?: string } }).userAgentData?.platform ??
-    navigator.platform ??
-    "";
-  return /mac|iphone|ipad|ipod/i.test(platform);
 }

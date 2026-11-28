@@ -48,6 +48,8 @@ export const pinBotSchema = z.object({ pinned: z.boolean() });
 
 export const yoloSchema = z.object({ on: z.boolean() });
 
+export const rewindChatSchema = z.object({ at: z.string().trim().min(1).max(64) });
+
 export const approvalSchema = z.object({
   decision: z.enum(["approved", "denied"]),
   alwaysAllow: z.string().min(1).max(128).optional(),

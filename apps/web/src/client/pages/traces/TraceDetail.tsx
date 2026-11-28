@@ -40,7 +40,8 @@ import {
 } from "../../components/ui/trace";
 import { useTraceSession } from "../../queries/traces";
 import { countEvents, shows, toolDisplayName, type FilterKey } from "./filters";
-import { formatCost, formatDuration, formatTime, formatTokens, dayLabel } from "./format";
+import { formatCost, formatDuration, formatTokens } from "../../lib/format";
+import { formatTime, dayLabel } from "./format";
 import { HARNESS_LABEL, KIND_LABEL } from "./Traces";
 
 function chatLink(session: TraceSession): string | undefined {

@@ -1,5 +1,5 @@
 import { createTerminalService, type TerminalService } from "@tiny-agents/sandbox/terminal";
-import { sandboxConnection } from "../bots/sandbox-host";
+import { sandboxConnection } from "../sandbox/sandbox-host";
 import { app } from "../../app-root";
 
 export function getTerminalService(): TerminalService {

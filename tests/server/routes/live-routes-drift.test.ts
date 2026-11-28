@@ -9,8 +9,8 @@ import {
   redeemBrowserPageVncTicket,
   redeemVncTicket,
   resetVncTicketsForTests,
-} from "../../../apps/web/src/server/api/bots/browser.vnc";
-import { resetComputerVncTicketsForTests } from "../../../apps/web/src/server/api/bots/computer.vnc";
+} from "../../../apps/web/src/server/api/live/browser.vnc";
+import { resetComputerVncTicketsForTests } from "../../../apps/web/src/server/api/live/computer.vnc";
 import {
   createBrowserSessions,
   type BrowserSession,

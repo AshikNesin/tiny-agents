@@ -80,20 +80,10 @@ export interface WorkspaceFile {
 
 type FileStatus = WorkspaceFile["status"];
 
-const STATUS_LETTER: Record<FileStatus, string> = {
-  added: "A",
-  modified: "M",
-  deleted: "D",
-};
-const STATUS_TONE: Record<FileStatus, string> = {
-  added: "text-success",
-  modified: "text-info",
-  deleted: "text-destructive",
-};
-const STATUS_NAME: Record<FileStatus, string> = {
-  added: "Added",
-  modified: "Modified",
-  deleted: "Deleted",
+const FILE_STATUS: Record<FileStatus, { letter: string; label: string; tone: string }> = {
+  added: { letter: "A", label: "Added", tone: "text-success" },
+  modified: { letter: "M", label: "Modified", tone: "text-info" },
+  deleted: { letter: "D", label: "Deleted", tone: "text-destructive" },
 };
 
 const READ_AT_ONCE = 4;
@@ -919,10 +909,10 @@ function Sidebar({
                     }}
                     onSelect={(e) => e.preventDefault()}
                   >
-                    <span className={cn("w-3 font-medium", STATUS_TONE[status])}>
-                      {STATUS_LETTER[status]}
+                    <span className={cn("w-3 font-medium", FILE_STATUS[status].tone)}>
+                      {FILE_STATUS[status].letter}
                     </span>
-                    {STATUS_NAME[status]}
+                    {FILE_STATUS[status].label}
                   </DropdownMenuCheckboxItem>
                 ))}
               </DropdownMenuContent>

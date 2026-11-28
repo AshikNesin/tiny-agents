@@ -97,7 +97,7 @@ async function settle(open: Opened, ms = 250): Promise<string[]> {
 async function stopAppServices(): Promise<void> {
   const { app } = await import("../../../apps/web/src/server/app-root");
   const { closeSandboxConnections } =
-    await import("../../../apps/web/src/server/api/bots/sandbox-host");
+    await import("../../../apps/web/src/server/api/sandbox/sandbox-host");
   const { closeAllBrowserSessions } =
     await import("../../../packages/sandbox/src/browser-sessions");
   const { closeAllComputerSessions } =

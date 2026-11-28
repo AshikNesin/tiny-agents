@@ -7,7 +7,7 @@ import { Boom } from "@groot/core/errors";
 import { logger } from "@groot/core/logger";
 import * as botsService from "../bots/bots.service";
 import { browserTargetForBot } from "../bots/browser.targets";
-import { knownProfile } from "../bots/profiles";
+import { knownProfile } from "./profiles";
 import { watchOnly } from "../people/access";
 import type { DesktopApp, DesktopApps, LiveStarting, VncTicket } from "../../../shared/api/live";
 

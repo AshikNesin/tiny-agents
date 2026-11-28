@@ -64,18 +64,3 @@ export const ROLE_LABEL: Record<ModelRole, { title: string; description: string 
 };
 
 export const ROLES = Object.keys(ROLE_LABEL) as ModelRole[];
-
-export function formatTokens(tokens: number): string {
-  if (tokens >= 1_000_000) return `${Math.round(tokens / 100_000) / 10}M`;
-  if (tokens >= 1_000) return `${Math.round(tokens / 1_000)}K`;
-  return String(tokens);
-}
-
-export function hostOf(url: string | null): string | null {
-  if (!url) return null;
-  try {
-    return new URL(url).host;
-  } catch {
-    return url;
-  }
-}

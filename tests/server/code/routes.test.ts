@@ -323,6 +323,15 @@ describe("Code API", () => {
     expect((await post("/threads/shelley:cGone/messages", { message: "hi" })).status).toBe(404);
   });
 
+  it("answers 404 to an id with no instance prefix and no thread row, without asking Shelley", async () => {
+    shelley.conversations.set("cA", { messages: [], conversation: { conversation_id: "cA" } });
+    shelley.seen.length = 0;
+    const read = await get("/threads/cA");
+    expect([read.status, read.body.error?.message]).toEqual([404, "No harness serves this thread"]);
+    expect((await post("/threads/cA/messages", { message: "hi" })).status).toBe(404);
+    expect(shelley.seen.filter((request) => request.url.includes("/cA"))).toEqual([]);
+  });
+
   it("sends the thread's pending line comments with the next message, once", async () => {
     const draft = (body: unknown) => post("/threads/fake:t1/review/drafts", body);
     expect(
@@ -381,15 +390,6 @@ describe("Code API", () => {
     });
     expect(unknown.status).toBe(400);
     expect(fake.sent).toHaveLength(before);
-  });
-
-  it("serves links written before the harness layer (bare Shelley ids)", async () => {
-    shelley.conversations.set("cLegacy", {
-      messages: [],
-      conversation: { conversation_id: "cLegacy", slug: "legacy" },
-    });
-    const thread = await get<{ thread: { id: string } }>("/threads/cLegacy");
-    expect(thread.body.data?.thread.id).toBe("shelley:cLegacy");
   });
 
   it("answers capability_missing for what a harness cannot do", async () => {

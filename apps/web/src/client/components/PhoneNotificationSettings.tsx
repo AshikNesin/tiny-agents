@@ -3,16 +3,11 @@ import { toast } from "sonner";
 import { Send, Smartphone, Trash2 } from "lucide-react";
 import { Button } from "@groot/ui/button";
 import { useConfirm } from "@groot/ui/primitives";
-import { StatusBadge } from "@groot/ui/status-badge";
 import type { PushDevice } from "../../shared/api/push";
+import { pushSubscriptionLabels } from "../../shared/machines/push-subscription";
+import { StatusBadge } from "./StatusBadge";
 import { errorMessage } from "../lib/errors";
 import { usePushDeviceMutations, usePushDevices } from "../queries/push";
-
-const STATUS = {
-  active: { status: "success", label: "Receiving" },
-  failing: { status: "warning", label: "Failing" },
-  revoked: { status: "error", label: "Signed out" },
-} as const;
 
 const via = (device: PushDevice) =>
   device.distributor === "fcm"
@@ -79,10 +74,7 @@ export function PhoneNotificationSettings() {
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <span className="font-medium">{device.label || "Phone"}</span>
-              <StatusBadge
-                status={STATUS[device.status].status}
-                label={STATUS[device.status].label}
-              />
+              <StatusBadge status={device.status} labels={pushSubscriptionLabels} />
             </div>
             <p className="text-muted-foreground text-xs">
               Via {via(device)}

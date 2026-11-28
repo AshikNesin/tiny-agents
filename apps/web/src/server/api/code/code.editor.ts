@@ -4,7 +4,7 @@ import { shelley } from "@tiny-agents/code/server";
 import { DEFAULT_SSH_USER } from "@tiny-agents/sandbox";
 import type { EditorSshTarget } from "../../../shared/api/code";
 import { appEnv, type AppEnv } from "../../env";
-import { sandboxHost, unquoteEnv } from "../bots/sandbox-host";
+import { sandboxHost, unquoteEnv } from "../sandbox/sandbox-host";
 
 function remoteHost(host: string | undefined): string | null {
   if (!host) return null;

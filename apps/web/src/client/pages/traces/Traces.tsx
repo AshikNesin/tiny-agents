@@ -12,7 +12,8 @@ import type { SideCall, TraceSession } from "../../../shared/api/traces";
 import { tracesApi } from "../../lib/traces-api";
 import { errorMessage } from "../../lib/errors";
 import { useTraceList, useTraceSummary, type TraceListFilter } from "../../queries/traces";
-import { byDay, formatCost, formatDuration, formatTime, formatTokens } from "./format";
+import { formatCost, formatDuration, formatTokens } from "../../lib/format";
+import { byDay, formatTime } from "./format";
 
 const FILTERS: { value: TraceListFilter; label: string }[] = [
   { value: "all", label: "All" },

@@ -34,7 +34,7 @@ import {
 import { fauxMode } from "../../env";
 import { createAppCredential, deleteItemRow } from "../vault/vault.admin.service";
 import { getAgentRuntime } from "../bots/bots.runtime";
-import { sharedClaudeWorkerLocator } from "../bots/claude-worker";
+import { sharedClaudeWorkerLocator } from "../sandbox/claude-worker";
 import { providerHost, reloadModels, vaultCredentials } from "./models.config";
 import {
   checkBaseUrl,

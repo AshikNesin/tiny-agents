@@ -3,7 +3,7 @@ import {
   createRfbInputWatch,
   createRfbViewOnlyFilter,
   RfbViewOnlyError,
-} from "../../../../apps/web/src/server/api/bots/rfb-view-only";
+} from "../../../../apps/web/src/server/api/live/rfb-view-only";
 
 const b = (...bytes: number[]) => Buffer.from(bytes);
 const HANDSHAKE = Buffer.concat([Buffer.from("RFB 003.008\n"), b(1), b(1)]);

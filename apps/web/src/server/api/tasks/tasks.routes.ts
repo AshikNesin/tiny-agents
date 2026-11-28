@@ -2,8 +2,8 @@ import { routes } from "../routes";
 import { ok } from "@groot/core/utils/api-response.utils";
 import type { Deleted } from "../../../shared/api/common";
 import { parseBody, parseStringParam } from "@groot/core/utils/controller.utils";
-import * as taskService from "./task.service";
-import { createTaskSchema, updateTaskSchema } from "./task.schema";
+import * as taskService from "./tasks.service";
+import { createTaskSchema, updateTaskSchema } from "./tasks.schema";
 
 const router = routes();
 

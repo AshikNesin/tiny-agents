@@ -7,7 +7,8 @@ import {
   useRef,
 } from "react";
 import { botVncTicket, resizeBotBrowser } from "../../lib/vnc-session";
-import { isMac, remapMetaChord, type KeyStroke } from "../../lib/browser-keys";
+import { remapMetaChord, type KeyStroke } from "../../lib/browser-keys";
+import { isMac } from "../../lib/platform";
 import { ignoreClipboardRefusal, sayClipboardReadRefused } from "../../lib/clipboard";
 import { createRfb, type RfbClient } from "../../lib/novnc";
 import { reconnectingSocket } from "../../lib/reconnecting-socket";

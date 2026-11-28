@@ -31,7 +31,7 @@ import { getBrowserSessions } from "./browser.sessions";
 import { browserTargetForBot, ownBrowserProfile, SHARED_BROWSER_PROFILE } from "./browser.targets";
 import { retireConversation } from "./chats.history";
 import { computerProfileForBot, computerSetupHint, getComputerSessions } from "./computer.sessions";
-import { sandboxEndpoint } from "./sandbox-host";
+import { sandboxEndpoint } from "../sandbox/sandbox-host";
 import { app } from "../../app-root";
 
 interface ReleaseContext {

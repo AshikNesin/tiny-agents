@@ -1,5 +1,5 @@
 import type { IncomingMessage, Server } from "node:http";
-import { getComputerSessions } from "./computer.sessions";
+import { getComputerSessions } from "../bots/computer.sessions";
 import { attachVncBridge, type VncTarget } from "./desktop.vnc";
 import { createTicketStore } from "../ws/upgrade";
 

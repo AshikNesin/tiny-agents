@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
-import { captureConversation } from "../../../apps/web/src/server/api/bots/memories.runner";
+import { captureConversation } from "../../../apps/web/src/server/api/memories/memories.runner";
 import type { SideCaller, SideCallRequest } from "../../../apps/web/src/server/api/bots/side-call";
 import { listPastChats } from "../../../apps/web/src/server/api/bots/chats.history";
 import {

@@ -1,6 +1,6 @@
 import type { IncomingMessage, Server } from "node:http";
 import type { BrowserTarget } from "@tiny-agents/sandbox/browser";
-import { getBrowserSessions } from "./browser.sessions";
+import { getBrowserSessions } from "../bots/browser.sessions";
 import { attachVncBridge, type VncTarget } from "./desktop.vnc";
 import { createTicketStore } from "../ws/upgrade";
 

@@ -60,12 +60,12 @@ router.post("/vault/step-up", "signedIn", authRateLimiter, async (c) => {
   if ("password" in body) {
     if (!(await verifyPassword(userId, body.password))) throw Boom.unauthorized("Wrong password");
   } else {
-    const result = await passkeyService.verifyAuthentication({
+    const user = await passkeyService.authenticatePasskey({
       response: body.passkey as unknown as Parameters<
-        typeof passkeyService.verifyAuthentication
+        typeof passkeyService.authenticatePasskey
       >[0]["response"],
     });
-    if (result.user.id !== userId) throw Boom.forbidden("That passkey belongs to someone else");
+    if (user.id !== userId) throw Boom.forbidden("That passkey belongs to someone else");
   }
   return ok(c, issueStepUp(userId));
 });

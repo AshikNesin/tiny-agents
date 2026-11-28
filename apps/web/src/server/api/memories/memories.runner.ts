@@ -10,9 +10,9 @@ import {
 import { MEMORY_CAPTURE_CHAR_CAP, MEMORY_TRIVIAL_BYTES } from "./memories.domain";
 import { memoryLedger } from "./memories.ledger";
 import { bots, db } from "../../db";
-import { chatOwner } from "./bots.owner";
+import { chatOwner } from "../bots/bots.owner";
 import { ownerDisplayName } from "../people/people.service";
-import type { SideCaller } from "./side-call";
+import type { SideCaller } from "../bots/side-call";
 
 const CAPTURE_TIMEOUT_MS = 60_000;
 const ASSISTANT_CONTEXT_CHARS = 500;

@@ -519,8 +519,9 @@ question Q3.
 registered twice per surface, by profile and as the per-bot alias, which
 resolves the bot to its profile (`browserTargetForBot`) and runs the same
 handler. `live.routes.ts` declares the two surfaces, the browser and the
-computer. The four old routers are gone; the session managers, the VNC
-bridges and their ticket stores stay in `api/bots/`, unchanged.
+computer. The four old routers are gone; the session managers stay in
+`api/bots/`, and the VNC bridges and their ticket stores sit beside the
+routers in `api/live/`.
 
 Every route keeps its method, path, guard, envelope, status codes and error
 text (D9), and the mount order is the old one. All are under `/api/v1`

@@ -24,11 +24,6 @@ const SHIFT_L = 0xffe1;
 const CONTROL_L = 0xffe3;
 const ALT_L = 0xffe9;
 
-export function isMac(): boolean {
-  if (typeof navigator === "undefined") return false;
-  return /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
-}
-
 export function keysymFor(key: string): number | undefined {
   if (key in KEYSYMS) return KEYSYMS[key as keyof typeof KEYSYMS];
   const chars = [...key];

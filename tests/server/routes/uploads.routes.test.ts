@@ -8,7 +8,7 @@ import {
   extractKey,
 } from "../../../apps/web/src/server/api/uploads/uploads.extraction";
 import { createAttachmentStore } from "../../../apps/web/src/server/api/uploads/uploads.store";
-import { captureWindow } from "../../../apps/web/src/server/api/bots/memories.runner";
+import { captureWindow } from "../../../apps/web/src/server/api/memories/memories.runner";
 import { pdf, xlsx } from "../api/uploads/fixtures";
 import { api, createTestApp, type TestApp } from "../helpers";
 import {

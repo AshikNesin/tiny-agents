@@ -10,7 +10,7 @@ import {
 } from "../../../packages/agent/src/testing";
 import { createSandboxToolkit } from "../../../packages/agent/src/toolkits/sandbox";
 import { createWebToolkit } from "../../../packages/agent/src/toolkits/web";
-import { sandboxConnection } from "../../../apps/web/src/server/api/bots/sandbox-host";
+import { sandboxConnection } from "../../../apps/web/src/server/api/sandbox/sandbox-host";
 import { appEnv } from "../../../apps/web/src/server/env";
 import { until } from "../fixtures";
 

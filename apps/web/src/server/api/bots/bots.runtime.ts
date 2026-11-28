@@ -37,10 +37,10 @@ import {
 } from "@tiny-agents/agent/testing";
 import { logger, setScrubber } from "@groot/core/logger";
 import { recordLlmCall } from "../traces/traces.calls";
-import { taskStore } from "../tasks/task.store";
+import { taskStore } from "../tasks/tasks.store";
 import { codeStore } from "../code/code.bots";
 import { skillStore } from "../skills/skills.store";
-import { memoryStore } from "./memories.store";
+import { memoryStore } from "../memories/memories.store";
 import { createBotMessagingStore } from "./bots.messaging";
 import { createAttachmentStore, createVisionStore } from "../uploads/uploads.store";
 import { createInstructionsStore } from "./self-improve.store";
@@ -55,8 +55,8 @@ import {
   computerSetupHint,
   getComputerSessions,
 } from "./computer.sessions";
-import { sandboxConnection, unquoteEnv as unquote } from "./sandbox-host";
-import { sharedClaudeWorkerLocator } from "./claude-worker";
+import { sandboxConnection, unquoteEnv as unquote } from "../sandbox/sandbox-host";
+import { sharedClaudeWorkerLocator } from "../sandbox/claude-worker";
 import { missingToolkits } from "./bot-toolkits";
 import { appEnv, type AppEnv } from "../../env";
 import {

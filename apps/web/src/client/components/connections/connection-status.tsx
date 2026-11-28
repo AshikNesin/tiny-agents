@@ -1,15 +1,16 @@
-import { StatusBadge } from "@groot/ui/status-badge";
 import type { Connection, ConnectionStatus } from "../../../shared/api/connections";
+import type { StatusLabels } from "../../../shared/machines/status-label";
+import { StatusBadge } from "../StatusBadge";
 
-const STATUS_BADGE: Record<ConnectionStatus, { variant: string; label: string }> = {
-  connected: { variant: "success", label: "Connected" },
-  connecting: { variant: "pending", label: "Connecting" },
-  error: { variant: "error", label: "Error" },
-  needs_auth: { variant: "warning", label: "Needs sign-in" },
+const CONNECTION_STATUS_LABELS: StatusLabels<ConnectionStatus> = {
+  connected: { label: "Connected", tone: "success" },
+  connecting: { label: "Connecting", tone: "neutral" },
+  error: { label: "Error", tone: "danger" },
+  needs_auth: { label: "Needs sign-in", tone: "warning" },
 };
 
 export function ConnectionStatusBadge({ status }: { status: ConnectionStatus }) {
-  return <StatusBadge status={STATUS_BADGE[status].variant} label={STATUS_BADGE[status].label} />;
+  return <StatusBadge status={status} labels={CONNECTION_STATUS_LABELS} />;
 }
 
 export function needsAttention(status: ConnectionStatus): boolean {

@@ -1,5 +1,4 @@
 import { useMemo, type ReactNode } from "react";
-import { Navigate, useLocation } from "react-router-dom";
 import { AccountSettings } from "@groot/shell/components/AccountSettings";
 import { AppSettings } from "@groot/shell/components/AppSettings";
 import { NotificationSettings } from "@groot/shell/components/NotificationSettings";
@@ -35,11 +34,7 @@ const ELEMENTS: Record<SettingsSectionId, ReactNode> = {
   reviews: <CodeSettingsSection section="reviews" />,
 };
 
-const LEGACY_TABS: Record<string, string> = { general: "account", claude: "models" };
-
 export function SettingsPage() {
-  const { pathname, search } = useLocation();
-  const legacyTab = new URLSearchParams(search).get("tab");
   const role = viewerRole(useViewer());
   const restricted = role !== "owner";
   const code = useCodeStore((s) => s.harnesses === null || s.harnesses.length > 0);
@@ -47,9 +42,6 @@ export function SettingsPage() {
     () => settingsSectionsFor(restricted, code).map((s) => ({ ...s, element: ELEMENTS[s.id] })),
     [restricted, code],
   );
-  if (legacyTab && pathname.replace(/\/+$/, "") === "/settings") {
-    return <Navigate to={`/settings/${LEGACY_TABS[legacyTab] ?? legacyTab}`} replace />;
-  }
   if (role === "loading" || role === "unknown") return null;
   return <Settings sections={sections} />;
 }

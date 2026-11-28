@@ -4,15 +4,9 @@ import { CalendarClock, ChevronDown } from "lucide-react";
 import { cn } from "@groot/ui/lib/utils";
 import { markdownToPlainText } from "../lib/plain-text";
 import { formatIst, TZ_IST } from "../../shared/routines-schedule";
+import { routineRunLabels } from "../../shared/machines/routine-run";
+import { StatusBadge } from "./StatusBadge";
 import type { RoutineRunCard } from "../lib/chat-types";
-
-const STATUS_WORD: Record<RoutineRunCard["status"], string> = {
-  succeeded: "done",
-  blocked: "needs attention",
-  failed: "failed",
-  missed: "missed",
-  cancelled: "cancelled",
-};
 
 const timeOfDay = new Intl.DateTimeFormat("en-GB", {
   timeZone: TZ_IST,
@@ -23,9 +17,6 @@ const timeOfDay = new Intl.DateTimeFormat("en-GB", {
 
 const blockedRun = (run: RoutineRunCard) => run.status === "blocked";
 const failedRun = (run: RoutineRunCard) => run.status !== "succeeded" && !blockedRun(run);
-
-const statusClass = (run: RoutineRunCard) =>
-  cn(blockedRun(run) && "text-warning", failedRun(run) && "text-destructive");
 
 export function RoutineRuns({ runs }: { runs: RoutineRunCard[] }) {
   const [open, setOpen] = useState(false);
@@ -48,7 +39,7 @@ export function RoutineRuns({ runs }: { runs: RoutineRunCard[] }) {
         </span>
         <span aria-hidden>·</span>
         {runs.length === 1 ? (
-          <span className={statusClass(latest)}>{STATUS_WORD[latest.status]}</span>
+          <StatusBadge plain status={latest.status} labels={routineRunLabels} />
         ) : (
           <>
             <span>ran {runs.length}×</span>
@@ -92,7 +83,7 @@ function RunDetail({ run, showName }: { run: RoutineRunCard; showName: boolean }
         {timeOfDay.format(new Date(run.finishedAt))}
         {showName ? ` · ${run.routineName}` : ""}
         {" · "}
-        <span className={statusClass(run)}>{STATUS_WORD[run.status]}</span>
+        <StatusBadge plain status={run.status} labels={routineRunLabels} />
         {run.trigger === "manual" ? " · run now" : ""}
       </p>
       {output && <p className="text-foreground text-sm whitespace-pre-wrap">{output}</p>}

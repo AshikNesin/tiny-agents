@@ -1,7 +1,7 @@
 import { CATEGORY_ORDER, extractedMemorySchema, type MemoryCategory } from "./memories.domain";
 import { memoryLedger } from "./memories.ledger";
-import { getAgentRuntime } from "./bots.runtime";
-import { conversationOwner, ownerTurnOf, type ChatReader } from "./bots.owner";
+import { getAgentRuntime } from "../bots/bots.runtime";
+import { conversationOwner, ownerTurnOf, type ChatReader } from "../bots/bots.owner";
 import type { MemoryStore } from "@tiny-agents/agent";
 
 function order(category: string): number {
