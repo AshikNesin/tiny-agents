@@ -1,5 +1,13 @@
 # @tiny-agents/code
 
+## 0.4.0
+
+### Minor Changes
+
+- [#630](https://github.com/AshikNesin/tiny-agents/pull/630) [`3d5b044`](https://github.com/AshikNesin/tiny-agents/commit/3d5b04442d27ae96146fc10f6968def874d87a99) Thanks [@AshikNesin](https://github.com/AshikNesin)! - A Code thread id with no instance in front (`cA` rather than `shelley:cA`) is no longer read as a Shelley conversation. Such ids were last written before Code had more than one coding agent. A migration gives any hand-off, pull request, checkpoint, viewed mark or review comment still saved under one its Shelley thread, so those keep working. A thread opened by an id the app does not know now answers "not found" instead of asking Shelley for a conversation of that name.
+  
+  `@tiny-agents/code` removes `LEGACY_INSTANCE_ID` and the second argument of `parseThreadId`.
+
 ## 0.3.0
 
 ### Minor Changes

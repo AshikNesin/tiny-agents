@@ -1,5 +1,47 @@
 # tiny-agents
 
+## 1.8.0
+
+### Minor Changes
+
+- [#631](https://github.com/AshikNesin/tiny-agents/pull/631) [`b2e4c4a`](https://github.com/AshikNesin/tiny-agents/commit/b2e4c4a07b4ac1ecf5161b752bf0fb85f3ce4aae) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Bots can now write artifacts: a document, code file, diagram, SVG or single HTML page that opens in a panel next to the chat instead of filling the reply. Each change the bot makes is kept as a version, so you can look back at any of them, copy or download it, and restore an old one. HTML and SVG run in a locked-down frame that can't reach your session or the network. Guests of a shared bot can read its artifacts.
+
+- [#617](https://github.com/AshikNesin/tiny-agents/pull/617) [`2df6eaa`](https://github.com/AshikNesin/tiny-agents/commit/2df6eaa84c2831d44d73846994a72825b05964d6) Thanks [@AshikNesin](https://github.com/AshikNesin)! - The vault asks you to confirm it's you only when a value could leave it: revealing, copying, deleting, linking an existing 1Password item, or changing an item's URLs or policy. Adding an item, changing its title or values, saving a sign-in a bot asked for, and moving local items to 1Password no longer ask. The Android app can confirm with a passkey (fingerprint or face): with `ANDROID_APP_CERT_SHA256` set, the server's `/.well-known/assetlinks.json` now also lets the app use the server's passkeys, and the server accepts passkey answers signed for the app.
+
+### Patch Changes
+
+- [#627](https://github.com/AshikNesin/tiny-agents/pull/627) [`4bf8b31`](https://github.com/AshikNesin/tiny-agents/commit/4bf8b31fe56772d5a3d6bfdd839aa4554652e6eb) Thanks [@AshikNesin](https://github.com/AshikNesin)! - The Android app confirms vault reveals with your fingerprint: it keeps your password behind the phone's fingerprint lock and sends it for you. The server no longer accepts passkeys signed for the Android app, and `/.well-known/assetlinks.json` is back to app links only.
+
+- [#621](https://github.com/AshikNesin/tiny-agents/pull/621) [`a9cc44d`](https://github.com/AshikNesin/tiny-agents/commit/a9cc44dfbd7560957e40a173d88a584831cab812) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Smoother everyday use. A Settings link opened straight from the address bar, a bookmark or a reload now stays on its section instead of falling back to Appearance. Phone pages show one menu button instead of two. Adding a project in Code makes its chat right away, so it shows up in Chat's sidebar without opening it from Code first.
+  
+  New chat (the header button, its shortcut and the palette) starts a fresh chat straight away instead of asking first, the same as typing `/new`. The chat you leave stays in Chat history, where you can read or continue it.
+
+- [#628](https://github.com/AshikNesin/tiny-agents/pull/628) [`522fc04`](https://github.com/AshikNesin/tiny-agents/commit/522fc04822bafe146b9d02d601457368f6479e42) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Code threads now get every connection and skill you can use in a bot chat. Before, a Code thread only had the connections and skills switched on for every bot, so one turned on for just some bots, and any skill a bot saved for itself, never showed up in Code. A connection or skill that no bot has is still left out, and Settings > Tools still decides allow, ask or off.
+
+- [#625](https://github.com/AshikNesin/tiny-agents/pull/625) [`d0b1f2c`](https://github.com/AshikNesin/tiny-agents/commit/d0b1f2c90367fe62c2a99a5154473787bfd499e6) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Fewer "Confirm it's you" prompts. Replacing a model account's key or a connection's header value, discovering or testing a model endpoint, saving a GitHub token and starting GitHub App setup no longer ask for your password. Adding an account or connection, pointing one somewhere new, and deleting one still do. Saving a GitHub token in Settings works again; it failed every time before.
+  
+  Bots save memories you ask for without an approval card. Forgetting a memory still asks, and you can set saving back to Ask under Settings > Tools.
+  
+  A draft pull request now says "Turn Draft off to merge" beside its disabled Merge button, so the reason shows on a phone too.
+
+- [#614](https://github.com/AshikNesin/tiny-agents/pull/614) [`744f27f`](https://github.com/AshikNesin/tiny-agents/commit/744f27fe5df0720485fd82b429ff00216cc8aa7f) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Fix every DELETE request failing with a 500 ("Cannot read properties of undefined (reading 'window')") on the Node server after the 1Password fix. The server again lets its HTTP adapter replace the global `Request`, which the body limit needs, and only puts the built-in `Response` back for 1Password's SDK.
+
+- [#615](https://github.com/AshikNesin/tiny-agents/pull/615) [`5957ff8`](https://github.com/AshikNesin/tiny-agents/commit/5957ff8a289e0e80ddd62427e41d2c7f4a15c193) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Project chat now looks like any bot chat. Code's Project chat link opens it in Chat, with the Chat sidebar, and the Threads panel starts closed; its button shows a dot when a thread needs you.
+
+- [#626](https://github.com/AshikNesin/tiny-agents/pull/626) [`e779535`](https://github.com/AshikNesin/tiny-agents/commit/e77953572aca2c42a2c926a3ddce12359be41c36) Thanks [@AshikNesin](https://github.com/AshikNesin)! - The chat sidebar lists Projects, then Bots, then Threads at the bottom, each showing its first few rows with a **More** row for the rest.
+
+- [#628](https://github.com/AshikNesin/tiny-agents/pull/628) [`522fc04`](https://github.com/AshikNesin/tiny-agents/commit/522fc04822bafe146b9d02d601457368f6479e42) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Typing `/` in a bot chat or a Code thread now lists your tools as well as commands and skills. Each connection shows up (for example `/github` for every GitHub tool), and as you type you can pick a single tool. A picked tool sits as a chip above the composer, and the message asks the agent to load and use it. The chat menu also offers `/new`, and it opens even for a bot with no skills.
+
+- [#630](https://github.com/AshikNesin/tiny-agents/pull/630) [`3d5b044`](https://github.com/AshikNesin/tiny-agents/commit/3d5b04442d27ae96146fc10f6968def874d87a99) Thanks [@AshikNesin](https://github.com/AshikNesin)! - A Code thread id with no instance in front (`cA` rather than `shelley:cA`) is no longer read as a Shelley conversation. Such ids were last written before Code had more than one coding agent. A migration gives any hand-off, pull request, checkpoint, viewed mark or review comment still saved under one its Shelley thread, so those keep working. A thread opened by an id the app does not know now answers "not found" instead of asking Shelley for a conversation of that name.
+  
+  `@tiny-agents/code` removes `LEGACY_INSTANCE_ID` and the second argument of `parseThreadId`.
+
+- [#616](https://github.com/AshikNesin/tiny-agents/pull/616) [`5cb7857`](https://github.com/AshikNesin/tiny-agents/commit/5cb78578c0a97494504aa7b9e7f7b006518fc621) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Settings → Models names where an account's key is kept as "1Password" or "Local", not the internal `onepassword`/`local`, and linking an item from an unconfigured vault says "1Password is not configured".
+
+- [#612](https://github.com/AshikNesin/tiny-agents/pull/612) [`b7fec7a`](https://github.com/AshikNesin/tiny-agents/commit/b7fec7aad03f670021aa28e0d7535dc89249ccef) Thanks [@AshikNesin](https://github.com/AshikNesin)! - Fix the 1Password vault on deployed servers: every request failed and the Vault card said 1Password "refused the service account token" with a "reqwest library: error sending request" message. The Node server replaced the global `Response` class, and 1Password's SDK rejects any fetch answer that isn't the built-in `Response`. The server now leaves the globals alone, so no setting changes are needed; redeploy. When the SDK really can't send a request, the card now says 1Password is unreachable from the server instead of blaming the token.
+
+- [#624](https://github.com/AshikNesin/tiny-agents/pull/624) [`aedd94c`](https://github.com/AshikNesin/tiny-agents/commit/aedd94c1bf57def38fba34dee53c2b63b4a285b4) Thanks [@AshikNesin](https://github.com/AshikNesin)! - A credential request filled twice while the first fill is still running now gets the first fill's answer instead of "This request is being filled already.", and the web form's button reads **Filling…** while it runs. Saving a new item to 1Password takes one request fewer: the item's details come from 1Password's create answer instead of a second read.
+
 ## 1.7.0
 
 ### Minor Changes
