@@ -120,7 +120,7 @@ The sandbox VM layer is its own package too, `@tiny-agents/sandbox`
 computer sessions and transports, their VM setup scripts and the forwarding
 server. It imports neither pi-durable nor `@tiny-agents/agent` (lint R11);
 the browser, computer and sandbox toolkits stay in `@tiny-agents/agent` and
-drive it (docs/rewrite/DECISIONS.md D7). Its subpaths are entry files under
+drive it ([ADR 0047](./adr/0047-sandbox-and-models-are-their-own-packages.md)). Its subpaths are entry files under
 `packages/sandbox/src/subpaths/`, listed in its `exports` and the root
 `tsconfig.json` `paths`.
 

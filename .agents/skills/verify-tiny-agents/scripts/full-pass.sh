@@ -6,7 +6,7 @@
 # group needs `pnpm sandbox:up`. Logs: data/verify-evidence/full-pass-<time>/<run>.log
 #   .agents/skills/verify-tiny-agents/scripts/full-pass.sh [--no-infra] [--aria save|check]
 # --no-infra runs only the groups that need no sandbox, Shelley or Cloudflare
-# keys (the rewrite's definition of done runs it; docs/rewrite/PLAN.md).
+# keys.
 # --aria save|check runs those on frozen-clock instances (`up --fixed-clock`),
 # without the three journeys that wait for a scheduled fire or a retry, then saves or
 # checks every journey's ARIA snapshots against goldens/ (aria-goldens.mjs).

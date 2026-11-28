@@ -27,7 +27,7 @@ that the code alone cannot show.
 | 0008 | [Claude subscription inference goes through Claude Code](0008-claude-code-engine.md)                                 | accepted (amended by 0010, 0014, 0016, 0018)                   |
 | 0009 | [Coding goes to Shelley; tiny-agents is a client of its API](0009-shelley-is-the-coding-agent.md)                    | accepted (generalized by 0011)                                 |
 | 0010 | [The Claude worker runs on the sandbox, set up by the app](0010-claude-worker-runs-on-the-sandbox.md)                | accepted (amends 0008; amended by 0013)                        |
-| 0011 | [The Code page talks to coding agents through harness adapters](0011-code-harness-adapters.md)                       | accepted (generalizes 0009)                                    |
+| 0011 | [The Code page talks to coding agents through harness adapters](0011-code-harness-adapters.md)                       | accepted (generalizes 0009; bare-id rule superseded by 0052)   |
 | 0012 | [Claude Code's coding mode on the sandbox worker](0012-claude-code-coding-mode.md)                                   | accepted (amends 0008)                                         |
 | 0013 | [One sandbox connection](0013-one-sandbox-connection.md)                                                             | accepted (amends 0010)                                         |
 | 0014 | [One Tool gate for both engines, behind a real AgentEngine seam](0014-tool-gate-and-engine-seam.md)                  | accepted (amends 0008; amended by 0016, 0018)                  |
@@ -62,6 +62,12 @@ that the code alone cannot show.
 | 0044 | [Base UI replaces Radix as the one primitive layer](0044-base-ui-replaces-radix.md)                                  | accepted (amends 0001, 0003)                                   |
 | 0045 | [1Password through service accounts; Connect is removed](0045-1password-through-service-accounts.md)                 | accepted (supersedes 0027's Connect parts, amends 0005)        |
 | 0046 | [Code threads reach every connection and skill a bot chat reaches](0046-code-threads-reach-what-any-bot-reaches.md)  | accepted (amends 0042)                                         |
+| 0047 | [The sandbox and the model layer are their own packages](0047-sandbox-and-models-are-their-own-packages.md)          | accepted                                                       |
+| 0048 | [Server state lives in one App root](0048-one-app-root.md)                                                           | accepted                                                       |
+| 0049 | [Settling follows activity levels, not a once-per-turn edge](0049-settling-follows-activity-levels.md)               | accepted                                                       |
+| 0050 | [Retired modules stay gone; narrowed modules keep their names](0050-retired-modules-stay-gone.md)                    | accepted                                                       |
+| 0051 | [API wire types live once, in `shared/api`](0051-wire-types-live-in-shared-api.md)                                   | accepted                                                       |
+| 0052 | [Code thread ids always carry their instance](0052-thread-ids-always-carry-their-instance.md)                        | accepted (supersedes 0011's bare-id rule)                      |
 | G4   | [Hono + Drizzle on SQLite, for Node and Cloudflare Workers](0004-hono-drizzle-sqlite-workers.md)                     | accepted (groot)                                               |
 
 `G4` is groot's ADR 0004, synced from the boilerplate; tiny-agents' own 0004

@@ -264,7 +264,7 @@ const declaredReadonly = (id) =>
   READONLY_COLLECTIONS.has(id?.typeAnnotation?.typeAnnotation?.typeName?.name);
 
 const API_TYPE_EXPORT_MESSAGE =
-  "R13: an API's request and response types live once, in apps/web/src/shared/api/<area>.ts, where the server's handlers use them too (docs/rewrite/README.md §4.5). Declare the type there and import it here; its other readers import it from there as well.";
+  "R13: an API's request and response types live once, in apps/web/src/shared/api/<area>.ts, where the server's handlers use them too (ADR 0051). Declare the type there and import it here; its other readers import it from there as well.";
 
 const TYPE_DECLARATIONS = new Set(["TSInterfaceDeclaration", "TSTypeAliasDeclaration"]);
 

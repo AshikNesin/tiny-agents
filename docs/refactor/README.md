@@ -50,7 +50,5 @@ lint rule groot adds later is ported by hand. Files under
 - `/code/settings/projects` still redirects to `/settings/projects`, because
   the Android app opens it (`NewCodeThreadScreen.kt`). Remove it once the app
   links to the new page.
-- ADR 0011 still says a bare thread id belongs to Shelley; migration 0040
-  ended that, and the ADR needs a superseding entry.
 - A GitHub pull snapshot fails whole on a malformed element on purpose: it
   drives Auto-fix and merge decisions.

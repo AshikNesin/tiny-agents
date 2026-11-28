@@ -238,7 +238,7 @@ const BOUNDARY_RULES: BoundaryRule[] = [
         {
           regex: "^@earendil-works/pi-durable(/|$)|^@tiny-agents/agent(/|$)|(^|/)agent/src(/|$)",
           message:
-            "R11: @tiny-agents/models imports neither pi-durable nor @tiny-agents/agent (docs/rewrite/DECISIONS.md D7). Move the pi-durable-free code it needs into packages/models, or have the caller pass it in.",
+            "R11: @tiny-agents/models imports neither pi-durable nor @tiny-agents/agent (ADR 0047). Move the pi-durable-free code it needs into packages/models, or have the caller pass it in.",
         },
       ],
     },
@@ -284,7 +284,7 @@ const BOUNDARY_RULES: BoundaryRule[] = [
         {
           regex: "^@earendil-works/pi-durable(/|$)|^@tiny-agents/agent(/|$)|(^|/)agent/src(/|$)",
           message:
-            "R11: @tiny-agents/sandbox imports neither pi-durable nor @tiny-agents/agent (docs/rewrite/DECISIONS.md D7). Move the pi-durable-free code it needs into packages/sandbox, or have the caller pass it in.",
+            "R11: @tiny-agents/sandbox imports neither pi-durable nor @tiny-agents/agent (ADR 0047). Move the pi-durable-free code it needs into packages/sandbox, or have the caller pass it in.",
         },
       ],
     },

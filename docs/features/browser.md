@@ -163,7 +163,7 @@ private method). It is the chat's shared live-view panel
 (`components/live/LivePanel.tsx`) on the browser's surface, and the Browser
 page is the shared `LivePage`; the Computer's panel and page are the same two
 components on the computer's surface (`components/live/surfaces.tsx`, every
-difference a field; docs/rewrite/README.md §4.5).
+difference a field).
 
 The panel is one card (`Card` from `@groot/ui`): a one-row header over the
 viewport. The header has the title (or the Browser / Computer tabs), one status

@@ -1,5 +1,5 @@
 {
-  "$comment": "The rewrite's retired-paths list (docs/rewrite/PLAN.md, step 6.1). `pnpm check:old-modules` (scripts/check-old-modules.ts) fails when a retired path exists or is imported, a retired symbol is declared, a retired module singleton is back, a retired pattern matches, or a narrowed module (DECISIONS.md D13) grows back. `replacedBy` is a repo path that must exist.",
+  "$comment": "The modules the rewrite retired or narrowed (docs/adr/0050-retired-modules-stay-gone.md). `pnpm check:old-modules` (scripts/check-old-modules.ts) fails when a retired path exists or is imported, a retired symbol is declared, a retired module singleton is back, a retired pattern matches, or a narrowed module grows back. `replacedBy` is a repo path that must exist.",
   "paths": [
     {
       "path": "apps/web/src/server/api/bots/browser.routes.ts",
@@ -59,13 +59,13 @@
     {
       "path": "packages/agent/src/toolkits/browser-sessions.ts",
       "replacedBy": "packages/sandbox/src/live-sessions.ts",
-      "note": "the browser session manager: a thin LiveSessions instance in packages/sandbox/src/browser-sessions.ts (D13)",
+      "note": "the browser session manager: a thin LiveSessions instance in packages/sandbox/src/browser-sessions.ts (ADR 0050)",
       "step": "3.4, 3.5"
     },
     {
       "path": "packages/agent/src/toolkits/computer-sessions.ts",
       "replacedBy": "packages/sandbox/src/live-sessions.ts",
-      "note": "the computer session manager: a thin LiveSessions instance in packages/sandbox/src/computer-sessions.ts (D13)",
+      "note": "the computer session manager: a thin LiveSessions instance in packages/sandbox/src/computer-sessions.ts (ADR 0050)",
       "step": "3.4, 3.5"
     },
     {
@@ -400,7 +400,7 @@
   "narrowed": [
     {
       "file": "apps/web/src/server/api/bots/bots.service.ts",
-      "role": "bot CRUD, links, pin and the read marker; no chat action (D13, 4.1)",
+      "role": "bot CRUD, links, pin and the read marker; no chat action (ADR 0050)",
       "noDeclarationsExportedBy": "apps/web/src/server/api/bots/chats.service.ts",
       "forbid": [
         {
@@ -415,7 +415,7 @@
     },
     {
       "file": "packages/sandbox/src/browser-sessions.ts",
-      "role": "a thin LiveSessions instance; the manager logic is live-sessions.ts's (D13, 3.5)",
+      "role": "a thin LiveSessions instance; the manager logic is live-sessions.ts's (ADR 0050)",
       "require": [
         {
           "pattern": "\\bcreateLiveSessions[<(]",
@@ -440,7 +440,7 @@
     },
     {
       "file": "packages/sandbox/src/computer-sessions.ts",
-      "role": "a thin LiveSessions instance; the manager logic is live-sessions.ts's (D13, 3.5)",
+      "role": "a thin LiveSessions instance; the manager logic is live-sessions.ts's (ADR 0050)",
       "require": [
         {
           "pattern": "\\bcreateLiveSessions[<(]",
@@ -497,6 +497,6 @@
       "@tiny-agents/agent/browser",
       "@tiny-agents/agent/computer"
     ],
-    "note": "Re-exports of @tiny-agents/models and @tiny-agents/sandbox (3.3, 3.4), kept for outside importers until a major removes them. Nothing in this repo may import them."
+    "note": "Re-exports of @tiny-agents/models and @tiny-agents/sandbox (ADR 0047), kept for outside importers until a major removes them. Nothing in this repo may import them."
   }
 }

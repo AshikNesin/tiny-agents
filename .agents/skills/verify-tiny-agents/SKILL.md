@@ -157,9 +157,8 @@ name `stamp`, UTC, en-US and reduced motion, so two runs of a journey write the
 same ARIA snapshots. `full-pass.sh --aria check` drives the no-infra journeys
 that way (not the three that wait on real time: two for a scheduled fire, one
 for a job retry) and compares each
-snapshot with `goldens/<journey>/` (`--aria save` records them). The rewrite
-(`docs/rewrite/PLAN.md`) keeps them unchanged; a signed-off UI change records
-its journey again.
+snapshot with `goldens/<journey>/` (`--aria save` records them). A signed-off
+UI change records its journey again.
 
 Keep this map honest with `/maintain-verification-skill`. CI never drives the
 journeys, but `tests/client/verify-journey-routes.test.ts` (part of

@@ -82,6 +82,17 @@ on the edges:
   `struggling`, `auto_paused`, `done` or `paused` off the routine's fields,
   so the Routines page asks one question instead of combining four.
 
+## Labels and tones
+
+A status the UI shows has one label and one tone, set next to its machine:
+the machine file exports `<machine>Labels: StatusLabels<Status>`, a record
+with a `label` and a `tone` for every state. `StatusLabels` and the tones are
+in [`apps/web/src/shared/machines/status-label.ts`](../../apps/web/src/shared/machines/status-label.ts),
+and [`MachineStatusBadge`](../../apps/web/src/client/components/MachineStatusBadge.tsx)
+renders a status from its record as a badge or, with `plain`, as text. A new
+state does not compile until its record has it, so the UI never shows a raw
+status string.
+
 ## Adding a machine
 
 1. Add `apps/web/src/shared/machines/<name>.ts` with `defineMachine` and its
@@ -91,6 +102,8 @@ on the edges:
 3. Guard every write with `inArray(column, machine.sourcesOf(to))`.
 4. Add the machine to `MACHINES` in `tests/server/api/state-machines.test.ts`
    (well-formed, every state reachable) and a row to the table above.
+5. If the UI shows the status, export its labels and render them with
+   `MachineStatusBadge`.
 
 ## Not machines, on purpose
 

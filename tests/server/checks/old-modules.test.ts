@@ -139,7 +139,7 @@ describe("old-modules gate", () => {
     ]);
   });
 
-  it("fails a narrowed module that grows back (D13)", () => {
+  it("fails a narrowed module that grows back (ADR 0050)", () => {
     const root = repo({
       ...base,
       "apps/bots.service.ts": [

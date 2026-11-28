@@ -161,8 +161,7 @@ wire-type rule in [`AGENTS.md`](../../AGENTS.md).
   value) is a `useSecretMutation`, which keeps neither once it has answered;
   the vault's step-up prompt stays outside React Query. The live
   stores (the bot list, chat sessions, the code list) stay in Zustand. The
-  behavior each page keeps is the table in
-  [the rewrite design §4.5](../rewrite/README.md).
+  behavior each page keeps is pinned by its tests under `tests/client/pages/`.
 
 ## Mutation feedback
 
