@@ -1,3 +1,4 @@
+import type { JWK } from "jose";
 import { WaitTracker, type AgentRuntime, type BotMessagingStore } from "@tiny-agents/agent";
 import type { BrowserSessions } from "@tiny-agents/sandbox/browser";
 import type { ClaudeWorkerLocator } from "@tiny-agents/agent/claude-worker";
@@ -49,6 +50,7 @@ export interface App {
   reviewCheckouts: Map<string, Promise<CodeReviewRow>>;
   sandboxConnections: Map<string, SandboxConnection>;
   sandboxHostKeys?: HostKeyStore;
+  oidcSigningKey?: Promise<{ kid: string; privateJwk: JWK; publicJwk: JWK }>;
   claudeWorker?: { connection: SandboxConnection; locator: ClaudeWorkerLocator };
   terminalService?: TerminalService;
   ownerWaits: WaitTracker;

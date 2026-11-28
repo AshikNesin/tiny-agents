@@ -5,7 +5,7 @@ import {
   type BrowserSessions,
   type BrowserTransport,
 } from "@tiny-agents/sandbox/browser";
-import { sandboxConnection, sandboxEndpoint, unquoteEnv } from "../sandbox/sandbox-host";
+import { sandboxConfigured, sandboxConnection, unquoteEnv } from "../sandbox/sandbox-host";
 import { appEnv, type AppEnv } from "../../env";
 import { app } from "../../app-root";
 
@@ -50,7 +50,7 @@ export function browserLiveViewHint(env: AppEnv = appEnv()): string | undefined 
   if (unquoteEnv(env.BROWSER_EXECUTABLE_PATH)) {
     return "BROWSER_EXECUTABLE_PATH runs a headless browser on this server, so there is nothing to show. Unset it and set SANDBOX_HOST for a live browser on the sandbox VM.";
   }
-  if (!sandboxEndpoint(env)) {
+  if (!sandboxConfigured(env)) {
     return "Bots browse headless on this server, so there is nothing to show. Set SANDBOX_HOST for a live browser on the sandbox VM.";
   }
   return undefined;

@@ -7,12 +7,12 @@ import {
 } from "@tiny-agents/sandbox/computer";
 import { DEFAULT_BROWSER_PROFILES_DIR } from "@tiny-agents/sandbox/browser";
 import { browserTargetForBot, browserTargetForConversation } from "./browser.targets";
-import { sandboxConnection, sandboxEndpoint, unquoteEnv } from "../sandbox/sandbox-host";
+import { sandboxConfigured, sandboxConnection, unquoteEnv } from "../sandbox/sandbox-host";
 import { appEnv, type AppEnv } from "../../env";
 import { app } from "../../app-root";
 
 export function computerSetupHint(env: AppEnv = appEnv()): string | undefined {
-  if (!sandboxEndpoint(env)) return "Set SANDBOX_HOST to give bots a computer on the sandbox VM.";
+  if (!sandboxConfigured(env)) return "Set SANDBOX_HOST to give bots a computer on the sandbox VM.";
   const size = parseDesktopSize(unquoteEnv(env.COMPUTER_DESKTOP_SIZE));
   if (size.invalid) {
     return `COMPUTER_DESKTOP_SIZE "${size.invalid}" is not WIDTHxHEIGHT between 640x480 and 1920x1200.`;

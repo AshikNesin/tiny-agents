@@ -4,6 +4,7 @@ import type { AppEnv } from "@groot/core/types";
 import { requireSession } from "@groot/core/session";
 import { vaultNoStore } from "./api/vault/vault.routes";
 import appLinksRouter from "./api/system/app-links";
+import oidcRouter from "./api/system/oidc";
 import { guestGuard } from "./api/people/guest.guard";
 import { FEATURES } from "./api/features";
 
@@ -24,6 +25,7 @@ export function createWebApp(options: Omit<CreateAppOptions, "routes"> = {}) {
         if (feature.routes) api.route(feature.at ?? "/", feature.routes);
       }
       app.route("/", appLinksRouter);
+      app.route("/", oidcRouter);
       app.route("/api/v1", api);
     },
   });
