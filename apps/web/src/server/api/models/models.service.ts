@@ -1,68 +1,41 @@
-import { parseJson } from "@tiny-agents/std";
-import { z } from "zod";
 import { randomBytes } from "node:crypto";
-import { and, count, eq, inArray, isNotNull } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { Boom, HttpError } from "@groot/core/errors";
-import { secretRedactor, SecretValue } from "@tiny-agents/agent";
 import {
-  discoverModels,
-  DiscoveryError,
-  gatewayCustomBaseUrl,
-  type GatewayCustomProvider,
-  testClassifierCall,
-  testModelCall,
-  testUnsavedModel,
-  type ProviderAccount,
-  type TestResult,
   PROVIDER_KINDS,
   PROVIDER_TEMPLATES,
   resolveCapabilities,
   type DiscoveredModel,
-  type ProviderKind,
 } from "@tiny-agents/models";
-import { listClaudeCodeModels } from "@tiny-agents/agent/claude-worker";
-import {
-  bots,
-  db,
-  modelRoles,
-  models,
-  providers,
-  vaultItems,
-  type ModelRowRecord,
-  type ProviderRow,
-} from "../../db";
+import { bots, db, modelRoles, models, providers, vaultItems, type ProviderRow } from "../../db";
 import { fauxMode } from "../../env";
 import { createAppCredential, deleteItemRow } from "../vault/vault.admin.service";
-import { getAgentRuntime } from "../bots/bots.runtime";
-import { sharedClaudeWorkerLocator } from "../sandbox/claude-worker";
-import { providerHost, reloadModels, vaultCredentials } from "./models.config";
-import {
-  checkBaseUrl,
-  checkResolvesPublic,
-  guardedFetch,
-  guardedGet,
-  OutboundRefusedError,
-} from "./models.fetch";
-import type {
-  CreateAccountDTO,
-  DiscoverDTO,
-  Overrides,
-  TestDTO,
-  UpdateConnectionDTO,
-} from "./models.schema";
-import { ROLES } from "./models.schema";
+import { providerHost, reloadModels } from "./models.config";
+import type { CreateAccountDTO, Overrides, UpdateConnectionDTO } from "./models.schema";
 import type { Deleted } from "../../../shared/api/common";
 import type {
   AccountData,
   AccountListData,
   AccountModel,
   AccountRefreshData,
-  DiscoveredModels,
-  Roles,
-  RolesResponse,
 } from "../../../shared/api/models";
-
-type Kind = Exclude<ProviderKind, "faux">;
+import {
+  accountOrThrow,
+  accountView,
+  botUsage,
+  modelOrThrow,
+  modelView,
+  parseObject,
+  storedKey,
+} from "./models.records";
+import {
+  canonicalEndpoint,
+  refuseClaudeToken,
+  settingsFor,
+  type Endpoint,
+  type Kind,
+} from "./models.endpoint";
+import { discoverAt, discoverNew } from "./models.discovery";
 
 const WORKERS_AI_HOST = "api.cloudflare.com";
 
@@ -71,101 +44,16 @@ const INJECT: Record<Exclude<Kind, "claude-plan">, { name: string; format: strin
   "openai-chat": { name: "Authorization", format: "Bearer {value}" },
   "openai-responses": { name: "Authorization", format: "Bearer {value}" },
   gemini: { name: "x-goog-api-key", format: "{value}" },
-  "cloudflare-ai-gateway": { name: "cf-aig-authorization", format: "Bearer {value}" },
-};
-
-const parseObject = (raw: string | null | undefined): Record<string, unknown> => {
-  try {
-    return parseJson("A provider's stored options", raw ?? "{}", z.record(z.string(), z.unknown()));
-  } catch {
-    return {};
-  }
+  "cloudflare-ai-gateway": {
+    name: "cf-aig-authorization",
+    format: "Bearer {value}",
+  },
 };
 
 function keyHint(key: string): string {
   const tail = key.slice(-4);
   const head = key.match(/^[A-Za-z]+[-_]/)?.[0] ?? "";
   return `${head}…${tail}`;
-}
-
-function refuseClaudeToken(key: string | undefined): void {
-  if (key?.includes("sk-ant-oat")) {
-    throw Boom.badRequest(
-      "That is a Claude.ai sign-in token. tiny-agents never stores it: add a Claude plan account instead.",
-    );
-  }
-}
-
-function outbound(error: unknown): never {
-  if (error instanceof OutboundRefusedError) throw Boom.badRequest(error.message);
-  if (error instanceof DiscoveryError) {
-    throw Boom.badRequest(error.message, undefined, error.code);
-  }
-  throw error;
-}
-
-function modelView(row: ModelRowRecord, usedBy: number): AccountModel {
-  return {
-    id: row.id,
-    upstreamId: row.upstreamId,
-    name: row.name,
-    type: row.type as AccountModel["type"],
-    source: row.source as AccountModel["source"],
-    enabled: row.enabled,
-    contextWindow: row.contextWindow,
-    maxOutputTokens: row.maxOutputTokens,
-    imageInput: row.imageInput,
-    reasoning: row.reasoning,
-    overrides: parseObject(row.overridesJson) as Overrides,
-    compat: row.compatJson ? parseObject(row.compatJson) : null,
-    missing: row.missingSince !== null,
-    usedBy,
-  };
-}
-
-async function accountView(row: ProviderRow, usage: Map<string, number>): Promise<AccountData> {
-  const [rows, item] = await Promise.all([
-    db.select().from(models).where(eq(models.providerId, row.id)),
-    row.credentialItemId
-      ? db.query.vaultItems.findFirst({
-          where: eq(vaultItems.id, row.credentialItemId),
-          columns: { backend: true },
-        })
-      : undefined,
-  ]);
-  return {
-    id: row.id,
-    name: row.name,
-    kind: row.kind as ProviderKind,
-    baseUrl: row.baseUrl,
-    viaProviderId: row.viaProviderId,
-    settings: parseObject(row.settingsJson),
-    discovery: row.discovery as AccountData["discovery"],
-    allowPrivateNetwork: row.allowPrivateNetwork,
-    enabled: row.enabled,
-    status: row.status as AccountData["status"],
-    statusDetail: row.statusDetail,
-    checkedAt: row.checkedAt,
-    version: row.version,
-    credential: item
-      ? {
-          hint: row.credentialHint,
-          backend: item.backend as NonNullable<AccountData["credential"]>["backend"],
-        }
-      : null,
-    models: rows
-      .sort((a, b) => a.name.localeCompare(b.name))
-      .map((model) => modelView(model, usage.get(model.id) ?? 0)),
-  };
-}
-
-async function botUsage(): Promise<Map<string, number>> {
-  const rows = await db
-    .select({ modelId: bots.modelId, n: count() })
-    .from(bots)
-    .where(isNotNull(bots.modelId))
-    .groupBy(bots.modelId);
-  return new Map(rows.map((row) => [row.modelId!, row.n]));
 }
 
 export async function listAccounts(): Promise<AccountListData> {
@@ -179,160 +67,6 @@ export async function listAccounts(): Promise<AccountListData> {
     ),
     templates: PROVIDER_TEMPLATES,
   };
-}
-
-async function accountOrThrow(id: string): Promise<ProviderRow> {
-  const row = await db.query.providers.findFirst({ where: eq(providers.id, id) });
-  if (!row) throw Boom.notFound("No such provider account");
-  return row;
-}
-
-async function modelOrThrow(id: string): Promise<ModelRowRecord> {
-  const row = await db.query.models.findFirst({ where: eq(models.id, id) });
-  if (!row) throw Boom.notFound("No such model");
-  return row;
-}
-
-interface Endpoint {
-  kind: Kind;
-  baseUrl: string | null;
-  apiKey?: string;
-  allowPrivateNetwork: boolean;
-  viaProviderId?: string | null;
-  settings?: {
-    accountId?: string;
-    gatewayId?: string;
-    customProviders?: GatewayCustomProvider[];
-    upstream?: string;
-    basePath?: string;
-  };
-}
-
-function canonicalEndpoint(input: Endpoint): string | null {
-  if (input.kind === "claude-plan" || input.viaProviderId) return null;
-  if (input.kind === "cloudflare-ai-gateway") {
-    return input.baseUrl ? checkBaseUrl(input.baseUrl, false) : null;
-  }
-  const base = input.baseUrl ?? PROVIDER_KINDS[input.kind].defaultBaseUrl ?? null;
-  if (!base) throw Boom.badRequest("Set the endpoint.");
-  try {
-    return checkBaseUrl(base, input.allowPrivateNetwork);
-  } catch (error) {
-    outbound(error);
-  }
-}
-
-async function discoverThroughGateway(input: Endpoint): Promise<DiscoveredModel[]> {
-  const gateway = await accountOrThrow(input.viaProviderId!);
-  const settings = parseObject(gateway.settingsJson);
-  const upstream = input.settings?.upstream?.trim();
-  if (
-    !upstream ||
-    typeof settings.accountId !== "string" ||
-    typeof settings.gatewayId !== "string"
-  ) {
-    return [];
-  }
-  const basePath = input.settings?.basePath?.replace(/^\/+|\/+$/g, "");
-  const routeBase = [
-    (gateway.baseUrl ?? "https://gateway.ai.cloudflare.com").replace(/\/+$/, ""),
-    "v1",
-    settings.accountId,
-    settings.gatewayId,
-    upstream,
-    ...(basePath ? [basePath] : []),
-  ].join("/");
-  const key = await storedKey(gateway);
-  try {
-    return await discoverModels({
-      kind: "openai-chat",
-      baseUrl: routeBase,
-      headers: key ? { "cf-aig-authorization": `Bearer ${key}` } : {},
-      get: (url, headers) => guardedGet(url, headers, { allowPrivateNetwork: false }),
-    });
-  } catch {
-    return [];
-  }
-}
-
-async function discoverCustomProviders(input: Endpoint): Promise<DiscoveredModel[]> {
-  const { accountId, gatewayId } = input.settings ?? {};
-  const custom = input.settings?.customProviders ?? [];
-  if (!accountId || !gatewayId || custom.length === 0) return [];
-  const frontDoor = input.baseUrl ?? "https://gateway.ai.cloudflare.com";
-  const lists = await Promise.all(
-    custom.map(async (provider) => {
-      try {
-        const listed = await discoverModels({
-          kind: "openai-chat",
-          baseUrl: gatewayCustomBaseUrl(frontDoor, { accountId, gatewayId }, provider),
-          headers: input.apiKey ? { "cf-aig-authorization": `Bearer ${input.apiKey}` } : {},
-          get: (url, headers) => guardedGet(url, headers, { allowPrivateNetwork: false }),
-        });
-        return listed.map((model) => {
-          const resolved = resolveCapabilities(
-            "cloudflare-ai-gateway",
-            input.baseUrl,
-            `${provider.slug}/${model.upstreamId}`,
-          );
-          const name = resolved.known ? resolved.name : model.name;
-          return { ...resolved, name: `${name} (${provider.slug})` };
-        });
-      } catch {
-        return [];
-      }
-    }),
-  );
-  return lists.flat();
-}
-
-async function discoverAt(input: Endpoint): Promise<DiscoveredModel[]> {
-  if (input.viaProviderId) return discoverThroughGateway(input);
-  if (input.kind === "cloudflare-ai-gateway") {
-    const [custom, catalog] = await Promise.all([
-      discoverCustomProviders(input),
-      discoverDirect(input),
-    ]);
-    return [...custom, ...catalog];
-  }
-  return discoverDirect(input);
-}
-
-function claudePlanLister(): (() => ReturnType<typeof listClaudeCodeModels>) | undefined {
-  const locator = sharedClaudeWorkerLocator();
-  return locator ? () => listClaudeCodeModels(() => locator.resolve()) : undefined;
-}
-
-async function discoverNew(input: Endpoint): Promise<DiscoveredModel[]> {
-  if (input.kind !== "claude-plan") return discoverAt(input);
-  try {
-    return await discoverAt(input);
-  } catch {
-    return [];
-  }
-}
-
-async function discoverDirect(input: Endpoint): Promise<DiscoveredModel[]> {
-  const baseUrl = canonicalEndpoint(input);
-  const listClaudePlan = input.kind === "claude-plan" ? claudePlanLister() : undefined;
-  try {
-    return await discoverModels({
-      kind: input.kind,
-      baseUrl,
-      ...(input.apiKey ? { apiKey: input.apiKey } : {}),
-      ...(listClaudePlan ? { listClaudePlan } : {}),
-      get: (url, headers) =>
-        guardedGet(url, headers, { allowPrivateNetwork: input.allowPrivateNetwork }),
-    });
-  } catch (error) {
-    outbound(error);
-  }
-}
-
-export async function discover(input: DiscoverDTO): Promise<DiscoveredModels> {
-  refuseClaudeToken(input.apiKey);
-  const found = await discoverNew({ ...input, kind: input.kind, baseUrl: input.baseUrl ?? null });
-  return { models: found };
 }
 
 async function storeKey(kind: Kind, name: string, baseUrl: string | null, key: string) {
@@ -384,43 +118,13 @@ function modelValues(
   };
 }
 
-function settingsFor(input: CreateAccountDTO): Record<string, unknown> {
-  const s = input.settings;
-  switch (input.kind) {
-    case "cloudflare-ai-gateway": {
-      if (!s.accountId || !s.gatewayId) {
-        throw Boom.badRequest("A gateway account needs its Account ID and Gateway ID.");
-      }
-      const trimPath = (path?: string) => path?.replace(/^\/+|\/+$/g, "") || undefined;
-      const custom = (s.customProviders ?? []).map((p) => {
-        const basePath = trimPath(p.basePath);
-        return { slug: p.slug, ...(basePath ? { basePath } : {}) };
-      });
-      return {
-        accountId: s.accountId,
-        gatewayId: s.gatewayId,
-        ...(custom.length > 0 ? { customProviders: custom } : {}),
-      };
-    }
-    case "claude-plan":
-      return {
-        ...(s.fallbackModelId ? { fallbackModelId: s.fallbackModelId } : {}),
-        ...(s.maxTurns ? { maxTurns: s.maxTurns } : {}),
-      };
-    default:
-      if (input.viaProviderId) {
-        if (!s.upstream) throw Boom.badRequest("Name the gateway's upstream provider.");
-        return { upstream: s.upstream, ...(s.basePath ? { basePath: s.basePath } : {}) };
-      }
-      return {};
-  }
-}
-
 export async function createAccount(input: CreateAccountDTO): Promise<AccountData> {
   refuseClaudeToken(input.apiKey);
   const kind = input.kind;
   if (kind === "claude-plan") {
-    const existing = await db.query.providers.findFirst({ where: eq(providers.kind, kind) });
+    const existing = await db.query.providers.findFirst({
+      where: eq(providers.kind, kind),
+    });
     if (existing) throw Boom.conflict("There is already a Claude plan account.");
   }
   if (input.viaProviderId) {
@@ -432,7 +136,11 @@ export async function createAccount(input: CreateAccountDTO): Promise<AccountDat
     }
   }
   const settings = settingsFor(input);
-  const baseUrl = canonicalEndpoint({ ...input, kind, baseUrl: input.baseUrl ?? null });
+  const baseUrl = canonicalEndpoint({
+    ...input,
+    kind,
+    baseUrl: input.baseUrl ?? null,
+  });
   const keyNeeded =
     kind !== "claude-plan" &&
     !input.viaProviderId &&
@@ -551,13 +259,6 @@ export async function patchAccount(
   return accountView(updated, await botUsage());
 }
 
-async function storedKey(row: ProviderRow): Promise<string | undefined> {
-  if (!row.credentialItemId) return undefined;
-  const key = await vaultCredentials.resolve(row.id);
-  if (!key) throw Boom.badRequest("The saved key can't be read. Re-enter it.");
-  return key;
-}
-
 async function addListed(providerId: string, found: readonly DiscoveredModel[]) {
   const have = await savedUpstreamIds(providerId);
   const fresh = found.filter((m) => !have.has(m.upstreamId));
@@ -640,7 +341,9 @@ export async function updateConnection(
     .returning();
   if (!updated) {
     if (item) await removeKey(item.id);
-    const gone = await db.query.providers.findFirst({ where: eq(providers.id, id) });
+    const gone = await db.query.providers.findFirst({
+      where: eq(providers.id, id),
+    });
     if (!gone) throw Boom.notFound("No such provider account");
     throw new HttpError(412, "The account changed meanwhile. Reload and try again.");
   }
@@ -651,7 +354,9 @@ export async function updateConnection(
 }
 
 async function removeKey(itemId: string): Promise<void> {
-  const item = await db.query.vaultItems.findFirst({ where: eq(vaultItems.id, itemId) });
+  const item = await db.query.vaultItems.findFirst({
+    where: eq(vaultItems.id, itemId),
+  });
   if (item) await deleteItemRow(item, { purge: true });
 }
 
@@ -738,7 +443,9 @@ async function moveOrRefuse(from: readonly string[], moveTo: string | undefined)
   const fallsBack = typeof fallback === "string" && from.includes(fallback);
   if (users.bots.length === 0 && users.roles.length === 0 && !fallsBack) return;
   if (!moveTo) {
-    throw Boom.conflict("In use", { in_use: { ...users, claudePlanFallback: fallsBack } });
+    throw Boom.conflict("In use", {
+      in_use: { ...users, claudePlanFallback: fallsBack },
+    });
   }
   if (from.includes(moveTo)) throw Boom.badRequest("Move them to another model.");
   const target = await modelOrThrow(moveTo);
@@ -810,9 +517,14 @@ export async function addModel(
   const kind = row.kind as Kind;
   const found =
     kind === "cloudflare-ai-gateway" && !row.viaProviderId
-      ? ((await discoverAt({ kind, baseUrl: row.baseUrl, allowPrivateNetwork: false })).find(
-          (m) => m.upstreamId === input.upstreamId,
-        ) ?? resolveCapabilities(kind, row.baseUrl, input.upstreamId))
+      ? ((
+          await discoverAt({
+            kind,
+            baseUrl: row.baseUrl,
+            allowPrivateNetwork: false,
+          })
+        ).find((m) => m.upstreamId === input.upstreamId) ??
+        resolveCapabilities(kind, row.baseUrl, input.upstreamId))
       : resolveCapabilities(kind, row.baseUrl, input.upstreamId, input.name);
   const [created] = await db
     .insert(models)
@@ -873,207 +585,4 @@ export async function deleteModel(id: string, moveTo: string | undefined): Promi
   await db.delete(models).where(eq(models.id, id));
   await reloadModels();
   return { deleted: true };
-}
-
-export async function getRoles(): Promise<RolesResponse> {
-  const catalog = getAgentRuntime().catalog;
-  return {
-    roles: Object.fromEntries(
-      ROLES.map((role) => {
-        const model = catalog.forRole(role);
-        return [
-          role,
-          {
-            modelId: model?.id ?? null,
-            fallback: !catalog.roleIsSet(role),
-          },
-        ];
-      }),
-    ) as Roles,
-  };
-}
-
-export async function putRoles(
-  input: Partial<Record<(typeof ROLES)[number], string | null>>,
-): Promise<RolesResponse> {
-  const entries = Object.entries(input);
-  const cleared = entries.filter(([, modelId]) => !modelId).map(([role]) => role);
-  const set = entries.filter((entry): entry is [string, string] => Boolean(entry[1]));
-  const targets = await Promise.all(set.map(([, modelId]) => modelOrThrow(modelId)));
-  set.forEach(([role], index) => {
-    const wantsClassifier = role === "classifier";
-    if ((targets[index]!.type === "classifier") !== wantsClassifier) {
-      throw Boom.badRequest(
-        wantsClassifier ? "The classifier role needs a classifier model." : "Pick a chat model.",
-      );
-    }
-  });
-  if (cleared.length > 0) await db.delete(modelRoles).where(inArray(modelRoles.role, cleared));
-  await Promise.all(
-    set.map(([role, modelId]) =>
-      db
-        .insert(modelRoles)
-        .values({ role, modelId })
-        .onConflictDoUpdate({ target: modelRoles.role, set: { modelId, updatedAt: new Date() } }),
-    ),
-  );
-  await reloadModels();
-  return getRoles();
-}
-
-const redacted = (result: TestResult, upstreamId?: string): TestResult =>
-  result.error
-    ? {
-        ...result,
-        error: explained(secretRedactor.scrub(result.error), upstreamId).slice(0, 600),
-      }
-    : result;
-
-function explained(error: string, upstreamId?: string): string {
-  const slug = upstreamId?.startsWith("custom-") ? upstreamId.split("/")[0] : undefined;
-  if (slug && /^404\b/.test(error)) {
-    return `${slug} answered 404 Not Found: the gateway reached it on the wrong path. Set its base path in this card's Custom providers (for Z.AI's coding plan: api/coding/paas/v4).`;
-  }
-  if (/"code":\s*2021|unified billing credits/i.test(error)) {
-    return `The gateway has no key for this provider and no Unified Billing credits: add the provider's key to the gateway (BYOK), or credits in Cloudflare. ${error}`;
-  }
-  if (/"internalCode":\s*5035|not available on the Workers Free plan/i.test(error)) {
-    return `This Workers AI model needs the Workers Paid plan. ${error}`;
-  }
-  return error;
-}
-
-async function accountAllowsPrivateNetwork(providerId: string): Promise<boolean> {
-  const row = await db.query.providers.findFirst({
-    where: eq(providers.id, providerId),
-    columns: { allowPrivateNetwork: true },
-  });
-  if (row) return row.allowPrivateNetwork;
-  const via = await db.query.providers.findFirst({
-    where: eq(providers.id, providerId.split(":")[0] ?? providerId),
-    columns: { allowPrivateNetwork: true },
-  });
-  return via?.allowPrivateNetwork ?? false;
-}
-
-export async function testModel(input: TestDTO): Promise<TestResult> {
-  if ("modelId" in input) {
-    const rt = getAgentRuntime();
-    const model = rt.catalog.get(input.modelId);
-    if (!model) throw Boom.notFound("No such model");
-    if (model.engine === "claude-code") {
-      const started = Date.now();
-      const account = await rt.claudePlan.account();
-      const ok = account.state === "ready" && account.loggedIn;
-      return {
-        ok,
-        latencyMs: Date.now() - started,
-        ...(ok
-          ? {}
-          : {
-              error:
-                "Claude Code is not signed in on the sandbox (Settings → Models → Claude plan).",
-            }),
-      };
-    }
-    if (model.type === "classifier") {
-      const classifier = rt.catalog.classifierModel(input.modelId);
-      if (!classifier) {
-        return {
-          ok: false,
-          latencyMs: 0,
-          error: `The model can't run (${model.unavailableReason ?? "missing"}).`,
-        };
-      }
-      return redacted(await testClassifierCall(rt.models, classifier));
-    }
-    const pi = rt.catalog.piModel(input.modelId);
-    if (!pi) {
-      return {
-        ok: false,
-        latencyMs: 0,
-        error: `The model can't run (${model.unavailableReason ?? "missing"}).`,
-      };
-    }
-    const allowPrivateNetwork = await accountAllowsPrivateNetwork(pi.provider);
-    return redacted(
-      await testModelCall(rt.models, pi, {
-        fetch: (input2, init) => guardedFetch(input2, init ?? {}, { allowPrivateNetwork }),
-      }),
-      model.upstreamId,
-    );
-  }
-  refuseClaudeToken(input.apiKey);
-  if (input.kind === "claude-plan")
-    throw Boom.badRequest("Test a Claude plan model once it is saved.");
-  if (input.apiKey) secretRedactor.register(new SecretValue(input.apiKey));
-  const kind = input.kind;
-  const via = input.viaProviderId ? await accountOrThrow(input.viaProviderId) : undefined;
-  const baseUrl = canonicalEndpoint({ ...input, kind, baseUrl: input.baseUrl ?? null });
-  const target = via?.baseUrl ?? baseUrl ?? (via ? "https://gateway.ai.cloudflare.com" : null);
-  if (target) {
-    try {
-      await checkResolvesPublic(target, input.allowPrivateNetwork);
-    } catch (error) {
-      outbound(error);
-    }
-  }
-  const gatewayKey = via ? await storedKey(via) : undefined;
-  const settings = settingsFor({ ...input, discovery: "manual", models: [] } as CreateAccountDTO);
-  const account = (id: string, fields: Partial<ProviderAccount>): ProviderAccount => ({
-    id,
-    name: id,
-    kind,
-    baseUrl,
-    hasCredential: Boolean(input.apiKey),
-    viaProviderId: null,
-    settings,
-    enabled: true,
-    status: "ok",
-    statusDetail: null,
-    ...fields,
-  });
-  const providersList: ProviderAccount[] = via
-    ? [
-        account("gateway", {
-          kind: "cloudflare-ai-gateway",
-          baseUrl: via.baseUrl,
-          hasCredential: Boolean(gatewayKey),
-          settings: parseObject(via.settingsJson),
-        }),
-        account("test", { hasCredential: false, viaProviderId: "gateway", baseUrl: null }),
-      ]
-    : [account("test", {})];
-  const found = resolveCapabilities(kind, baseUrl, input.upstreamId);
-  const result = await testUnsavedModel(
-    {
-      providers: providersList,
-      models: [
-        {
-          id: "test-model",
-          providerId: "test",
-          upstreamId: input.upstreamId,
-          name: input.upstreamId,
-          type: "chat",
-          enabled: true,
-          contextWindow: found.contextWindow,
-          maxOutputTokens: found.maxOutputTokens,
-          imageInput: found.imageInput,
-          reasoning: found.reasoning,
-          compat: found.compat,
-          missing: false,
-        },
-      ],
-      roles: {},
-    },
-    { resolve: async (id) => (id === "gateway" ? gatewayKey : input.apiKey) },
-    "test",
-    input.upstreamId,
-    {
-      image: input.image,
-      fetch: (input2, init) =>
-        guardedFetch(input2, init ?? {}, { allowPrivateNetwork: input.allowPrivateNetwork }),
-    },
-  );
-  return redacted(result, input.upstreamId);
 }

@@ -22,7 +22,7 @@ import { createDeliveries, type DeliveryRuntime } from "../bots/bots.delivery";
 import { conversationOwner, type ConversationBot } from "../bots/bots.owner";
 import { codeHub } from "./code.hub";
 import { listProjects, projectSettings, startProjectThread } from "./code.projects";
-import { archiveCodeThread } from "./code.pulls";
+import { archiveCodeThread } from "./code.pulls.reconcile";
 import { startRun } from "./code.runs";
 import {
   askedFrom,

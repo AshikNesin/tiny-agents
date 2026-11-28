@@ -12,7 +12,7 @@ import { verifyWebhook } from "@tiny-agents/github";
 import { codePrEvents, codeProjects, codePullRequests, db, type CodePullRow } from "../../db";
 import type { AppContext } from "@groot/core/types";
 import { completeInstall, completeManifest, FLOW_COOKIE, webhookSecret } from "./code.github";
-import { armReconcile } from "./code.pulls";
+import { armReconcile } from "./code.pulls.reconcile";
 
 const HINT_DELAY_MS = 5_000;
 

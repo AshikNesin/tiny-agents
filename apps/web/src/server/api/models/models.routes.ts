@@ -15,6 +15,9 @@ import {
   updateConnectionSchema,
 } from "./models.schema";
 import * as service from "./models.service";
+import { discover } from "./models.discovery";
+import { testModel } from "./models.probe";
+import { getRoles, putRoles } from "./models.roles";
 import { assertStepUp } from "../vault/vault.stepup";
 
 const router = routes();
@@ -40,7 +43,7 @@ function ifMatch(c: AppContext): number | undefined {
 router.get("/models/providers", async (c) => ok(c, await service.listAccounts()));
 
 router.post("/models/discover", "signedIn", async (c) =>
-  ok(c, await service.discover(await parseBody(c, discoverSchema))),
+  ok(c, await discover(await parseBody(c, discoverSchema))),
 );
 
 router.post("/models/providers", "stepUp", async (c) =>
@@ -75,13 +78,13 @@ router.post("/models/providers/:id/models", "signedIn", async (c) =>
 );
 
 router.post("/models/test", "signedIn", async (c) =>
-  ok(c, await service.testModel(await parseBody(c, testSchema))),
+  ok(c, await testModel(await parseBody(c, testSchema))),
 );
 
-router.get("/models/roles", async (c) => ok(c, await service.getRoles()));
+router.get("/models/roles", async (c) => ok(c, await getRoles()));
 
 router.put("/models/roles", "signedIn", async (c) =>
-  ok(c, await service.putRoles(await parseBody(c, rolesSchema))),
+  ok(c, await putRoles(await parseBody(c, rolesSchema))),
 );
 
 router.patch("/models/:id", "signedIn", async (c) =>

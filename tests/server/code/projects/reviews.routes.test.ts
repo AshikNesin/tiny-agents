@@ -425,7 +425,7 @@ describe("reviewing a Code thread's own PR", () => {
     const { threadId, head } = await threadPull();
     const review = await open();
     const { archiveCodeThread } =
-      await import("../../../../apps/web/src/server/api/code/code.pulls");
+      await import("../../../../apps/web/src/server/api/code/code.pulls.reconcile");
 
     await archiveCodeThread(threadId, true);
 

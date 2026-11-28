@@ -2,7 +2,7 @@ import type { HarnessInstance } from "@tiny-agents/code/contracts";
 import { logger } from "@groot/core/logger";
 import { app } from "../../app-root";
 import type { SideCaller } from "../bots/side-call";
-import { branchSlug, cleanBranchSlug } from "./code.workspace";
+import { branchSlug, cleanBranchSlug } from "./code.branches";
 
 export interface CodeBranchNamer {
   sideCaller: SideCaller;

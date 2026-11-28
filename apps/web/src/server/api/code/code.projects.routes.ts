@@ -42,7 +42,8 @@ import { threadReview } from "./code.review";
 import { checkpointRange, checkpointsOf, revertTo } from "./code.checkpoints";
 import { codeHub } from "./code.hub";
 import { checkLog } from "./code.checks";
-import { cleanBranchPrefix, saying } from "./code.workspace";
+import { saying } from "./code.workspace";
+import { cleanBranchPrefix } from "./code.branches";
 import {
   archiveReview,
   askReview,
@@ -53,10 +54,6 @@ import {
   pushReview,
   reviewComments,
   replyToReviewThread,
-  reviewInbox,
-  inboxSettings,
-  inboxSettingsChange,
-  saveInboxSettings,
   resolveReviewThread,
   reviewTerminal,
   reviewIdOfKey,
@@ -67,6 +64,12 @@ import {
   suggestReviewChanges,
   terminalIn,
 } from "./code.reviews";
+import {
+  reviewInbox,
+  inboxSettings,
+  inboxSettingsChange,
+  saveInboxSettings,
+} from "./code.reviews.inbox";
 import {
   createProject,
   deleteProject,

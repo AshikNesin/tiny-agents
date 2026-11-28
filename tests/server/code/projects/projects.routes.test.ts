@@ -1121,7 +1121,7 @@ describe("thread lifecycle", () => {
     const project = await newProject();
     const thread = await newThread(project.id);
     const { archiveCodeThread } =
-      await import("../../../../apps/web/src/server/api/code/code.pulls");
+      await import("../../../../apps/web/src/server/api/code/code.pulls.reconcile");
     await commit(thread.worktree, "a.txt");
     await archiveCodeThread(thread.id, true);
     expect(existsSync(thread.worktree)).toBe(false);
@@ -1144,7 +1144,7 @@ describe("thread lifecycle", () => {
 describe("the reconcile chain", () => {
   it("re-arms itself from its own link only, and boot repairs a broken chain", async () => {
     const { registerCodeJobs, rearmReconcilers, RECONCILE_JOB } =
-      await import("../../../../apps/web/src/server/api/code/code.pulls");
+      await import("../../../../apps/web/src/server/api/code/code.pulls.reconcile");
     const { getJobHandler } = await import("@groot/jobs/server/worker");
     const { codePullRequests, jobs } = await import("../../../../apps/web/src/server/db");
     registerCodeJobs();

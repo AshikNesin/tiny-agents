@@ -20,7 +20,7 @@ import modelsRoutes from "./models/models.routes";
 import codeRoutes from "./code/code.routes";
 import codeProjectRoutes from "./code/code.projects.routes";
 import codeWebhookRoutes from "./code/code.webhook";
-import { registerCodeJobs } from "./code/code.pulls";
+import { registerCodeJobs } from "./code/code.pulls.reconcile";
 import peopleRoutes from "./people/people.routes";
 import updatesRoutes from "./system/updates.routes";
 import pushRoutes from "./notifications/push.routes";

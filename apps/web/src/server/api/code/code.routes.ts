@@ -30,7 +30,8 @@ import {
 import { codeChanges } from "./code.changes";
 import { editorSshTarget } from "./code.editor";
 import { codeGitHub } from "./code.github";
-import { archiveCodeThread, noteOwnerInput } from "./code.pulls";
+import { noteOwnerInput } from "./code.pulls";
+import { archiveCodeThread } from "./code.pulls.reconcile";
 import { threadReview } from "./code.review";
 import { rewindThread, undoRewind } from "./code.rewind";
 import { startRun, stopRun } from "./code.runs";

@@ -27,14 +27,8 @@ import type {
 import { DEFAULT_AUTOFIX } from "./code.autofix";
 import { codeGitHub } from "./code.github";
 import { applyTitle, threadNames } from "./code.naming";
-import {
-  branchName,
-  checkpointRef,
-  cleanBranchPrefix,
-  DEFAULT_BRANCH_PREFIX,
-  type ProjectScripts,
-  type Workspace,
-} from "./code.workspace";
+import { checkpointRef, type ProjectScripts, type Workspace } from "./code.workspace";
+import { branchName, cleanBranchPrefix, DEFAULT_BRANCH_PREFIX } from "./code.branches";
 import {
   PROJECT_RULE,
   branchTitle,
