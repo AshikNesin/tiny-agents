@@ -1,5 +1,11 @@
 # tiny-agents
 
+## 1.9.0
+
+### Minor Changes
+
+- [#635](https://github.com/AshikNesin/tiny-agents/pull/635) [`58dc879`](https://github.com/AshikNesin/tiny-agents/commit/58dc879ce89908e77cb4914155a436ebfff1332e) Thanks [@AshikNesin](https://github.com/AshikNesin)! - The sandbox can now run on an AWS Lambda MicroVM. Set `SANDBOX_PROVIDER=microvm` with an image from `pnpm sandbox:microvm:image` and an IAM role, and bots get the same shell, browser, desktop and terminal there. You don't store any AWS keys or SSH keys: the app signs in to AWS with its own OIDC tokens (published at `/.well-known/openid-configuration`) and gives each VM a fresh SSH key when it starts it. A VM lasts at most 8 hours, after which new work moves to a fresh one; files, browser logins and terminal tabs don't carry over. Setup and local testing are in `docs/guides/microvm-sandbox.md`.
+
 ## 1.8.0
 
 ### Minor Changes

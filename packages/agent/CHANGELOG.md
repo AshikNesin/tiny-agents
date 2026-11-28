@@ -1,5 +1,13 @@
 # @tiny-agents/agent
 
+## 1.3.1
+
+### Patch Changes
+
+- [#633](https://github.com/AshikNesin/tiny-agents/pull/633) [`4ec4594`](https://github.com/AshikNesin/tiny-agents/commit/4ec45946efc623a875374f553223d9afb1826c67) Thanks [@AshikNesin](https://github.com/AshikNesin)! - `createSandboxConnection` now takes a `SandboxMachine` instead of an SSH endpoint (ADR 0054). Wrap an existing endpoint with `sshMachine(endpoint)` for the same behaviour as before. A machine can get its host ready before each dial, which is what a sandbox that starts on demand, such as an AWS Lambda MicroVM, needs. The deprecated `@tiny-agents/agent/sandbox` subpath keeps its old signature.
+- Updated dependencies [[`58dc879`](https://github.com/AshikNesin/tiny-agents/commit/58dc879ce89908e77cb4914155a436ebfff1332e), [`4ec4594`](https://github.com/AshikNesin/tiny-agents/commit/4ec45946efc623a875374f553223d9afb1826c67)]:
+  - @tiny-agents/sandbox@0.3.0
+
 ## 1.3.0
 
 ### Minor Changes
