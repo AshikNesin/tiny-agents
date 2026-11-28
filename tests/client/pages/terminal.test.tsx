@@ -11,6 +11,7 @@ import type { TerminalConnection } from "@/lib/terminal-ws";
 import type { Deleted } from "../../../apps/web/src/shared/api/common";
 import type { TerminalList, TerminalSession } from "../../../apps/web/src/shared/api/terminal";
 import { ApiFailure, fakeApi } from "../fakes/api";
+import { AppQueryProvider } from "../query-provider";
 
 let api: ReturnType<typeof fakeApi>;
 const sessionsAre = (list: TerminalList) => api.get("/terminal/sessions", () => list);
@@ -95,11 +96,13 @@ const session = (n: number, process: string | null = null): TerminalSession => (
 function mount() {
   return render(
     <React.StrictMode>
-      <MemoryRouter>
-        <GrootUIProvider>
-          <TerminalPage />
-        </GrootUIProvider>
-      </MemoryRouter>
+      <AppQueryProvider>
+        <MemoryRouter>
+          <GrootUIProvider>
+            <TerminalPage />
+          </GrootUIProvider>
+        </MemoryRouter>
+      </AppQueryProvider>
     </React.StrictMode>,
   );
 }

@@ -1,5 +1,5 @@
 import React from "react";
-import { act, render, screen } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it } from "vite-plus/test";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { GrootUIProvider } from "@groot/ui/provider";
@@ -9,10 +9,10 @@ import type {
   NotificationStatus,
 } from "@groot/shell/services/notifications";
 import { SettingsPage } from "@/pages/settings/SettingsPage";
-import { usePeopleStore } from "@/store/people";
 import type { PushDeviceList } from "../../../apps/web/src/shared/api/push";
 import { fakeApi } from "../fakes/api";
 import { AppQueryProvider } from "../query-provider";
+import type { PeopleMe } from "../../../apps/web/src/shared/api/people";
 
 const status: NotificationStatus = {
   channel: "pushover",
@@ -53,7 +53,8 @@ describe("settings deep link", () => {
     api.get("/notifications/settings", () => settings);
     api.get("/notifications/log", () => log);
     api.get("/notifications/devices", () => devices);
-    usePeopleStore.setState({ role: null });
+    let answer: (value: PeopleMe) => void = () => undefined;
+    api.get("/people/me", () => new Promise<PeopleMe>((resolve) => (answer = resolve)));
     render(
       <AppQueryProvider>
         <GrootUIProvider>
@@ -66,10 +67,12 @@ describe("settings deep link", () => {
         </GrootUIProvider>
       </AppQueryProvider>,
     );
-    expect(api.requests).toEqual([]);
-    await act(async () => usePeopleStore.setState({ role: "owner" }));
-    expect(screen.getByTestId("at").textContent).toBe("/settings/notifications");
+    await waitFor(() =>
+      expect(api.requests.map((request) => request.path)).toEqual(["/people/me"]),
+    );
+    await act(async () => answer({ guest: false }));
     expect(await screen.findByText("Recent notifications")).toBeTruthy();
+    expect(screen.getByTestId("at").textContent).toBe("/settings/notifications");
     expect(screen.getByText("Nothing sent yet.")).toBeTruthy();
   });
 });

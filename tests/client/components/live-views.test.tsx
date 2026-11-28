@@ -13,6 +13,7 @@ import type { ChatMessage, ChatToolCall } from "@/lib/chat-types";
 import type { Bot } from "../../../apps/web/src/shared/api/bots";
 import type { ComputerStatus } from "../../../apps/web/src/shared/api/live";
 import { fakeApi } from "../fakes/api";
+import { AppQueryProvider } from "../query-provider";
 
 const bot = { id: "b1", name: "Surfer", conversationId: "c1" } as unknown as Bot;
 
@@ -30,6 +31,7 @@ function turn(name: string, status: ChatToolCall["status"]): ChatMessage {
 const views = (messages: ChatMessage[]) =>
   renderHook((props: { messages: ChatMessage[] }) => useLiveViews(bot, props.messages), {
     initialProps: { messages },
+    wrapper: AppQueryProvider,
   });
 
 beforeEach(() => {

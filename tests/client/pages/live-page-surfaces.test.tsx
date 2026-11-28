@@ -34,6 +34,7 @@ import type {
 } from "../../../apps/web/src/shared/api/live";
 import { createRfb } from "@/lib/novnc";
 import { ApiFailure, fakeApi } from "../fakes/api";
+import { AppQueryProvider } from "../query-provider";
 import { markup, outline } from "../dom-outline";
 
 const fakes = vi.hoisted(() => ({ rfbs: [] as EventTarget[] }));
@@ -170,11 +171,13 @@ function desktopBackend(list: DesktopList | Promise<DesktopList>) {
 function mount(which: "browser" | "computer", path = `/${which}`) {
   const Page = which === "browser" ? BrowserPage : ComputerPage;
   return render(
-    <MemoryRouter initialEntries={[path]}>
-      <GrootUIProvider>
-        <Page />
-      </GrootUIProvider>
-    </MemoryRouter>,
+    <AppQueryProvider>
+      <MemoryRouter initialEntries={[path]}>
+        <GrootUIProvider>
+          <Page />
+        </GrootUIProvider>
+      </MemoryRouter>
+    </AppQueryProvider>,
   );
 }
 
@@ -537,34 +540,38 @@ describe("the pages' actions", () => {
 });
 
 describe("the pages' poll", () => {
-  function polls() {
-    const spy = vi.spyOn(window, "setInterval");
-    return () => spy.mock.calls.map(([, ms]) => ms).filter((ms) => ms === 1500 || ms === 3000);
-  }
+  const pass = (ms: number) => act(() => vi.advanceTimersByTimeAsync(ms));
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval", "setTimeout", "clearTimeout"] });
+  });
 
   it("polls the browsers every 1.5s while any of them starts, not just the one shown", async () => {
-    const delays = polls();
-    browserBackend(browsers([browserItem(), scoutBrowser({ starting: true })]));
+    const { api } = browserBackend(browsers([browserItem(), scoutBrowser({ starting: true })]));
     mount("browser");
-    await connect();
-    expect(delays()[0]).toBe(3000);
-    await waitFor(() => expect(delays().at(-1)).toBe(1500));
+    await pass(0);
+    expect(api.sent("GET", "/browser")).toHaveLength(1);
+    await pass(1500);
+    expect(api.sent("GET", "/browser")).toHaveLength(2);
   });
 
   it("polls the desktops every 1.5s while any of them starts, not just the one shown", async () => {
-    const delays = polls();
-    desktopBackend(desktops([desktopItem(), scoutDesktop({ starting: true })]));
+    const { api } = desktopBackend(desktops([desktopItem(), scoutDesktop({ starting: true })]));
     mount("computer");
-    await connect();
-    expect(delays()[0]).toBe(3000);
-    await waitFor(() => expect(delays().at(-1)).toBe(1500));
+    await pass(0);
+    expect(api.sent("GET", "/computer")).toHaveLength(1);
+    await pass(1500);
+    expect(api.sent("GET", "/computer")).toHaveLength(2);
   });
 
   it("polls every 3s when nothing starts", async () => {
-    const delays = polls();
-    desktopBackend(desktops([desktopItem()]));
+    const { api } = desktopBackend(desktops([desktopItem()]));
     mount("computer");
-    await connect();
-    expect(new Set(delays())).toEqual(new Set([3000]));
+    await pass(0);
+    expect(api.sent("GET", "/computer")).toHaveLength(1);
+    await pass(1500);
+    expect(api.sent("GET", "/computer")).toHaveLength(1);
+    await pass(1500);
+    expect(api.sent("GET", "/computer")).toHaveLength(2);
   });
 });

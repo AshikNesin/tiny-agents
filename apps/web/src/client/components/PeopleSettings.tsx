@@ -7,34 +7,31 @@ import { Input } from "@groot/ui/input";
 import { Label } from "@groot/ui/label";
 import { useConfirm } from "@groot/ui/primitives";
 import type { Guest } from "../../shared/api/people";
-import { peopleApi } from "../lib/people-api";
 import { useBotsStore } from "../store/bots";
 import { errorMessage } from "../lib/errors";
+import { useGuestMutations, useGuests } from "../queries/people";
 
 const EMPTY = { name: "", email: "", password: "" };
 
 export function PeopleSettings() {
-  const [guests, setGuests] = useState<Guest[] | null>(null);
+  const list = useGuests();
+  const { add: addGuest, remove: removeGuest } = useGuestMutations();
+  const guests = list.status === "ready" ? list.data : list.status === "failed" ? list.last : null;
+  const loadError = list.status === "failed" ? list.loadError : null;
   const [form, setForm] = useState(EMPTY);
   const [adding, setAdding] = useState(false);
   const bots = useBotsStore((s) => s.bots);
   const confirm = useConfirm();
 
-  const reload = () =>
-    peopleApi
-      .list()
-      .then(({ guests: all }) => setGuests(all))
-      .catch((error: unknown) => toast.error(errorMessage(error, "Failed to load guests")));
-
   useEffect(() => {
-    void reload();
-  }, []);
+    if (loadError) toast.error(loadError);
+  }, [loadError]);
 
   const add = async (event: FormEvent) => {
     event.preventDefault();
     setAdding(true);
     try {
-      await peopleApi.add({
+      await addGuest.mutateAsync({
         name: form.name.trim(),
         email: form.email.trim(),
         password: form.password,
@@ -43,7 +40,7 @@ export function PeopleSettings() {
         description: "Share a bot with them from its settings → Sharing.",
       });
       setForm(EMPTY);
-      await reload();
+      await list.refresh();
     } catch (error) {
       toast.error(errorMessage(error, "Failed to add guest"));
     } finally {
@@ -60,8 +57,8 @@ export function PeopleSettings() {
     });
     if (!ok) return;
     try {
-      await peopleApi.remove(guest.id);
-      await reload();
+      await removeGuest.mutateAsync(guest.id);
+      await list.refresh();
     } catch (error) {
       toast.error(errorMessage(error, "Failed to remove guest"));
     }
@@ -128,7 +125,7 @@ export function PeopleSettings() {
           <CardDescription>Share a bot with a guest from its settings → Sharing.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-2">
-          {guests === null && <p className="text-muted-foreground text-sm">Loading…</p>}
+          {!guests && <p className="text-muted-foreground text-sm">Loading…</p>}
           {guests?.length === 0 && <p className="text-muted-foreground text-sm">No guests yet.</p>}
           {guests?.map((guest) => {
             const shared = guest.botIds.map(botName).filter(Boolean);

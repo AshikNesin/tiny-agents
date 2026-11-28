@@ -1,4 +1,4 @@
-import { parseJson } from "@tiny-agents/std";
+import { parseEach, parseJson } from "@tiny-agents/std";
 import { z } from "zod";
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { Boom } from "@groot/core/errors";
@@ -101,7 +101,12 @@ async function candidates(force = false) {
 
 function parseList(raw: string | null): string[] {
   try {
-    return parseJson("A vault item's list", raw ?? "[]", z.array(z.string()));
+    return parseEach(
+      parseJson("A vault item's list", raw ?? "[]", z.array(z.unknown())),
+      z.string(),
+      (_value, problem) =>
+        logger.warn({ problem }, "Skipped a vault list entry that does not fit its shape"),
+    );
   } catch {
     return [];
   }

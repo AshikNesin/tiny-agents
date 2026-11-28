@@ -281,6 +281,16 @@ const FIXTURES: Record<string, Fixture> = {
     source: "export const f = (x: string) => <number>(<unknown>x);\n",
     rules: ["R6"],
   },
+  "apps/web/src/client/pages/r23-fail.tsx": {
+    source:
+      "export function start(refresh: () => void) {\n  const timer = setInterval(refresh, 5000);\n  const other = window.setInterval(refresh, 5000);\n  return [timer, other];\n}\n",
+    rules: ["R23", "R23"],
+    mentions: "refetchInterval",
+  },
+  "apps/web/src/client/lib/r23-transport-pass.ts": {
+    source: "export const ping = (probe: () => void) => setInterval(probe, 1000);\n",
+    rules: [],
+  },
   "apps/web/src/server/api/r22-fail.ts": {
     source:
       "interface Row { id: string }\nexport const read = (text: string) => JSON.parse(text) as Row;\nexport const list = (text: string) => (JSON.parse(text)) as Row[];\n",

@@ -52,7 +52,7 @@ const renderedElements = (node) => {
 };
 
 const LOAD_IN_EFFECT_MESSAGE =
-  "R15: load request/response data with useResource from apps/web/src/client/queries/resource.ts (writes: useMutation), not a fetch, an `xxxApi.` call or a `load…`/`fetch…` helper in useEffect. A hand-rolled load needs its own cancel flag, busy reset and refresh after a change, and agents kept missing one (issue #412). A live stream or socket is not a resource: list the file in R15's except in scripts/lint/boundaries.ts with the reason.";
+  "R15: load request/response data with useResource from apps/web/src/client/queries/resource.ts (writes: useMutation), not a fetch, an `xxxApi.` call or a `load…`/`fetch…` helper in useEffect. A hand-rolled load needs its own cancel flag, busy reset and refresh after a change, and agents kept missing one (issue #412). A poll is `refetchInterval` on the resource. A live stream subscribes with subscribeSse, whose path comes from an `xxxApi.…Path()` builder; that is not a load.";
 
 const EFFECT_HOOKS = new Set(["useEffect", "useLayoutEffect"]);
 
@@ -74,7 +74,8 @@ const isLoadCall = (node) => {
   return (
     callee.type === "MemberExpression" &&
     callee.object.type === "Identifier" &&
-    callee.object.name.endsWith("Api")
+    callee.object.name.endsWith("Api") &&
+    !(callee.property.type === "Identifier" && /(Path|Url)$/.test(callee.property.name))
   );
 };
 
@@ -93,6 +94,9 @@ const CASTS = new Set(["TSAsExpression", "TSTypeAssertion"]);
 
 const unparenthesized = (node) =>
   node.type === "ParenthesizedExpression" ? unparenthesized(node.expression) : node;
+
+const CLIENT_INTERVAL_MESSAGE =
+  "R23: re-read server data with `refetchInterval` on useResource (apps/web/src/client/queries/resource.ts), which stops with the component and pauses in a hidden tab. A hand-rolled setInterval poll outlived its component more than once.";
 
 const JSON_PARSE_CAST_MESSAGE =
   "R22: JSON.parse returns whatever was stored or sent, and a cast compiles any shape. Read it with `parseJson(what, text, schema)` from @tiny-agents/std, and a list of rows with `parseEach`, so a wrong shape fails where it is read.";
@@ -634,6 +638,22 @@ export default {
             for (const s of node.specifiers) {
               if (s.type === "ImportSpecifier" && s.imported.name === "env") report(s);
             }
+          },
+        };
+      },
+    },
+    "no-client-interval": {
+      create(context) {
+        return {
+          CallExpression(node) {
+            const callee = node.callee;
+            const name =
+              callee.type === "Identifier"
+                ? callee.name
+                : callee.type === "MemberExpression" && callee.property.type === "Identifier"
+                  ? callee.property.name
+                  : null;
+            if (name === "setInterval") context.report({ node, message: CLIENT_INTERVAL_MESSAGE });
           },
         };
       },

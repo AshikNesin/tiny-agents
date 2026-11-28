@@ -7,6 +7,7 @@ import type {
   VncTicket,
 } from "../../../apps/web/src/shared/api/live";
 import { fakeApi } from "../fakes/api";
+import { signedInAs } from "../fakes/viewer";
 
 type Held<Status> = Status | Promise<Status>;
 
@@ -17,6 +18,7 @@ function liveBackend<Status extends BrowserStatus | ComputerStatus>(
   afterDriver: (status: Status, driver: DriverBody["driver"]) => Status,
 ) {
   const api = fakeApi();
+  signedInAs(api, "owner");
   const base = `/bots/b1/${surface}`;
   let current = initial;
   api.get(base, () => current);

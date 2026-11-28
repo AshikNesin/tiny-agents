@@ -10,7 +10,6 @@ import { LegacyCodeSettings } from "@/pages/code/CodeSettings";
 import { SettingsPage } from "@/pages/settings/SettingsPage";
 import { useBotsStore } from "@/store/bots";
 import { useCodeStore } from "@/store/code";
-import { usePeopleStore } from "@/store/people";
 import type { HarnessInfo } from "@/lib/code/api";
 import type { Bot, BotListEntry } from "../../../apps/web/src/shared/api/bots";
 import type {
@@ -24,6 +23,7 @@ import type { CatalogModel } from "../../../apps/web/src/shared/api/models";
 import { FIXED_NOW } from "../../test-clock";
 import { fakeApi } from "../fakes/api";
 import { AppQueryProvider } from "../query-provider";
+import { signedInAs } from "../fakes/viewer";
 
 const render = (ui: Parameters<typeof renderBare>[0]) =>
   renderBare(ui, { wrapper: AppQueryProvider });
@@ -168,8 +168,8 @@ function renderAt(path: string) {
 }
 
 beforeEach(() => {
-  usePeopleStore.setState({ role: "owner" });
   api = fakeApi();
+  signedInAs(api, "owner");
   api.get("/code/projects", () => [project]);
   api.get("/code/github", () => github);
   api.get("/code/github/app/repositories", () => []);

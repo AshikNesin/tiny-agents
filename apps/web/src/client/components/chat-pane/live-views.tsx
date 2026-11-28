@@ -2,9 +2,9 @@ import { useCallback, useEffect, useState } from "react";
 import { Globe, Monitor, type LucideIcon } from "lucide-react";
 import type { Bot } from "../../../shared/api/bots";
 import type { ChatMessage } from "../../lib/chat-types";
-import { botsApi } from "../../lib/bots-api";
 import { browserInUse, computerInUse, useLiveLayout } from "../../lib/browser-panel";
 import { SHOW_COMPUTER_EVENT } from "../../lib/owner-actions";
+import { useComputerStatus } from "../../queries/bots";
 
 function usePanel(onOpen: () => void) {
   const [open, setOpen] = useState(false);
@@ -23,19 +23,11 @@ export function useLiveViews(bot: Bot, messages: ChatMessage[]) {
   const browser = usePanel(useCallback(() => setFront("browser"), []));
   const computer = usePanel(useCallback(() => setFront("computer"), []));
   const [layout, setLayout] = useLiveLayout();
-  const [computerConfigured, setComputerConfigured] = useState(false);
-  useEffect(() => {
-    let cancelled = false;
-    void Promise.resolve()
-      .then(() => botsApi.computerStatus(bot.id))
-      .then((status) => {
-        if (!cancelled) setComputerConfigured(Boolean(status?.configured));
-      })
-      .catch(() => undefined);
-    return () => {
-      cancelled = true;
-    };
-  }, [bot.id]);
+  const computerStatus = useComputerStatus(bot.id);
+  const computerConfigured =
+    computerStatus.status === "ready"
+      ? computerStatus.data.configured
+      : computerStatus.status === "failed" && computerStatus.last?.configured === true;
   const showBrowser = browser.open && (!computer.open || front === "browser");
   const showComputer = computer.open && (!browser.open || front === "computer");
   const hasComputer = computerConfigured || computer.open || computerActive;

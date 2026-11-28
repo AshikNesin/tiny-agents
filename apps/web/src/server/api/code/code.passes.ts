@@ -1,4 +1,4 @@
-import { parseJson } from "@tiny-agents/std";
+import { parseEach, parseJson } from "@tiny-agents/std";
 import { z } from "zod";
 import { logger } from "@groot/core/logger";
 import { notificationService } from "@groot/core/notification/notification.service";
@@ -49,7 +49,7 @@ const reportSchema = z.looseObject({
   ),
 });
 
-const passItemsSchema = z.array(z.looseObject({ id: z.string(), kind: z.string() })).nullable();
+const passItemSchema = z.looseObject({ id: z.string(), kind: z.string() });
 
 function parseReport(text: string): ReportEntry[] | undefined {
   const blocks = [
@@ -311,7 +311,12 @@ export async function finishPass(pass: CodeAutofixPass, outcome?: TurnOutcome): 
   }
 
   const github = await services.client(ctx.project);
-  const items = parseJson("An Auto-fix pass's items", pass.items, passItemsSchema) ?? [];
+  const items = parseEach(
+    parseJson("An Auto-fix pass's items", pass.items, z.array(z.unknown()).nullable()) ?? [],
+    passItemSchema,
+    (_value, problem) =>
+      logger.warn({ problem }, "Skipped an Auto-fix pass item that does not fit its shape"),
+  );
   const report = parseReport(await lastAnswer(ctx, outcome));
   const short = pushed.slice(0, 7);
   try {

@@ -23,6 +23,7 @@ import type {
 } from "../../../apps/web/src/shared/api/live";
 import { createRfb } from "@/lib/novnc";
 import { fakeApi } from "../fakes/api";
+import { AppQueryProvider } from "../query-provider";
 
 interface FakeRfb extends EventTarget {
   viewOnly: boolean;
@@ -114,11 +115,13 @@ function backend(initial: PageBrowserList) {
 
 function mount(path = "/browser") {
   return render(
-    <MemoryRouter initialEntries={[path]}>
-      <GrootUIProvider>
-        <BrowserPage />
-      </GrootUIProvider>
-    </MemoryRouter>,
+    <AppQueryProvider>
+      <MemoryRouter initialEntries={[path]}>
+        <GrootUIProvider>
+          <BrowserPage />
+        </GrootUIProvider>
+      </MemoryRouter>
+    </AppQueryProvider>,
   );
 }
 

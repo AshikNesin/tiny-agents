@@ -10,7 +10,7 @@ import { PeopleSettings } from "../../components/PeopleSettings";
 import { PhoneNotificationSettings } from "../../components/PhoneNotificationSettings";
 import { ToolDefaultsSettings } from "../../components/ToolDefaultsSettings";
 import { UpdatesSettings } from "../../components/UpdatesSettings";
-import { useViewerRole } from "../../store/people";
+import { useViewer, viewerRole } from "../../queries/viewer";
 import { useCodeStore } from "../../store/code";
 import { CodeSettingsSection } from "../code/CodeSettings";
 import { ModelsSettings } from "./models/ModelsSettings";
@@ -40,7 +40,7 @@ const LEGACY_TABS: Record<string, string> = { general: "account", claude: "model
 export function SettingsPage() {
   const { pathname, search } = useLocation();
   const legacyTab = new URLSearchParams(search).get("tab");
-  const role = useViewerRole();
+  const role = viewerRole(useViewer());
   const restricted = role !== "owner";
   const code = useCodeStore((s) => s.harnesses === null || s.harnesses.length > 0);
   const sections = useMemo<SettingsSection[]>(
@@ -50,6 +50,6 @@ export function SettingsPage() {
   if (legacyTab && pathname.replace(/\/+$/, "") === "/settings") {
     return <Navigate to={`/settings/${LEGACY_TABS[legacyTab] ?? legacyTab}`} replace />;
   }
-  if (role === null) return null;
+  if (role === "loading" || role === "unknown") return null;
   return <Settings sections={sections} />;
 }

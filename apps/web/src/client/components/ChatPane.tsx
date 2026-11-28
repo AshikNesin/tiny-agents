@@ -9,7 +9,7 @@ import { useBotsStore } from "../store/bots";
 import type { OwnerSubmission } from "../store/chats";
 import { useChat } from "../store/use-chat";
 import { useUiStore } from "../store/ui";
-import { useViewerRole } from "../store/people";
+import { useViewer, viewerRole } from "../queries/viewer";
 import { BrowserPanel } from "./BrowserPanel";
 import { ComputerPanel } from "./ComputerPanel";
 import { ChatComposer, type ChatComposerHandle } from "./ChatComposer";
@@ -62,7 +62,7 @@ function ChatPaneBody({
   const { messages, busy, yolo } = chat;
   const setMobileOpen = useUiStore((s) => s.setMobileOpen);
   const [confirmYolo, setConfirmYolo] = useState(false);
-  const role = useViewerRole();
+  const role = viewerRole(useViewer());
   const owner = role === "owner";
   const [menuView, setMenuView] = useHistoryMenu();
   const composerRef = useRef<ChatComposerHandle>(null);

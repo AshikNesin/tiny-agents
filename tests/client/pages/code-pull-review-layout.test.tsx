@@ -8,11 +8,10 @@
  */
 import { render as renderBare, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { MemoryRouter } from "react-router-dom";
 import { ConfirmProvider } from "@groot/ui/primitives";
 import { PullReview } from "@/pages/code/PullReview";
-import { usePeopleStore } from "@/store/people";
 import type { PullReviewView } from "../../../apps/web/src/shared/api/code";
 import { clickLine, line } from "../diff-dom";
 import { AppQueryProvider } from "../query-provider";
@@ -67,6 +66,7 @@ function stubFetch() {
   const fetch = vi.fn(async (url: string, init?: RequestInit) => {
     const at = new URL(String(url), "http://x");
     const path = at.pathname;
+    if (path === "/api/v1/people/me") return answer({ guest: false });
     if (path === "/api/v1/code/reviews/rv1") return answer(REVIEW);
     if (path === `${thread}/files`) return answer([file("src/a.ts"), file("src/b.ts")]);
     if (path === `${thread}/file`) {
@@ -99,7 +99,6 @@ function showReview() {
   );
 }
 
-beforeEach(() => usePeopleStore.setState({ role: "owner" }));
 afterEach(() => vi.unstubAllGlobals());
 
 describe("a PR review's layout", () => {

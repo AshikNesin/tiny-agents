@@ -1,4 +1,5 @@
-import { parseJson } from "@tiny-agents/std";
+import { parseEach, parseJson } from "@tiny-agents/std";
+import { logger } from "@groot/core/logger";
 import { z } from "zod";
 import type { McpToolInfo } from "@tiny-agents/agent";
 import type { ModelCatalog } from "@tiny-agents/models";
@@ -67,10 +68,12 @@ export type CachedTool = z.infer<typeof cachedToolSchema>;
 
 export function parseTools(raw: string): CachedTool[] {
   try {
-    return parseJson("A connection's cached tools", raw, z.array(z.unknown())).flatMap((tool) => {
-      const fits = cachedToolSchema.safeParse(tool);
-      return fits.success ? [fits.data] : [];
-    });
+    return parseEach(
+      parseJson("A connection's cached tools", raw, z.array(z.unknown())),
+      cachedToolSchema,
+      (_value, problem) =>
+        logger.warn({ problem }, "Skipped a cached connection tool that does not fit its shape"),
+    );
   } catch {
     return [];
   }

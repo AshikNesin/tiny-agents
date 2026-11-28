@@ -23,6 +23,7 @@ import type {
 } from "../../../apps/web/src/shared/api/live";
 import { createRfb } from "@/lib/novnc";
 import { fakeApi } from "../fakes/api";
+import { AppQueryProvider } from "../query-provider";
 
 interface FakeRfb extends EventTarget {
   viewOnly: boolean;
@@ -113,11 +114,13 @@ function backend(initial: DesktopList) {
 
 function mount() {
   return render(
-    <MemoryRouter>
-      <GrootUIProvider>
-        <ComputerPage />
-      </GrootUIProvider>
-    </MemoryRouter>,
+    <AppQueryProvider>
+      <MemoryRouter>
+        <GrootUIProvider>
+          <ComputerPage />
+        </GrootUIProvider>
+      </MemoryRouter>
+    </AppQueryProvider>,
   );
 }
 

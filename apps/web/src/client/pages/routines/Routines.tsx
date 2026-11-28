@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
@@ -16,8 +16,6 @@ import { RoutineCard } from "./RoutineCard";
 import { RoutineEditor } from "./RoutineEditor";
 import { RecentRuns, UpcomingRuns } from "./RoutineRunLists";
 import { HookUrlDialog } from "./HookUrlDialog";
-
-const AWAITING_POLL_MS = 4_000;
 
 export function Routines() {
   const resource = useRoutines();
@@ -37,13 +35,6 @@ export function Routines() {
   const [hook, setHook] = useState<{ name: string; url: string } | null>(null);
   const confirm = useConfirm();
   const navigate = useNavigate();
-
-  const awaiting = runs?.some((run) => run.status === "awaiting") ?? false;
-  useEffect(() => {
-    if (!awaiting) return;
-    const timer = setInterval(() => void refresh(), AWAITING_POLL_MS);
-    return () => clearInterval(timer);
-  }, [awaiting, refresh]);
 
   const upcoming = useMemo(
     () =>

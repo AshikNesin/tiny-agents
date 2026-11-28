@@ -9,12 +9,12 @@ and `pnpm build` green.
 | 0     | A groot sync rewriting the child's gates and lint rules    | done   |
 | 1     | A write route without an access tier                       | open   |
 | 2     | A resource that is still loading read as a value           | open   |
-| 3     | A client test that mocks the module it covers              | open   |
-| 4     | Server data loaded outside `useResource`                   | open   |
+| 3     | A client test that mocks the module it covers              | done   |
+| 4     | Server data loaded outside `useResource`                   | done   |
 | 5     | An unsent draft lost on remount                            | open   |
-| 6     | A server timer or module state with no owner               | open   |
-| 7     | A harness that declares a capability and omits its methods | open   |
-| 8     | Stored JSON read with a cast; a helper written twice       | open   |
+| 6     | A server timer or module state with no owner               | done   |
+| 7     | A harness that declares a capability and omits its methods | done   |
+| 8     | Stored JSON read with a cast; a helper written twice       | done   |
 | 9     | A silent fallback                                          | open   |
 | 10    | A feature mounted by hand in several lists                 | open   |
 | 11    | Legacy ids and redirects kept beside their replacement     | open   |
@@ -31,4 +31,13 @@ lint rule groot adds later is ported by hand. Files under
 
 ## Debt left on purpose
 
-Recorded as each slice closes.
+- Server interval timers are unchanged. Each is tied to a connection or an
+  injected clock, and `tests/server/fixtures/file-isolation.ts` already fails
+  a test file that leaks one; a wrapper would not make a leak impossible.
+- `capabilitiesCache` in `apps/web/src/client/lib/bots-api.ts` is still a
+  module-level promise cache.
+- A Shelley message's content blocks, a cached pull snapshot's inner arrays,
+  the Auto-fix report and extracted upload content are each read as one
+  object, so one bad element fails that value.
+- A GitHub pull snapshot fails whole on a malformed element on purpose: it
+  drives Auto-fix and merge decisions.

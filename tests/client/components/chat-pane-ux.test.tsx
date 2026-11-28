@@ -10,20 +10,21 @@
  * so no server is involved.
  */
 import React from "react";
-import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { BrowserRouter } from "react-router-dom";
 import { ChatPane } from "@/components/ChatPane";
 import { useBotsStore } from "@/store/bots";
 import { chatSessions } from "@/store/chats";
-import { usePeopleStore } from "@/store/people";
 import type { Bot, PastChatList, SendMessageBody } from "../../../apps/web/src/shared/api/bots";
 import type { CatalogModel } from "../../../apps/web/src/shared/api/models";
 import type { ChatMessage } from "@/lib/chat-types";
 import { botStream, openedPaths } from "../fakes/sse";
 import { AppQueryProvider } from "../query-provider";
 import { chatBackend } from "./chat-backend";
+import { signedInAs, viewerLoaded } from "../fakes/viewer";
+import type { PeopleMe } from "../../../apps/web/src/shared/api/people";
 
 let api: ReturnType<typeof chatBackend>;
 
@@ -90,7 +91,6 @@ function seedStore(opts: { lastReadAt?: string | null } = {}) {
     fullBots: {},
   });
   chatSessions.store.setState({ sessions: {} });
-  usePeopleStore.setState({ role: "owner" });
 }
 
 const done = (id: string, role: ChatMessage["role"], text: string, createdAt: number) =>
@@ -103,7 +103,7 @@ function snapshot(messages: ChatMessage[], busy = false) {
   });
 }
 
-function renderPane(bot: Bot = HOST) {
+async function renderPane(bot: Bot = HOST) {
   render(
     <AppQueryProvider>
       <BrowserRouter>
@@ -111,6 +111,7 @@ function renderPane(bot: Bot = HOST) {
       </BrowserRouter>
     </AppQueryProvider>,
   );
+  await viewerLoaded(api);
   return screen.getByRole("textbox") as HTMLTextAreaElement;
 }
 
@@ -123,13 +124,14 @@ const newConversation = () =>
 
 beforeEach(() => {
   api = chatBackend(HOST);
+  signedInAs(api, "owner");
   localStorage.clear();
 });
 
 describe("ChatPane composer — Enter behavior by pointer type", () => {
   it("sends on Enter with a fine (desktop) pointer", async () => {
     seedStore();
-    const composer = renderPane();
+    const composer = await renderPane();
     await user.type(composer, "hello desktop{Enter}");
     await waitFor(() => expect(sends()).toHaveLength(1));
     expect(composer.value).toBe("");
@@ -156,7 +158,7 @@ describe("ChatPane composer — Enter behavior by pointer type", () => {
       })),
     );
     try {
-      const composer = renderPane();
+      const composer = await renderPane();
       await user.type(composer, "hello mobile{Enter}second line");
       expect(sends()).toHaveLength(0);
       expect(composer.value).toBe("hello mobile\nsecond line");
@@ -171,9 +173,9 @@ describe("ChatPane composer — Enter behavior by pointer type", () => {
 });
 
 describe("ChatPane transcript", () => {
-  it("draws the New messages divider above the first reply that arrived while away", () => {
+  it("draws the New messages divider above the first reply that arrived while away", async () => {
     seedStore({ lastReadAt: new Date(1_500).toISOString() });
-    renderPane();
+    await renderPane();
     snapshot([
       done("u1", "user", "read question", 1_000),
       done("a1", "assistant", "first unread reply", 2_000),
@@ -186,16 +188,16 @@ describe("ChatPane transcript", () => {
 
   it("waits for the first snapshot before showing the empty state", async () => {
     seedStore();
-    renderPane();
+    await renderPane();
     expect(screen.queryByText(/say hi/i)).toBeNull();
     expect(screen.queryByText(/reconnecting/i)).toBeNull();
     snapshot([]);
     expect(await screen.findByText(/say hi/i)).toBeInTheDocument();
   });
 
-  it("shows typing dots until the reply's first token arrives", () => {
+  it("shows typing dots until the reply's first token arrives", async () => {
     seedStore();
-    renderPane();
+    await renderPane();
     snapshot([done("u1", "user", "hi", 1_000)], true);
     expect(screen.getByTestId("typing-indicator")).toBeInTheDocument();
     botStream("host").send({
@@ -214,7 +216,7 @@ describe("ChatPane transcript", () => {
   it("draws an Echo in the transcript and a held message over the composer, with its cancel", async () => {
     seedStore();
     api.post("/bots/host/messages", () => new Promise(() => undefined));
-    const composer = renderPane();
+    const composer = await renderPane();
     snapshot([done("u1", "user", "hi", 1_000)], true);
     await user.type(composer, "also this{Enter}");
     expect(await screen.findByText("also this")).toBeInTheDocument();
@@ -234,15 +236,15 @@ describe("ChatPane transcript", () => {
 });
 
 describe("ChatPane composer — one action button", () => {
-  function renderBusy(busy: boolean) {
+  async function renderBusy(busy: boolean) {
     seedStore();
-    const composer = renderPane();
+    const composer = await renderPane();
     snapshot([done("u1", "user", "hi", 1_000)], busy);
     return composer;
   }
 
   it("shows only Stop while replying with nothing typed, and Steer once text is typed", async () => {
-    const composer = renderBusy(true);
+    const composer = await renderBusy(true);
     expect(screen.getByRole("button", { name: "Stop generating" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /send message|steer the reply/i })).toBeNull();
 
@@ -251,14 +253,14 @@ describe("ChatPane composer — one action button", () => {
     expect(screen.queryByRole("button", { name: "Stop generating" })).toBeNull();
   });
 
-  it("shows only Send when idle", () => {
-    renderBusy(false);
+  it("shows only Send when idle", async () => {
+    await renderBusy(false);
     expect(screen.getByRole("button", { name: "Send message" })).toBeDisabled();
     expect(screen.queryByRole("button", { name: "Stop generating" })).toBeNull();
   });
 
   it("stops the reply on Escape and shows the stop as pending until the run ends", async () => {
-    const composer = renderBusy(true);
+    const composer = await renderBusy(true);
     composer.focus();
     await user.keyboard("{Escape}");
     expect(aborts()).toHaveLength(1);
@@ -270,7 +272,7 @@ describe("ChatPane composer — one action button", () => {
 
   it("keeps an unsent draft per bot across remounts and clears it on send", async () => {
     seedStore();
-    const composer = renderPane();
+    const composer = await renderPane();
     await user.type(composer, "half-written thought");
     cleanup();
 
@@ -280,27 +282,27 @@ describe("ChatPane composer — one action button", () => {
       conversationId: "c2",
       name: "Other Bot",
     };
-    const otherComposer = renderPane(other);
+    const otherComposer = await renderPane(other);
     expect(otherComposer.value).toBe("");
     await user.type(otherComposer, "a different thought");
     cleanup();
 
-    const again = renderPane();
+    const again = await renderPane();
     expect(again.value).toBe("half-written thought");
     await user.type(again, "{Enter}");
     await waitFor(() => expect(sends()).toHaveLength(1));
     cleanup();
 
-    expect(renderPane().value).toBe("");
+    expect((await renderPane()).value).toBe("");
     cleanup();
-    expect(renderPane(other).value).toBe("a different thought");
+    expect((await renderPane(other)).value).toBe("a different thought");
   });
 });
 
 describe("ChatPane header", () => {
-  it("keeps the header to the bot menu and three quiet icons: live view, Past chats and New chat", () => {
+  it("keeps the header to the bot menu and three quiet icons: live view, Past chats and New chat", async () => {
     seedStore();
-    renderPane({ ...HOST, description: "Plans trips" });
+    await renderPane({ ...HOST, description: "Plans trips" });
     const header = screen.getByRole("banner");
     expect(within(header).getByRole("button", { name: "Host Bot menu" })).toBeInTheDocument();
     expect(
@@ -322,7 +324,7 @@ describe("ChatPane header", () => {
         </BrowserRouter>
       </AppQueryProvider>,
     );
-    await user.click(screen.getByRole("button", { name: "Host Bot menu" }));
+    await user.click(await screen.findByRole("button", { name: "Host Bot menu" }));
     expect(screen.queryByTestId("yolo-toggle")).toBeNull();
     await user.click(await screen.findByRole("menuitem", { name: "Bot settings" }));
     expect(onEditBot).toHaveBeenCalledOnce();
@@ -330,7 +332,7 @@ describe("ChatPane header", () => {
 
   it("shows YOLO as a chip in the composer, as Code's composer does", async () => {
     seedStore();
-    renderPane();
+    await renderPane();
     snapshot([]);
     const chip = screen.getByRole("button", { name: "YOLO" });
     expect(chip).toHaveAttribute("aria-pressed", "false");
@@ -345,7 +347,7 @@ describe("ChatPane header", () => {
   it("disables new chat on an empty conversation and starts one without asking otherwise", async () => {
     seedStore();
     newConversation();
-    renderPane();
+    await renderPane();
     snapshot([]);
     const newChat = screen.getByRole("button", { name: "Start a new chat" });
     expect(newChat).toBeDisabled();
@@ -375,6 +377,7 @@ describe("ChatPane header", () => {
         </BrowserRouter>
       </AppQueryProvider>,
     );
+    await viewerLoaded(api);
     snapshot([done("u1", "user", "the old conversation", 1_000)]);
     const opens = openedPaths.length;
 
@@ -389,7 +392,7 @@ describe("ChatPane header", () => {
   it("/new in the composer starts a new chat without the confirm and sends nothing", async () => {
     seedStore();
     newConversation();
-    const composer = renderPane();
+    const composer = await renderPane();
     snapshot([done("u1", "user", "the old conversation", 1_000)]);
 
     await user.type(composer, " /new {Enter}");
@@ -402,8 +405,9 @@ describe("ChatPane header", () => {
   it("/new keeps the draft until the chat and the account have loaded", async () => {
     seedStore();
     newConversation();
-    usePeopleStore.setState({ role: null });
-    const composer = renderPane();
+    let answer: (value: PeopleMe) => void = () => undefined;
+    api.get("/people/me", () => new Promise<PeopleMe>((resolve) => (answer = resolve)));
+    const composer = await renderPane();
 
     await user.type(composer, "/new{Enter}");
     expect(composer.value).toBe("/new");
@@ -415,9 +419,11 @@ describe("ChatPane header", () => {
     expect(composer.value).toBe("/new");
     expect(resets()).toHaveLength(0);
 
-    usePeopleStore.setState({ role: "owner" });
-    await user.keyboard("{Enter}");
-    await waitFor(() => expect(resets()).toHaveLength(1));
+    await act(async () => answer({ guest: false }));
+    await waitFor(async () => {
+      await user.keyboard("{Enter}");
+      expect(resets()).toHaveLength(1);
+    });
     expect(composer.value).toBe("");
   });
 
@@ -435,7 +441,7 @@ describe("ChatPane header", () => {
         },
       ],
     }));
-    renderPane();
+    await renderPane();
     await user.click(screen.getByRole("button", { name: "Host Bot menu" }));
     await user.click(await screen.findByRole("menuitem", { name: "Chat history" }));
     expect(await screen.findByText("Goa trip")).toBeInTheDocument();
@@ -444,7 +450,7 @@ describe("ChatPane header", () => {
 
   it("says so on the history page when there is no past chat yet", async () => {
     seedStore();
-    renderPane();
+    await renderPane();
     await user.click(screen.getByRole("button", { name: "Host Bot menu" }));
     await user.click(await screen.findByRole("menuitem", { name: "Chat history" }));
     expect(

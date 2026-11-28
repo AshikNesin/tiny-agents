@@ -207,7 +207,7 @@ Render it the way `main.tsx` mounts the app: a client from
 network with `fakeApi()` from `tests/client/fakes/api.ts` rather than mocking
 `apiClient` or a `*-api` module (lint R21), so the envelope, `ApiError` and the
 error wording are the real ones. Declare each route the test needs
-(`api.get("/tasks", () => tasks)`), throw `ApiFailure` or `networkDown()` from a
+(`api.get("/tasks", () => tasks)`), throw `ApiFailure` from a
 reply to fail it, and assert on the text a person reads or on the request that
 left the browser (`api.sent("POST", "/tasks")`).
 

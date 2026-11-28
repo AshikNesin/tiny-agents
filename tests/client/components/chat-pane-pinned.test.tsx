@@ -21,7 +21,6 @@ import { ConfirmProvider } from "@groot/ui/primitives";
 import { ChatPane } from "@/components/ChatPane";
 import { useBotsStore } from "@/store/bots";
 import { chatSessions } from "@/store/chats";
-import { usePeopleStore } from "@/store/people";
 import type { Bot, YoloState } from "../../../apps/web/src/shared/api/bots";
 import type { BrowserStatus, ComputerStatus } from "../../../apps/web/src/shared/api/live";
 import type { CatalogModel } from "../../../apps/web/src/shared/api/models";
@@ -30,6 +29,7 @@ import { botStream } from "../fakes/sse";
 import { markup, outline } from "../dom-outline";
 import { AppQueryProvider } from "../query-provider";
 import { chatBackend } from "./chat-backend";
+import { signedInAs, viewerLoaded } from "../fakes/viewer";
 
 vi.mock("@/lib/sse", async () => (await import("../fakes/sse")).sseModule);
 vi.mock("streamdown", () => ({
@@ -159,11 +159,11 @@ function seed({ providers = [] }: { providers?: { enabled: boolean }[] } = {}) {
   chatSessions.store.setState({ sessions: {} });
 }
 
-function mount(
+async function mount(
   bot: Bot = HOST,
   { canAnswer = true, path = "/chats/host" }: { canAnswer?: boolean; path?: string } = {},
 ) {
-  return render(
+  const view = render(
     <AppQueryProvider>
       <ConfirmProvider>
         <MemoryRouter initialEntries={[path]}>
@@ -172,6 +172,8 @@ function mount(
       </ConfirmProvider>
     </AppQueryProvider>,
   );
+  await viewerLoaded(api);
+  return view;
 }
 
 function open(messages: ChatMessage[], busy = false, queued: QueuedMessage[] = []) {
@@ -195,21 +197,21 @@ beforeEach(() => {
   api = chatBackend(HOST);
   api.get("/bots/host/browser", () => browserClosed);
   api.put("/bots/host/yolo", (): YoloState => ({ on: true, approved: [] }));
-  usePeopleStore.setState({ role: "owner" });
+  signedInAs(api, "owner");
   localStorage.clear();
 });
 
 describe("ChatPane, pinned", () => {
   it("before the first snapshot", async () => {
     seed();
-    mount();
+    await mount();
     await settle();
     pin();
   });
 
   it("an empty chat", async () => {
     seed();
-    mount();
+    await mount();
     open([]);
     await settle();
     pin();
@@ -217,7 +219,7 @@ describe("ChatPane, pinned", () => {
 
   it("a conversation", async () => {
     seed();
-    mount();
+    await mount();
     open([done("u1", "user", "hi"), done("a1", "assistant", "hello")]);
     await settle();
     pin();
@@ -225,8 +227,8 @@ describe("ChatPane, pinned", () => {
 
   it("a guest's pane", async () => {
     seed();
-    usePeopleStore.setState({ role: "guest" });
-    mount();
+    signedInAs(api, "guest");
+    await mount();
     open([done("u1", "user", "hi")]);
     botStream("host").send({ type: "yolo", on: true });
     await settle();
@@ -235,7 +237,7 @@ describe("ChatPane, pinned", () => {
 
   it("no model is set up", async () => {
     seed();
-    mount(HOST, { canAnswer: false });
+    await mount(HOST, { canAnswer: false });
     open([]);
     await settle();
     pin();
@@ -243,7 +245,7 @@ describe("ChatPane, pinned", () => {
 
   it("no model can run", async () => {
     seed({ providers: [{ enabled: true }] });
-    mount(HOST, { canAnswer: false });
+    await mount(HOST, { canAnswer: false });
     open([]);
     await settle();
     pin();
@@ -251,7 +253,7 @@ describe("ChatPane, pinned", () => {
 
   it("the bot's model is not in the catalog", async () => {
     seed();
-    mount({ ...HOST, modelId: "gone" });
+    await mount({ ...HOST, modelId: "gone" });
     open([]);
     await settle();
     pin();
@@ -259,7 +261,7 @@ describe("ChatPane, pinned", () => {
 
   it("a shared chat", async () => {
     seed();
-    mount({ ...HOST, guestIds: [5] });
+    await mount({ ...HOST, guestIds: [5] });
     open([]);
     await settle();
     pin();
@@ -267,7 +269,7 @@ describe("ChatPane, pinned", () => {
 
   it("YOLO on", async () => {
     seed();
-    mount();
+    await mount();
     open([done("u1", "user", "hi")]);
     botStream("host").send({ type: "yolo", on: true });
     await settle();
@@ -276,7 +278,7 @@ describe("ChatPane, pinned", () => {
 
   it("messages held over the composer", async () => {
     seed();
-    mount();
+    await mount();
     open([done("u1", "user", "hi")], true, [
       { requestId: "q1", mode: "steer", text: "this too" },
       {
@@ -300,7 +302,7 @@ describe("ChatPane, pinned", () => {
 
   it("the file-drop overlay", async () => {
     seed();
-    mount();
+    await mount();
     open([]);
     await settle();
     const pane = screen.getByRole("banner").parentElement!;
@@ -316,7 +318,7 @@ describe("ChatPane, pinned", () => {
 
   it("the YOLO confirmation", async () => {
     seed();
-    mount();
+    await mount();
     open([done("u1", "user", "hi")]);
     await settle();
     await user.click(screen.getByRole("button", { name: "YOLO" }));
@@ -326,7 +328,7 @@ describe("ChatPane, pinned", () => {
 
   it("?history=1 opens the bot menu on Chat history", async () => {
     seed();
-    mount(HOST, { path: "/chats/host?history=1" });
+    await mount(HOST, { path: "/chats/host?history=1" });
     open([]);
     await settle();
     await settle();
@@ -336,7 +338,7 @@ describe("ChatPane, pinned", () => {
   it("a computer: the toggle, then the tabs", async () => {
     seed();
     api.get("/bots/host/computer", () => computerOff);
-    mount();
+    await mount();
     open([]);
     await settle();
     pin("closed");
@@ -353,7 +355,7 @@ describe("ChatPane, pinned", () => {
 
   it("the bot using the browser leaves its panel closed and lights the toggle", async () => {
     seed();
-    mount();
+    await mount();
     open([using("browser_navigate")]);
     await settle();
     expect(document.querySelector("[data-testid=browser-panel]")).toBeNull();
@@ -366,7 +368,7 @@ describe("ChatPane, pinned", () => {
   it("the bot using the computer, with a computer", async () => {
     seed();
     api.get("/bots/host/computer", () => computerOff);
-    mount();
+    await mount();
     open([using("computer_click")]);
     await settle();
     expect(document.querySelector("[data-testid=computer-panel]")).toBeNull();
@@ -378,7 +380,7 @@ describe("ChatPane, pinned", () => {
 
   it("a takeover request leaves the computer closed", async () => {
     seed();
-    mount();
+    await mount();
     open([using("computer_request_takeover", "awaiting_takeover")]);
     await settle();
     expect(document.querySelector("[data-testid=computer-panel]")).toBeNull();
@@ -387,7 +389,7 @@ describe("ChatPane, pinned", () => {
 
   it("the transcript's Open computer brings the computer up", async () => {
     seed();
-    mount();
+    await mount();
     open([done("u1", "user", "hi")]);
     await settle();
     act(() => {

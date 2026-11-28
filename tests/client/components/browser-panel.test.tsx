@@ -22,9 +22,10 @@ import { BrowserPanel } from "@/components/BrowserPanel";
 import type { Bot } from "../../../apps/web/src/shared/api/bots";
 import type { BrowserStatus } from "../../../apps/web/src/shared/api/live";
 import { createRfb } from "@/lib/novnc";
-import { usePeopleStore } from "@/store/people";
 import { ApiFailure } from "../fakes/api";
 import { browserBackend } from "./live-backend";
+import { signedInAs } from "../fakes/viewer";
+import { AppQueryProvider } from "../query-provider";
 
 const fakes = vi.hoisted(() => ({ rfbs: [] as FakeRfb[] }));
 
@@ -71,9 +72,11 @@ const bot: Bot = {
 
 const render = (ui: React.ReactElement) =>
   rtlRender(
-    <MemoryRouter>
-      <ConfirmProvider>{ui}</ConfirmProvider>
-    </MemoryRouter>,
+    <AppQueryProvider>
+      <MemoryRouter>
+        <ConfirmProvider>{ui}</ConfirmProvider>
+      </MemoryRouter>
+    </AppQueryProvider>,
   );
 
 const vncStatus = (s: Partial<BrowserStatus> = {}): BrowserStatus => ({
@@ -120,7 +123,6 @@ describe("BrowserPanel", () => {
     fakes.rfbs.length = 0;
     vi.mocked(createRfb).mockClear();
     window.localStorage.clear();
-    usePeopleStore.setState({ role: "owner" });
   });
   afterEach(() => {
     vi.restoreAllMocks();
@@ -150,9 +152,8 @@ describe("BrowserPanel", () => {
   });
 
   it("lets a guest watch only: no take control, paste, reset, open or window fit (S2)", async () => {
-    usePeopleStore.setState({ role: "guest" });
-    onTestFinished(() => usePeopleStore.setState({ role: null }));
     const api = mockApi(vncStatus());
+    signedInAs(api.api, "guest");
     render(<BrowserPanel bot={bot} onClose={vi.fn()} />);
     await connected();
 
@@ -165,9 +166,8 @@ describe("BrowserPanel", () => {
   });
 
   it("offers a guest no way to open a closed browser (S2)", async () => {
-    usePeopleStore.setState({ role: "guest" });
-    onTestFinished(() => usePeopleStore.setState({ role: null }));
-    mockApi(vncStatus({ active: false, mode: null, driver: null, url: null }));
+    const { api } = mockApi(vncStatus({ active: false, mode: null, driver: null, url: null }));
+    signedInAs(api, "guest");
     render(<BrowserPanel bot={bot} onClose={vi.fn()} />);
     expect(await screen.findByText("No browser is open.")).toBeInTheDocument();
     expect(screen.queryByTestId("browser-open")).not.toBeInTheDocument();
@@ -587,7 +587,7 @@ describe("BrowserPanel", () => {
     expect(screen.queryByTestId("browser-takeover")).not.toBeInTheDocument();
 
     api.set(vncStatus({ active: false, url: null, driver: null, mode: null, starting: true }));
-    fireEvent.click(screen.getByTestId("browser-open"));
+    fireEvent.click(await screen.findByTestId("browser-open"));
     await waitFor(() => expect(api.starts()).not.toHaveLength(0));
     expect(await screen.findByText("Starting the browser")).toBeInTheDocument();
     expect(screen.getByText("Starting")).toBeInTheDocument();

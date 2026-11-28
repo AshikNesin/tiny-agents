@@ -60,10 +60,6 @@ function envelope(status: number, payload: unknown): Response {
   });
 }
 
-export function networkDown(): TypeError {
-  return new TypeError("Failed to fetch");
-}
-
 afterEach(() => {
   vi.unstubAllGlobals();
 });

@@ -65,7 +65,7 @@ export interface LoadedHighlighter {
   ): { lines: React.ReactNode[]; state: GrammarState | undefined };
 }
 
-export async function loadHighlighter(language: string): Promise<LoadedHighlighter | null> {
+export async function importHighlighter(language: string): Promise<LoadedHighlighter | null> {
   const lang = getLanguage(language);
 
   if (!lang) {

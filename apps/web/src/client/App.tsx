@@ -35,7 +35,7 @@ import { BrandMark } from "./components/shell/BrandMark";
 import { APP_NAV, guestNav } from "./components/shell/nav";
 import { isGuestPage } from "../shared/guest-access";
 import { useUiStore } from "./store/ui";
-import { useViewerRole } from "./store/people";
+import { useViewer, viewerRole } from "./queries/viewer";
 
 const SHELL_CONFIG: ShellConfig = {
   brand: { label: "tiny-agents", icon: BrandMark, to: "/chats" },
@@ -77,7 +77,7 @@ const SHELL_CONFIG: ShellConfig = {
 const TOASTER = { position: "top-center" } as const;
 
 function Root() {
-  const restricted = useViewerRole() !== "owner";
+  const restricted = viewerRole(useViewer()) !== "owner";
   const config = useMemo<ShellConfig>(
     () =>
       restricted
@@ -109,7 +109,7 @@ function Root() {
 }
 
 function GuestGate() {
-  const role = useViewerRole();
+  const role = viewerRole(useViewer());
   const { pathname } = useLocation();
   if (role === "owner" || isGuestPage(pathname)) return <Outlet />;
   if (role === "guest") return <Navigate to="/chats" replace />;

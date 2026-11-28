@@ -208,19 +208,26 @@ describe("Shelley wire helpers", () => {
   });
 
   it("reads queued messages and message_user calls", () => {
+    const skipped: string[] = [];
+    const noteSkipped = (what: string) => void skipped.push(what);
     expect(
-      queuedMessages({
-        queued_messages: JSON.stringify([
-          {
-            id: "q1",
-            created_at: "t",
-            llm: { Content: [{ Type: 2, Text: "after this" }] },
-            user_data: { sender_slug: "run-tests" },
-          },
-        ]),
-      }),
+      queuedMessages(
+        {
+          queued_messages: JSON.stringify([
+            {
+              id: "q1",
+              created_at: "t",
+              llm: { Content: [{ Type: 2, Text: "after this" }] },
+              user_data: { sender_slug: "run-tests" },
+            },
+            { created_at: "t" },
+          ]),
+        },
+        noteSkipped,
+      ),
     ).toEqual([{ id: "q1", text: "after this", createdAt: "t", from: "run-tests" }]);
-    expect(queuedMessages({ queued_messages: "{bad" })).toEqual([]);
+    expect(skipped).toEqual(["a queued Shelley message"]);
+    expect(queuedMessages({ queued_messages: "{bad" }, noteSkipped)).toEqual([]);
     expect(
       messageUserText(
         JSON.stringify({

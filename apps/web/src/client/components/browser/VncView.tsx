@@ -6,7 +6,7 @@ import {
   useLayoutEffect,
   useRef,
 } from "react";
-import { botsApi } from "../../lib/bots-api";
+import { botVncTicket, resizeBotBrowser } from "../../lib/vnc-session";
 import { isMac, remapMetaChord, type KeyStroke } from "../../lib/browser-keys";
 import { createRfb, type RfbClient } from "../../lib/novnc";
 import { reconnectingSocket } from "../../lib/reconnecting-socket";
@@ -150,12 +150,7 @@ export const VncView = forwardRef<VncHandle, VncViewProps>(function VncView(
     if (!host) return;
     const socket = reconnectingSocket<{ path: string; scale: number }, RfbClient>(
       {
-        ticket: () =>
-          ticketRef.current
-            ? ticketRef.current()
-            : kind === "computer"
-              ? botsApi.computerVncTicket(botId)
-              : botsApi.browserVncTicket(botId),
+        ticket: () => (ticketRef.current ? ticketRef.current() : botVncTicket(kind, botId)),
         open: async (ticket, events) => {
           const rfb =
             kind === "computer"
@@ -214,7 +209,7 @@ export const VncView = forwardRef<VncHandle, VncViewProps>(function VncView(
         width: Math.max(320, Math.round(desktop.width)),
         height: Math.max(240, Math.round(desktop.height)),
       };
-      void (resizeRef.current ? resizeRef.current(size) : botsApi.browserResize(botId, size))
+      void (resizeRef.current ? resizeRef.current(size) : resizeBotBrowser(botId, size))
         .then(
           () => true,
           () => false,

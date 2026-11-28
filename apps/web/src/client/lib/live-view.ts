@@ -1,16 +1,18 @@
 import {
-  useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type PointerEvent as ReactPointerEvent,
   type RefObject,
 } from "react";
 import { toast } from "sonner";
+import { useQueryClient } from "@tanstack/react-query";
 import { useConfirm, type ConfirmOptions } from "@groot/ui/primitives";
 import type { VncHandle, VncState } from "../components/browser/VncView";
 import { errorMessage } from "./errors";
 import { readStored, readStoredJson, writeStored } from "./browser-storage";
+import { useResource } from "../queries/resource";
 
 export type LiveViewKind = "browser" | "computer";
 export type Driver = "agent" | "human";
@@ -272,31 +274,44 @@ export function useLiveView<S, I extends LiveItem>(adapter: LiveViewSource<S, I>
     adapterRef.current = adapter;
   });
 
-  const [status, setStatus] = useState<S | null>(null);
-  const [error, setError] = useState<unknown>(null);
   const [vncState, setVncState] = useState<VncState>("connecting");
   const regionRef = useRef<HTMLDivElement>(null);
   const vncRef = useRef<VncHandle>(null);
   const confirm = useConfirm();
   const { fullscreen, toggleFullscreen } = useFullScreen(regionRef, LOCKED_KEYS[kind]);
 
-  const refresh = useCallback(async () => {
-    try {
-      setStatus(await adapterRef.current.load());
-      setError(null);
-    } catch (err) {
-      setError(err);
-    }
-  }, []);
+  const client = useQueryClient();
+  const statusKey = useMemo(() => ["live-view", kind, source], [kind, source]);
+  const [failure, setFailure] = useState<unknown>(null);
+  const keepFailure = (cause: unknown): never => {
+    setFailure(cause);
+    throw cause;
+  };
+  const resource = useResource<S>(
+    statusKey,
+    () => adapterRef.current.load().catch(keepFailure),
+    "Failed to load the live view",
+    {
+      refetchInterval: (query) => {
+        const latest = query.state.data;
+        if (latest === undefined) return POLL_MS;
+        const current = adapterRef.current;
+        return pollInterval(
+          current.starting?.(latest) ?? Boolean(current.select(latest)?.starting),
+        );
+      },
+    },
+  );
+  const { refresh } = resource;
+  const status =
+    resource.status === "ready"
+      ? resource.data
+      : resource.status === "failed"
+        ? (resource.last ?? null)
+        : null;
+  const error = resource.status === "failed" ? failure : null;
 
   const item = status ? adapter.select(status) : undefined;
-  const starting = status ? (adapter.starting?.(status) ?? Boolean(item?.starting)) : false;
-  const pollMs = pollInterval(starting);
-  useEffect(() => {
-    void refresh();
-    const timer = setInterval(() => void refresh(), pollMs);
-    return () => clearInterval(timer);
-  }, [refresh, pollMs, source]);
 
   const streaming = isStreaming(kind, item);
   useEffect(() => {
@@ -304,8 +319,8 @@ export function useLiveView<S, I extends LiveItem>(adapter: LiveViewSource<S, I>
   }, [streaming]);
 
   const apply = (change: LiveChange) =>
-    setStatus((current) => {
-      if (!current) return current;
+    client.setQueryData<S>(statusKey, (current) => {
+      if (current === undefined) return current;
       const { select, replace } = adapterRef.current;
       const selected = select(current);
       return selected ? replace(current, settle(kind, selected, change)) : current;

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef } from "react";
 import { create } from "zustand";
 import { toast } from "sonner";
 import { errorMessage } from "../errors";
-import { useViewerRole } from "../../store/people";
+import { useViewer, viewerRole } from "../../queries/viewer";
 import type { ReviewDraft, ReviewDraftBody } from "../../../shared/api/code";
 import { projectsApi } from "./projects";
 
@@ -159,7 +159,7 @@ export function useThreadCommenting(
   threadId: string | undefined,
   onGuestText: (text: string) => void,
 ): ThreadCommenting | undefined {
-  const role = useViewerRole();
+  const role = viewerRole(useViewer());
   const comments = useThreadComments(threadId, role === "owner");
   const add = useCommentStore((s) => s.add);
   const remove = useCommentStore((s) => s.remove);
@@ -168,7 +168,7 @@ export function useThreadCommenting(
     guestText.current = onGuestText;
   });
   return useMemo(() => {
-    if (!threadId || role === null) return undefined;
+    if (!threadId || role === "loading" || role === "unknown") return undefined;
     return {
       comments,
       add: async (body: ReviewDraftBody) => {

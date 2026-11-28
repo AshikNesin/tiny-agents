@@ -33,7 +33,7 @@ import { useBotsStore } from "../../store/bots";
 import { useCodeStore } from "../../store/code";
 import { RESOURCE_QUERY, useResource } from "../../queries/resource";
 import type { HarnessInfo } from "../../lib/code/api";
-import { useViewerRole } from "../../store/people";
+import { useViewer, viewerRole } from "../../queries/viewer";
 import type {
   GitHubStatus,
   ProjectUpdateBody,
@@ -217,8 +217,8 @@ function SettingsBody({
   projects: ProjectView[] | null;
   onChange(): void;
 }) {
-  const role = useViewerRole();
-  if (role === null) {
+  const role = viewerRole(useViewer());
+  if (role === "loading" || role === "unknown") {
     return (
       <div className="flex justify-center p-6">
         <Spinner />

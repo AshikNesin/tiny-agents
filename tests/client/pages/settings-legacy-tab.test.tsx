@@ -1,6 +1,6 @@
 import React from "react";
 import { render, screen } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
+import { beforeEach, describe, expect, it } from "vite-plus/test";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { GrootUIProvider } from "@groot/ui/provider";
 import type {
@@ -9,7 +9,6 @@ import type {
   NotificationStatus,
 } from "@groot/shell/services/notifications";
 import { SettingsPage } from "@/pages/settings/SettingsPage";
-import { usePeopleStore } from "@/store/people";
 import type {
   AccountList,
   ModelsResponse,
@@ -19,6 +18,7 @@ import type { GuestList } from "../../../apps/web/src/shared/api/people";
 import type { PushDeviceList } from "../../../apps/web/src/shared/api/push";
 import { fakeApi } from "../fakes/api";
 import { AppQueryProvider } from "../query-provider";
+import { signedInAs, ViewerProbe, viewerShown } from "../fakes/viewer";
 
 const unset = { modelId: null, fallback: true };
 const accounts: AccountList = { accounts: [], templates: [] };
@@ -83,19 +83,16 @@ beforeEach(() => {
   api.get("/notifications/settings", () => notificationSettings);
   api.get("/notifications/log", () => notificationLog);
   api.get("/notifications/devices", () => devices);
-  usePeopleStore.setState({ role: "owner" });
+  signedInAs(api, "owner");
 });
 
-afterEach(() => {
-  usePeopleStore.setState({ role: null });
-});
-
-function at(entry: string) {
+async function at(entry: string) {
   render(
     <AppQueryProvider>
       <GrootUIProvider>
         <MemoryRouter initialEntries={[entry]}>
           <Where />
+          <ViewerProbe />
           <Routes>
             <Route path="/settings/*" element={<SettingsPage />} />
           </Routes>
@@ -103,6 +100,7 @@ function at(entry: string) {
       </GrootUIProvider>
     </AppQueryProvider>,
   );
+  await viewerShown("owner");
   return screen.getByTestId("at").textContent;
 }
 
@@ -114,12 +112,12 @@ describe("legacy settings tabs", () => {
     ["/settings?tab=security", "/settings/security", "Security"],
     ["/settings?tab=general", "/settings/account", "Account"],
     ["/settings?tab=claude", "/settings/models", "Models"],
-  ])("%s lands on %s", (from, to, section) => {
-    expect(at(from)).toBe(to);
+  ])("%s lands on %s", async (from, to, section) => {
+    expect(await at(from)).toBe(to);
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(section);
   });
 
-  it("leaves a section's own query alone", () => {
-    expect(at("/settings/models?tab=x")).toBe("/settings/models?tab=x");
+  it("leaves a section's own query alone", async () => {
+    expect(await at("/settings/models?tab=x")).toBe("/settings/models?tab=x");
   });
 });

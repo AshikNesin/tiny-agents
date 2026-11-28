@@ -11,10 +11,11 @@ import { beforeEach, describe, expect, it } from "vite-plus/test";
 import { MemoryRouter } from "react-router-dom";
 import { BotRail, BotsSection } from "@/components/shell/BotsSection";
 import { useBotsStore } from "@/store/bots";
-import { usePeopleStore } from "@/store/people";
 import type { Bot, BotListEntry } from "../../../apps/web/src/shared/api/bots";
 import type { PeopleMe } from "../../../apps/web/src/shared/api/people";
 import { ApiFailure, fakeApi } from "../fakes/api";
+import { signedInAs, viewerLoaded } from "../fakes/viewer";
+import { AppQueryProvider } from "../query-provider";
 
 let api: ReturnType<typeof fakeApi>;
 
@@ -72,31 +73,33 @@ function StoreBots({ activeId }: { activeId: string | null }) {
   return <BotsSection bots={bots} activeId={activeId} />;
 }
 
-function renderSection(bots: BotListEntry[], activeId: string | null = null) {
+async function renderSection(bots: BotListEntry[], activeId: string | null = null) {
   useBotsStore.setState({ bots });
   render(
     <MemoryRouter>
       <StoreBots activeId={activeId} />
     </MemoryRouter>,
+    { wrapper: AppQueryProvider },
   );
+  await viewerLoaded(api);
 }
 
 const user = userEvent.setup();
 
 beforeEach(() => {
   api = fakeApi();
-  usePeopleStore.setState({ role: "owner" });
+  signedInAs(api, "owner");
 });
 
 describe("BotsSection", () => {
-  it("shows Pinned and Recent labels only when something is pinned", () => {
-    renderSection([bot("a"), bot("b")]);
+  it("shows Pinned and Recent labels only when something is pinned", async () => {
+    await renderSection([bot("a"), bot("b")]);
     expect(screen.queryByText("Pinned")).not.toBeInTheDocument();
     expect(screen.queryByText("Recent")).not.toBeInTheDocument();
   });
 
-  it("groups pinned bots above recent ones", () => {
-    renderSection([bot("a"), bot("p", { pinnedAt: "2026-01-02T00:00:00.000Z" })]);
+  it("groups pinned bots above recent ones", async () => {
+    await renderSection([bot("a"), bot("p", { pinnedAt: "2026-01-02T00:00:00.000Z" })]);
     expect(screen.getByText("Pinned")).toBeInTheDocument();
     expect(screen.getByText("Recent")).toBeInTheDocument();
     const names = screen.getAllByRole("link").map((link) => link.textContent);
@@ -107,7 +110,7 @@ describe("BotsSection", () => {
     const bots = Array.from({ length: 11 }, (_, i) =>
       bot(`b${i}`, { lastActivityAt: `2026-01-${String(20 - i).padStart(2, "0")}T00:00:00.000Z` }),
     );
-    renderSection(bots);
+    await renderSection(bots);
     expect(screen.getAllByRole("link")).toHaveLength(5);
     await user.click(screen.getByRole("button", { name: "More (6)" }));
     expect(screen.getAllByRole("link")).toHaveLength(11);
@@ -115,14 +118,14 @@ describe("BotsSection", () => {
     expect(screen.getAllByRole("link")).toHaveLength(5);
   });
 
-  it("marks the open bot as the current page", () => {
-    renderSection([bot("a"), bot("b")], "b");
+  it("marks the open bot as the current page", async () => {
+    await renderSection([bot("a"), bot("b")], "b");
     expect(screen.getByRole("link", { name: "Bot b" })).toHaveAttribute("aria-current", "page");
     expect(screen.getByRole("link", { name: "Bot a" })).not.toHaveAttribute("aria-current");
   });
 
-  it("shows approvals, questions, replying and unread states", () => {
-    renderSection([
+  it("shows approvals, questions, replying and unread states", async () => {
+    await renderSection([
       bot("a", { approvals: 2 }),
       bot("b", { replying: true }),
       bot("c", { unread: true }),
@@ -140,7 +143,7 @@ describe("BotsSection", () => {
 
   it("pins a bot from the row menu", async () => {
     api.post("/bots/a/pin", () => stored("a", "2026-01-05T00:00:00.000Z"));
-    renderSection([bot("a")]);
+    await renderSection([bot("a")]);
     await user.click(screen.getByRole("button", { name: "Bot a actions" }));
     await user.click(await screen.findByRole("menuitem", { name: "Pin" }));
     await waitFor(() =>
@@ -160,7 +163,7 @@ describe("BotsSection", () => {
     api.post("/bots/a/pin", () => {
       throw new ApiFailure(403, "nope");
     });
-    renderSection([bot("a")]);
+    await renderSection([bot("a")]);
     await user.click(screen.getByRole("button", { name: "Bot a actions" }));
     await user.click(await screen.findByRole("menuitem", { name: "Pin" }));
     await waitFor(() => expect(api.sent("POST", "/bots/a/pin")).toHaveLength(1));
@@ -172,18 +175,13 @@ describe("BotsSection while /people/me is unanswered", () => {
   it("hides New bot until the viewer is known to be the owner", async () => {
     let answer: (value: PeopleMe) => void = () => undefined;
     api.get("/people/me", () => new Promise<PeopleMe>((resolve) => (answer = resolve)));
-    usePeopleStore.setState(usePeopleStore.getInitialState());
-    const loading = usePeopleStore.getState().load();
-    renderSection([bot("a")]);
+    await renderSection([bot("a")]);
 
     expect(screen.queryByRole("button", { name: "New bot" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Bot a actions" })).not.toBeInTheDocument();
 
-    await act(async () => {
-      answer({ guest: false });
-      await loading;
-    });
-    expect(screen.getByRole("button", { name: "New bot" })).toBeInTheDocument();
+    await act(async () => answer({ guest: false }));
+    expect(await screen.findByRole("button", { name: "New bot" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Bot a actions" })).toBeInTheDocument();
   });
 });

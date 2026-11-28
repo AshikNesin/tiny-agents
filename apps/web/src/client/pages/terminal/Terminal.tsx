@@ -16,8 +16,12 @@ import { Button, EmptyState, ErrorState, LoadingState, monoClass } from "@groot/
 import { cn } from "@groot/ui/lib/utils";
 import { useConfirm } from "@groot/ui/primitives";
 import { PageLayout } from "@groot/shell/components/layout/PageLayout";
-import type { TerminalSession, TerminalStatusWire } from "../../../shared/api/terminal";
-import { terminalApi, closeBlockedReason } from "../../lib/terminal-api";
+import { closeBlockedReason } from "../../lib/terminal-api";
+import {
+  useDropTerminalTab,
+  useTerminalTabMutations,
+  useTerminalTabs,
+} from "../../queries/terminal";
 import type { TerminalConnectionState } from "../../lib/terminal-ws";
 import { TerminalView, type TerminalControls } from "./TerminalView";
 import { TerminalKeysPanel } from "./TerminalKeysPanel";
@@ -64,9 +68,15 @@ function storeFontSize(px: number): void {
 const LOCKED_KEYS = ["Escape"];
 
 export function TerminalPage() {
-  const [sessions, setSessions] = useState<TerminalSession[] | null>(null);
-  const [status, setStatus] = useState<TerminalStatusWire | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const tabs = useTerminalTabs();
+  const { refresh } = tabs;
+  const list =
+    tabs.status === "ready" ? tabs.data : tabs.status === "failed" ? tabs.last : undefined;
+  const sessions = list?.sessions ?? null;
+  const status = list?.status ?? null;
+  const loadError = tabs.status === "failed" ? tabs.loadError : null;
+  const dropTab = useDropTerminalTab();
+  const { create: createTab, remove: closeTab } = useTerminalTabMutations();
   const [searchParams] = useSearchParams();
   const [picked, setActive] = useState<string | null>(() => searchParams.get("tab"));
   const [tabStatus, setTabStatus] = useState<TabStatus>({});
@@ -83,26 +93,10 @@ export function TerminalPage() {
 
   const sizeRef = useRef<{ cols: number; rows: number } | null>(null);
 
-  const refresh = useCallback(async () => {
-    try {
-      const list = await terminalApi.list();
-      setStatus(list.status);
-      setSessions(list.sessions);
-      setLoadError(null);
-    } catch (error) {
-      setLoadError(errorMessage(error, "Failed to load terminal tabs"));
-    }
-  }, []);
-
   useEffect(() => {
-    void refresh();
-    const timer = setInterval(() => void refresh(), 5000);
     const onFocus = () => void refresh();
     window.addEventListener("focus", onFocus);
-    return () => {
-      clearInterval(timer);
-      window.removeEventListener("focus", onFocus);
-    };
+    return () => window.removeEventListener("focus", onFocus);
   }, [refresh]);
 
   const names = useMemo(() => (sessions ?? []).map((s) => s.name), [sessions]);
@@ -121,7 +115,7 @@ export function TerminalPage() {
     if (creating) return;
     setCreating(true);
     try {
-      const created = await terminalApi.create(sizeRef.current ?? undefined);
+      const created = await createTab.mutateAsync(sizeRef.current ?? undefined);
       await refresh();
       setActive(created.name);
     } catch (error) {
@@ -129,13 +123,13 @@ export function TerminalPage() {
     } finally {
       setCreating(false);
     }
-  }, [creating, refresh]);
+  }, [creating, refresh, createTab]);
 
   const removeTab = useCallback(
     async (name: string, force = false) => {
       try {
-        await terminalApi.remove(name, force);
-        setSessions((prev) => (prev ? prev.filter((s) => s.name !== name) : prev));
+        await closeTab.mutateAsync({ name, force });
+        dropTab(name);
       } catch (error) {
         const blocked = closeBlockedReason(error);
         if (blocked) {
@@ -152,7 +146,7 @@ export function TerminalPage() {
         toast.error(errorMessage(error, "Failed to close the tab"));
       }
     },
-    [confirm],
+    [confirm, closeTab, dropTab],
   );
 
   const onState = useCallback((name: string, state: TerminalConnectionState) => {

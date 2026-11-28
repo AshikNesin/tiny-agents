@@ -2,25 +2,12 @@
   "apps/web/src/client/components/ChatComposer.tsx": {
     ".catch((): OwnerSendOutcome => \"restored\")": 1
   },
-  "apps/web/src/client/components/ChatHistoryMenu.tsx": {
-    ".catch(() => undefined)": 1
-  },
-  "apps/web/src/client/components/FilePreview.tsx": {
-    ".catch(() => !cancelled && setError(\"The preview could not be loaded.\"))": 1,
-    "catch {}": 1
-  },
   "apps/web/src/client/components/Transcript.tsx": {
     ".catch(() => undefined)": 1
-  },
-  "apps/web/src/client/components/bot-dialog/use-bot-dialog-lists.ts": {
-    ".catch(() => undefined)": 4
   },
   "apps/web/src/client/components/browser/VncView.tsx": {
     ".catch(() => {})": 2,
     ".then(() => false)": 1
-  },
-  "apps/web/src/client/components/chat-pane/live-views.tsx": {
-    ".catch(() => undefined)": 1
   },
   "apps/web/src/client/components/shell/settings-commands.ts": {
     ".catch(() => undefined)": 1
@@ -59,9 +46,6 @@
   },
   "apps/web/src/client/lib/tool-call-text.ts": {
     "catch {}": 1
-  },
-  "apps/web/src/client/lib/use-tool-labels.ts": {
-    ".catch(() => undefined)": 1
   },
   "apps/web/src/client/lib/xterm.ts": {
     "catch {}": 3

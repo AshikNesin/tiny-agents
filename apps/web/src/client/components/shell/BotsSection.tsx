@@ -18,7 +18,7 @@ import {
 } from "../../lib/bot-groups";
 import { attentionOf, railBots, stateLabel, waitingLabel } from "../../lib/attention";
 import { useBotsStore } from "../../store/bots";
-import { useViewerRole } from "../../store/people";
+import { useViewer, viewerRole } from "../../queries/viewer";
 import { useUiStore } from "../../store/ui";
 import { BotAvatar } from "../BotAvatar";
 import { MoreRow, SidebarSection } from "./SidebarSection";
@@ -66,7 +66,7 @@ function BotRow({
   const togglePin = useBotsStore((s) => s.togglePin);
   const openEditBot = useUiStore((s) => s.openEditBot);
   const navigate = useNavigate();
-  const owner = useViewerRole() === "owner";
+  const owner = viewerRole(useViewer()) === "owner";
   const pinned = bot.pinnedAt !== null;
   const preview = bot.lastMessagePreview ? previewLine(bot.lastMessagePreview) : "";
   const previewId = `bot-preview-${bot.id}`;
@@ -150,7 +150,7 @@ interface BotsSectionProps {
 
 export function BotsSection({ bots, activeId, onNavigate = () => {} }: BotsSectionProps) {
   const openCreateBot = useUiStore((s) => s.openCreateBot);
-  const role = useViewerRole();
+  const role = viewerRole(useViewer());
   const [expanded, setExpanded] = useState(false);
   const { needsYou, working, pinned, recent } = useMemo(() => groupBots(bots), [bots]);
   const above = needsYou.length + working.length + pinned.length;

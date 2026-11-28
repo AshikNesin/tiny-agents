@@ -22,8 +22,8 @@ import { ComputerPanel } from "@/components/ComputerPanel";
 import type { Bot } from "../../../apps/web/src/shared/api/bots";
 import type { ComputerStatus } from "../../../apps/web/src/shared/api/live";
 import { createRfb } from "@/lib/novnc";
-import { usePeopleStore } from "@/store/people";
 import { computerBackend } from "./live-backend";
+import { AppQueryProvider } from "../query-provider";
 
 const fakes = vi.hoisted(() => ({ rfbs: [] as (EventTarget & { viewOnly: boolean })[] }));
 
@@ -46,9 +46,11 @@ const bot = { id: "b1", name: "Clicker", conversationId: "1" } as unknown as Bot
 
 const render = (ui: React.ReactElement) =>
   rtlRender(
-    <MemoryRouter>
-      <ConfirmProvider>{ui}</ConfirmProvider>
-    </MemoryRouter>,
+    <AppQueryProvider>
+      <MemoryRouter>
+        <ConfirmProvider>{ui}</ConfirmProvider>
+      </MemoryRouter>
+    </AppQueryProvider>,
   );
 
 const liveStatus = (s: Partial<ComputerStatus> = {}): ComputerStatus => ({
@@ -81,7 +83,6 @@ describe("ComputerPanel", () => {
     fakes.rfbs.length = 0;
     vi.mocked(createRfb).mockClear();
     window.localStorage.clear();
-    usePeopleStore.setState({ role: "owner" });
   });
   afterEach(() => {
     vi.restoreAllMocks();

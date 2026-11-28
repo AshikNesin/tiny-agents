@@ -7,7 +7,7 @@
  * actions.
  */
 import React, { useState } from "react";
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render as renderBare, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { ConfirmProvider } from "@groot/ui/primitives";
@@ -23,6 +23,9 @@ import type {
 import { fakeApi } from "../fakes/api";
 import { chatTimeline } from "@/lib/chat-timeline";
 import type { ChatMessage } from "@/lib/chat-types";
+import { AppQueryProvider } from "../query-provider";
+
+const render = (ui: React.ReactElement) => renderBare(ui, { wrapper: AppQueryProvider });
 
 vi.mock("streamdown", () => ({
   Streamdown: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,

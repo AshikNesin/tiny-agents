@@ -22,7 +22,7 @@ import {
   Wrench,
   Zap,
 } from "lucide-react";
-import { useViewerRole } from "../store/people";
+import { useViewer, viewerRole } from "../queries/viewer";
 import { useSkills } from "../queries/skills";
 import { useBotTools } from "../queries/bot-tools";
 import { slashEntries, toolPickLabel, type SlashEntry, type SlashKind } from "../lib/slash-menu";
@@ -240,7 +240,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
   }, [text, mentionTipSeen]);
   const mention = activeMentionToken(text, caret);
   const mentionOpen = mention !== null && !mentionClosed;
-  const owner = useViewerRole() === "owner";
+  const owner = viewerRole(useViewer()) === "owner";
   const skillLibrary = useSkills({ enabled: owner });
   const library =
     skillLibrary.status === "ready"

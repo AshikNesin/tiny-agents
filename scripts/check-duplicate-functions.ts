@@ -1,6 +1,6 @@
 #!/usr/bin/env tsx
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import process from "node:process";
 import { pathToFileURL } from "node:url";
 import { parseSync } from "oxc-parser";
@@ -73,7 +73,7 @@ export function duplicateFunctions(files: ReadonlyMap<string, string>): Function
 function main(): void {
   const listed = execFileSync("git", ["ls-files", ...ROOTS], { encoding: "utf8" })
     .split("\n")
-    .filter((file) => /\.tsx?$/.test(file) && !SKIP.test(file));
+    .filter((file) => /\.tsx?$/.test(file) && !SKIP.test(file) && existsSync(file));
   const files = new Map(listed.map((file) => [file, readFileSync(file, "utf8")]));
   const duplicates = duplicateFunctions(files);
   if (duplicates.length === 0) {

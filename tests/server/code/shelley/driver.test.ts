@@ -271,6 +271,14 @@ describe("Shelley harness", () => {
     expect(JSON.parse(forked.body.toString())).toEqual({ tags: ["release", "tiny-agents"] });
   });
 
+  it("still lists the archived conversations when Shelley sends one malformed row", async () => {
+    shelley.archived.push({ slug: "no id", archived: true, tags: '["tiny-agents"]' });
+    harness.start();
+    await shelley.waitForStreams(1);
+    const archived = await harness.listThreads("archived");
+    expect(archived.map((t) => t.nativeId)).toEqual(["cOld"]);
+  });
+
   it('lists and finds only conversations tagged "tiny-agents", with their subagents', async () => {
     shelley.rows.push(
       row("cB", { parent_conversation_id: "cA", tags: "[]" }),

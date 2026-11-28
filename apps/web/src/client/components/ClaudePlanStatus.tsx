@@ -1,13 +1,11 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { Button, Text } from "@groot/ui";
 import type { ClaudeCodeAccount, ClaudeCodeStatus } from "../../shared/api/bots";
-import { claudeCodeApi } from "../lib/bots-api";
 import { terminalApi } from "../lib/terminal-api";
 import { errorMessage } from "../lib/errors";
-
-const INSTALL_POLL_MS = 3000;
+import { useClaudeCodeAccount, useClaudeCodeStatus } from "../queries/claude-code";
 
 function accountLine(account: ClaudeCodeAccount | undefined): string {
   if (!account) return "Checking Claude Code on the sandbox.";
@@ -36,52 +34,6 @@ function fallbackLine(status: ClaudeCodeStatus): string {
   const host = status.workerHost ? `Worker on ${status.workerHost}. ` : "";
   const then = status.fallback === "gateway" ? "move to its fallback model" : "pause";
   return `${host}When the engine is off or Claude Code can't answer, turns ${then}.`;
-}
-
-function useClaudeStatus() {
-  const [status, setStatus] = useState<ClaudeCodeStatus | undefined>();
-  const [error, setError] = useState<string | undefined>();
-
-  useEffect(() => {
-    let cancelled = false;
-    claudeCodeApi
-      .status()
-      .then((next) => {
-        if (!cancelled) setStatus(next);
-      })
-      .catch((caught: unknown) => {
-        if (!cancelled) setError(errorMessage(caught, "Status unavailable"));
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  return { status, error };
-}
-
-function useClaudeAccount() {
-  const [account, setAccount] = useState<ClaudeCodeAccount | undefined>();
-
-  const check = useCallback(async () => {
-    try {
-      setAccount(await claudeCodeApi.account());
-    } catch (caught) {
-      setAccount({ state: "error", detail: errorMessage(caught, "Could not reach the sandbox") });
-    }
-  }, []);
-
-  useEffect(() => {
-    void check();
-  }, [check]);
-
-  useEffect(() => {
-    if (account?.state !== "installing") return;
-    const timer = setTimeout(() => void check(), INSTALL_POLL_MS);
-    return () => clearTimeout(timer);
-  }, [account, check]);
-
-  return { account, check };
 }
 
 function useClaudeSignIn() {
@@ -135,11 +87,13 @@ function AccountActions({
 }
 
 export function ClaudePlanStatus({ onCheckModels }: { onCheckModels?: () => void } = {}) {
-  const { status, error } = useClaudeStatus();
-  const { account, check } = useClaudeAccount();
+  const engine = useClaudeCodeStatus();
+  const sandbox = useClaudeCodeAccount();
+  const status = engine.status === "ready" ? engine.data : undefined;
+  const account = sandbox.status === "ready" ? sandbox.data : undefined;
   const onSandbox = status?.mode === "sandbox" || account?.state === "ready";
   const onCheck = () => {
-    void check();
+    void sandbox.refresh();
     if (account?.state === "ready" && account.subscription) onCheckModels?.();
   };
 
@@ -152,11 +106,13 @@ export function ClaudePlanStatus({ onCheckModels }: { onCheckModels?: () => void
         </Text>
       </p>
       <p>
-        <Text>{error ?? engineLine(status)}</Text>
+        <Text>{engine.status === "failed" ? engine.loadError : engineLine(status)}</Text>
       </p>
       {status?.enabled === false ? null : (
         <p>
-          <Text data-testid="claude-plan-account">{accountLine(account)}</Text>
+          <Text data-testid="claude-plan-account">
+            {sandbox.status === "failed" ? sandbox.loadError : accountLine(account)}
+          </Text>
         </p>
       )}
       {onSandbox ? <AccountActions account={account} onCheck={onCheck} /> : null}

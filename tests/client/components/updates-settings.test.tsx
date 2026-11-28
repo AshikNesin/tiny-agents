@@ -6,12 +6,15 @@
  * the sandbox note, and "Update & restart" asks the supervisor.
  */
 import React from "react";
-import { render, screen } from "@testing-library/react";
+import { render as renderBare, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vite-plus/test";
 import { UpdatesSettings } from "@/components/UpdatesSettings";
 import { fakeApi } from "../fakes/api";
 import type { UpdateStatus, UpdateView } from "../../../apps/web/src/shared/local-updates";
+import { AppQueryProvider } from "../query-provider";
+
+const render = (ui: React.ReactElement) => renderBare(ui, { wrapper: AppQueryProvider });
 
 let api: ReturnType<typeof fakeApi>;
 

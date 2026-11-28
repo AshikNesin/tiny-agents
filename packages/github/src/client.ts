@@ -1,5 +1,15 @@
+import { parseEach } from "@tiny-agents/std";
 import { z } from "zod";
 import { GitHubError, type GitHubApi } from "./api";
+
+type ReportInvalid = (what: string, problem: string) => void;
+
+const each =
+  (what: string, report: ReportInvalid) =>
+  <T>(schema: z.ZodType<T>) =>
+    z
+      .array(z.unknown())
+      .transform((values) => parseEach(values, schema, (_value, problem) => report(what, problem)));
 
 export interface RepoRef {
   owner: string;
@@ -217,37 +227,46 @@ function inboxSearches(filter: InboxFilter): Record<keyof typeof INBOX_SEARCHES,
 
 const viewerSchema = z.looseObject({ viewer: z.looseObject({ login: z.string() }) });
 
-const rawInboxPullSchema = z.looseObject({
-  number: z.number(),
-  title: z.string(),
-  url: z.string(),
-  isDraft: z.boolean(),
-  updatedAt: z.string(),
-  headRefOid: z.string(),
-  reviewDecision: z.enum(["APPROVED", "CHANGES_REQUESTED", "REVIEW_REQUIRED"]).nullable(),
-  repository: z.looseObject({ owner: z.looseObject({ login: z.string() }), name: z.string() }),
-  author: z.looseObject({ login: z.string(), __typename: z.string().optional() }).nullable(),
-  reviews: z.looseObject({
-    nodes: z.array(
-      z.looseObject({
-        submittedAt: z.string().nullable(),
-        commit: z.looseObject({ oid: z.string() }).nullable(),
-      }),
-    ),
-  }),
-});
+const rawInboxPullSchemaOf = (report: ReportInvalid) =>
+  z.looseObject({
+    number: z.number(),
+    title: z.string(),
+    url: z.string(),
+    isDraft: z.boolean(),
+    updatedAt: z.string(),
+    headRefOid: z.string(),
+    reviewDecision: z.enum(["APPROVED", "CHANGES_REQUESTED", "REVIEW_REQUIRED"]).nullable(),
+    repository: z.looseObject({ owner: z.looseObject({ login: z.string() }), name: z.string() }),
+    author: z.looseObject({ login: z.string(), __typename: z.string().optional() }).nullable(),
+    reviews: z.looseObject({
+      nodes: each(
+        "a pull request's review",
+        report,
+      )(
+        z.looseObject({
+          submittedAt: z.string().nullable(),
+          commit: z.looseObject({ oid: z.string() }).nullable(),
+        }),
+      ),
+    }),
+  });
 
 const notAPull = (): null => null;
 
-const inboxNodesSchema = z.looseObject({
-  nodes: z.array(z.union([rawInboxPullSchema, z.strictObject({}).transform(notAPull)])),
-});
+const inboxNodesSchemaOf = (report: ReportInvalid) =>
+  z.looseObject({
+    nodes: each(
+      "a review inbox entry",
+      report,
+    )(z.union([rawInboxPullSchemaOf(report), z.strictObject({}).transform(notAPull)])),
+  });
 
-const inboxSchema = z.looseObject({
-  requested: inboxNodesSchema,
-  reviewed: inboxNodesSchema,
-  authored: inboxNodesSchema,
-});
+const inboxSchemaOf = (report: ReportInvalid) =>
+  z.looseObject({
+    requested: inboxNodesSchemaOf(report),
+    reviewed: inboxNodesSchemaOf(report),
+    authored: inboxNodesSchemaOf(report),
+  });
 
 const repositorySchema = z.looseObject({
   repository: z
@@ -258,15 +277,19 @@ const repositorySchema = z.looseObject({
     .nullable(),
 });
 
-const openPullsSchema = z.looseObject({
-  repository: z
-    .looseObject({
-      pullRequests: z.looseObject({
-        nodes: z.array(z.looseObject({ number: z.number(), url: z.string() })),
-      }),
-    })
-    .nullable(),
-});
+const openPullsSchemaOf = (report: ReportInvalid) =>
+  z.looseObject({
+    repository: z
+      .looseObject({
+        pullRequests: z.looseObject({
+          nodes: each(
+            "an open pull request",
+            report,
+          )(z.looseObject({ number: z.number(), url: z.string() })),
+        }),
+      })
+      .nullable(),
+  });
 
 const createdPullSchema = z.looseObject({ number: z.number(), html_url: z.string() });
 
@@ -466,7 +489,9 @@ const rawPullSchema = z.looseObject({
         commit: z.looseObject({
           oid: z.string(),
           statusCheckRollup: z
-            .looseObject({ contexts: z.looseObject({ nodes: z.array(rawContextSchema) }) })
+            .looseObject({
+              contexts: z.looseObject({ nodes: z.array(rawContextSchema) }),
+            })
             .nullable(),
         }),
       }),
@@ -626,7 +651,7 @@ export function toSnapshot(raw: RawSnapshot): PullSnapshot {
 const enc = encodeURIComponent;
 const repoPath = (repo: RepoRef) => `/repos/${enc(repo.owner)}/${enc(repo.name)}`;
 
-export function createGitHubClient(api: GitHubApi): GitHubClient {
+export function createGitHubClient(api: GitHubApi, report: ReportInvalid): GitHubClient {
   return {
     transport: api.kind,
     async viewer() {
@@ -636,7 +661,7 @@ export function createGitHubClient(api: GitHubApi): GitHubClient {
     async reviewInbox(filter = {}) {
       const { viewer } = await api.graphql(viewerSchema, `query { viewer { login } }`);
       const login = viewer.login;
-      const data = await api.graphql(inboxSchema, INBOX_QUERY, {
+      const data = await api.graphql(inboxSchemaOf(report), INBOX_QUERY, {
         login,
         ...inboxSearches(filter),
       });
@@ -690,7 +715,7 @@ export function createGitHubClient(api: GitHubApi): GitHubClient {
     },
     async openPullForBranch(repo, branch) {
       const data = await api.graphql(
-        openPullsSchema,
+        openPullsSchemaOf(report),
         `query($owner: String!, $name: String!, $head: String!) { repository(owner: $owner, name: $name) { pullRequests(headRefName: $head, states: [OPEN], first: 1) { nodes { number url } } } }`,
         { owner: repo.owner, name: repo.name, head: branch },
       );

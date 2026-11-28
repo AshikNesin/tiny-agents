@@ -1,6 +1,7 @@
 import { createHash, createSign, randomBytes } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { Boom } from "@groot/core/errors";
+import { logger } from "@groot/core/logger";
 import { createNamespaceKv } from "@groot/core/kv";
 import {
   convertManifest,
@@ -118,6 +119,10 @@ function installationOf(project: ProjectTransport): number {
   return project.installationId;
 }
 
+function skipped(what: string, problem: string): void {
+  logger.warn({ problem }, `GitHub: skipped ${what} that does not fit its shape`);
+}
+
 function defaultServices(): CodeGitHub {
   return {
     async client(project) {
@@ -126,15 +131,17 @@ function defaultServices(): CodeGitHub {
         const auth = await gitHubApp();
         return createGitHubClient(
           createHttpsTransport({ token: () => auth.installationToken(installation) }),
+          skipped,
         );
       }
       const { tokenHandle } = await githubSettings();
       if (tokenHandle) {
         return createGitHubClient(
           createHttpsTransport({ token: () => resolveGitHubToken(tokenHandle) }),
+          skipped,
         );
       }
-      return createGitHubClient(createGhTransport(requireSandbox()));
+      return createGitHubClient(createGhTransport(requireSandbox()), skipped);
     },
     async workspace(project) {
       if (project?.transport === "app") {

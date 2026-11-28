@@ -7,11 +7,11 @@ import { MemoryRouter } from "react-router-dom";
 import { CodeSettingsSection } from "@/pages/code/CodeSettings";
 import { useCodeStore } from "@/store/code";
 import type { HarnessInfo } from "@/lib/code/api";
-import { usePeopleStore } from "@/store/people";
 import type { GitHubStatus, ProjectView } from "../../../apps/web/src/shared/api/code";
 import { FIXED_NOW } from "../../test-clock";
 import { fakeApi } from "../fakes/api";
 import { AppQueryProvider } from "../query-provider";
+import { signedInAs } from "../fakes/viewer";
 
 const render = (ui: Parameters<typeof renderBare>[0]) =>
   renderBare(ui, { wrapper: AppQueryProvider });
@@ -85,9 +85,9 @@ function open() {
 }
 
 beforeEach(() => {
-  usePeopleStore.setState({ role: "owner" });
   useCodeStore.setState({ harnesses: [shelley], statuses: {} });
   api = fakeApi();
+  signedInAs(api, "owner");
   api.get("/code/projects", (): ProjectView[] => []);
   api.get("/code/github", () => github);
   api.get("/code/github/app/repositories", () =>

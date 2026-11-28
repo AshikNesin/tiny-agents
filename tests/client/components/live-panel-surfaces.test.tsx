@@ -23,10 +23,11 @@ import { ComputerPanel } from "@/components/ComputerPanel";
 import type { Bot } from "../../../apps/web/src/shared/api/bots";
 import type { BrowserStatus, ComputerStatus } from "../../../apps/web/src/shared/api/live";
 import { createRfb } from "@/lib/novnc";
-import { usePeopleStore } from "@/store/people";
 import { markup, outline } from "../dom-outline";
 import { ApiFailure } from "../fakes/api";
 import { browserBackend, computerBackend } from "./live-backend";
+import { signedInAs, viewerLoaded } from "../fakes/viewer";
+import { AppQueryProvider } from "../query-provider";
 
 const fakes = vi.hoisted(() => ({ rfbs: [] as EventTarget[] }));
 
@@ -102,15 +103,18 @@ const tabs = (
 function mount(which: "browser" | "computer", withTabs = false) {
   const Panel = which === "browser" ? BrowserPanel : ComputerPanel;
   return render(
-    <MemoryRouter>
-      <GrootUIProvider>
-        <Panel bot={bot} onClose={vi.fn()} tabs={withTabs ? tabs : undefined} />
-      </GrootUIProvider>
-    </MemoryRouter>,
+    <AppQueryProvider>
+      <MemoryRouter>
+        <GrootUIProvider>
+          <Panel bot={bot} onClose={vi.fn()} tabs={withTabs ? tabs : undefined} />
+        </GrootUIProvider>
+      </MemoryRouter>
+    </AppQueryProvider>,
   );
 }
 
-const asGuest = () => usePeopleStore.setState({ role: "guest" });
+const asGuest = (backend: { api: Parameters<typeof signedInAs>[0] }) =>
+  signedInAs(backend.api, "guest");
 
 const viewerCreated = () =>
   waitFor(() => expect(fakes.rfbs.length).toBeGreaterThan(0), { timeout: 4000 });
@@ -134,17 +138,16 @@ beforeEach(() => {
   vi.mocked(toast.error).mockClear();
   vi.mocked(toast.success).mockClear();
   window.localStorage.clear();
-  usePeopleStore.setState({ role: "owner" });
 });
 afterEach(() => {
   vi.restoreAllMocks();
-  usePeopleStore.setState({ role: null });
 });
 
 describe("BrowserPanel states", () => {
-  it("before the first status", () => {
-    mockBrowser(new Promise(() => undefined));
+  it("before the first status", async () => {
+    const backend = mockBrowser(new Promise(() => undefined));
     mount("browser");
+    await viewerLoaded(backend.api);
     pin();
   });
 
@@ -156,8 +159,8 @@ describe("BrowserPanel states", () => {
   });
 
   it("closed, for a guest", async () => {
-    asGuest();
     const api = mockBrowser(browserClosed());
+    asGuest(api);
     mount("browser");
     await waitFor(() => expect(api.statuses()).not.toHaveLength(0));
     await screen.findByText("Closed");
@@ -186,8 +189,7 @@ describe("BrowserPanel states", () => {
   });
 
   it("failed to open, for a guest", async () => {
-    asGuest();
-    mockBrowser(browserClosed({ error: "Chrome crashed" }));
+    asGuest(mockBrowser(browserClosed({ error: "Chrome crashed" })));
     mount("browser");
     await screen.findByTestId("browser-error");
     pin();
@@ -223,8 +225,7 @@ describe("BrowserPanel states", () => {
   });
 
   it("live, for a guest", async () => {
-    asGuest();
-    mockBrowser(browser());
+    asGuest(mockBrowser(browser()));
     mount("browser");
     await connect();
     pin();
@@ -279,8 +280,7 @@ describe("ComputerPanel states", () => {
   });
 
   it("off, for a guest", async () => {
-    asGuest();
-    mockComputer(computerOff());
+    asGuest(mockComputer(computerOff()));
     mount("computer");
     await screen.findByText("The computer is off.");
     pin();
@@ -308,8 +308,7 @@ describe("ComputerPanel states", () => {
   });
 
   it("failed to open, for a guest", async () => {
-    asGuest();
-    mockComputer(computerOff({ error: "Xvfb died" }));
+    asGuest(mockComputer(computerOff({ error: "Xvfb died" })));
     mount("computer");
     await screen.findByTestId("computer-error");
     pin();
@@ -345,8 +344,7 @@ describe("ComputerPanel states", () => {
   });
 
   it("live, for a guest", async () => {
-    asGuest();
-    mockComputer(computer({ takeover: "Sign in to the mail app", driver: "human" }));
+    asGuest(mockComputer(computer({ takeover: "Sign in to the mail app", driver: "human" })));
     mount("computer");
     await connect();
     pin();
@@ -432,28 +430,39 @@ describe("the panels' actions", () => {
 });
 
 describe("the panels' poll", () => {
-  function polls() {
-    const spy = vi.spyOn(window, "setInterval");
-    return () => spy.mock.calls.map(([, ms]) => ms).filter((ms) => ms === 1500 || ms === 3000);
-  }
+  const pass = (ms: number) => act(() => vi.advanceTimersByTimeAsync(ms));
 
-  it("polls the browser every 3s, and every 1.5s while it starts", async () => {
-    const delays = polls();
-    const api = mockBrowser(browserClosed({ starting: true, phase: "starting" }));
-    mount("browser");
-    await screen.findByText("Starting the browser");
-    await waitFor(() => expect(delays().at(-1)).toBe(1500));
-    expect(delays()[0]).toBe(3000);
-    expect(api.statuses()).not.toHaveLength(0);
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval", "setTimeout", "clearTimeout"] });
   });
 
-  it("polls the computer every 3s, and every 1.5s while it starts", async () => {
-    const delays = polls();
+  it("polls the browser every 1.5s while it starts, then every 3s", async () => {
+    const api = mockBrowser(browserClosed({ starting: true, phase: "starting" }));
+    mount("browser");
+    await pass(0);
+    expect(screen.getByText("Starting the browser")).toBeInTheDocument();
+    expect(api.statuses()).toHaveLength(1);
+    api.set(browserClosed());
+    await pass(1500);
+    expect(api.statuses()).toHaveLength(2);
+    await pass(1500);
+    expect(api.statuses()).toHaveLength(2);
+    await pass(1500);
+    expect(api.statuses()).toHaveLength(3);
+  });
+
+  it("polls the computer every 1.5s while it starts, then every 3s", async () => {
     const api = mockComputer(computerOff({ starting: true, phase: "starting" }));
     mount("computer");
-    await screen.findByText("Starting the computer");
-    await waitFor(() => expect(delays().at(-1)).toBe(1500));
-    expect(delays()[0]).toBe(3000);
-    expect(api.statuses()).not.toHaveLength(0);
+    await pass(0);
+    expect(screen.getByText("Starting the computer")).toBeInTheDocument();
+    expect(api.statuses()).toHaveLength(1);
+    api.set(computerOff());
+    await pass(1500);
+    expect(api.statuses()).toHaveLength(2);
+    await pass(1500);
+    expect(api.statuses()).toHaveLength(2);
+    await pass(1500);
+    expect(api.statuses()).toHaveLength(3);
   });
 });

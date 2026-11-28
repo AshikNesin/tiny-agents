@@ -7,13 +7,13 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { BrowserRouter } from "react-router-dom";
 import { ChatPane } from "@/components/ChatPane";
-import { usePeopleStore } from "@/store/people";
 import type { ToolChoice } from "@tiny-agents/code/contracts";
 import type { Bot, SendMessageBody } from "../../../apps/web/src/shared/api/bots";
 import type { Skill } from "../../../apps/web/src/shared/api/skills";
 import type { CatalogModel } from "../../../apps/web/src/shared/api/models";
 import { AppQueryProvider } from "../query-provider";
 import { chatBackend } from "./chat-backend";
+import { signedInAs } from "../fakes/viewer";
 
 vi.mock("@/lib/sse", async () => (await import("../fakes/sse")).sseModule);
 
@@ -93,6 +93,7 @@ const user = userEvent.setup();
 
 beforeEach(() => {
   api = chatBackend(HOST);
+  signedInAs(api, "owner");
   api.get("/skills", (): Skill[] => [
     skill("s1", "show-me", "Explain it visually"),
     skill("s2", "shopping", "Not this bot's"),
@@ -107,7 +108,6 @@ beforeEach(() => {
     },
   ]);
   localStorage.clear();
-  usePeopleStore.setState({ role: "owner" });
 });
 
 describe("ChatPane slash skills", () => {

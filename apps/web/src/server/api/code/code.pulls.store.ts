@@ -1,4 +1,5 @@
-import { parseJson } from "@tiny-agents/std";
+import { logger } from "@groot/core/logger";
+import { parseEach, parseJson } from "@tiny-agents/std";
 import { z } from "zod";
 import { and, desc, eq, inArray, isNull, ne } from "drizzle-orm";
 import { Boom } from "@groot/core/errors";
@@ -187,7 +188,7 @@ const snapshotSchema: z.ZodType<PullSnapshot> = z.object({
   comments: z.array(commentSchema),
 });
 
-const passItemIdsSchema = z.array(z.looseObject({ id: z.string() }));
+const passItemIdSchema = z.looseObject({ id: z.string() });
 
 export function cachedSnapshot(row: CodePullRow): PullSnapshot | null {
   if (!row.snapshot) return null;
@@ -278,7 +279,12 @@ export async function passesOf(pullId: string): Promise<CodeAutofixPass[]> {
 export function passRecord(row: CodeAutofixPass): PassRecord {
   let items: string[] = [];
   try {
-    items = parseJson("An Auto-fix pass's items", row.items, passItemIdsSchema).map((i) => i.id);
+    items = parseEach(
+      parseJson("An Auto-fix pass's items", row.items, z.array(z.unknown())),
+      passItemIdSchema,
+      (_value, problem) =>
+        logger.warn({ problem }, "Skipped an Auto-fix pass item that does not fit its shape"),
+    ).map((i) => i.id);
   } catch {
     items = [];
   }

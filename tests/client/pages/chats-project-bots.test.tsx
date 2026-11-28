@@ -7,9 +7,10 @@ import { beforeEach, describe, expect, it } from "vite-plus/test";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { ChatWorkspace } from "@/pages/chats/ChatsLayout";
 import { useBotsStore } from "@/store/bots";
-import { usePeopleStore } from "@/store/people";
 import { AppQueryProvider } from "../query-provider";
 import type { Bot, BotListEntry } from "../../../apps/web/src/shared/api/bots";
+import { fakeApi } from "../fakes/api";
+import { signedInAs, ViewerProbe, viewerLoaded, viewerShown } from "../fakes/viewer";
 
 function bot(id: string, name: string, projectId: string | null): BotListEntry {
   return {
@@ -35,7 +36,7 @@ function Where() {
   return <output data-testid="where">{pathname}</output>;
 }
 
-function renderAt(path: string) {
+function show(path: string) {
   render(
     <MemoryRouter initialEntries={[path]}>
       <Routes>
@@ -45,9 +46,16 @@ function renderAt(path: string) {
         <Route path="/code/p/:chatProjectId" element={<p>Project chat page</p>} />
       </Routes>
       <Where />
+      <ViewerProbe />
     </MemoryRouter>,
     { wrapper: AppQueryProvider },
   );
+}
+
+async function renderAt(path: string, role: "owner" | "guest" = "owner") {
+  signedInAs(fakeApi(), role);
+  show(path);
+  await viewerShown(role);
 }
 
 const seed = () =>
@@ -58,54 +66,66 @@ const seed = () =>
 
 describe("Project chats in Chat", () => {
   beforeEach(() => {
-    usePeopleStore.setState({ role: "owner" });
     useBotsStore.setState({ fullBots: {} });
   });
 
-  it("keep their past chats reachable at their history links", () => {
+  it("keep their past chats reachable at their history links", async () => {
     seed();
-    renderAt("/chats/b2/history/c1");
+    await renderAt("/chats/b2/history/c1");
     expect(screen.queryByText("Project chat page")).toBeNull();
     expect(screen.getByTestId("where")).toHaveTextContent("/chats/b2/history/c1");
   });
 
-  it("stay in Chat for a guest the owner shared one with, since guests have no Code", () => {
-    usePeopleStore.setState({ role: "guest" });
+  it("stay in Chat for a guest the owner shared one with, since guests have no Code", async () => {
     seed();
-    renderAt("/chats");
+    await renderAt("/chats", "guest");
     expect(screen.getByText("web-project")).toBeTruthy();
     cleanup();
-    renderAt("/chats/b2");
+    await renderAt("/chats/b2", "guest");
     expect(screen.queryByText("Project chat page")).toBeNull();
   });
 
-  it("are left out of the chat bot list", () => {
+  it("are left out of the chat bot list", async () => {
     useBotsStore.setState({
       bots: [bot("b1", "Helper", null), bot("b2", "web-project", "p1")],
       loading: false,
     });
-    renderAt("/chats");
+    await renderAt("/chats");
     expect(screen.getByText("Helper")).toBeTruthy();
     expect(screen.queryByText("web-project")).toBeNull();
   });
 
-  it("open at their chat link in Chat, without leaving for Code", () => {
+  it("open at their chat link in Chat, without leaving for Code", async () => {
     useBotsStore.setState({
       bots: [bot("b1", "Helper", null), bot("b2", "web-project", "p1")],
       loading: false,
     });
-    renderAt("/chats/b2");
+    await renderAt("/chats/b2");
     expect(screen.queryByText("Project chat page")).toBeNull();
     expect(screen.getByTestId("where")).toHaveTextContent("/chats/b2");
   });
 
-  it("open from Code's link before the bot list has the new project bot", () => {
+  it("open from Code's link before the bot list has the new project bot", async () => {
     useBotsStore.setState({
       bots: [bot("b1", "Helper", null)],
       fullBots: { b2: bot("b2", "web-project", "p1") as unknown as Bot },
       loading: false,
     });
-    renderAt("/chats/b2");
+    await renderAt("/chats/b2");
+    expect(screen.getByTestId("where")).toHaveTextContent("/chats/b2");
+  });
+
+  it("keep Code's link while the viewer's role is still loading", async () => {
+    useBotsStore.setState({
+      bots: [bot("b1", "Helper", null)],
+      fullBots: { b2: bot("b2", "web-project", "p1") as unknown as Bot },
+      loading: false,
+    });
+    const api = fakeApi();
+    api.get("/people/me", () => new Promise(() => undefined));
+    show("/chats/b2");
+    await viewerLoaded(api);
+    expect(screen.getByTestId("viewer")).toHaveTextContent("loading");
     expect(screen.getByTestId("where")).toHaveTextContent("/chats/b2");
   });
 });

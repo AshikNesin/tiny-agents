@@ -1,7 +1,7 @@
 import { PageKeys, useKeyCommands, type KeyCommand } from "../../components/keys";
 import { ReviewFindings, openFindings } from "./ReviewFindings";
 import type { FindingView, ReviewVerdict } from "../../../shared/api/code";
-import { useCallback, useEffect, useEffectEvent, useMemo, useState, type FormEvent } from "react";
+import { useCallback, useMemo, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
@@ -49,6 +49,7 @@ import { usePullConversations } from "./PullThreads";
 import { SubmitReviewButton } from "./SubmitReview";
 import { OpenInTerminal, useOpenInTerminal, YourChangesActions } from "./YourChanges";
 
+const REVIEWING_POLL_MS = 3000;
 const STARTERS = ["Summarize this PR", "What could break?", "Is it tested well?"];
 
 export function PullReview({
@@ -66,6 +67,7 @@ export function PullReview({
     reviewKey,
     () => reviewsApi.get(reviewId),
     "Could not open the review.",
+    { refetchInterval: (query) => (query.state.data?.reviewing ? REVIEWING_POLL_MS : false) },
   );
   const review =
     loaded.status === "ready"
@@ -103,12 +105,6 @@ export function PullReview({
     () => client.invalidateQueries({ queryKey: ["code", "reviews", "detail", reviewId] }),
     [client, reviewId],
   );
-  const pollReview = useEffectEvent(() => void refreshReview());
-  useEffect(() => {
-    if (!reviewing) return;
-    const timer = setInterval(() => pollReview(), 3000);
-    return () => clearInterval(timer);
-  }, [reviewing]);
 
   const open = useMemo(() => (review ? openFindings(review) : []), [review]);
   const current = open.find((finding) => finding.id === focused) ?? open[0];

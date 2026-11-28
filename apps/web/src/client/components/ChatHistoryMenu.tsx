@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { History, MessageSquare } from "lucide-react";
 import { Button } from "@groot/ui/button";
@@ -11,23 +11,21 @@ import {
   DropdownMenuTrigger,
 } from "@groot/ui/dropdown-menu";
 import type { PastChat } from "../../shared/api/bots";
-import { botsApi } from "../lib/bots-api";
 import { messageCountLabel, pastChatRange, pastChatTitle } from "../lib/past-chats";
 import { previewLine } from "../lib/bot-groups";
+import { usePastChatList } from "../queries/bots";
+import { useRefreshOn } from "../queries/resource";
 
-export function usePastChats(botId: string, conversationId: string, refresh: unknown) {
-  const [chats, setChats] = useState<PastChat[] | null>(null);
-  useEffect(() => {
-    let cancelled = false;
-    void botsApi
-      .pastChats(botId)
-      .then((next) => !cancelled && setChats(next))
-      .catch(() => undefined);
-    return () => {
-      cancelled = true;
-    };
-  }, [botId, conversationId, refresh]);
-  return chats;
+export function usePastChats(
+  botId: string,
+  conversationId: string,
+  view: string | null,
+): PastChat[] | null {
+  const chats = usePastChatList(botId);
+  useRefreshOn(`${conversationId}:${view}`, chats.refresh);
+  if (chats.status === "ready") return chats.data;
+  if (chats.status === "failed") return chats.last ?? null;
+  return null;
 }
 
 export function PastChatItems({

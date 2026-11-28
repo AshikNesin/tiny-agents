@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { ChevronLeft, ChevronRight, Download } from "lucide-react";
 import { Button } from "@groot/ui/button";
 import {
@@ -11,41 +11,18 @@ import {
   DialogTitle,
 } from "@groot/ui/dialog";
 import { Table, TableBody, TableCell, TableRow } from "@groot/ui/table";
-import type { UploadMeta, UploadStatus, UploadText } from "../../shared/api/uploads";
+import type { UploadMeta, UploadStatus } from "../../shared/api/uploads";
 import type { AttachmentRef } from "../lib/chat-types";
 import { botsApi } from "../lib/bots-api";
-
-const POLL_MS = 2_000;
-const MAX_POLLS = 90;
+import { useUploadExtraction, useUploadText } from "../queries/uploads";
 
 export function useUploadStatus(attachment: AttachmentRef): UploadStatus | undefined {
-  const [status, setStatus] = useState<UploadStatus | undefined>(undefined);
-  const id = attachment.uploadId;
-  const isFile = attachment.kind === "file";
-  useEffect(() => {
-    if (!isFile) return;
-    let cancelled = false;
-    let polls = 0;
-    const poll = async () => {
-      if (++polls > MAX_POLLS) {
-        window.clearInterval(timer);
-        return;
-      }
-      try {
-        const next = await botsApi.uploadStatus(id);
-        if (cancelled) return;
-        setStatus(next);
-        if (next.status !== "pending") window.clearInterval(timer);
-      } catch {}
-    };
-    const timer = window.setInterval(() => void poll(), POLL_MS);
-    void poll();
-    return () => {
-      cancelled = true;
-      window.clearInterval(timer);
-    };
-  }, [id, isFile]);
-  return status;
+  const extraction = useUploadExtraction(attachment.uploadId, {
+    enabled: attachment.kind === "file",
+  });
+  if (extraction.status === "ready") return extraction.data;
+  if (extraction.status === "failed") return extraction.last;
+  return undefined;
 }
 
 export function statusLabel(status: UploadStatus | undefined): string | undefined {
@@ -73,21 +50,15 @@ function sheetCells(sheet: number, rows: string[][]) {
 function PreviewBody({ uploadId }: { uploadId: string }) {
   const [page, setPage] = useState(1);
   const [sheet, setSheet] = useState(1);
-  const [data, setData] = useState<UploadText | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  useEffect(() => {
-    let cancelled = false;
-    botsApi
-      .uploadText(uploadId, { page, sheet })
-      .then((next) => !cancelled && setData(next))
-      .catch(() => !cancelled && setError("The preview could not be loaded."));
-    return () => {
-      cancelled = true;
-    };
-  }, [uploadId, page, sheet]);
+  const preview = useUploadText(uploadId, page, sheet);
 
-  if (error) return <p className="text-destructive text-sm">{error}</p>;
-  if (!data) return <p className="text-muted-foreground text-sm">Loading…</p>;
+  if (preview.status === "failed") {
+    return <p className="text-destructive text-sm">The preview could not be loaded.</p>;
+  }
+  if (preview.status === "loading") {
+    return <p className="text-muted-foreground text-sm">Loading…</p>;
+  }
+  const data = preview.data;
   if (data.status !== "ready") {
     return (
       <p className="text-muted-foreground text-sm">
