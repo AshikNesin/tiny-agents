@@ -20,6 +20,7 @@ tiny-agents-sandbox container (Debian 13, user exedev, passwordless sudo)
   ├─ Terminal tabs: tmux 3.5
   ├─ Browser: Google Chrome (Chromium on arm64) on an Xtigervnc display (CDP + VNC via SSH tunnels)
   ├─ Computer: an XFCE desktop per profile (xdotool, scrot, VNC)
+  ├─ Node.js (latest LTS) and pnpm on the PATH
   ├─ Claude Code: Node, the Agent SDK and the CLI, preinstalled for the Claude plan engine
   ├─ CLIs: gh and codex, installed at build time or on the first start
   └─ Shelley: a web-based coding agent, started with the container on 127.0.0.1:9000

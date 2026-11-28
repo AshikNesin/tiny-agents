@@ -48,6 +48,17 @@ RUN apt-get update -qq \
       procps psmisc util-linux iproute2 iputils-ping bind9-dnsutils build-essential \
  && rm -rf /var/lib/apt/lists/*
 
+# Node.js (the latest LTS, from nodejs.org) and pnpm on the PATH for bots'
+# commands and Code threads. NODE_VERSION pins one (e.g. 24.22.2); empty
+# resolves the newest LTS at build time.
+ARG NODE_VERSION=""
+RUN set -e; \
+    case "$(dpkg --print-architecture)" in amd64) NA=x64 ;; arm64) NA=arm64 ;; *) echo "unsupported arch" >&2; exit 1 ;; esac; \
+    V="${NODE_VERSION:-$(curl -fsSL https://nodejs.org/dist/index.json | jq -r '[.[] | select(.lts)][0].version' | sed 's/^v//')}"; \
+    curl -fsSL "https://nodejs.org/dist/v${V}/node-v${V}-linux-${NA}.tar.gz" | tar -xz -C /usr/local --strip-components=1 --exclude=CHANGELOG.md --exclude=LICENSE --exclude=README.md; \
+    npm install -g pnpm --no-audit --no-fund --loglevel=error; \
+    node --version && pnpm --version
+
 # Browser stack (browser-vm-setup.ts installStackCommand). The app starts
 # `google-chrome-stable`: Google Chrome on amd64, as on the VM; Debian's
 # Chromium on arm64 (Chrome has no Linux arm64 build), under the same name
