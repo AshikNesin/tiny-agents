@@ -787,7 +787,7 @@ export class ClaudeCodeEngine implements AgentEngine {
     change: (records: ClaudeRecord[]) => Promise<T>,
   ): Promise<T> {
     const run = session.writes.then(async () => change(await this.records(ref, session)));
-    session.writes = run.catch(() => undefined);
+    session.writes = run.catch(writerSeesFailure);
     return run;
   }
 
@@ -810,7 +810,7 @@ export class ClaudeCodeEngine implements AgentEngine {
         };
       }, ctx),
     );
-    this.docWrites = run.catch(() => undefined);
+    this.docWrites = run.catch(writerSeesFailure);
     try {
       await run;
     } catch (error) {
@@ -928,6 +928,8 @@ export class ClaudeCodeEngine implements AgentEngine {
     else console.warn("Claude plan engine:", error);
   }
 }
+
+function writerSeesFailure(): void {}
 
 function upsertTool(reply: ClaudeReply, tool: ChatToolCall): void {
   const tools = reply.toolCalls ? [...reply.toolCalls] : [];

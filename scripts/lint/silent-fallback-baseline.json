@@ -190,64 +190,6 @@
   "apps/web/src/server/lifecycle.ts": {
     ".then(() => exit(1))": 1
   },
-  "packages/agent/src/conversation-store.ts": {
-    ".catch(() => undefined)": 1
-  },
-  "packages/agent/src/credentials.ts": {
-    "catch {}": 1
-  },
-  "packages/agent/src/engines/claude-code/engine.ts": {
-    ".catch(() => undefined)": 2
-  },
-  "packages/agent/src/engines/claude-code/sandbox-worker.ts": {
-    ".catch(() => {})": 1
-  },
-  "packages/agent/src/gate.ts": {
-    ".catch(() => undefined)": 1,
-    "catch {}": 1
-  },
-  "packages/agent/src/lock.ts": {
-    "catch {}": 1
-  },
-  "packages/agent/src/runtime.ts": {
-    ".catch(() => undefined)": 2,
-    "catch {}": 1
-  },
-  "packages/agent/src/toolkits/browser-vault.ts": {
-    ".catch(() => \"null\")": 1,
-    ".catch(() => ({ savedHandle: undefined }))": 1,
-    ".catch(() => request.origin)": 1
-  },
-  "packages/agent/src/toolkits/code.ts": {
-    ".catch(() => [])": 1
-  },
-  "packages/agent/src/toolkits/computer.ts": {
-    ".catch(() => undefined)": 1
-  },
-  "packages/agent/src/toolkits/web.ts": {
-    ".catch(() => [])": 1,
-    ".catch(() => undefined)": 4
-  },
-  "packages/agent/src/waiting.ts": {
-    "catch {}": 3
-  },
-  "packages/claude-worker/src/coding-ops.ts": {
-    ".catch(() => \"\")": 1,
-    ".catch(() => null)": 1,
-    ".catch(() => undefined)": 6,
-    ".then(() => null)": 1,
-    ".then(() => undefined)": 2
-  },
-  "packages/claude-worker/src/coding.ts": {
-    ".catch(() => [])": 2,
-    ".catch(() => undefined)": 1,
-    "catch {}": 1
-  },
-  "packages/claude-worker/src/session-patches.ts": {
-    ".catch(() => [])": 1,
-    ".catch(() => new Map())": 1,
-    ".catch(() => undefined)": 1
-  },
   "packages/code/src/drivers/claude-code/driver.ts": {
     ".catch(() => undefined)": 3
   },

@@ -175,8 +175,11 @@ export class ConversationStore {
   }
 
   async close(): Promise<void> {
-    await this.#graph?.stop().catch(() => undefined);
-    await this.harness.close(ctx);
+    try {
+      await this.#graph?.stop();
+    } finally {
+      await this.harness.close(ctx);
+    }
   }
 }
 

@@ -384,10 +384,21 @@ export function createComputerToolkit(options: ComputerToolkitOptions = {}): Cap
         };
       }
       const live = sessions.get(profile);
-      const shot = await live?.desktop.screenshot().catch(() => undefined);
+      let shot: Buffer | undefined;
+      let shotProblem: string | undefined;
+      try {
+        shot = await live?.desktop.screenshot();
+      } catch (error) {
+        shotProblem = describe(error);
+      }
       return {
         output: [
-          { type: "text", text: "The owner handed the computer back. This is what they left:" },
+          {
+            type: "text",
+            text: shot
+              ? "The owner handed the computer back. This is what they left:"
+              : `The owner handed the computer back. ${shotProblem ? `The screenshot of what they left failed: ${shotProblem}` : "The desktop is not running, so there is no screenshot of what they left."}`,
+          },
           ...(shot ? [image(shot)] : []),
         ],
         details: {

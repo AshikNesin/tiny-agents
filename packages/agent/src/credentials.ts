@@ -156,10 +156,9 @@ export const CREDENTIAL_REQUESTS_PER_HOUR = 3;
 export const CREDENTIAL_REQUEST_TTL_MS = 10 * 60_000;
 
 export function credentialSubject(request: Pick<CredentialRequest, "origin" | "title">): string {
-  let host = request.origin;
-  try {
-    host = new URL(request.origin).hostname.replace(/^www\./, "");
-  } catch {}
+  const host = URL.canParse(request.origin)
+    ? new URL(request.origin).hostname.replace(/^www\./, "")
+    : request.origin;
   return `${request.title} on ${host}`;
 }
 

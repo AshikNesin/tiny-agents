@@ -5,6 +5,7 @@ import { mkdir, readdir, readFile, realpath, stat, writeFile } from "node:fs/pro
 import { homedir } from "node:os";
 import path from "node:path";
 import { CodingError } from "./coding";
+import { missingAs, warnFailure } from "./failures";
 import {
   EMPTY_TREE,
   GitReadError,
@@ -75,7 +76,7 @@ function checkAbsolute(value: string): string {
 
 async function directory(value: string): Promise<string> {
   const dir = checkAbsolute(value);
-  const info = await stat(dir).catch(() => undefined);
+  const info = await stat(dir).catch(missingAs(undefined));
   if (!info?.isDirectory()) throw new CodingError("bad_path", `Not a directory: ${dir}`);
   return dir;
 }
@@ -135,14 +136,14 @@ function localPort(root: string): GitReadPort {
   return {
     git: (args) => runGit(root, args),
     async fileSize(rel) {
-      const info = await stat(inside(rel)).catch(() => undefined);
+      const info = await stat(inside(rel)).catch(missingAs(undefined));
       return info?.isFile() ? info.size : null;
     },
-    readFile: (rel) => readFile(inside(rel), "utf8").catch(() => null),
+    readFile: (rel) => readFile(inside(rel), "utf8").catch(missingAs(null)),
     async stats(rels) {
       const lines = await Promise.all(
         rels.map(async (rel) => {
-          const info = await stat(inside(rel), { bigint: true }).catch(() => undefined);
+          const info = await stat(inside(rel), { bigint: true }).catch(missingAs(undefined));
           return info ? `${info.size} ${info.mtimeNs}` : "-";
         }),
       );
@@ -179,6 +180,24 @@ function runGit(cwd: string, args: string[]): Promise<GitRunResult> {
   });
 }
 
+function gitFailed(result: GitRunResult): CodingError {
+  const detail = result.stderr.trim().split("\n")[0];
+  return new CodingError("git", detail || `git exited with ${result.exitCode}`);
+}
+
+async function gitAnswer(
+  dir: string,
+  args: string[],
+  noAnswer: RegExp,
+): Promise<string | undefined> {
+  const result = await runGit(dir, args);
+  if (result.exitCode === 0) return result.stdout.trim() || undefined;
+  if (!noAnswer.test(result.stderr)) {
+    warnFailure(`git ${args.join(" ")} in ${dir}`, gitFailed(result));
+  }
+  return undefined;
+}
+
 async function reading<T>(work: () => Promise<T>): Promise<T> {
   try {
     return await work();
@@ -199,10 +218,10 @@ async function workingFiles(root: string): Promise<CodingGitFile[]> {
 }
 
 async function parentOf(root: string, sha: string): Promise<string | null> {
-  return git(root, ["rev-parse", "--verify", "-q", `${sha}^`]).then(
-    (out) => out.trim(),
-    () => null,
-  );
+  const result = await runGit(root, ["rev-parse", "--verify", "-q", `${sha}^`]);
+  if (result.exitCode === 0) return result.stdout.trim();
+  if (result.exitCode === 1 && !result.stderr.trim()) return null;
+  throw gitFailed(result);
 }
 
 async function commitFiles(root: string, sha: string): Promise<CodingGitFile[]> {
@@ -296,7 +315,7 @@ async function findFiles(
   const needle = query.trim();
   if (content === "only") {
     if (!needle) return [];
-    const output = await git(dir, [
+    const grep = await runGit(dir, [
       "grep",
       "-n",
       "-I",
@@ -308,9 +327,11 @@ async function findFiles(
       needle,
       "--",
       ".",
-    ]).catch(() => "");
+    ]);
+    const noMatch = grep.exitCode === 1 && !grep.stderr.trim();
+    if (grep.exitCode !== 0 && !noMatch) throw gitFailed(grep);
     const matches: CodingFileMatch[] = [];
-    for (const line of output.split("\n")) {
+    for (const line of grep.stdout.split("\n")) {
       const match = /^(.+?):(\d+):(.*)$/.exec(line);
       if (!match) continue;
       matches.push({ path: match[1]!, line: Number(match[2]), text: match[3]!.slice(0, 300) });
@@ -362,15 +383,9 @@ async function listDir(value: string): Promise<CodingDirectoryListing> {
     .sort((a, b) => Number(b.isDir) - Number(a.isDir) || a.name.localeCompare(b.name))
     .slice(0, MAX_LIST_ENTRIES);
   const parent = path.dirname(dir);
-  const root = await git(dir, ["rev-parse", "--show-toplevel"]).then(
-    (out) => out.trim(),
-    () => undefined,
-  );
+  const root = await gitAnswer(dir, ["rev-parse", "--show-toplevel"], /not a git repository/i);
   const subject = root
-    ? await git(dir, ["log", "-1", "--format=%s"]).then(
-        (out) => out.trim() || undefined,
-        () => undefined,
-      )
+    ? await gitAnswer(dir, ["log", "-1", "--format=%s"], /does not have any commits yet/i)
     : undefined;
   return {
     path: dir,
@@ -386,7 +401,15 @@ async function validateCwd(value: string): Promise<{ valid: boolean; error?: str
   if (value.includes("\0") || !path.isAbsolute(value)) {
     return { valid: false, error: "The working directory must be an absolute path." };
   }
-  const info = await stat(value).catch(() => undefined);
+  let info: Awaited<ReturnType<typeof stat>> | undefined;
+  try {
+    info = await stat(value).catch(missingAs(undefined));
+  } catch (error) {
+    return {
+      valid: false,
+      error: `${value} could not be checked: ${error instanceof Error ? error.message : String(error)}`,
+    };
+  }
   if (!info) return { valid: false, error: `${value} does not exist on the sandbox.` };
   if (!info.isDirectory()) return { valid: false, error: `${value} is not a directory.` };
   return { valid: true };
@@ -452,8 +475,8 @@ async function readAsset(ref: string, ctx: CodingOpsContext): Promise<CodingAsse
   const root = ctx.uploadsDir ?? defaultUploadsDir(ctx.home);
   const wanted = checkAbsolute(ref);
   const [realRoot, realFile] = await Promise.all([
-    realpath(root).catch(() => undefined),
-    realpath(wanted).catch(() => undefined),
+    realpath(root).catch(missingAs(undefined)),
+    realpath(wanted).catch(missingAs(undefined)),
   ]);
   if (!realRoot || !realFile || !realFile.startsWith(realRoot + path.sep)) {
     throw new CodingError("not_found", "No such asset.");

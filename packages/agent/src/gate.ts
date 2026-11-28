@@ -65,6 +65,7 @@ export interface ToolGateOptions {
   reviewer?: Reviewer;
   ownerUserId?: () => Promise<number | undefined>;
   store?: GateStore;
+  report?: (error: unknown) => void;
 }
 
 interface HeldAnswer {
@@ -85,6 +86,10 @@ const noStore: GateStore = {
   },
   grant: async () => undefined,
 };
+
+function warnGateFailure(error: unknown): void {
+  console.warn("Tool gate:", error);
+}
 
 const heldKey = (conversation: number, taskId: number) => `${conversation}:${taskId}`;
 
@@ -116,6 +121,7 @@ export class ToolGate {
   readonly #ownerUserId: () => Promise<number | undefined>;
   readonly #store: GateStore;
   readonly #stop: ((conversation: number) => void) | undefined;
+  readonly #report: (error: unknown) => void;
   readonly #held = new Map<string, HeldAnswer>();
   readonly #runCalls = new Map<string, number>();
 
@@ -125,6 +131,7 @@ export class ToolGate {
     this.#reviewer = options.reviewer;
     this.#ownerUserId = options.ownerUserId ?? (async () => undefined);
     this.#store = options.store ?? noStore;
+    this.#report = options.report ?? warnGateFailure;
   }
 
   waiting(conversation: number): number {
@@ -180,7 +187,13 @@ export class ToolGate {
       if (typeof decision !== "string") return decision;
       waitedMs = await api.memo("gate:waited", Date.now() - waitStarted, context);
       if (decision !== "approved") {
-        await hooks?.settled?.(args, api, context, decision).catch(() => undefined);
+        try {
+          await hooks?.settled?.(args, api, context, decision);
+        } catch (error) {
+          this.#report(
+            new Error(`${name} was ${decision}, but its settled hook failed`, { cause: error }),
+          );
+        }
         return declinedResult(name, decision, waitedMs);
       }
       await api.memo("gate:approved", true, context);
@@ -288,7 +301,13 @@ export class ToolGate {
       try {
         await this.#store.approveForYolo(conversation, taskId);
         approved.push(taskId);
-      } catch {}
+      } catch (error) {
+        if (!(error instanceof ApprovalNotPendingError)) {
+          this.#report(
+            new Error(`Could not approve waiting tool call ${taskId} for yolo`, { cause: error }),
+          );
+        }
+      }
     }
     return approved;
   }

@@ -5,6 +5,7 @@ import path from "node:path";
 import { createInterface } from "node:readline";
 import type { CodingHistoryMessage } from "./coding-protocol";
 import { record } from "@tiny-agents/std";
+import { missingAs, warnedAs } from "./failures";
 
 export function claudeConfigDir(env: Readonly<Record<string, string | undefined>>): string {
   return env.CLAUDE_CONFIG_DIR?.trim() || path.join(env.HOME?.trim() || homedir(), ".claude");
@@ -13,11 +14,11 @@ export function claudeConfigDir(env: Readonly<Record<string, string | undefined>
 async function sessionFile(configDir: string, sessionId: string): Promise<string | null> {
   if (!/^[A-Za-z0-9_-]{1,200}$/.test(sessionId)) return null;
   const root = path.join(configDir, "projects");
-  const dirs = await readdir(root, { withFileTypes: true }).catch(() => []);
+  const dirs = await readdir(root, { withFileTypes: true }).catch(missingAs([]));
   for (const dir of dirs) {
     if (!dir.isDirectory()) continue;
     const file = path.join(root, dir.name, `${sessionId}.jsonl`);
-    if ((await stat(file).catch(() => undefined))?.isFile()) return file;
+    if ((await stat(file).catch(missingAs(undefined)))?.isFile()) return file;
   }
   return null;
 }
@@ -55,8 +56,10 @@ export async function withSessionPatches(
   configDir: string,
   sessionId: string,
 ): Promise<CodingHistoryMessage[]> {
-  const patches = await sessionPatches(configDir, sessionId).catch(() => new Map());
-  if (patches.size === 0) return messages;
+  const patches = await sessionPatches(configDir, sessionId).catch(
+    warnedAs(`history for session ${sessionId} is shown without its file patches`, undefined),
+  );
+  if (!patches || patches.size === 0) return messages;
   return messages.map((message) => {
     const patch = patches.get(message.uuid);
     return patch && message.tool_use_result === undefined

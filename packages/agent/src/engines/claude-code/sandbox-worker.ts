@@ -144,6 +144,8 @@ export function createSandboxClaudeWorker(options: SandboxWorkerOptions): Claude
     throw new Error("The Claude worker did not come up on the sandbox.");
   };
 
+  const keptAsLastError = (): void => undefined;
+
   const ensure = (): Promise<string> => {
     if (!ensured) {
       const attempt = ensureOnce();
@@ -197,7 +199,7 @@ export function createSandboxClaudeWorker(options: SandboxWorkerOptions): Claude
       return { url: `ws://127.0.0.1:${await localPort()}`, token };
     },
     prepare() {
-      void ensure().catch(() => {});
+      void ensure().catch(keptAsLastError);
     },
     invalidate() {
       script = undefined;

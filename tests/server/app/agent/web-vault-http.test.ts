@@ -157,3 +157,22 @@ describe("http_request keeps vault credentials off plaintext http", () => {
     expect(log).toEqual([{ url: "http://plain.example.com/v1/me" }]);
   });
 });
+
+describe("http_request when the host does not resolve", () => {
+  it("says why the lookup failed and sends nothing", async () => {
+    const log: Hop[] = [];
+    const web = createWebToolkit({
+      vault: broker().broker,
+      sendPinned: hops(log),
+      resolveHost: async () => {
+        throw new Error("getaddrinfo EAI_AGAIN api.example.com");
+      },
+    });
+    const result = await run(web, { url: "https://api.example.com/v1/me" });
+    expect(result.isError).toBe(true);
+    expect(result.text).toBe(
+      "Could not resolve api.example.com: getaddrinfo EAI_AGAIN api.example.com",
+    );
+    expect(log).toEqual([]);
+  });
+});

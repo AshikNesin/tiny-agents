@@ -82,7 +82,7 @@ import type {
   WaitEvent,
   WithdrawOutcome,
 } from "./types";
-import { restoreParkedWaits, WaitTracker, type WaitTransition } from "./waiting";
+import { notifyEach, restoreParkedWaits, WaitTracker, type WaitTransition } from "./waiting";
 import type { Reviewer } from "./reviewer";
 import { GrantsDoc } from "./vault";
 import type { ConversationTrace, ConversationUsage } from "./trace";
@@ -149,6 +149,7 @@ export class AgentRuntime {
   #built = new Set<string>();
   readonly #lock: StoreLock | undefined;
   readonly #activityListeners = new Set<(change: ActivityChange) => void>();
+  readonly #report: (error: unknown) => void;
   readonly #registry: Registry;
   readonly #approvals: WaitTracker;
   readonly #questions: WaitTracker;
@@ -197,6 +198,7 @@ export class AgentRuntime {
       onReplying: (ref) => this.#busyChanged(ref),
     });
     this.#gate = gate;
+    this.#report = onReport ?? warnRuntimeFailure;
     this.#pi = new PiEngine(this.#store);
     this.#images = images;
     this.claudePlan = new ClaudePlan({
@@ -252,6 +254,7 @@ export class AgentRuntime {
     let storage: Storage | undefined;
     let harness: Harness | undefined;
     let runtime: AgentRuntime | undefined;
+    const report = options.onReport ?? warnRuntimeFailure;
     try {
       storage = inMemory ? new MemoryStorage() : await openNodeSqliteStorage(options.storePath);
       const models = options.models ?? createModels();
@@ -274,11 +277,12 @@ export class AgentRuntime {
         approvals,
         stop: (conversation) => {
           setTimeout(() => {
-            runtime?.abort(conversation).catch(() => undefined);
+            runtime?.abort(conversation).catch(report);
           }, 0);
         },
         ...(options.reviewer ? { reviewer: options.reviewer } : {}),
         ...(options.ownerUserId ? { ownerUserId: options.ownerUserId } : {}),
+        report,
         store: {
           decide: async (conversation, taskId, decision, grant) => {
             try {
@@ -290,8 +294,13 @@ export class AgentRuntime {
               approvalNotPending(error, taskId);
             }
           },
-          approveForYolo: (conversation, taskId) =>
-            harness!.commit((tx) => recordYoloDecision(tx, conversation, taskId), ctx),
+          approveForYolo: async (conversation, taskId) => {
+            try {
+              await harness!.commit((tx) => recordYoloDecision(tx, conversation, taskId), ctx);
+            } catch (error) {
+              approvalNotPending(error, taskId);
+            }
+          },
           grant: (conversation, grant) =>
             harness!.commit(async (tx) => {
               const grants = await tx.doc(GrantsDoc, conversation as ConversationId);
@@ -353,8 +362,17 @@ export class AgentRuntime {
       return opened;
     } catch (error) {
       if (runtime) runtime.#closed = true;
-      await (harness ? harness.close(ctx) : storage?.close(ctx))?.catch(() => undefined);
-      lock?.release();
+      try {
+        await (harness ? harness.close(ctx) : storage?.close(ctx));
+      } catch (closeError) {
+        report(
+          new Error("Could not close the agent store after the runtime failed to open", {
+            cause: closeError,
+          }),
+        );
+      } finally {
+        lock?.release();
+      }
       throw error;
     }
   }
@@ -676,11 +694,7 @@ export class AgentRuntime {
   }
 
   #emitActivity(change: ActivityChange): void {
-    for (const listener of this.#activityListeners) {
-      try {
-        listener(change);
-      } catch {}
-    }
+    notifyEach(this.#activityListeners, this.#report, change);
   }
 
   async close(): Promise<void> {
@@ -693,4 +707,8 @@ export class AgentRuntime {
       this.#lock?.release();
     }
   }
+}
+
+function warnRuntimeFailure(error: unknown): void {
+  console.warn("Agent runtime:", error);
 }

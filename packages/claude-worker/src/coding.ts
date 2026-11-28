@@ -2,6 +2,7 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { homedir } from "node:os";
 import path from "node:path";
 import { assertSessionMayStart, type ClaudeAuthStatus } from "./auth";
+import { warnFailure, warnedAs } from "./failures";
 import {
   DEFAULT_CODING_PERMISSION_MODE,
   promptWithAttachments,
@@ -498,7 +499,9 @@ export class CodingSession {
     this.expireApprovals();
     try {
       query?.close();
-    } catch {}
+    } catch (closeError) {
+      warnFailure(`closing the Claude Code process of session ${this.id}`, closeError);
+    }
     if (this.running) {
       this.endTurnSynthetic(error ? { error } : { interrupted: true });
     } else {
@@ -507,7 +510,9 @@ export class CodingSession {
   }
 
   private sendInterrupt(): void {
-    void this.query?.interrupt().catch(() => undefined);
+    void this.query
+      ?.interrupt()
+      .catch(warnedAs(`interrupting the turn of session ${this.id}`, undefined));
   }
 
   private pushInput(held: HeldMessage, priority?: "next"): InputItem {
@@ -1033,8 +1038,10 @@ export class CodingBook {
     this.catalogLoading = true;
     try {
       const [commands, models] = await Promise.all([
-        query.supportedCommands().catch(() => []),
-        query.supportedModels ? query.supportedModels().catch(() => []) : Promise.resolve([]),
+        query.supportedCommands().catch(warnedAs("listing Claude Code's slash commands", [])),
+        query.supportedModels
+          ? query.supportedModels().catch(warnedAs("listing Claude Code's models", []))
+          : Promise.resolve([]),
       ]);
       if (commands.length === 0 && models.length === 0) return;
       this.catalog = {

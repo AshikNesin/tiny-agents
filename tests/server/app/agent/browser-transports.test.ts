@@ -233,6 +233,27 @@ describe("page session disconnects", () => {
   });
 });
 
+describe("page session waits", () => {
+  const open = { viewportWidth: 1280, viewportHeight: 800 };
+  const waitingOn = (outcome: () => Promise<void>) =>
+    pageSession(
+      {
+        once: () => undefined,
+        getByText: () => ({ first: () => ({ waitFor: outcome }) }),
+      } as unknown as Page,
+      open,
+      { close: async () => {} },
+    );
+  const wait = { text: "Done", timeoutMs: 10 };
+
+  it("fails, instead of answering false, when the tab is gone", async () => {
+    const gone = new Error("locator.waitFor: Target page, context or browser has been closed");
+    await expect(waitingOn(() => Promise.reject(gone)).waitFor!(wait)).rejects.toThrow(
+      "Target page, context or browser has been closed",
+    );
+  });
+});
+
 describe("window resizer", () => {
   const tab = (name: string) => ({ name }) as unknown as Page;
 

@@ -411,7 +411,7 @@ export function createCodeToolkit(options: CodeToolkitOptions): Capability {
   const tools = codeTools(options);
   const guidance = section("code", async () => {
     if (!store) return undefined;
-    const harnesses = await store.harnesses().catch(() => []);
+    const harnesses = await store.harnesses();
     return harnesses.length ? rules(harnesses, await store.projects()) : undefined;
   });
 
