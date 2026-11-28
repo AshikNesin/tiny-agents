@@ -15,7 +15,8 @@ import {
   SandboxTimeoutError,
   type SshEndpoint,
 } from "./connection";
-import { ChannelPtyStream, type PtySize, type PtyStream } from "./pty-stream";
+import { ChannelPtyStream, closeChannel, type PtySize, type PtyStream } from "./pty-stream";
+import { callerSeesRejection } from "../failures";
 import { readCapped, writeAtomic } from "./sftp";
 import { EXIT_NO_STATUS } from "../shell";
 
@@ -127,9 +128,11 @@ export function createSandboxConnection(
       });
       return pooled;
     });
-    source.catch(() => {
-      if (current === source) current = undefined;
-    });
+    source.catch(
+      callerSeesRejection(() => {
+        if (current === source) current = undefined;
+      }),
+    );
     return source;
   };
 
@@ -322,22 +325,17 @@ function collect(
       options.signal?.removeEventListener("abort", stopped);
       finish();
     };
-    const closeChannel = () => {
-      try {
-        channel.close();
-      } catch {}
-    };
     const timer = setTimeout(
       () =>
         settle(() => {
-          closeChannel();
+          closeChannel(channel);
           reject(new SandboxTimeoutError(timeoutMs));
         }),
       timeoutMs,
     );
     const stopped = () =>
       settle(() => {
-        closeChannel();
+        closeChannel(channel);
         reject(new Error("Stopped before the command finished."));
       });
     if (options.signal?.aborted) stopped();
@@ -349,7 +347,7 @@ function collect(
       grace = setTimeout(
         () =>
           settle(() => {
-            closeChannel();
+            closeChannel(channel);
             resolve(result(code));
           }),
         EXIT_GRACE_MS,
@@ -361,7 +359,7 @@ function collect(
     });
     channel.on("error", (error: Error) =>
       settle(() => {
-        closeChannel();
+        closeChannel(channel);
         reject(error);
       }),
     );

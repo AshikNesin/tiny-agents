@@ -1,3 +1,4 @@
+import { survived } from "./failures";
 import { bashScript, exitWith, shQuote } from "./shell";
 
 const STATE_DIR = "$HOME/.tiny-agents";
@@ -241,7 +242,9 @@ export function createVmStack<A extends VmStackArgs>(spec: VmStackSpec<A>, run: 
         );
         return parseReport(output, spec.report);
       } catch (error) {
-        await stop(args.profileDir).catch(() => {});
+        await stop(args.profileDir).catch(
+          survived(`stopping the half-launched stack in ${args.profileDir}`),
+        );
         throw error;
       }
     },

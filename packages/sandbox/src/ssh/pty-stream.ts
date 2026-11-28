@@ -1,5 +1,6 @@
 import { Duplex } from "node:stream";
 import type { ClientChannel } from "ssh2";
+import { alreadyClosed } from "../failures";
 
 export interface PtyStream extends Duplex {
   setWindow(rows: number, cols: number): void;
@@ -10,6 +11,14 @@ export interface PtySize {
   term: string;
   cols: number;
   rows: number;
+}
+
+export function closeChannel(channel: ClientChannel): void {
+  try {
+    channel.close();
+  } catch (error) {
+    alreadyClosed("closing an SSH channel")(error);
+  }
 }
 
 export class ChannelPtyStream extends Duplex implements PtyStream {
@@ -64,9 +73,7 @@ export class ChannelPtyStream extends Duplex implements PtyStream {
 
   override _destroy(error: Error | null, callback: (error?: Error | null) => void): void {
     this.ended = true;
-    try {
-      this.channel.close();
-    } catch {}
+    closeChannel(this.channel);
     this.release();
     callback(error);
   }

@@ -2,6 +2,7 @@ import type { Frame, Page } from "playwright-core";
 import type { SecretValue } from "./vault-target";
 import { VaultTargetMovedError } from "./vault-target";
 import { assertRefShape } from "./browser-guard";
+import { survived, waitTimedOut } from "./failures";
 
 export interface SecretFillField {
   key: string;
@@ -219,6 +220,11 @@ function frameOriginOf(frame: Frame): string | undefined {
   }
 }
 
+function fieldNotReached(error: unknown): "missing" {
+  waitTimedOut(error);
+  return "missing";
+}
+
 async function fillPass(
   page: Page,
   fill: SecretFill,
@@ -239,7 +245,7 @@ async function fillPass(
       result = await page
         .getByRef(field.ref)
         .evaluate(fillInPage, args(true), { timeout: ACTION_TIMEOUT_MS })
-        .catch(() => "missing" as const);
+        .catch(fieldNotReached);
     } else {
       const subframes = page
         .frames()
@@ -249,7 +255,7 @@ async function fillPass(
       for (const [index, frame] of frames.entries()) {
         const found: FillResult = await frame
           .evaluate(fillInPage, args(false))
-          .catch(() => "missing" as const);
+          .catch(fieldNotReached);
         if (found === "origin" && index > 0) continue;
         result = found;
         if (result === "filled" || result === "origin") break;
@@ -258,7 +264,9 @@ async function fillPass(
     if (result === "origin") {
       const top = await pageOrigin(page);
       if (field.ref && top === fill.origin) {
-        const frame = await refOrigin(page, field.ref).catch(() => undefined);
+        const frame = await refOrigin(page, field.ref).catch(
+          survived("reading the field's frame origin"),
+        );
         if (frame && frame !== top) throw new FrameOriginError(frame);
       }
       throw new OriginMismatchError(top);

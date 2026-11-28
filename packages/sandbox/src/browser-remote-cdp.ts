@@ -6,6 +6,7 @@ import { SandboxTimeoutError } from "./ssh/connection";
 import type { SandboxConnection } from "./ssh/sandbox-connection";
 import { pageSession } from "./browser-chromium";
 import { navigationGuard } from "./navigation-guard";
+import { alreadyClosed, callerSeesRejection, reportFailure, survived } from "./failures";
 import { failureDetail } from "./shell";
 import { browserVmStack, launchedStack } from "./browser-vm-setup";
 import type {
@@ -90,7 +91,10 @@ export function createForwardingServer(
           socket.on("close", done);
           channel.on("close", done);
         })
-        .catch(() => socket.destroy());
+        .catch((error: unknown) => {
+          reportFailure("forwarding a local connection to the VM failed, dropping it", error);
+          socket.destroy();
+        });
     };
     const scan = () => {
       const head = Buffer.concat(early);
@@ -132,7 +136,7 @@ export function createWindowResizer(
   const release = () => {
     const stale = held;
     held = undefined;
-    void stale?.cdp.detach().catch(() => {});
+    void stale?.cdp.detach().catch(alreadyClosed("detaching the stale resize session"));
   };
 
   const attach = async (page: Page) => {
@@ -141,7 +145,7 @@ export function createWindowResizer(
       const { windowId } = await cdp.send("Browser.getWindowForTarget");
       return { page, cdp, windowId };
     } catch (error) {
-      await cdp.detach().catch(() => {});
+      await cdp.detach().catch(alreadyClosed("detaching the failed resize session"));
       throw error;
     }
   };
@@ -169,7 +173,7 @@ export function createWindowResizer(
 
   return (width, height) => {
     const run = queue.then(() => fit(width, height));
-    queue = run.catch(() => {});
+    queue = run.catch(callerSeesRejection());
     return run;
   };
 }
@@ -230,7 +234,7 @@ export function createRemoteCdpTransport(options: RemoteCdpTransportOptions): Br
       for (const tunnel of live) tunnel.destroy();
       live.clear();
       server?.close();
-      await stack.stop(profileDir).catch(() => {});
+      await stack.stop(profileDir).catch(survived(`stopping the browser stack in ${profileDir}`));
     };
 
     const openChannel = async (targetPort: number): Promise<Duplex> => {
@@ -281,12 +285,12 @@ export function createRemoteCdpTransport(options: RemoteCdpTransportOptions): Br
           else setTimeout(listener, 0);
         },
         close: async () => {
-          await browser.close().catch(() => {});
-          await cleanup().catch(() => {});
+          await browser.close().catch(alreadyClosed("closing the VM's browser"));
+          await cleanup();
         },
       });
     } catch (error) {
-      await cleanup().catch(() => {});
+      await cleanup();
       throw error;
     }
   };

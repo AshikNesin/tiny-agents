@@ -1,5 +1,6 @@
 import type { SecretFill } from "./browser-fill";
 import { parseExemptHosts } from "./browser-guard";
+import { survived } from "./failures";
 import {
   createLiveSessions,
   realClock,
@@ -239,7 +240,8 @@ export function createBrowserSessions(options: BrowserSessionsOptions = {}): Bro
   async function bringToFront({ browser, session }: LiveBrowserTab, key: string): Promise<void> {
     if (browser.driver === "human" || browser.front === key) return;
     browser.front = key;
-    if (browser.tabs.size > 1) await session.focus?.().catch(() => {});
+    if (browser.tabs.size > 1)
+      await session.focus?.().catch(survived(`bringing tab ${key} to the front`));
   }
 
   const manager: BrowserSessions = {
@@ -282,7 +284,7 @@ export function createBrowserSessions(options: BrowserSessionsOptions = {}): Bro
       entry.front = undefined;
       const tab = entry.tabs.get(target.tab);
       if (tab) {
-        await tab.adoptActiveTab?.().catch(() => {});
+        await tab.adoptActiveTab?.().catch(survived("adopting the tab the owner left open"));
         entry.front = target.tab;
       }
       live.release(entry);
@@ -302,11 +304,11 @@ export function createBrowserSessions(options: BrowserSessionsOptions = {}): Bro
       }
       if ([...entry.tabs.values()].includes(tab)) return;
       if (tab === entry.session) {
-        await tab.navigate("about:blank").catch(() => undefined);
+        await tab.navigate("about:blank").catch(survived("blanking the closed tab"));
         tab.release?.();
         return;
       }
-      await tab.close().catch(() => undefined);
+      await tab.close().catch(survived(`closing tab ${target.tab}`));
     },
     closeAll: () => live.closeAll(),
     async fillSecret(target, fill) {
@@ -316,7 +318,7 @@ export function createBrowserSessions(options: BrowserSessionsOptions = {}): Bro
     },
     async tabOrigin(target) {
       const tab = live.peek(target.profile)?.tabs.get(target.tab);
-      return tab?.origin?.().catch(() => undefined);
+      return tab?.origin?.().catch(survived(`reading the origin of tab ${target.tab}`));
     },
   };
   managers.add(manager);

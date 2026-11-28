@@ -227,57 +227,6 @@
   "packages/models/src/discovery.ts": {
     "catch {}": 1
   },
-  "packages/sandbox/src/browser-chromium.ts": {
-    ".catch(() => \"\")": 1,
-    ".catch(() => null)": 3,
-    ".catch(() => undefined)": 10,
-    ".catch(() => {})": 5,
-    ".then(() => false)": 2,
-    ".then(() => settle())": 1,
-    "catch {}": 1
-  },
-  "packages/sandbox/src/browser-fill.ts": {
-    ".catch(() => \"missing\" as const)": 2,
-    ".catch(() => undefined)": 1
-  },
-  "packages/sandbox/src/browser-remote-cdp.ts": {
-    ".catch(() => socket.destroy())": 1,
-    ".catch(() => {})": 7
-  },
-  "packages/sandbox/src/browser-sessions.ts": {
-    ".catch(() => undefined)": 3,
-    ".catch(() => {})": 2
-  },
-  "packages/sandbox/src/computer-x11.ts": {
-    ".catch(() => {})": 1
-  },
-  "packages/sandbox/src/egress-proxy.ts": {
-    ".catch(() => res.destroy())": 1,
-    ".catch(() => socket.destroy())": 1,
-    ".then((): Verdict => ({ failed: `${name} did not resolve` }))": 1
-  },
-  "packages/sandbox/src/live-sessions.ts": {
-    ".catch(() => undefined)": 2,
-    ".catch(() => {})": 5
-  },
-  "packages/sandbox/src/navigation-guard.ts": {
-    ".catch(() => guards.delete(browser))": 1,
-    ".catch(() => null)": 1,
-    ".catch(() => true)": 1,
-    ".catch(() => undefined)": 2,
-    ".catch(() => { if (watched.get(page) === frameId) watched.delete(page); })": 1,
-    ".then(() => undefined)": 1
-  },
-  "packages/sandbox/src/ssh/pty-stream.ts": {
-    "catch {}": 1
-  },
-  "packages/sandbox/src/ssh/sandbox-connection.ts": {
-    ".catch(() => { if (current === source) current = undefined; })": 1,
-    "catch {}": 1
-  },
-  "packages/sandbox/src/vm-stack.ts": {
-    ".catch(() => {})": 1
-  },
   "packages/shell/src/hooks/useSetupStatus.ts": {
     ".then(() => live && setNeedsSetup(false))": 1
   },

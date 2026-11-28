@@ -1,3 +1,5 @@
+import { callerSeesRejection, survived } from "./failures";
+
 export type LiveDriver = "agent" | "human";
 
 export type LivePhase = "installing" | "starting";
@@ -129,7 +131,7 @@ export function createLiveSessions<U extends LiveSurface, S extends LiveEntry>(
           void options
             .surfaceOf(entry)
             .close()
-            .catch(() => {});
+            .catch(survived(`closing the idle session ${key}`));
         }
       }
     }, IDLE_SWEEP_MS);
@@ -167,7 +169,7 @@ export function createLiveSessions<U extends LiveSurface, S extends LiveEntry>(
     void options
       .surfaceOf(entry)
       .close()
-      .catch(() => {});
+      .catch(survived(`closing the dropped session ${profile}`));
   }
 
   function dispose(profile: string, entry: S): Promise<void> {
@@ -175,14 +177,16 @@ export function createLiveSessions<U extends LiveSurface, S extends LiveEntry>(
     release(entry);
     if (live.get(profile) === entry) live.delete(profile);
     const closed = options.surfaceOf(entry).close();
-    return options.closeErrors === "swallow" ? closed.catch(() => {}) : settle(closed);
+    return options.closeErrors === "swallow"
+      ? closed.catch(survived(`closing the session ${profile}`))
+      : settle(closed);
   }
 
   async function closeProfile(profile: string, wipe: boolean): Promise<void> {
     const pending = opening.get(profile);
     if (pending) {
       pending.cancel(wipe);
-      await pending.promise.catch(() => undefined);
+      await pending.promise.catch(callerSeesRejection());
     }
     const entry = live.get(profile);
     if (entry) await dispose(profile, entry);
@@ -192,7 +196,7 @@ export function createLiveSessions<U extends LiveSurface, S extends LiveEntry>(
 
   async function closeTracked(profile: string, wipe: boolean): Promise<void> {
     const done = closeProfile(profile, wipe);
-    const settled = done.catch(() => undefined);
+    const settled = done.catch(callerSeesRejection());
     closing.set(profile, settled);
     try {
       await done;
@@ -228,9 +232,13 @@ export function createLiveSessions<U extends LiveSurface, S extends LiveEntry>(
       const promise = launched
         .then(async (surface) => {
           if (cancelled) {
-            await surface.close().catch(() => {});
+            await surface
+              .close()
+              .catch(survived(`closing the session ${profile} cancelled while opening`));
             if (options.wipeCancelledOpen && cancelled.wipe) {
-              await options.wipe(profile).catch(() => {});
+              await options
+                .wipe(profile)
+                .catch(survived(`wiping ${profile} after its open was cancelled`));
             }
             throw new Error(options.closedWhileOpening);
           }
